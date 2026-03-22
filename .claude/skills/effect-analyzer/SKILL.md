@@ -1,6 +1,6 @@
 ---
 name: effect-analyzer
-description: Use when working on the effect-analyzer package - static analysis for Effect-TS code. Covers architecture, IR types, adding analyzers, output renderers, CLI flags, testing with fixtures, and the fluent analyze() API. Triggers on changes to packages/effect-analyzer or questions about Effect program analysis, mermaid diagrams, or IR nodes.
+description: Use when working on the effect-analyzer package - static analysis for Effect-TS code. Covers architecture, IR types, adding analyzers, output renderers, CLI flags, diff/regression detection, interactive HTML, test matrix, coverage audit, testing with fixtures, and the fluent analyze() API. Triggers on changes to packages/effect-analyzer or questions about Effect program analysis, mermaid diagrams, or IR nodes.
 ---
 
 # effect-analyzer
@@ -19,6 +19,7 @@ CLI (cli.ts)
         → alias-resolution.ts (resolve Effect aliases/re-exports)
         → type-extractor.ts (extract Effect/Stream/Layer type signatures)
       → output/*.ts (render IR → mermaid, json, html, explain, etc.)
+      → diff/*.ts (semantic diff between program versions)
 ```
 
 **Key data flow:** Source file → ts-morph AST → `StaticEffectIR` (IR) → output format
@@ -43,6 +44,210 @@ StaticEffectIR { root: StaticEffectProgram, metadata, serviceDefinitions, warnin
 - Plus: `terminal`, `try-catch`, `loop`, `cause`, `exit`, `schedule`, `match`, `scope-resource`, and more
 
 All types use `readonly` everywhere. See `StaticFlowNode` union in `src/types.ts` for the full set.
+
+## CLI Usage
+
+```
+effect-analyze [PATH] [options]
+```
+
+PATH defaults to `.` (current directory). When PATH is a directory, analyzes all TypeScript files and writes colocated `.effect-analysis.md` next to each file containing Effect programs.
+
+### Output Formats
+
+`effect-analyze <path> --format <fmt>`:
+
+| Format | Description |
+|--------|-------------|
+| `auto` | Best diagram for program (default) |
+| `json` | Raw IR as JSON |
+| `mermaid` | Generic flowchart |
+| `mermaid-paths` | Path-based rendering (with style-guide heuristics) |
+| `mermaid-enhanced` | Enhanced Mermaid with colors/styles |
+| `mermaid-railway` | Happy path + error branches |
+| `mermaid-services` | Service dependency map |
+| `mermaid-errors` | Error propagation |
+| `mermaid-decisions` | Control flow |
+| `mermaid-causes` | Cause/error cause chain diagram |
+| `mermaid-concurrency` | Parallel/race |
+| `mermaid-timeline` | Step sequence |
+| `mermaid-layers` | Layer composition |
+| `mermaid-retry` | Retry/resilience patterns |
+| `mermaid-testability` | Testing readiness diagram |
+| `mermaid-dataflow` | Variable flow |
+| `explain` | Plain-English narrative |
+| `summary` | One-liner |
+| `stats` | Complexity metrics |
+| `matrix` | Dependency matrix |
+| `showcase` | Multi-program showcase |
+| `api-docs` | API documentation (HttpApi) |
+| `openapi-paths` | OpenAPI paths JSON |
+| `openapi-runtime` | Runtime OpenAPI via `OpenApi.fromApi()` |
+| `migration` | Migration opportunities |
+
+### Diff & Regression Detection
+
+Compare program versions structurally (not text diff):
+
+```bash
+effect-analyze --diff v1.ts v2.ts                  # Two local files
+effect-analyze --diff src/wf.ts                     # HEAD vs working copy
+effect-analyze --diff main:src/wf.ts src/wf.ts      # Git ref vs local
+effect-analyze --diff gh:#123                        # GitHub PR auto-discover
+effect-analyze --diff gh:#123 src/wf.ts              # GitHub PR specific file
+effect-analyze --diff v1.ts v2.ts --regression       # Flag removed programs as regressions
+effect-analyze --diff v1.ts v2.ts --include-trivial  # Include trivial changes
+```
+
+Renderers: `renderDiffMarkdown()`, `renderDiffJSON()`, `renderDiffMermaid()`
+
+### Interactive HTML
+
+```bash
+effect-analyze ./program.ts --format mermaid --html
+effect-analyze ./program.ts --html --html-output=docs/program.html
+```
+
+Self-contained HTML with 6 themes: `midnight | ocean | ember | forest | daylight | paper`. Features: search/filter, click nodes for source location/IR, path explorer, complexity heatmap, data flow and error flow overlay toggles.
+
+Library: `renderInteractiveHTML(ir, options)` from `src/output/html.ts`
+
+### Colocated Analysis Docs
+
+```bash
+effect-analyze src/                            # Writes .effect-analysis.md next to each file
+effect-analyze src/ --no-colocate              # Skip writing files, print summary only
+effect-analyze src/ --no-colocate-enhanced     # Use standard Mermaid (not enhanced)
+effect-analyze src/ --colocate-suffix=analysis # Custom suffix: foo.analysis.md
+effect-analyze ./file.ts --colocate            # Single file: write colocated doc
+```
+
+### Coverage Audit
+
+```bash
+effect-analyze ./src --coverage-audit                  # Full audit report
+effect-analyze ./src --coverage-audit --json-summary   # CI mode (JSON only)
+effect-analyze ./src --coverage-audit --show-suspicious-zeros
+effect-analyze ./src --coverage-audit --show-by-folder
+effect-analyze ./src --coverage-audit --per-file-timing
+effect-analyze ./src --coverage-audit --min-meaningful-nodes 3
+effect-analyze ./src --coverage-audit --exclude-from-suspicious-zero "test"
+effect-analyze ./src --coverage-audit --known-effect-internals-root ./packages/core
+```
+
+Reports: discovered/analyzed/failed counts + percentages, suspicious zeros, top unknown files/reasons, folder aggregation.
+
+### Diagram Quality
+
+```bash
+effect-analyze ./src --quality                               # Readability heuristics
+effect-analyze ./src --quality --quality-eslint .cache/eslint.json  # + ESLint hints
+```
+
+### Test Matrix Generation
+
+Library API for generating test coverage matrices from program paths:
+
+```typescript
+import { generateTestMatrix, formatTestMatrixMarkdown, formatTestMatrixAsCode, formatTestChecklist } from 'effect-analyzer';
+```
+
+### Watch Mode
+
+```bash
+effect-analyze ./program.ts --watch        # Re-analyze on file change
+effect-analyze ./program.ts -w --cache     # With caching for performance
+```
+
+### All CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `-f, --format <fmt>` | Output format (see table above) |
+| `--export <name>` | For `openapi-runtime`: HttpApi export name |
+| `-o, --output <file>` | Output file (default: stdout) |
+| `-d, --direction <dir>` | Mermaid direction: TB, LR, BT, RL |
+| `-c, --compact` | Compact output |
+| `--pretty` | Pretty-print (default) |
+| `--tsconfig <path>` | Custom tsconfig.json path |
+| `--no-metadata` | Exclude metadata |
+| `--colocate` | Single-file: write colocated .md |
+| `--no-colocate` | Project mode: skip writing files |
+| `--no-colocate-enhanced` | Standard Mermaid in colocated docs |
+| `--colocate-suffix <s>` | Custom suffix (default: `effect-analysis`) |
+| `-q, --quiet` | Minimal output |
+| `--no-color` | Disable colors |
+| `-w, --watch` | Watch mode |
+| `--cache` | Cache for watch |
+| `-m, --migration` | Migration assistant |
+| `--diff` | Semantic diff mode |
+| `--regression` | Flag regressions in diff |
+| `--include-trivial` | Include trivial diff changes |
+| `--coverage-audit` | Project coverage audit |
+| `--json-summary` | Audit: JSON-only output (CI) |
+| `--show-suspicious-zeros` | Audit: list 0-program Effect files |
+| `--show-top-unknown` | Audit: top files by unknown rate |
+| `--show-top-unknown-reasons` | Audit: top unknown reasons |
+| `--show-by-folder` | Audit: folder aggregation |
+| `--per-file-timing` | Audit: per-file durations |
+| `--min-meaningful-nodes <n>` | Filter small programs |
+| `--exclude-from-suspicious-zero <pat>` | Exclude pattern (repeatable) |
+| `--known-effect-internals-root <path>` | Treat local imports as Effect |
+| `--quality` | Diagram quality heuristics |
+| `--quality-eslint <path>` | ESLint JSON for quality hints |
+| `--style-guide` / `--no-style-guide` | Style guide heuristics |
+| `--service-map` / `--no-service-map` | Service map (default: on) |
+| `--html` | Interactive HTML output |
+| `--html-output <path>` | HTML output path |
+
+## Library API
+
+### Primary Analysis
+
+```typescript
+import { analyze } from 'effect-analyzer';
+const ir = await Effect.runPromise(analyze('./program.ts').single());
+const all = await Effect.runPromise(analyze('./program.ts').all());
+const named = await Effect.runPromise(analyze('./program.ts').named('myProgram'));
+```
+
+### Advanced Analyses
+
+All exported from `src/index.ts`:
+
+- **Composition:** `analyzeProgramGraph()`, `analyzeProjectComposition()`
+- **Data flow:** `buildDataFlowGraph()`, `buildLayerDependencyGraph()`
+- **Error flow:** `analyzeErrorFlow()`, `analyzeErrorPropagation()`
+- **Service flow:** `analyzeServiceFlow()`, `buildProjectServiceMap()`
+- **State flow:** `analyzeStateFlow()` — Ref/state tracking
+- **Scope/resource:** `analyzeScopeResource()` — Resource lifecycle
+- **Observability:** `analyzeObservability()` — Spans, logs, metrics
+- **DI completeness:** `checkDICompleteness()` — Service satisfaction
+- **Strict diagnostics:** `validateStrict()` — Strict mode validation
+- **Match analysis:** `analyzeMatch()` — Match statement patterns
+- **Platform:** `analyzePlatformUsage()` — Platform detection
+- **Testing:** `analyzeTestingPatterns()` — Test pattern detection
+- **Version:** `getEffectVersion()`, `checkVersionCompat()`
+- **Generator:** `analyzeGenYields()` — Yield analysis
+- **SQL:** `analyzeSqlPatterns()` — SQL pattern detection
+- **RPC:** `analyzeRpcPatterns()` — RPC pattern analysis
+- **Batching:** `analyzeRequestBatching()` — Request batching
+- **STM:** `analyzeStm()` — Software transactional memory
+- **Playground:** `exportForPlayground()`, `encodePlaygroundPayload()`
+
+### Output Renderers
+
+```typescript
+import {
+  renderStaticMermaid, renderEnhancedMermaid, renderRailwayMermaid,
+  renderInteractiveHTML,
+  renderDiffMarkdown, renderDiffJSON, renderDiffMermaid,
+  generateTestMatrix, formatTestMatrixMarkdown, formatTestMatrixAsCode, formatTestChecklist,
+  renderDocumentation, renderMultiProgramDocs,
+  generateShowcase,
+  computeProgramDiagramQuality, buildTopOffendersReport,
+} from 'effect-analyzer';
+```
 
 ## Quick Reference
 
@@ -123,30 +328,6 @@ pnpm quality     # type-check && test && lint
 - **Pattern maps:** `ERROR_HANDLER_PATTERNS`, `CONDITIONAL_PATTERNS`, `TRANSFORM_OPS` in `analysis-patterns.ts`
 - **Typed errors:** `AnalysisError` with codes (`NO_EFFECTS_FOUND`, `FILE_NOT_FOUND`)
 - **Semantic roles:** Nodes tagged with `SemanticRole` for filtering/styling
-
-## CLI Formats
-
-`effect-analyze <path> --format <fmt>`:
-
-| Format | Description |
-|--------|-------------|
-| `auto` | Best diagram for program |
-| `json` | Raw IR as JSON |
-| `mermaid` | Generic flowchart |
-| `mermaid-railway` | Happy path + error branches |
-| `mermaid-services` | Service dependency map |
-| `mermaid-errors` | Error propagation |
-| `mermaid-decisions` | Control flow |
-| `mermaid-concurrency` | Parallel/race |
-| `mermaid-layers` | Layer composition |
-| `mermaid-timeline` | Step sequence |
-| `mermaid-dataflow` | Variable flow |
-| `explain` | Plain-English narrative |
-| `summary` | One-liner |
-| `stats` | Complexity metrics |
-| `matrix` | Dependency matrix |
-| `api-docs` | API documentation |
-| `migration` | Migration opportunities |
 
 ## Common Mistakes
 
