@@ -811,7 +811,7 @@ export const findEffectPrograms = (
       }
     }
 
-    if ((exprText === 'gen' || (exprText.includes('.gen') && isEffectLikeCallExpression(call, sourceFile, effectImportNames, _opts.knownEffectInternalsRoot))) && !seenCallStarts.has(callStart)) {
+    if ((exprText === 'gen' || (exprText.endsWith('.gen') && isEffectLikeCallExpression(call, sourceFile, effectImportNames, _opts.knownEffectInternalsRoot))) && !seenCallStarts.has(callStart)) {
       const name = extractProgramName(call) ?? extractEnclosingEffectFnName(call) ?? `program-${programs.length + 1}`;
       programs.push({
         name,
