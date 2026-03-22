@@ -486,6 +486,11 @@ export function renderInteractiveHTML(
     }
 
     // Click-to-navigate: show node details when clicking on diagram nodes
+    function truncLabel(s, max) {
+      if (!s || s.length <= max) return s;
+      return s.slice(0, max) + '…';
+    }
+    var LABEL_MAX = 60;
     function showNodeDetails(nodeId) {
       var node = nodeIndex[nodeId];
       if (!node) return;
@@ -495,8 +500,8 @@ export function renderInteractiveHTML(
       html += '<table>';
       html += '<tr><td>ID</td><td><code>' + node.id + '</code></td></tr>';
       html += '<tr><td>Type</td><td><b>' + node.type + '</b></td></tr>';
-      if (node.callee) html += '<tr><td>Callee</td><td>' + node.callee + '</td></tr>';
-      if (node.displayName) html += '<tr><td>Display</td><td>' + node.displayName + '</td></tr>';
+      if (node.callee) html += '<tr><td>Callee</td><td>' + truncLabel(node.callee, LABEL_MAX) + '</td></tr>';
+      if (node.displayName) html += '<tr><td>Display</td><td>' + truncLabel(node.displayName, LABEL_MAX) + '</td></tr>';
       if (node.semanticRole) html += '<tr><td>Role</td><td>' + node.semanticRole + '</td></tr>';
       html += '<tr><td>Location</td><td><code>' + loc + '</code></td></tr>';
       if (node.typeSignature) {

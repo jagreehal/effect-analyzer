@@ -27,6 +27,7 @@ import type {
 } from './types';
 import { getStaticChildren } from './types';
 import { splitTopLevelUnion } from './type-extractor';
+import { KNOWN_EFFECT_NAMESPACES, BUILT_IN_TYPE_NAMES } from './analysis-patterns';
 
 // =============================================================================
 // Default Options
@@ -576,11 +577,43 @@ export const createEmptyStats = (): AnalysisStats => ({
 // Display Name & Semantic Role Computation
 // =============================================================================
 
+/** Default max length for user-visible labels (diagrams, explain, IR display names). */
+export const DEFAULT_LABEL_MAX = 60;
+
 /**
  * Truncate a string to `max` characters, appending an ellipsis if truncated.
+ * Use for any user-facing label in output renderers.
  */
-const truncate = (s: string, max: number): string =>
-  s.length <= max ? s : `${s.slice(0, max)}…`;
+export function truncateDisplayText(s: string, max: number = DEFAULT_LABEL_MAX): string {
+  return s.length <= max ? s : `${s.slice(0, max)}…`;
+}
+
+const truncate = truncateDisplayText;
+
+/**
+ * Extract a clean function name from a callee expression.
+ *
+ * For known Effect namespaces (Effect, Schema, Layer, etc.), strips the prefix:
+ *   "Effect.tryPromise" → "tryPromise"
+ *   "Schema.decodeUnknown(UserSchema)" → "decodeUnknown"
+ *
+ * For user/service objects, keeps the receiver for context:
+ *   "deps.convertCurrency" → "deps.convertCurrency"
+ *   "config.getOrDefault" → "config.getOrDefault"
+ */
+export function extractFunctionName(callee: string): string {
+  // Remove anything after opening paren (arguments)
+  const withoutArgs = callee.replace(/\(.*$/, '');
+  const parts = withoutArgs.split('.');
+  if (parts.length <= 1) return withoutArgs;
+  // Strip known Effect namespace prefixes (Effect.X → X, Schema.X → X)
+  const receiver = parts[0] ?? '';
+  if (KNOWN_EFFECT_NAMESPACES.has(receiver) || BUILT_IN_TYPE_NAMES.has(receiver)) {
+    return parts[parts.length - 1] ?? withoutArgs;
+  }
+  // Keep receiver for user objects (deps.foo, config.bar)
+  return withoutArgs;
+}
 
 /**
  * Compute a human-readable display label for a StaticFlowNode.
@@ -591,8 +624,14 @@ const truncate = (s: string, max: number): string =>
 export function computeDisplayName(node: StaticFlowNode, variableName?: string): string {
   switch (node.type) {
     case 'effect': {
-      const prefix = variableName ?? node.name;
-      return prefix ? `${prefix} <- ${node.callee}` : node.callee;
+      const fnName = extractFunctionName(node.callee);
+      if (variableName) {
+        return truncate(`${variableName} <- ${fnName}`, 60);
+      }
+      if (node.name) {
+        return truncate(`${node.name} <- ${fnName}`, 60);
+      }
+      return truncate(fnName, 60);
     }
 
     case 'generator':
@@ -623,7 +662,7 @@ export function computeDisplayName(node: StaticFlowNode, variableName?: string):
       return truncate(node.condition, 30);
 
     case 'loop':
-      return node.iterSource ? `${node.loopType}(${node.iterSource})` : node.loopType;
+      return node.iterSource ? truncate(`${node.loopType}(${node.iterSource})`, 60) : node.loopType;
 
     case 'layer':
       return node.isMerged ? 'Layer (merged)' : 'Layer';
@@ -632,7 +671,7 @@ export function computeDisplayName(node: StaticFlowNode, variableName?: string):
       const ops = node.pipeline.map((op) => op.operation);
       const parts: string[] = ['Stream', ...ops];
       if (node.sink) parts.push(node.sink);
-      return parts.join(' → ');
+      return truncate(parts.join(' → '), 60);
     }
 
     case 'concurrency-primitive':

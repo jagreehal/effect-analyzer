@@ -1696,6 +1696,10 @@ export const analyzeGeneratorFunction = (
     // inside pipe chains, which tests and downstream consumers rely on.
     const calls = body.getDescendantsOfKind(SyntaxKind.CallExpression);
     for (const call of calls) {
+      // Skip Effect.withSpan calls — they are merged as annotations on pipe nodes
+      const callCallee = call.getExpression().getText();
+      if (callCallee.includes('withSpan')) continue;
+
       const aliases = getAliasesForFile(sourceFile);
       if (isEffectLikeCallExpression(call, sourceFile, aliases, opts.knownEffectInternalsRoot)) {
         const analyzed = yield* analyzeEffectCall(

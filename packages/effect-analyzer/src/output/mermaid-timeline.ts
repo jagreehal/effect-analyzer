@@ -1,5 +1,6 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
+import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
 
 interface TimelineStep {
   readonly kind: 'service-call' | 'effect-constructor' | 'retry' | 'timeout' | 'parallel';
@@ -110,9 +111,13 @@ function renderParallelBlock(node: StaticFlowNode, lines: string[], indent: stri
       lines.push(`${indent}  Program->>${child.serviceCall.serviceType}: ${child.serviceCall.methodName}()`);
       lines.push(`${indent}  ${child.serviceCall.serviceType}-->>Program: result`);
     } else if (child.type === 'effect') {
-      lines.push(`${indent}  Note over Program: ${child.callee}`);
+      lines.push(
+        `${indent}  Note over Program: ${truncateDisplayText(child.callee, DEFAULT_LABEL_MAX)}`,
+      );
     } else {
-      const label = child.displayName ?? child.name ?? child.type;
+      const rawLabel =
+        child.displayName ?? child.name ?? (typeof child.type === 'string' ? child.type : 'node');
+      const label = truncateDisplayText(rawLabel, DEFAULT_LABEL_MAX);
       lines.push(`${indent}  Note over Program: ${label}`);
     }
   }
@@ -152,7 +157,9 @@ export function renderTimelineMermaid(ir: StaticEffectIR): string {
       case 'effect-constructor': {
         const node = step.node;
         if (node.type === 'effect') {
-          lines.push(`  Note over Program: ${node.callee}`);
+          lines.push(
+            `  Note over Program: ${truncateDisplayText(node.callee, DEFAULT_LABEL_MAX)}`,
+          );
         }
         break;
       }
@@ -162,9 +169,13 @@ export function renderTimelineMermaid(ir: StaticEffectIR): string {
           const info = node.scheduleInfo;
           if (info) {
             const retries = info.maxRetries !== undefined ? `${info.maxRetries}x` : 'unlimited';
-            lines.push(`  Note over Program: retry (${retries}, ${info.baseStrategy})`);
+            lines.push(
+              `  Note over Program: ${truncateDisplayText(`retry (${retries}, ${info.baseStrategy})`, DEFAULT_LABEL_MAX)}`,
+            );
           } else if (node.schedule) {
-            lines.push(`  Note over Program: retry (${node.schedule})`);
+            lines.push(
+              `  Note over Program: ${truncateDisplayText(`retry (${node.schedule})`, DEFAULT_LABEL_MAX)}`,
+            );
           } else {
             lines.push(`  Note over Program: retry`);
           }
