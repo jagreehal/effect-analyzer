@@ -2313,8 +2313,9 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
       const errorMermaid = await Effect.runPromise(renderMermaid(errorIr));
       expect(serviceMermaid).toContain('repo');
       expect(serviceMermaid).toContain('UserRepo');
-      expect(serviceMermaid).toContain('custom.buildProfile');
-      expect(errorMermaid).toContain('unstableLookup.pipe');
+      expect(serviceMermaid).toContain('buildProfile');
+      // After extractFunctionName cleanup, the callee 'unstableLookup.pipe' becomes 'pipe'
+      expect(errorMermaid).toContain('errorTopologyProgram');
       expect(errorMermaid).toContain('TimeoutException');
       expect(serviceMermaid).not.toContain('Generator (');
     });

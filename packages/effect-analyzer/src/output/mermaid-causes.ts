@@ -1,5 +1,6 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
+import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
 
 interface CausesOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
@@ -97,7 +98,10 @@ function collectFailureNodes(node: StaticFlowNode): readonly FailureNode[] {
   if (node.type === 'effect' && EFFECT_FAILURE_CALLEES.has(node.callee)) {
     const kind = calleeToKind(node.callee);
     const errorType = getErrorTypeLabel(node);
-    const label = errorType ? `${node.callee}: ${errorType}` : node.callee;
+    const label = truncateDisplayText(
+      errorType ? `${node.callee}: ${errorType}` : node.callee,
+      DEFAULT_LABEL_MAX,
+    );
     results.push({
       id: sanitizeId(node.id),
       kind,

@@ -7,7 +7,8 @@
  * - R (Requirements/Context type)
  */
 
-import type { Type, Node, TypeChecker, VariableDeclaration, CallExpression } from 'ts-morph';
+import type { Type, Node, TypeChecker, VariableDeclaration, CallExpression, PropertyAccessExpression } from 'ts-morph';
+import { loadTsMorph } from './ts-morph-loader';
 import type {
   EffectTypeSignature,
   ServiceRequirement,
@@ -70,6 +71,49 @@ export function effectTypeSignatureFromTypeText(
 }
 
 /**
+ * When an error type is a single-letter generic (e.g., "E"), try to resolve
+ * the concrete type from the inner expression (pipe base or call argument).
+ */
+function tryResolveGenericFromInnerExpression(
+  node: Node,
+  typeChecker: TypeChecker,
+): { errorType: string } | undefined {
+  try {
+    const { SyntaxKind } = loadTsMorph();
+    if (node.getKind() === SyntaxKind.CallExpression) {
+      const call = node as CallExpression;
+      const expr = call.getExpression();
+      // For pipe chains: base.pipe(Effect.withSpan("x")) — check the base expression
+      if (expr.getKind() === SyntaxKind.PropertyAccessExpression) {
+        const propAccess = expr as PropertyAccessExpression;
+        if (propAccess.getName() === 'pipe') {
+          const baseExpr = propAccess.getExpression();
+          if (baseExpr) {
+            const baseSig = extractEffectTypeSignature(baseExpr, typeChecker);
+            if (baseSig && !/^[A-Z]$/.test(baseSig.errorType)) {
+              return { errorType: baseSig.errorType };
+            }
+          }
+        }
+      }
+      // For curried calls: Effect.withSpan("name")(effect) — check the argument
+      const args = call.getArguments();
+      if (args.length > 0) {
+        for (const arg of args) {
+          const argSig = extractEffectTypeSignature(arg, typeChecker);
+          if (argSig && !/^[A-Z]$/.test(argSig.errorType)) {
+            return { errorType: argSig.errorType };
+          }
+        }
+      }
+    }
+  } catch {
+    // Type resolution can fail; return undefined
+  }
+  return undefined;
+}
+
+/**
  * Extract Effect type signature from a node
  */
 export const extractEffectTypeSignature = (
@@ -94,9 +138,27 @@ export const extractEffectTypeSignature = (
 
   if (typeArgs) {
     const [aType, eType, rType] = typeArgs;
+    const errorTypeStr = typeToString(eType);
+
+    // If errorType is a single-letter type parameter (e.g. "E"), try to resolve
+    // from the call's inner expression type
+    if (/^[A-Z]$/.test(errorTypeStr)) {
+      const resolved = tryResolveGenericFromInnerExpression(node, _typeChecker);
+      if (resolved) {
+        return {
+          successType: typeToString(aType),
+          errorType: resolved.errorType,
+          requirementsType: typeToString(rType),
+          isInferred: true,
+          typeConfidence: 'inferred',
+          rawTypeString: nodeType.getText(),
+        };
+      }
+    }
+
     return {
       successType: typeToString(aType),
-      errorType: typeToString(eType),
+      errorType: errorTypeStr,
       requirementsType: typeToString(rType),
       isInferred: true,
       typeConfidence: 'declared',
@@ -107,7 +169,22 @@ export const extractEffectTypeSignature = (
   // Fallback: parse A, E, R from type text when Type API doesn't provide type args
   const typeText = nodeType.getText();
   const fromText = effectTypeSignatureFromTypeText(typeText);
-  if (fromText) return fromText;
+  if (fromText) {
+    const eTrim = fromText.errorType.trim();
+    if (/^[A-Z]$/.test(eTrim)) {
+      const resolved = tryResolveGenericFromInnerExpression(node, _typeChecker);
+      if (resolved) {
+        return {
+          ...fromText,
+          errorType: resolved.errorType,
+          isInferred: true,
+          typeConfidence: 'inferred',
+          rawTypeString: nodeType.getText(),
+        };
+      }
+    }
+    return fromText;
+  }
 
   // Fallback: resolve the callee function's return type annotation
   const fromCallee = tryExtractFromCalleeReturnType(node);

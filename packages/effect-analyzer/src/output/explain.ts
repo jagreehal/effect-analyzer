@@ -10,6 +10,7 @@ import type {
   StaticFlowNode,
   StaticEffectProgram,
 } from '../types';
+import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -19,21 +20,22 @@ const indent = (depth: number): string => '  '.repeat(depth);
 
 /** Summarise a node in a short inline phrase (no newline). */
 function shortLabel(node: StaticFlowNode): string {
+  const t = (s: string, max = DEFAULT_LABEL_MAX) => truncateDisplayText(s, max);
   switch (node.type) {
     case 'effect': {
       if (node.serviceCall) {
-        return `${node.serviceCall.serviceType}.${node.serviceCall.methodName}`;
+        return t(`${node.serviceCall.serviceType}.${node.serviceCall.methodName}`);
       }
-      return node.displayName ?? node.callee;
+      return t(node.displayName ?? node.callee);
     }
     case 'generator':
       return 'Effect.gen block';
     case 'pipe':
-      return `pipe(${shortLabel(node.initial)})`;
+      return t(`pipe(${shortLabel(node.initial)})`);
     case 'parallel':
-      return `${node.callee}(${node.children.length} effects)`;
+      return t(`${node.callee}(${node.children.length} effects)`);
     case 'race':
-      return `${node.callee}(${node.children.length} effects)`;
+      return t(`${node.callee}(${node.children.length} effects)`);
     case 'error-handler':
       return node.handlerType;
     case 'retry':
@@ -45,7 +47,9 @@ function shortLabel(node: StaticFlowNode): string {
     case 'conditional':
       return `if ${node.conditionLabel ?? node.condition}`;
     case 'loop':
-      return `${node.loopType}${node.iterSource ? `(${node.iterSource})` : ''}`;
+      return t(
+        `${node.loopType}${node.iterSource ? `(${node.iterSource})` : ''}`,
+      );
     case 'layer':
       return node.provides ? `Layer(${node.provides.join(', ')})` : 'Layer';
     case 'stream':
@@ -125,7 +129,10 @@ export function explainNode(
           );
         }
       } else {
-        const label = node.displayName ?? node.callee;
+        const label = truncateDisplayText(
+          node.displayName ?? node.callee,
+          DEFAULT_LABEL_MAX,
+        );
         const desc = node.description ? ` — ${node.description}` : '';
         // If displayName has a binding arrow (e.g. "logger <- Logger"), it's a service yield
         if (label.includes(' <- ')) {
@@ -381,7 +388,9 @@ export function explainNode(
 
     // ----- loop -------------------------------------------------------------
     case 'loop': {
-      const src = node.iterSource ? ` over ${node.iterSource}` : '';
+      const src = node.iterSource
+        ? ` over ${truncateDisplayText(node.iterSource, DEFAULT_LABEL_MAX)}`
+        : '';
       lines.push(`${pad}Iterates (${node.loopType})${src}:`);
       lines.push(...explainNode(node.body, depth + 1, state));
       break;

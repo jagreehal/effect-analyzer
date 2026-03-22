@@ -21,6 +21,7 @@ import type {
 import { getStaticChildren } from '../types';
 import { buildDataFlowGraph } from '../data-flow';
 import { analyzeErrorFlow, analyzeErrorPropagation } from '../error-flow';
+import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
 
 // =============================================================================
 // Default styles (include start/end for Start/End nodes)
@@ -390,7 +391,7 @@ function getNodeLabel(
   let label: string;
   switch (node.type) {
     case 'effect':
-      label = node.callee || 'Effect';
+      label = truncateDisplayText(node.callee || 'Effect', DEFAULT_LABEL_MAX);
       break;
     case 'generator':
       label = `Generator (${node.yields.length} yields)`;
@@ -399,10 +400,16 @@ function getNodeLabel(
       label = `Pipe (${node.transformations.length + 1} steps)`;
       break;
     case 'parallel':
-      label = `${node.callee} (${node.children.length} effects)`;
+      label = truncateDisplayText(
+        `${node.callee} (${node.children.length} effects)`,
+        DEFAULT_LABEL_MAX,
+      );
       break;
     case 'race':
-      label = `${node.callee} (${node.children.length} racing)`;
+      label = truncateDisplayText(
+        `${node.callee} (${node.children.length} racing)`,
+        DEFAULT_LABEL_MAX,
+      );
       break;
     case 'error-handler':
       label = node.handlerType;
@@ -420,13 +427,21 @@ function getNodeLabel(
       label = `${node.conditionalType} (${truncate(node.condition, 20)})`;
       break;
     case 'loop':
-      label = `${node.loopType}${node.iterSource ? `(${node.iterSource})` : ''}`;
+      label = node.iterSource
+        ? truncateDisplayText(
+            `${node.loopType}(${node.iterSource})`,
+            DEFAULT_LABEL_MAX,
+          )
+        : node.loopType;
       break;
     case 'layer':
       label = `Layer${node.isMerged ? ' (merged)' : ''}`;
       break;
     case 'stream':
-      label = `Stream${node.pipeline.length > 0 ? `.${node.pipeline.map((p) => p.operation).join(' → ')}` : ''}${node.sink ? ` → ${node.sink}` : ''}`;
+      label = truncateDisplayText(
+        `Stream${node.pipeline.length > 0 ? `.${node.pipeline.map((p) => p.operation).join(' → ')}` : ''}${node.sink ? ` → ${node.sink}` : ''}`,
+        DEFAULT_LABEL_MAX,
+      );
       break;
     case 'concurrency-primitive':
       label = `${node.primitive}.${node.operation}${node.strategy ? ` (${node.strategy})` : ''}`;
@@ -757,7 +772,12 @@ function renderNode(
 
     case 'loop': {
       const loopId = `loop_${++context.nodeCounter}`;
-      const bodyLabel = `${node.loopType}${node.iterSource ? `(${node.iterSource})` : ''}`;
+      const bodyLabel = node.iterSource
+        ? truncateDisplayText(
+            `${node.loopType}(${node.iterSource})`,
+            DEFAULT_LABEL_MAX,
+          )
+        : node.loopType;
       lines.push(`  ${loopId}(["${escapeLabel(bodyLabel)}"])`);
       context.styleClasses.set(loopId, 'loopStyle');
       context.edges.push({ from: nodeId, to: loopId });
@@ -1519,7 +1539,10 @@ export function renderSequenceMermaid(ir: StaticEffectIR): string {
   });
   lines.push('');
   forks.forEach((f, i) => {
-    const label = f.fiberSource ? (f.fiberSource as StaticEffectNode).callee ?? 'effect' : 'effect';
+    const raw = f.fiberSource
+      ? (f.fiberSource as StaticEffectNode).callee ?? 'effect'
+      : 'effect';
+    const label = truncateDisplayText(raw, DEFAULT_LABEL_MAX);
     lines.push(`  Main->>Fiber${i + 1}: fork(${label})`);
   });
   joins.forEach((_, i) => {

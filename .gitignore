@@ -12,3 +12,4 @@ tsup.config.bundled_*.mjs
 **/.playwright-cli
 ___*
 .DS_Store
+.astro/

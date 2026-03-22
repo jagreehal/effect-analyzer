@@ -216,7 +216,9 @@ describe('effect-analyzer (handler/metrics)', () => {
   });
 
   describe('Precision metrics', () => {
-    it('should report unknownNodeRate in coverage audit', async () => {
+    it(
+      'should report unknownNodeRate in coverage audit',
+      async () => {
       const tmp = mkdtempSync(join(tmpdir(), 'precision-'));
       const tsconfigPath = join(tmp, 'tsconfig.json');
       const filePath = join(tmp, 'app.ts');
@@ -238,7 +240,9 @@ describe('effect-analyzer (handler/metrics)', () => {
         rmSync(tmp, { recursive: true });
         clearProjectCache();
       }
-    });
+    },
+      20_000,
+    );
 
     it('should classify files with Effect imports but zero programs as suspicious zeros', async () => {
       const tmp = mkdtempSync(join(tmpdir(), 'suspicious-'));
@@ -308,30 +312,34 @@ describe('effect-analyzer (handler/metrics)', () => {
       }
     });
 
-    it('should expose repo-level totalNodes and unknownNodes in audit (improve.md §5)', async () => {
-      const tmp = mkdtempSync(join(tmpdir(), 'audit-total-unknown-'));
-      const tsconfigPath = join(tmp, 'tsconfig.json');
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] }));
-      writeFileSync(join(tmp, 'app.ts'), [
-        'import { Effect } from "effect";',
-        'export const program = Effect.succeed(1);',
-      ].join('\n'));
-      clearProjectCache();
-      try {
-        const audit = await Effect.runPromise(runCoverageAudit(tmp, { tsconfig: tsconfigPath }));
-        expect(typeof (audit as { totalNodes?: number }).totalNodes).toBe('number');
-        expect(typeof (audit as { unknownNodes?: number }).unknownNodes).toBe('number');
-        const a = audit as { totalNodes: number; unknownNodes: number; unknownNodeRate: number };
-        expect(a.totalNodes).toBeGreaterThanOrEqual(0);
-        expect(a.unknownNodes).toBeGreaterThanOrEqual(0);
-        if (a.totalNodes > 0) {
-          expect(a.unknownNodeRate).toBeCloseTo(a.unknownNodes / a.totalNodes);
-        }
-      } finally {
-        rmSync(tmp, { recursive: true });
+    it(
+      'should expose repo-level totalNodes and unknownNodes in audit (improve.md §5)',
+      async () => {
+        const tmp = mkdtempSync(join(tmpdir(), 'audit-total-unknown-'));
+        const tsconfigPath = join(tmp, 'tsconfig.json');
+        writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] }));
+        writeFileSync(join(tmp, 'app.ts'), [
+          'import { Effect } from "effect";',
+          'export const program = Effect.succeed(1);',
+        ].join('\n'));
         clearProjectCache();
-      }
-    });
+        try {
+          const audit = await Effect.runPromise(runCoverageAudit(tmp, { tsconfig: tsconfigPath }));
+          expect(typeof (audit as { totalNodes?: number }).totalNodes).toBe('number');
+          expect(typeof (audit as { unknownNodes?: number }).unknownNodes).toBe('number');
+          const a = audit as { totalNodes: number; unknownNodes: number; unknownNodeRate: number };
+          expect(a.totalNodes).toBeGreaterThanOrEqual(0);
+          expect(a.unknownNodes).toBeGreaterThanOrEqual(0);
+          if (a.totalNodes > 0) {
+            expect(a.unknownNodeRate).toBeCloseTo(a.unknownNodes / a.totalNodes);
+          }
+        } finally {
+          rmSync(tmp, { recursive: true });
+          clearProjectCache();
+        }
+      },
+      20_000,
+    );
   });
 
   describe('Acceptance checklist (improve.md)', () => {

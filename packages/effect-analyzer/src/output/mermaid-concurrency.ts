@@ -1,5 +1,6 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
+import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
 
 interface ConcurrencyOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
@@ -28,9 +29,10 @@ function nodeId(prefix: string, index: number): string {
 
 /** Compute a display label for a child flow node. */
 function childLabel(node: StaticFlowNode, index: number): string {
-  if (node.displayName) return node.displayName;
-  if (node.name) return node.name;
-  if (node.type === 'effect') return node.callee;
+  const t = (s: string) => truncateDisplayText(s, DEFAULT_LABEL_MAX);
+  if (node.displayName) return t(node.displayName);
+  if (node.name) return t(node.name);
+  if (node.type === 'effect') return t(node.callee);
   return `child_${index}`;
 }
 
@@ -102,7 +104,12 @@ export function renderConcurrencyMermaid(
         const pId = nodeId('P', globalIdx++);
         const count = pNode.children.length;
         const modeLabel = pNode.mode === 'parallel' ? 'parallel' : 'sequential';
-        const label = escapeLabel(`${pNode.callee} #lpar;${count} effects, ${modeLabel}#rpar;`);
+        const label = escapeLabel(
+          truncateDisplayText(
+            `${pNode.callee} #lpar;${count} effects, ${modeLabel}#rpar;`,
+            DEFAULT_LABEL_MAX,
+          ),
+        );
         lines.push(`  ${pId}[${label}]`);
         styleLines.push(`  style ${pId} fill:#E3F2FD`);
 

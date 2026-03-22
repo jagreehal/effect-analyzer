@@ -12,6 +12,7 @@ import { calculateComplexity } from '../complexity';
 import { renderStaticMermaid } from './mermaid';
 import { analyzeErrorFlow } from '../error-flow';
 import { buildDataFlowGraph } from '../data-flow';
+import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
 
 // =============================================================================
 // Types
@@ -74,9 +75,12 @@ function describeNode(node: StaticFlowNode, depth: number): WorkflowStep | null 
   switch (node.type) {
     case 'effect':
       return {
-        name: node.callee || 'Effect',
+        name: truncateDisplayText(node.callee || 'Effect', DEFAULT_LABEL_MAX),
         type: 'effect',
-        description: node.displayName ?? node.callee,
+        description: truncateDisplayText(
+          node.displayName ?? node.callee,
+          DEFAULT_LABEL_MAX,
+        ),
         depth,
       };
     case 'error-handler':
@@ -125,7 +129,10 @@ function describeNode(node: StaticFlowNode, depth: number): WorkflowStep | null 
       return {
         name: node.conditionalType,
         type: 'conditional',
-        description: `Conditional: ${node.condition}`,
+        description: truncateDisplayText(
+          `Conditional: ${node.condition}`,
+          DEFAULT_LABEL_MAX,
+        ),
         depth,
       };
     case 'decision':
@@ -139,7 +146,10 @@ function describeNode(node: StaticFlowNode, depth: number): WorkflowStep | null 
       return {
         name: node.loopType,
         type: 'loop',
-        description: `Loop: ${node.loopType}${node.iterSource ? ` over ${node.iterSource}` : ''}`,
+        description: truncateDisplayText(
+          `Loop: ${node.loopType}${node.iterSource ? ` over ${node.iterSource}` : ''}`,
+          DEFAULT_LABEL_MAX,
+        ),
         depth,
       };
     case 'layer':
@@ -153,7 +163,10 @@ function describeNode(node: StaticFlowNode, depth: number): WorkflowStep | null 
       return {
         name: 'Stream',
         type: 'stream',
-        description: `Stream pipeline${node.pipeline.length > 0 ? `: ${node.pipeline.map(p => p.operation).join(' → ')}` : ''}`,
+        description: truncateDisplayText(
+          `Stream pipeline${node.pipeline.length > 0 ? `: ${node.pipeline.map(p => p.operation).join(' → ')}` : ''}`,
+          DEFAULT_LABEL_MAX,
+        ),
         depth,
       };
     case 'fiber':
