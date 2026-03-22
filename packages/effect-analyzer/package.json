@@ -1,6 +1,6 @@
 {
   "name": "effect-analyzer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Static analysis for Effect-TS code. Analyze Effect code to extract structure, calculate complexity, and generate visualizations.",
   "main": "./dist/index.cjs",
@@ -40,8 +40,14 @@
     "effect:fetch": "tsx scripts/fetch-effect-repo.ts"
   },
   "keywords": [
-    "effect", "effect-ts", "static-analysis", "ts-morph",
-    "typescript", "visualization", "mermaid", "functional-programming"
+    "effect",
+    "effect-ts",
+    "static-analysis",
+    "ts-morph",
+    "typescript",
+    "visualization",
+    "mermaid",
+    "functional-programming"
   ],
   "author": "Jag Reehal <jag@jagreehal.com>",
   "license": "MIT",
@@ -50,8 +56,12 @@
     "@effect/platform": ">=0.70.0"
   },
   "peerDependenciesMeta": {
-    "effect": { "optional": false },
-    "@effect/platform": { "optional": true }
+    "effect": {
+      "optional": false
+    },
+    "@effect/platform": {
+      "optional": true
+    }
   },
   "dependencies": {
     "effect": "^3.21.0",
