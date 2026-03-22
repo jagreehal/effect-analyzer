@@ -1,6 +1,6 @@
 {
   "name": "effect-analyzer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Static analysis for Effect-TS code. Analyze Effect code to extract structure, calculate complexity, and generate visualizations.",
   "main": "./dist/index.cjs",
