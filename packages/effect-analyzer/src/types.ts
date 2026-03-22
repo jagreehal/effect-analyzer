@@ -75,6 +75,8 @@ export interface StaticBaseNode {
   readonly displayName?: string | undefined;
   /** Semantic role classification for styling and filtering */
   readonly semanticRole?: SemanticRole | undefined;
+  /** Span name from Effect.withSpan annotation */
+  readonly spanName?: string | undefined;
 }
 
 /**

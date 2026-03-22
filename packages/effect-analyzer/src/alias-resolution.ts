@@ -163,20 +163,42 @@ export function getEffectImportNames(sourceFile: SourceFile): Set<string> {
       const barrelFile = resolveBarrelSourceFile(project, currentPath, specifier);
       if (!barrelFile) continue;
       const reExported = getNamesReExportedFromEffect(barrelFile);
-      if (reExported.size === 0) continue;
+
+      // Collect all import names to check
+      const toCheck: { name: string; localName: string }[] = [];
       const def = decl.getDefaultImport();
       if (def) {
         const text = def.getText();
-        if (reExported.has(text)) names.add(text);
+        toCheck.push({ name: text, localName: text });
       }
       const ns = decl.getNamespaceImport();
       if (ns) {
         const text = ns.getText();
-        if (reExported.has(text)) names.add(text);
+        toCheck.push({ name: text, localName: text });
       }
       for (const named of decl.getNamedImports()) {
-        if (reExported.has(named.getName())) {
-          names.add(named.getAliasNode()?.getText() ?? named.getName());
+        toCheck.push({
+          name: named.getName(),
+          localName: named.getAliasNode()?.getText() ?? named.getName(),
+        });
+      }
+
+      // Fast path: check one-level re-exports first
+      let needsDeepTrace = false;
+      for (const entry of toCheck) {
+        if (reExported.has(entry.name)) {
+          names.add(entry.localName);
+        } else {
+          needsDeepTrace = true;
+        }
+      }
+
+      // Slow path: only trace deeper when one-level check missed some imports
+      if (needsDeepTrace) {
+        for (const entry of toCheck) {
+          if (!reExported.has(entry.name) && traceReExportChain(barrelFile, entry.name, project, 3)) {
+            names.add(entry.localName);
+          }
         }
       }
     }
@@ -337,6 +359,62 @@ export function normalizeEffectCallee(callee: string, sourceFile: SourceFile): s
 // =============================================================================
 
 /**
+ * Trace a re-export chain up to `maxDepth` levels to determine if a name
+ * ultimately originates from an Effect package.
+ */
+function traceReExportChain(
+  barrelFile: SourceFile,
+  name: string,
+  project: { getSourceFile: (path: string) => SourceFile | undefined },
+  maxDepth: number,
+): boolean {
+  if (maxDepth <= 0) return false;
+
+  for (const exportDecl of barrelFile.getExportDeclarations()) {
+    const specifier = exportDecl.getModuleSpecifierValue();
+    if (!specifier) continue;
+
+    // Check if this export contains the name, and resolve the original name
+    // through any alias (e.g. export { E as Fx } — name="Fx", originalName="E")
+    let originalName: string | undefined;
+    if (exportDecl.isNamespaceExport()) {
+      originalName = name; // namespace re-export covers all names unchanged
+    } else {
+      for (const namedExport of exportDecl.getNamedExports()) {
+        const alias = namedExport.getAliasNode()?.getText();
+        if (alias === name) {
+          // export { E as Fx } — looking for "Fx", original is "E"
+          originalName = namedExport.getName();
+          break;
+        }
+        if (namedExport.getName() === name) {
+          // export { E } — no rename
+          originalName = name;
+          break;
+        }
+      }
+    }
+
+    if (originalName === undefined) continue;
+
+    // If it re-exports from an Effect package, we found it
+    if (isEffectPackageSpecifier(specifier)) return true;
+
+    // If it re-exports from a local module, recurse with the original name
+    if (specifier.startsWith('.')) {
+      const nextBarrel = resolveBarrelSourceFile(project, barrelFile.getFilePath(), specifier);
+      if (nextBarrel) {
+        const fromEffect = getNamesReExportedFromEffect(nextBarrel);
+        if (fromEffect.has(originalName)) return true;
+        if (traceReExportChain(nextBarrel, originalName, project, maxDepth - 1)) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Resolve whether a callee expression originates from an Effect package
  * by tracing its import declaration. Fallback when API_PREFIXES and alias checks don't match.
  */
@@ -381,7 +459,12 @@ function resolveCalleeModuleOrigin(calleeText: string, sourceFile: SourceFile): 
             );
             if (barrelFile) {
               const reExported = getNamesReExportedFromEffect(barrelFile);
-              result = reExported.has(named.getName());
+              if (reExported.has(named.getName())) {
+                result = true;
+              } else {
+                // Multi-level: trace through barrel → barrel chains (up to 3 levels)
+                result = traceReExportChain(barrelFile, named.getName(), sourceFile.getProject(), 3);
+              }
             }
           }
           break;

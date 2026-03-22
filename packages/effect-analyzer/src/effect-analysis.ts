@@ -108,6 +108,26 @@ import {
   resolveBarrelSourceFile,
   resolveModulePath,
 } from './alias-resolution';
+
+// Schema decode/encode operations are NOT collection operations.
+const SCHEMA_OPS = [
+  'Schema.decode',
+  'Schema.decodeUnknown',
+  'Schema.encode',
+  'Schema.validate',
+  'Schema.decodeOption',
+  'Schema.decodeEither',
+  'Schema.encodeUnknown',
+  'Schema.decodeSync',
+  'Schema.encodeSync',
+  'Schema.decodeUnknownSync',
+  'Schema.decodeUnknownOption',
+  'Schema.decodeUnknownEither',
+  'Schema.decodePromise',
+  'Schema.encodePromise',
+  'Schema.decodeUnknownPromise',
+];
+
 export const analyzePipeChain = (
   node: CallExpression,
   sourceFile: SourceFile,
@@ -166,6 +186,30 @@ export const analyzePipeChain = (
       }
     }
 
+    // Detect Effect.withSpan in transformations and merge as annotation
+    let spanName: string | undefined;
+    const filteredTransformations = transformations.filter((t) => {
+      if (t.type === 'effect' && t.callee.includes('withSpan')) {
+        return false; // Remove withSpan from transformations list
+      }
+      return true;
+    });
+
+    // Extract span name from the AST transform arguments
+    if (!spanName) {
+      for (const arg of transformArgs) {
+        if (arg) {
+          const argText = arg.getText();
+          if (argText.includes('withSpan')) {
+            const match = /withSpan\s*\(\s*["']([^"']+)["']/.exec(argText);
+            if (match?.[1]) {
+              spanName = match[1];
+            }
+          }
+        }
+      }
+    }
+
     // Extract type flow through pipe chain
     let typeFlow: EffectTypeSignature[] | undefined;
     try {
@@ -190,8 +234,9 @@ export const analyzePipeChain = (
       id: generateId(),
       type: 'pipe',
       initial,
-      transformations,
+      transformations: filteredTransformations,
       ...(typeFlow ? { typeFlow } : {}),
+      ...(spanName ? { spanName } : {}),
     };
     const enrichedPipeNode: StaticPipeNode = {
       ...pipeNode,
@@ -425,8 +470,16 @@ export const analyzeEffectCall = (
       opts.includeLocations ?? false,
     );
 
-    // pipe(base, ...fns) inside generator → analyze as pipe chain so transformations (e.g. RcRef.update) are classified
-    if (callee === 'pipe' && call.getArguments().length >= 1) {
+    // pipe(base, ...fns) or Effect.*.pipe(...fns) inside generator → analyze as pipe chain so transformations (e.g. RcRef.update) are classified
+    // For method-style .pipe(), only route Effect-based pipes (not Schedule, Stream, etc.)
+    const isEffectMethodPipe =
+      callee.endsWith('.pipe') &&
+      callee !== 'pipe' &&
+      callee.startsWith('Effect.');
+    if (
+      (callee === 'pipe' || isEffectMethodPipe) &&
+      call.getArguments().length >= 1
+    ) {
       const nodes = yield* analyzePipeChain(
         call,
         sourceFile,
@@ -672,7 +725,9 @@ export const analyzeEffectCall = (
       );
     }
 
-    if (CONDITIONAL_PATTERNS.some((pattern) => callee.includes(pattern))) {
+    // Match CONDITIONAL_PATTERNS against the final method name, not the full callee text
+    const conditionalOp = `.${calleeOperation}`;
+    if (CONDITIONAL_PATTERNS.some((pattern) => conditionalOp === pattern || callee.endsWith(pattern))) {
       return yield* analyzeConditionalCall(
         call,
         callee,
@@ -684,7 +739,12 @@ export const analyzeEffectCall = (
       );
     }
 
-    if (COLLECTION_PATTERNS.some((pattern) => callee.includes(pattern))) {
+    const isSchemaOp = SCHEMA_OPS.some((op) => callee.startsWith(op) || normalizedCallee.startsWith(op));
+
+    // Match COLLECTION_PATTERNS against the final method name (calleeOperation), not
+    // the full callee text which can contain arbitrary source code from curried functions.
+    const collectionOp = `.${calleeOperation}`;
+    if (!isSchemaOp && COLLECTION_PATTERNS.some((pattern) => collectionOp === pattern || callee.endsWith(pattern))) {
       return yield* analyzeLoopCall(
         call,
         callee,
@@ -3023,7 +3083,8 @@ const analyzeLoopCall = (
     let body: StaticFlowNode;
 
     if (args.length > 0 && args[0]) {
-      iterSource = args[0].getText();
+      const rawSource = args[0].getText();
+      iterSource = rawSource.length > 30 ? rawSource.slice(0, 30) + '…' : rawSource;
     }
 
     if (args.length > bodyArgIndex && args[bodyArgIndex]) {

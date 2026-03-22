@@ -1,4 +1,5 @@
 import { Option } from 'effect';
+import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
 import { splitTopLevelUnion } from '../type-extractor';
 
@@ -74,21 +75,24 @@ function collectErrorTypes(node: StaticFlowNode): readonly string[] {
 
 /** Compute a display label for a flow node. */
 function computeLabel(node: StaticFlowNode): string {
-  if (node.displayName) return node.displayName;
-  if (node.type === 'effect') {
-    if (node.name) {
-      const stripped = node.name.replace(/^Effect\./, '');
-      return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+  const raw = ((): string => {
+    if (node.displayName) return node.displayName;
+    if (node.type === 'effect') {
+      if (node.name) {
+        const stripped = node.name.replace(/^Effect\./, '');
+        return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+      }
+      return node.callee.replace(/^Effect\./, '');
     }
-    return node.callee.replace(/^Effect\./, '');
-  }
-  if (node.name) return node.name;
-  if (node.type === 'parallel') return 'Effect.all';
-  if (node.type === 'race') return 'Effect.race';
-  if (node.type === 'error-handler') return 'Error Handler';
-  if (node.type === 'retry') return 'Retry';
-  if (node.type === 'conditional') return 'Conditional';
-  return node.type;
+    if (node.name) return node.name;
+    if (node.type === 'parallel') return 'Effect.all';
+    if (node.type === 'race') return 'Effect.race';
+    if (node.type === 'error-handler') return 'Error Handler';
+    if (node.type === 'retry') return 'Retry';
+    if (node.type === 'conditional') return 'Conditional';
+    return node.type;
+  })();
+  return truncateDisplayText(raw, DEFAULT_LABEL_MAX);
 }
 
 /** Transparent: recurse into children, don't show this node itself. */

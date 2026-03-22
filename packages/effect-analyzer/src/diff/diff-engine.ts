@@ -22,6 +22,8 @@ interface StepContext {
   callee: string;
   containerType: string;
   index: number;
+  /** Content-based fingerprint for stable matching */
+  fingerprint: string;
 }
 
 const CONTAINER_TYPES = new Set([
@@ -38,6 +40,15 @@ const CONTAINER_TYPES = new Set([
   'stream',
   'fiber',
 ]);
+
+function computeFingerprint(node: StaticFlowNode): string {
+  if (node.type === 'effect') {
+    // Use displayName (includes variable name, e.g. "config <- succeed")
+    // to disambiguate repeated callees; fall back to callee alone
+    return node.displayName ?? node.callee;
+  }
+  return `${node.type}:${node.displayName ?? node.id}`;
+}
 
 // ---------------------------------------------------------------------------
 // Tree walkers
@@ -56,6 +67,7 @@ function collectStepsWithContext(
       callee: node.callee,
       containerType,
       index,
+      fingerprint: computeFingerprint(node),
     });
     // Still recurse into callbackBody via getStaticChildren
   }
@@ -106,22 +118,44 @@ export function diffPrograms(
   const beforeSteps = collectStepsWithContext(before.root);
   const afterSteps = collectStepsWithContext(after.root);
 
-  const beforeMap = new Map<string, StepContext>();
-  for (const s of beforeSteps) beforeMap.set(s.stepId, s);
-
-  const afterMap = new Map<string, StepContext>();
-  for (const s of afterSteps) afterMap.set(s.stepId, s);
-
-  const matchedBefore = new Set<string>();
-  const matchedAfter = new Set<string>();
+  const matchedBeforeIdx = new Set<number>();
+  const matchedAfterIdx = new Set<number>();
   const entries: StepDiffEntry[] = [];
 
-  // Pass 1: Match by stepId (node.id)
-  for (const afterStep of afterSteps) {
-    const beforeStep = beforeMap.get(afterStep.stepId);
-    if (beforeStep) {
-      matchedBefore.add(beforeStep.stepId);
-      matchedAfter.add(afterStep.stepId);
+  // Pass 1: Match by fingerprint (content-based, stable across analysis runs)
+  // Sub-pass 1a: match same-container fingerprints first to avoid cross-container
+  // matches stealing candidates when duplicates exist.
+  function matchByFingerprint(requireSameContainer: boolean): void {
+    for (let bIdx = 0; bIdx < beforeSteps.length; bIdx++) {
+      if (matchedBeforeIdx.has(bIdx)) continue;
+      const beforeStep = beforeSteps[bIdx];
+      if (!beforeStep) continue;
+
+      // Collect unmatched after-step candidates with the same fingerprint
+      const candidates: number[] = [];
+      for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
+        if (!matchedAfterIdx.has(aIdx) && afterSteps[aIdx]?.fingerprint === beforeStep.fingerprint) {
+          if (requireSameContainer && afterSteps[aIdx]!.containerType !== beforeStep.containerType) continue;
+          candidates.push(aIdx);
+        }
+      }
+      if (candidates.length === 0) continue;
+
+      // Pick best candidate by closest index
+      let bestIdx = candidates[0]!;
+      let bestDist = Math.abs(afterSteps[bestIdx]!.index - beforeStep.index);
+      for (let i = 1; i < candidates.length; i++) {
+        const aIdx = candidates[i]!;
+        const dist = Math.abs(afterSteps[aIdx]!.index - beforeStep.index);
+        if (dist < bestDist) {
+          bestIdx = aIdx;
+          bestDist = dist;
+        }
+      }
+
+      const afterStep = afterSteps[bestIdx]!;
+      matchedBeforeIdx.add(bIdx);
+      matchedAfterIdx.add(bestIdx);
 
       if (beforeStep.containerType !== afterStep.containerType) {
         entries.push({
@@ -140,26 +174,29 @@ export function diffPrograms(
       }
     }
   }
+  // First match within same container, then allow cross-container moves
+  matchByFingerprint(true);
+  matchByFingerprint(false);
 
-  // Pass 2: Rename detection — match unmatched by callee + index position
+  // Pass 2: Rename detection — match unmatched by callee
   if (detectRenames) {
-    const unmatchedBefore = beforeSteps.filter((s) => !matchedBefore.has(s.stepId));
-    const unmatchedAfter = afterSteps.filter((s) => !matchedAfter.has(s.stepId));
-
-    for (const afterStep of unmatchedAfter) {
-      const candidate = unmatchedBefore.find(
-        (bs) =>
-          !matchedBefore.has(bs.stepId) &&
-          bs.callee === afterStep.callee &&
-          bs.index === afterStep.index,
+    for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
+      if (matchedAfterIdx.has(aIdx)) continue;
+      const afterStep = afterSteps[aIdx];
+      if (!afterStep) continue;
+      // Find first unmatched before-step with same callee
+      const bIdx = beforeSteps.findIndex(
+        (bStep, bi) => !matchedBeforeIdx.has(bi) && bStep.callee === afterStep.callee,
       );
-      if (candidate) {
-        matchedBefore.add(candidate.stepId);
-        matchedAfter.add(afterStep.stepId);
+      if (bIdx >= 0) {
+        const matchedBefore = beforeSteps[bIdx];
+        if (!matchedBefore) continue;
+        matchedBeforeIdx.add(bIdx);
+        matchedAfterIdx.add(aIdx);
         entries.push({
           kind: 'renamed',
           stepId: afterStep.stepId,
-          previousStepId: candidate.stepId,
+          previousStepId: matchedBefore.stepId,
           callee: afterStep.callee,
         });
       }
@@ -167,8 +204,10 @@ export function diffPrograms(
   }
 
   // Pass 3: Remaining unmatched → removed / added
-  for (const bs of beforeSteps) {
-    if (!matchedBefore.has(bs.stepId)) {
+  for (let bIdx = 0; bIdx < beforeSteps.length; bIdx++) {
+    if (!matchedBeforeIdx.has(bIdx)) {
+      const bs = beforeSteps[bIdx];
+      if (!bs) continue;
       entries.push({
         kind: 'removed',
         stepId: bs.stepId,
@@ -176,8 +215,10 @@ export function diffPrograms(
       });
     }
   }
-  for (const as2 of afterSteps) {
-    if (!matchedAfter.has(as2.stepId)) {
+  for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
+    if (!matchedAfterIdx.has(aIdx)) {
+      const as2 = afterSteps[aIdx];
+      if (!as2) continue;
       entries.push({
         kind: 'added',
         stepId: as2.stepId,

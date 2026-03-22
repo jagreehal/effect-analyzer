@@ -227,7 +227,9 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
       ).rejects.toThrow('No Effect programs found');
     });
 
-    it('should discover program when namespace alias is from re-export barrel pointing to Effect', async () => {
+    it(
+      'should discover program when namespace alias is from re-export barrel pointing to Effect',
+      async () => {
       const tmp = mkdtempSync(join(tmpdir(), 'barrel-reexport-'));
       const tsconfigPath = join(tmp, 'tsconfig.json');
       const barrelPath = join(tmp, 'barrel.ts');
@@ -249,7 +251,73 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
         rmSync(tmp, { recursive: true, force: true });
         clearProjectCache();
       }
-    });
+    },
+      20_000,
+    );
+
+    it(
+      'should discover program when namespace alias is re-exported through multiple local barrels',
+      async () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'barrel-reexport-deep-'));
+      const tsconfigPath = join(tmp, 'tsconfig.json');
+      const barrel1Path = join(tmp, 'barrel-1.ts');
+      const barrel2Path = join(tmp, 'barrel-2.ts');
+      const mainPath = join(tmp, 'main.ts');
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] }));
+      writeFileSync(barrel2Path, `export { Effect as E } from "effect";\n`);
+      writeFileSync(barrel1Path, `export { E } from "./barrel-2";\n`);
+      writeFileSync(mainPath, [
+        'import { E } from "./barrel-1";',
+        'export const program = E.gen(function* () {',
+        '  yield* E.succeed(1);',
+        '});',
+      ].join('\n'));
+      clearProjectCache();
+      try {
+        const results = await Effect.runPromise(
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+        );
+        expect(results.length).toBeGreaterThanOrEqual(1);
+        expect(results.map((r) => r.root.programName)).toContain('program');
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+        clearProjectCache();
+      }
+    },
+      20_000,
+    );
+
+    it(
+      'should discover program when a multi-level local barrel renames the alias',
+      async () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'barrel-reexport-renamed-'));
+      const tsconfigPath = join(tmp, 'tsconfig.json');
+      const barrel1Path = join(tmp, 'barrel-1.ts');
+      const barrel2Path = join(tmp, 'barrel-2.ts');
+      const mainPath = join(tmp, 'main.ts');
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] }));
+      writeFileSync(barrel2Path, `export { Effect as E } from "effect";\n`);
+      writeFileSync(barrel1Path, `export { E as Fx } from "./barrel-2";\n`);
+      writeFileSync(mainPath, [
+        'import { Fx } from "./barrel-1";',
+        'export const program = Fx.gen(function* () {',
+        '  yield* Fx.succeed(1);',
+        '});',
+      ].join('\n'));
+      clearProjectCache();
+      try {
+        const results = await Effect.runPromise(
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+        );
+        expect(results.length).toBeGreaterThanOrEqual(1);
+        expect(results.map((r) => r.root.programName)).toContain('program');
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+        clearProjectCache();
+      }
+    },
+      20_000,
+    );
 
     it('should discover program with renamed namespace import (import * as E from "effect/Effect")', async () => {
       const source = [
