@@ -1,0 +1,516 @@
+---
+title: Library API
+description: Complete programmatic API reference for effect-analyzer.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+All exports are available from the `effect-analyzer` package. The library is designed for integration into custom tools, CI pipelines, and editors.
+
+```ts
+import { analyze, renderMermaid, calculateComplexity } from "effect-analyzer"
+```
+
+## Analysis
+
+### `analyze(path)`
+
+The primary entry point. Returns a fluent API for extracting programs from a file.
+
+```ts
+import { analyze } from "effect-analyzer"
+import { Effect } from "effect"
+
+// Get a single program (throws if file has zero or multiple)
+const ir = await Effect.runPromise(analyze("./src/program.ts").single())
+
+// Get all programs in a file
+const irs = await Effect.runPromise(analyze("./src/program.ts").all())
+
+// Get a program by name
+const named = await Effect.runPromise(analyze("./src/program.ts").named("transfer"))
+```
+
+### `analyzeEffectFile(filePath, options?)`
+
+Lower-level file analysis. Returns `StaticEffectIR[]` - one IR per detected program.
+
+### `analyzeEffectSource(source, filePath?, options?)`
+
+Analyze a TypeScript source string directly, without reading from disk:
+
+```ts
+import { analyzeEffectSource } from "effect-analyzer"
+
+const irs = analyzeEffectSource(`
+  import { Effect } from 'effect';
+  export const hello = Effect.succeed('world');
+`)
+```
+
+### `analyze.source(code)`
+
+Analyze a TypeScript source string using the fluent API:
+
+```ts
+import { analyze } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze.source(`
+  import { Effect } from 'effect';
+  export const hello = Effect.succeed('world');
+`).single())
+```
+
+The fluent API methods available on `analyze(path)` and `analyze.source(code)`:
+
+| Method | Description |
+|---|---|
+| `.single()` | Returns exactly one program (fails if zero or multiple) |
+| `.singleOption()` | Returns `Option<IR>` - `None` if zero programs, fails if multiple |
+| `.all()` | Returns all programs as an array |
+| `.named(name)` | Returns the program matching the given name |
+| `.first()` | Returns the first program (fails if zero programs) |
+| `.firstOption()` | Returns `Option<IR>` - the first program or `None` |
+
+### `analyzeProject(dirPath, options?)`
+
+Analyze all TypeScript files in a directory. Returns a `ProjectAnalysisResult` with per-file outcomes.
+
+### `runCoverageAudit(dirPath, options?)`
+
+Run a coverage audit across a directory. Returns a `CoverageAuditResult`.
+
+## Rendering
+
+### Mermaid Diagrams
+
+| Function | Description |
+|---|---|
+| `renderMermaid(ir, options?)` | Standard flowchart |
+| `renderStaticMermaid(ir, options?)` | Static flowchart (no animation) |
+| `renderRailwayMermaid(ir, options?)` | Railway diagram with error branches |
+| `renderPathsMermaid(ir, options?)` | All execution paths as separate flows |
+| `renderEnhancedMermaid(ir, options?)` | Rich annotations per node |
+| `renderServiceGraphMermaid(ir)` | Service dependency graph |
+| `renderSequenceMermaid(ir)` | Sequence diagram |
+| `renderRetryGanttMermaid(ir)` | Retry timeline as Gantt chart |
+| `renderGraphMermaid(graph)` | Cross-program composition graph |
+| `renderCompositionMermaid(graph)` | Composition with call edges |
+| `renderCompositionWithServicesMermaid(graph)` | Composition including service nodes |
+
+All Mermaid renderers accept a `MermaidOptions` object:
+
+```ts
+import { renderMermaid } from "effect-analyzer"
+import { Effect } from "effect"
+
+const diagram = await Effect.runPromise(renderMermaid(ir, {
+  direction: "LR",        // TB | LR | BT | RL
+  styleGuide: true,       // Apply readability heuristics
+}))
+```
+
+### Structured Output
+
+| Function | Description |
+|---|---|
+| `renderJSON(ir, options?)` | Full IR as JSON |
+| `renderMultipleJSON(irs)` | Multiple IRs as JSON array |
+| `renderExplanation(ir)` | Plain-English narrative |
+| `renderMultipleExplanations(irs)` | Explanations for multiple programs |
+| `renderSummary(ir)` | One-line summary |
+| `renderMultipleSummaries(irs)` | Summaries for multiple programs |
+| `renderDependencyMatrix(irs)` | Program-by-service dependency table |
+| `renderDocumentation(ir, options?)` | Markdown documentation |
+| `renderMultiProgramDocs(irs, options?)` | Documentation for multiple programs |
+| `generateShowcase(ir, options?)` | Detailed step-by-step showcase |
+
+### Interactive HTML
+
+```ts
+import { renderInteractiveHTML } from "effect-analyzer"
+
+const html = renderInteractiveHTML(ir, {
+  title: "Transfer Analysis",
+  theme: "midnight",  // midnight | ocean | ember | forest | daylight | paper
+})
+```
+
+See [Interactive HTML](/effect-analyzer/reference/html-viewer/) for full details.
+
+### API Documentation
+
+| Function | Description |
+|---|---|
+| `renderApiDocsMarkdown(structure)` | HttpApi structure to markdown |
+| `renderApiDocsMermaid(structure)` | HttpApi structure to Mermaid |
+| `renderOpenApiPaths(structure)` | Minimal OpenAPI paths |
+| `extractHttpApiStructure(ir)` | Extract HttpApi info from IR |
+
+## Complexity
+
+### `calculateComplexity(ir)`
+
+Returns `ComplexityMetrics` with 6 metrics:
+
+```ts
+import { calculateComplexity } from "effect-analyzer"
+
+const metrics = calculateComplexity(ir)
+// { cyclomaticComplexity, cognitiveComplexity, pathCount, maxDepth, maxParallelBreadth, decisionPoints }
+```
+
+### `assessComplexity(metrics, thresholds?)`
+
+Evaluate metrics against thresholds. Returns a `ComplexityAssessment` with severity and warnings.
+
+### `formatComplexitySummary(metrics)`
+
+Format metrics as a human-readable one-liner.
+
+### `DEFAULT_THRESHOLDS`
+
+The default complexity thresholds object.
+
+## Path Generation
+
+### `generatePaths(ir, options?)`
+
+Enumerate execution paths. Returns `EffectPath[]`.
+
+```ts
+import { generatePaths } from "effect-analyzer"
+
+const paths = generatePaths(ir, { maxPaths: 100, expandLoops: true })
+```
+
+### `generatePathsWithMetadata(ir, options?)`
+
+Same as `generatePaths` but returns a `PathGenerationResult` with a `limitHit` flag.
+
+### `calculatePathStatistics(paths)`
+
+Aggregate statistics across paths.
+
+### `filterPaths(paths, criteria)`
+
+Filter paths by step names, error conditions, or loop presence.
+
+## Test Matrix
+
+### `generateTestMatrix(paths, options?)`
+
+Generate test cases from paths. Returns a `TestMatrix`.
+
+```ts
+import { generateTestMatrix } from "effect-analyzer"
+
+const matrix = generateTestMatrix(paths, { testNamePrefix: "should" })
+```
+
+### `formatTestMatrixMarkdown(matrix)`
+
+Render the test matrix as a markdown table.
+
+### `formatTestMatrixAsCode(matrix, options?)`
+
+Generate test code skeletons for vitest, jest, or mocha.
+
+### `formatTestChecklist(matrix)`
+
+Render the test matrix as a markdown checklist.
+
+## Data Flow
+
+### `buildDataFlowGraph(ir)`
+
+Build a data flow graph tracking value producers and consumers.
+
+```ts
+import { buildDataFlowGraph, getProducers, getConsumers } from "effect-analyzer"
+
+const graph = buildDataFlowGraph(ir)
+const producers = getProducers(graph, "AccountService")
+const consumers = getConsumers(graph, "balance")
+```
+
+### `getDataFlowOrder(graph)`
+
+Topological order of data flow nodes.
+
+### `getTransitiveDependencies(graph, nodeId)`
+
+All transitive dependencies of a node.
+
+### `findCycles(graph)`
+
+Detect circular dependencies in the data flow.
+
+### `validateDataFlow(graph)`
+
+Check for undefined reads and duplicate writes.
+
+### `renderDataFlowMermaid(graph)`
+
+Render the data flow graph as a Mermaid diagram.
+
+## Error Flow
+
+### `analyzeErrorFlow(ir)`
+
+Extract all error types and map them to steps.
+
+### `analyzeErrorPropagation(ir)`
+
+Track how errors propagate through the program and how handlers narrow them.
+
+### `getErrorsAtPoint(propagation, nodeId)`
+
+Look up the error state at a specific node.
+
+### `getErrorProducers(flow, errorType)`
+
+Find all steps that can produce a given error type.
+
+### `validateWorkflowErrors(ir)`
+
+Check for undeclared and unused error types.
+
+### `renderErrorFlowMermaid(flow)`
+
+Render the error flow as a Mermaid diagram.
+
+### `formatErrorSummary(flow)`
+
+Human-readable error summary.
+
+## Layer Analysis
+
+### `buildLayerDependencyGraph(irs)`
+
+Build a dependency graph of all layers in a set of IRs.
+
+### `renderLayerGraphMermaid(graph)`
+
+Render the layer graph as Mermaid.
+
+### `detectLayerCycles(graph)`
+
+Find circular layer dependencies.
+
+### `detectDiamondDependencies(graph)`
+
+Find diamond dependencies in the layer graph.
+
+### `findUnsatisfiedServices(graph)`
+
+Find services that are required but have no layer provider.
+
+## Service Flow
+
+### `analyzeServiceFlow(ir)`
+
+Track service provisions, unsatisfied services, and lifecycle.
+
+### `buildProjectServiceMap(irs)`
+
+Build a project-wide map of all services, their providers, and consumers.
+
+## Diff
+
+### `diffPrograms(before, after, options?)`
+
+Compare two program IRs. Returns a structured diff.
+
+### `renderDiffMarkdown(diff)`
+
+Render the diff as markdown.
+
+### `renderDiffJSON(diff)`
+
+Render the diff as JSON.
+
+### `renderDiffMermaid(diff)`
+
+Render the diff as a Mermaid diagram with change highlights.
+
+### `parseSourceArg(arg)`
+
+Parse a `ref:path` string into its components.
+
+### `resolveGitSource(arg)`
+
+Resolve a git ref to source code.
+
+## Composition
+
+### `analyzeProgramGraph(irs, options?)`
+
+Build a call graph across multiple programs.
+
+### `analyzeProjectComposition(dirPath, options?)`
+
+Analyze composition across an entire project.
+
+### `getTopologicalOrder(graph)`
+
+Topological sort of the program call graph.
+
+### `getDependencies(graph, programName)`
+
+Get direct dependencies of a program.
+
+### `getDependents(graph, programName)`
+
+Get direct dependents of a program.
+
+### `calculateGraphComplexity(graph)`
+
+Complexity metrics for the composition graph.
+
+## Diagnostics
+
+### `validateStrict(ir, options?)`
+
+Validate an IR against strict diagnostic rules.
+
+```ts
+import { validateStrict } from "effect-analyzer"
+
+const result = validateStrict(ir, { warningsAsErrors: true })
+```
+
+### `formatDiagnostics(result)`
+
+Human-readable diagnostic output.
+
+### `formatDiagnosticsJSON(result)`
+
+JSON diagnostic output.
+
+### `getSummary(result)`
+
+Error and warning counts.
+
+## Const Inliner
+
+### `createConstCache(sourceFile)`
+
+Build a cache of const declarations from a ts-morph source file.
+
+### `resolveConst(name, cache)`
+
+Look up a const value by name.
+
+### `constValueToJS(value)`
+
+Convert a `ConstValue` to a plain JavaScript value.
+
+### `extractStringArray(node, cache)`
+
+Extract a string array from a const or literal.
+
+### `extractString(node, cache)`
+
+Extract a single string value.
+
+## Auto-Detection
+
+### `inferBestDiagramType(ir)`
+
+Choose between `'mermaid'` and `'railway'` based on IR structure.
+
+### `selectFormats(ir)`
+
+Select the full set of auto-mode formats for a program.
+
+## Linting
+
+### `lintEffectProgram(ir, rules?)`
+
+Run lint rules against an Effect program IR.
+
+```ts
+import { lintEffectProgram, DEFAULT_LINT_RULES } from "effect-analyzer"
+
+const result = lintEffectProgram(ir, DEFAULT_LINT_RULES)
+```
+
+### `formatLintReport(result)`
+
+Format lint issues as a human-readable report.
+
+### Built-in Rules
+
+| Rule | Description |
+|---|---|
+| `errorTypeTooWideRule` | Error type is `unknown` or `Error` instead of a tagged union |
+| `unboundedParallelismRule` | `Effect.all` without concurrency option |
+| `redundantPipeRule` | Single-step pipe that could be simplified |
+| `orDieWarningRule` | Use of `Effect.orDie` which discards error info |
+| `untaggedYieldRule` | Yield without a descriptive variable name |
+| `missingErrorHandlerRule` | Errors produced but no handler present |
+| `deadCodeRule` | Unreachable code after terminal effects |
+| `complexLayerRule` | Layer with too many dependencies |
+| `catchAllVsCatchTagRule` | `catchAll` used where `catchTag` would be more precise |
+
+## Type Extraction
+
+### `extractEffectTypeSignature(node)`
+
+Extract `Effect<A, E, R>` type parameters from a ts-morph node.
+
+### `extractStreamTypeSignature(node)`
+
+Extract `Stream<A, E, R>` type parameters.
+
+### `extractLayerTypeSignature(node)`
+
+Extract `Layer<A, E, R>` type parameters.
+
+### `extractServiceRequirements(ir)`
+
+Get all service requirements for a program.
+
+### `formatTypeSignature(sig)`
+
+Format a type signature as a readable string.
+
+## Diagram Quality
+
+### `computeProgramDiagramQuality(ir)`
+
+Compute readability metrics for a program's diagram.
+
+### `computeFileDiagramQuality(irs)`
+
+Compute quality metrics for all programs in a file.
+
+### `buildTopOffendersReport(qualities)`
+
+Build a report of the worst-quality diagrams.
+
+## Additional Analyzers
+
+| Function | Description |
+|---|---|
+| `analyzeStateFlow(ir)` | Track `Ref` mutations and race conditions |
+| `analyzeScopeResource(ir)` | Analyze `acquireRelease` and scope boundaries |
+| `analyzeObservability(ir)` | Find spans, log points, and metrics |
+| `analyzeFiberLeaks(ir)` | Detect potentially leaked fibers |
+| `analyzeGenYields(ir)` | Detailed analysis of `yield*` bindings in generators |
+| `analyzeMatch(ir)` | Analyze `Match` pattern sites and arms |
+| `analyzePlatformUsage(ir)` | Detect `@effect/platform` usage |
+| `analyzeSqlPatterns(ir)` | Detect `@effect/sql` patterns |
+| `analyzeRpcPatterns(ir)` | Detect `@effect/rpc` patterns |
+| `analyzeRequestBatching(ir)` | Detect request batching patterns |
+| `analyzeStm(ir)` | Detect STM (software transactional memory) usage |
+| `analyzeConfig(ir)` | Analyze `Config` usage |
+| `analyzeTestingPatterns(ir)` | Detect testing patterns (`TestContext`, `TestClock`) |
+| `checkDICompleteness(irs)` | Check if all services have layer providers |
+| `formatDICompletenessReport(result)` | Format DI completeness check as a report |
+| `findMigrationOpportunities(path)` | Find patterns migratable to Effect |
+| `exportForPlayground(ir)` | Export IR for the Effect playground |

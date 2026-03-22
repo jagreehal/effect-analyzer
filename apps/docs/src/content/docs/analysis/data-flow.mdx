@@ -1,0 +1,141 @@
+---
+title: Data Flow Analysis
+description: Track value producers and consumers across Effect program steps.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **data flow analyzer** builds a graph of value and service dependencies between steps in your Effect program. It tracks which steps produce values, which steps consume them, and identifies issues like undefined reads or duplicate writes.
+
+## Building a Data Flow Graph
+
+```ts
+import { analyze, buildDataFlowGraph } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const graph = buildDataFlowGraph(ir)
+
+console.log(graph.nodes.length)         // Number of data flow nodes
+console.log(graph.edges.length)         // Number of dependency edges
+console.log(graph.undefinedReads)       // Reads with no matching producer
+console.log(graph.duplicateWrites)     // Keys written by multiple steps
+```
+
+## Graph Structure
+
+The `DataFlowGraph` contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `nodes` | `DataFlowNode[]` | One node per effect step |
+| `edges` | `DataFlowEdge[]` | Edges from producer to consumer |
+| `producedKeys` | `Set<string>` | All keys that have a producer |
+| `undefinedReads` | `UndefinedRead[]` | Reads where no producer was found |
+| `duplicateWrites` | `DuplicateWrite[]` | Keys written by more than one step |
+
+Each `DataFlowNode` records:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Node identifier (matches IR node ID) |
+| `name` | `string \| undefined` | Human-readable step name |
+| `writes` | `string \| undefined` | The success type this step produces |
+| `reads` | `string[]` | Service IDs this step reads from Context |
+
+## Querying Producers and Consumers
+
+Find which steps produce or consume a given key:
+
+```ts
+import { getProducers, getConsumers } from "effect-analyzer"
+
+// Who produces the "balance" value?
+const producers = getProducers(graph, "balance")
+
+// Who consumes "AccountService"?
+const consumers = getConsumers(graph, "AccountService")
+```
+
+## Transitive Dependencies
+
+Trace the full dependency chain for a node:
+
+```ts
+import { getTransitiveDependencies } from "effect-analyzer"
+
+const deps = getTransitiveDependencies(graph, "step-4")
+// All nodes that step-4 transitively depends on
+```
+
+## Finding Cycles
+
+Detect circular dependencies in the data flow:
+
+```ts
+import { findCycles } from "effect-analyzer"
+
+const cycles = findCycles(graph)
+if (cycles.length > 0) {
+  console.log("Circular dependencies found:", cycles)
+}
+```
+
+## Validating Data Flow
+
+Run a comprehensive validation that checks for undefined reads, duplicate writes, and other issues:
+
+```ts
+import { validateDataFlow } from "effect-analyzer"
+
+const validation = validateDataFlow(graph)
+
+console.log(validation.undefinedReads)   // Reads with no producer
+console.log(validation.duplicateWrites)  // Keys with multiple producers
+```
+
+<Aside type="note">
+Undefined reads are not always bugs - they may indicate services provided at the call site via `Effect.provideService`. The validation reports them for your review.
+</Aside>
+
+## Execution Order
+
+Get the topological order of data flow nodes - the order in which they must execute based on their dependencies:
+
+```ts
+import { getDataFlowOrder } from "effect-analyzer"
+
+const order = getDataFlowOrder(graph)
+// Returns node IDs in dependency-respecting order
+```
+
+## Mermaid Visualization
+
+Render the data flow as a Mermaid diagram:
+
+### CLI
+
+```bash
+npx effect-analyze ./src/transfer.ts --format mermaid-dataflow
+```
+
+### Library API
+
+```ts
+import { buildDataFlowGraph, renderDataFlowMermaid } from "effect-analyzer"
+
+const graph = buildDataFlowGraph(ir)
+const diagram = renderDataFlowMermaid(graph)
+
+console.log(diagram)
+```
+
+The diagram shows nodes as boxes with their produced types, and edges indicating which values flow between steps.
+
+## Related
+
+- [Error Analysis](/effect-analyzer/analysis/errors/) - track error flow instead of value flow
+- [Complexity Metrics](/effect-analyzer/analysis/complexity/) - overall program complexity
+- [All Formats](/effect-analyzer/diagrams/all-formats/) - `mermaid-dataflow` format reference

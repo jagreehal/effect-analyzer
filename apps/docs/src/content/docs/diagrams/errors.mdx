@@ -1,0 +1,84 @@
+---
+title: Error Flow Diagrams
+description: Visualize error propagation, handlers, and unhandled errors in Effect programs.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **error flow diagram** visualizes how errors propagate through your Effect program - which steps produce errors, which handlers catch them, and which errors remain unhandled at the program boundary.
+
+## Generating an Error Flow Diagram
+
+```bash
+npx effect-analyze ./src/transfer.ts --format mermaid-errors
+```
+
+The diagram shows:
+
+- **Error producers** - steps that can fail, annotated with their error types
+- **Error handlers** - `catchAll`, `catchTag`, `catchTags` nodes that intercept errors
+- **Unhandled errors** - errors that propagate out of the program without being caught
+
+For a program with `AccountNotFound` and `InsufficientFunds` errors:
+
+```mermaid
+graph TB
+  getBalance -->|AccountNotFound| ERR1[AccountNotFound]
+  debit -->|InsufficientFunds| ERR2[InsufficientFunds]
+  credit -->|AccountNotFound| ERR1
+  ERR1 -.->|unhandled| BOUNDARY[Program Boundary]
+  ERR2 -.->|unhandled| BOUNDARY
+```
+
+If the program includes a `catchTag` handler, the diagram shows the error being intercepted:
+
+```mermaid
+graph TB
+  getBalance -->|AccountNotFound| CATCH[catchTag AccountNotFound]
+  CATCH --> recovery[fallback logic]
+```
+
+## When Auto Mode Selects Error Flow
+
+Auto mode includes the error flow view when your program has:
+
+- Multiple distinct error types
+- One or more error handler nodes (`catchAll`, `catchTag`, `catchTags`)
+- A mix of handled and unhandled errors
+
+## Cause Diagrams
+
+For programs that use `Cause.match` or `Exit.match`, the **causes** diagram shows the cause hierarchy:
+
+```bash
+npx effect-analyze ./src/program.ts --format mermaid-causes
+```
+
+This visualizes `Fail`, `Die`, `Interrupt`, and composite causes (`Sequential`, `Parallel`).
+
+## Programmatic Usage
+
+Generate error flow diagrams through the library API:
+
+```ts
+import { analyze } from "effect-analyzer"
+import { renderErrorsMermaid } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const diagram = renderErrorsMermaid(ir)
+
+console.log(diagram)
+```
+
+<Aside type="note">
+The error flow diagram shows the static error structure. For deeper analysis including error propagation tracking and validation, see [Error Analysis](/effect-analyzer/analysis/errors/).
+</Aside>
+
+## Related
+
+- [Error Analysis](/effect-analyzer/analysis/errors/) - programmatic error flow analysis with `analyzeErrorFlow` and `analyzeErrorPropagation`
+- [Railway Diagrams](/effect-analyzer/diagrams/railway/) - shows errors as branches off the happy path
+- [Strict Diagnostics](/effect-analyzer/project/diagnostics/) - lint rules for missing error types

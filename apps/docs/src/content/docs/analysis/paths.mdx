@@ -1,0 +1,141 @@
+---
+title: Execution Paths
+description: Enumerate all possible execution paths through an Effect program for testing and analysis.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **path generator** enumerates every distinct execution path through your Effect program. Each path represents a unique sequence of steps that could execute given certain conditions - which branches are taken, which errors occur, and how loops iterate.
+
+## Generating Paths
+
+### CLI
+
+The `mermaid-paths` format renders each execution path as a separate diagram:
+
+```bash
+npx effect-analyze ./src/transfer.ts --format mermaid-paths
+```
+
+### Library API
+
+```ts
+import { analyze, generatePaths } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const paths = generatePaths(ir)
+
+for (const path of paths) {
+  console.log(`Path: ${path.steps.map(s => s.name ?? s.nodeId).join(" → ")}`)
+  console.log(`  Conditions: ${path.conditions.length}`)
+  console.log(`  Has loops: ${path.hasLoops}`)
+}
+```
+
+Each `EffectPath` contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `steps` | `PathStepRef[]` | Ordered sequence of steps in this path |
+| `conditions` | `PathCondition[]` | Conditions that must hold for this path to execute |
+| `hasLoops` | `boolean` | Whether this path passes through a loop |
+
+Each `PathStepRef` includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `nodeId` | `string` | Reference to the IR node |
+| `name` | `string \| undefined` | Human-readable step name |
+| `repeated` | `boolean` | Whether this step repeats (loop body) |
+
+## Options
+
+Control path generation with `PathGeneratorOptions`:
+
+```ts
+const paths = generatePaths(ir, {
+  maxPaths: 100,       // Cap at 100 paths (default: 1000)
+  expandLoops: true,   // Expand loop bodies into separate paths
+  maxLoopIterations: 3 // Maximum loop unrolling depth (default: 3)
+})
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `maxPaths` | `number` | `1000` | Maximum paths to generate before stopping |
+| `expandLoops` | `boolean` | `false` | Expand loop iterations as separate paths |
+| `maxLoopIterations` | `number` | `3` | How many iterations to unroll when `expandLoops` is true |
+
+<Aside type="note">
+When `maxPaths` is reached, the generator stops and sets `limitHit: true` on the result. Use `generatePathsWithMetadata` to access this flag.
+</Aside>
+
+## Path Metadata
+
+Use `generatePathsWithMetadata` for additional information:
+
+```ts
+import { generatePathsWithMetadata } from "effect-analyzer"
+
+const result = generatePathsWithMetadata(ir, { maxPaths: 50 })
+
+console.log(result.paths.length) // Number of paths generated
+console.log(result.limitHit)     // true if maxPaths was reached
+```
+
+## Calculating Path Statistics
+
+Use `calculatePathStatistics` to get aggregate statistics across all paths:
+
+```ts
+import { generatePaths, calculatePathStatistics } from "effect-analyzer"
+
+const paths = generatePaths(ir)
+const stats = calculatePathStatistics(paths)
+
+console.log(stats.totalPaths)       // Total number of paths
+console.log(stats.avgPathLength)    // Average steps per path
+console.log(stats.maxPathLength)    // Longest path
+console.log(stats.pathsWithLoops)   // How many paths include loops
+console.log(stats.uniqueConditions) // Distinct branching conditions
+```
+
+## Filtering Paths
+
+Use `filterPaths` to narrow down to specific paths of interest:
+
+```ts
+import { generatePaths, filterPaths } from "effect-analyzer"
+
+const paths = generatePaths(ir)
+
+// Filter to paths that include a specific step
+const withDebit = filterPaths(paths, {
+  includeStep: "debit",
+})
+
+// Filter to paths with error conditions
+const errorPaths = filterPaths(paths, {
+  hasErrors: true,
+})
+```
+
+## From Paths to Tests
+
+Paths are the input to the [Test Coverage Matrix](/effect-analyzer/analysis/test-matrix/). Each path becomes a test case describing what conditions to set up and what steps to verify.
+
+```ts
+import { generatePaths, generateTestMatrix } from "effect-analyzer"
+
+const paths = generatePaths(ir)
+const matrix = generateTestMatrix(paths)
+```
+
+## Related
+
+- [Complexity Metrics](/effect-analyzer/analysis/complexity/) - `pathCount` metric from `calculateComplexity`
+- [Test Coverage Matrix](/effect-analyzer/analysis/test-matrix/) - generate test cases from paths
+- [All Formats](/effect-analyzer/diagrams/all-formats/) - `mermaid-paths` format reference

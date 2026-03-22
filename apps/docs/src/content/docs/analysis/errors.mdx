@@ -1,0 +1,158 @@
+---
+title: Error Analysis
+description: Analyze error propagation, validate error handling, and find unhandled errors in Effect programs.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **error analysis** module provides deep inspection of how errors flow through your Effect programs. It goes beyond the visual [error flow diagram](/effect-analyzer/diagrams/errors/) to offer programmatic analysis of error producers, propagation chains, and handler coverage.
+
+## Analyzing Error Flow
+
+The `analyzeErrorFlow` function extracts all error types, maps them to the steps that produce them, and identifies steps without declared error types:
+
+```ts
+import { analyze, analyzeErrorFlow } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const flow = analyzeErrorFlow(ir)
+
+console.log(flow.allErrors)             // ["AccountNotFound", "InsufficientFunds"]
+console.log(flow.stepErrors)            // Per-step error breakdown
+console.log(flow.errorToSteps)          // Map: error type → step IDs
+console.log(flow.stepsWithoutErrors)    // Steps with no declared errors
+console.log(flow.allStepsDeclareErrors) // true if every step has error types
+```
+
+## Error Flow Structure
+
+The `ErrorFlowAnalysis` object contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `allErrors` | `string[]` | All distinct error types in the program |
+| `stepErrors` | `StepErrorInfo[]` | Per-step breakdown of errors |
+| `errorToSteps` | `Map<string, string[]>` | Map from error type to the steps that produce it |
+| `stepsWithoutErrors` | `string[]` | Step IDs that have no declared error type |
+| `allStepsDeclareErrors` | `boolean` | Whether every step has error annotations |
+
+Each `StepErrorInfo` includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `stepId` | `string` | IR node ID |
+| `stepName` | `string \| undefined` | Human-readable name |
+| `errors` | `string[]` | Error types this step can produce |
+
+## Error Propagation Analysis
+
+Use `analyzeErrorPropagation` to track how errors flow through the program and how handlers narrow the error set:
+
+```ts
+import { analyzeErrorPropagation } from "effect-analyzer"
+
+const propagation = analyzeErrorPropagation(ir)
+
+for (const entry of propagation.propagation) {
+  console.log(`At node ${entry.atNode}:`)
+  console.log(`  Possible errors: ${entry.possibleErrors}`)
+  if (entry.narrowedBy) {
+    console.log(`  Handler: ${entry.narrowedBy.handler}`)
+    console.log(`  Removed: ${entry.narrowedBy.removedErrors}`)
+    console.log(`  Added: ${entry.narrowedBy.addedErrors}`)
+  }
+  console.log(`  Defects: ${entry.defects}`)
+  console.log(`  Interruptible: ${entry.interruptible}`)
+}
+```
+
+Each `ErrorPropagation` entry records:
+
+| Field | Type | Description |
+|---|---|---|
+| `atNode` | `string` | The IR node ID |
+| `possibleErrors` | `string[]` | Errors that could exist at this point |
+| `narrowedBy` | `object \| undefined` | Handler that catches errors here |
+| `defects` | `string[]` | Defect types (unrecoverable) |
+| `interruptible` | `boolean` | Whether the fiber is interruptible at this point |
+
+## Querying Errors at a Specific Point
+
+Look up the error state at a particular node:
+
+```ts
+import { analyzeErrorPropagation, getErrorsAtPoint } from "effect-analyzer"
+
+const propagation = analyzeErrorPropagation(ir)
+const errorsAtDebit = getErrorsAtPoint(propagation, "step-3")
+// ["InsufficientFunds", "AccountNotFound"]
+```
+
+## Finding Error Producers
+
+Get all steps that can produce a specific error type:
+
+```ts
+import { analyzeErrorFlow, getErrorProducers } from "effect-analyzer"
+
+const flow = analyzeErrorFlow(ir)
+const producers = getErrorProducers(flow, "AccountNotFound")
+// ["getBalance", "credit"]
+```
+
+## Validating Error Handling
+
+Use `validateWorkflowErrors` to check whether all errors are properly handled:
+
+```ts
+import { validateWorkflowErrors } from "effect-analyzer"
+
+const validation = validateWorkflowErrors(ir)
+
+console.log(validation.valid)            // true if all errors are handled
+console.log(validation.undeclaredErrors) // Errors produced but not in the type signature
+console.log(validation.unusedDeclared)   // Declared errors that no step produces
+console.log(validation.computedErrors)   // The computed error union
+```
+
+<Aside type="caution">
+`undeclaredErrors` indicates errors that steps can produce but that are not reflected in the program's type signature. These are potential runtime surprises - consider adding explicit error types or handlers.
+</Aside>
+
+## Formatting an Error Summary
+
+Generate a human-readable error summary:
+
+```ts
+import { analyzeErrorFlow, formatErrorSummary } from "effect-analyzer"
+
+const flow = analyzeErrorFlow(ir)
+const summary = formatErrorSummary(flow)
+console.log(summary)
+```
+
+## Mermaid Error Flow Diagram
+
+Render the error flow as a Mermaid diagram:
+
+```ts
+import { analyzeErrorFlow, renderErrorFlowMermaid } from "effect-analyzer"
+
+const flow = analyzeErrorFlow(ir)
+const diagram = renderErrorFlowMermaid(flow)
+```
+
+Or via the CLI:
+
+```bash
+npx effect-analyze ./src/transfer.ts --format mermaid-errors
+```
+
+## Related
+
+- [Error Flow Diagrams](/effect-analyzer/diagrams/errors/) - visual error propagation
+- [Strict Diagnostics](/effect-analyzer/project/diagnostics/) - lint rules for missing error types
+- [Data Flow Analysis](/effect-analyzer/analysis/data-flow/) - track value flow between steps

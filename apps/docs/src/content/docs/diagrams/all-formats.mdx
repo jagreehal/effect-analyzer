@@ -1,0 +1,100 @@
+---
+title: All Formats Reference
+description: Complete reference for every output format supported by effect-analyzer.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+effect-analyzer supports over 25 output formats. Use `--format <name>` on the CLI, or let `auto` mode select the best combination for your program.
+
+## Mermaid Diagrams
+
+| Format | CLI Flag | Description | Best For |
+|---|---|---|---|
+| Standard flowchart | `--format mermaid` | Full control-flow graph with all paths | Complex programs with branching |
+| Railway | `--format mermaid-railway` | Linear happy path with error branches | Sequential generators |
+| Execution paths | `--format mermaid-paths` | Each execution path as a separate flow | Understanding all possible routes |
+| Enhanced | `--format mermaid-enhanced` | Rich annotations (types, services, errors) per node | Documentation and review |
+| Service map | `--format mermaid-services` | Service dependency graph | Understanding DI topology |
+| Error flow | `--format mermaid-errors` | Error producers, handlers, propagation | Debugging error handling |
+| Decision tree | `--format mermaid-decisions` | Conditional branching visualization | Programs with many `if`/`match` |
+| Cause hierarchy | `--format mermaid-causes` | Cause and Exit wrapping structure | Cause/Exit pattern analysis |
+| Concurrency | `--format mermaid-concurrency` | Parallel and race fork/join structure | Programs with `Effect.all`/`Effect.race` |
+| Timeline | `--format mermaid-timeline` | Step sequence as a timeline | Temporal ordering of steps |
+| Layer graph | `--format mermaid-layers` | Layer composition and dependencies | Layer architecture review |
+| Retry strategy | `--format mermaid-retry` | Retry and timeout policy visualization | Programs with retry/timeout |
+| Testability | `--format mermaid-testability` | What needs mocking and what to test | Test planning |
+| Data flow | `--format mermaid-dataflow` | Data dependencies between pipe steps | Understanding value flow |
+| Composition | (library API) | Cross-program call graph | Multi-program projects |
+
+## Structured Output
+
+| Format | CLI Flag | Description | Best For |
+|---|---|---|---|
+| JSON | `--format json` | Full IR serialized as JSON | Tooling integration |
+| Stats | `--format stats` | Complexity metrics and analysis statistics | Quick complexity check |
+| Explain | `--format explain` | Plain-English narrative of program behavior | Documentation, onboarding |
+| Summary | `--format summary` | One-line description per program | Directory overviews |
+| Matrix | `--format matrix` | Program-by-service dependency table | Cross-cutting dependency view |
+| Showcase | `--format showcase` | Detailed step-by-step breakdown | Comprehensive documentation |
+| Migration | `--format migration` | Patterns that could migrate to Effect | Adoption planning |
+
+## API Documentation
+
+| Format | CLI Flag | Description | Best For |
+|---|---|---|---|
+| API docs | `--format api-docs` | `HttpApi` structure as markdown | API documentation |
+| OpenAPI paths | `--format openapi-paths` | Minimal OpenAPI paths for spec merging | OpenAPI integration |
+| OpenAPI runtime | `--format openapi-runtime` | Full OpenAPI spec via `OpenApi.fromApi` | Complete spec generation |
+
+## Interactive
+
+| Format | How to Use | Description | Best For |
+|---|---|---|---|
+| Interactive HTML | `renderInteractiveHTML(ir)` (library API) | Self-contained HTML with search, filtering, path explorer, themes | Exploration, sharing |
+
+## Auto Mode
+
+When no `--format` is specified, the analyzer runs in auto mode:
+
+1. Selects a **baseline** diagram - railway for simple programs, flowchart for complex ones
+2. Scores the program's characteristics (error density, service count, concurrency, etc.)
+3. Adds up to **2 specialized views** based on the highest-scoring characteristics
+
+```bash
+# Auto mode (default)
+npx effect-analyze ./src/program.ts
+
+# Equivalent to explicitly requesting auto
+npx effect-analyze ./src/program.ts --format auto
+```
+
+<Aside type="note">
+Auto mode is designed to give you the most useful views without requiring you to know which diagram types exist. As you become familiar with the formats, you can request specific ones for targeted analysis.
+</Aside>
+
+## Combining with Output Options
+
+All formats support the following output options:
+
+```bash
+# Save to file
+npx effect-analyze ./src/program.ts --format mermaid-railway -o diagram.md
+
+# Compact JSON (no indentation)
+npx effect-analyze ./src/program.ts --format json --compact
+
+# Control flow direction
+npx effect-analyze ./src/program.ts --format mermaid --direction LR
+
+# Include trivial programs (schemas, thin wrappers)
+npx effect-analyze ./src/program.ts --include-trivial
+```
+
+## Related
+
+- [Diagram Overview](/effect-analyzer/diagrams/overview/) - how auto-detection works
+- [CLI Reference](/effect-analyzer/reference/cli/) - complete flag reference
+- [Library API](/effect-analyzer/reference/api/) - programmatic rendering functions

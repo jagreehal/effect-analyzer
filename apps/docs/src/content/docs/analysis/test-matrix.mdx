@@ -1,0 +1,172 @@
+---
+title: Test Coverage Matrix
+description: Generate prioritized test cases from execution paths through your Effect programs.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **test coverage matrix** transforms execution paths into concrete test cases. Each path becomes a test with setup conditions, expected steps, and a priority level - giving you a structured plan for testing your Effect programs.
+
+## Generating a Test Matrix
+
+### CLI
+
+```bash
+npx effect-analyze ./src/transfer.ts --format matrix
+```
+
+This outputs a markdown table of programs and their service dependencies. For the full test matrix with test cases, use the library API.
+
+### Library API
+
+```ts
+import { analyze, generatePaths, generateTestMatrix } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const paths = generatePaths(ir)
+const matrix = generateTestMatrix(paths)
+
+console.log(matrix.summary.totalTests)    // Total test cases
+console.log(matrix.summary.highPriority)  // High-priority tests
+console.log(matrix.summary.conditions)    // Unique conditions to cover
+```
+
+## Test Matrix Structure
+
+The `TestMatrix` object contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `paths` | `TestPath[]` | One test case per execution path |
+| `conditions` | `TestCondition[]` | All unique conditions across paths |
+| `summary` | `TestMatrixSummary` | Aggregate statistics |
+
+Each `TestPath` includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `testName` | `string` | Generated test name (e.g., "should complete transfer successfully") |
+| `priority` | `'high' \| 'medium' \| 'low'` | Test importance based on path characteristics |
+| `setupConditions` | `string[]` | What to set up before the test |
+| `expectedSteps` | `string[]` | Steps that should execute in this path |
+| `hasLoops` | `boolean` | Whether this path involves loop iterations |
+
+## Priority Assignment
+
+Test cases are prioritized based on the path they cover:
+
+| Priority | Criteria |
+|---|---|
+| **High** | Happy path (no error conditions), or paths with error handling |
+| **Medium** | Paths with conditional branches |
+| **Low** | Loop-heavy paths, paths with many conditions |
+
+## Formatting as Markdown
+
+Render the test matrix as a readable markdown document:
+
+```ts
+import { formatTestMatrixMarkdown } from "effect-analyzer"
+
+const markdown = formatTestMatrixMarkdown(matrix)
+console.log(markdown)
+```
+
+Output:
+
+```markdown
+## Test Coverage Matrix
+
+| # | Test | Priority | Conditions | Steps |
+|---|------|----------|------------|-------|
+| 1 | should complete transfer successfully | high | balance >= amount | getBalance → debit → credit → record |
+| 2 | should fail with InsufficientFunds | high | balance < amount | getBalance → fail |
+```
+
+## Generating Test Code
+
+Generate runnable test skeletons for your preferred test framework:
+
+```ts
+import { formatTestMatrixAsCode } from "effect-analyzer"
+
+// Vitest (default)
+const vitest = formatTestMatrixAsCode(matrix, { framework: "vitest" })
+
+// Jest
+const jest = formatTestMatrixAsCode(matrix, { framework: "jest" })
+
+// Mocha
+const mocha = formatTestMatrixAsCode(matrix, { framework: "mocha" })
+```
+
+Example output for Vitest:
+
+```ts
+import { describe, it, expect } from "vitest"
+
+describe("transfer", () => {
+  it("should complete transfer successfully", () => {
+    // Setup: balance >= amount
+    // Expected steps: getBalance → debit → credit → record
+  })
+
+  it("should fail with InsufficientFunds", () => {
+    // Setup: balance < amount
+    // Expected steps: getBalance → fail
+  })
+})
+```
+
+## Generating a Checklist
+
+For code review or manual testing, generate a markdown checklist:
+
+```ts
+import { formatTestChecklist } from "effect-analyzer"
+
+const checklist = formatTestChecklist(matrix)
+console.log(checklist)
+```
+
+Output:
+
+```markdown
+## Test Checklist
+
+- [ ] **[HIGH]** should complete transfer successfully
+  - Setup: balance >= amount
+  - Verify: getBalance → debit → credit → record
+- [ ] **[HIGH]** should fail with InsufficientFunds
+  - Setup: balance < amount
+  - Verify: getBalance → fail
+```
+
+## Options
+
+Customize test matrix generation with `TestMatrixOptions`:
+
+```ts
+const matrix = generateTestMatrix(paths, {
+  testNamePrefix: "should",            // Prefix for test names
+  includeLoopPaths: true,              // Include paths through loops
+  testNameGenerator: (path) => {       // Custom name generator
+    return `handles ${path.steps.length} steps`
+  },
+})
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `testNamePrefix` | `string` | `"should"` | Prefix for generated test names |
+| `testNameGenerator` | `(path) => string` | built-in | Custom function for test naming |
+| `includeLoopPaths` | `boolean` | `true` | Include paths that traverse loops |
+
+## Related
+
+- [Execution Paths](/effect-analyzer/analysis/paths/) - generate the paths that feed the test matrix
+- [Complexity Metrics](/effect-analyzer/analysis/complexity/) - understand program complexity
+- [All Formats](/effect-analyzer/diagrams/all-formats/) - `matrix` format reference

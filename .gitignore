@@ -1,0 +1,14 @@
+node_modules
+dist
+.turbo
+.effect-analyzer-cache
+.analysis-output
+.env*
+coverage
+.worktrees
+benchmarks/
+.cache/
+tsup.config.bundled_*.mjs
+**/.playwright-cli
+___*
+.DS_Store

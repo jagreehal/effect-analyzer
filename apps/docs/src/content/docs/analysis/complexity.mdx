@@ -1,0 +1,152 @@
+---
+title: Complexity Metrics
+description: Calculate cyclomatic complexity, cognitive complexity, path counts, and more for Effect programs.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+effect-analyzer calculates six complexity metrics for every Effect program it analyzes. Use these metrics to identify programs that may be difficult to understand, test, or maintain.
+
+![Complexity stats output for a transfer program](../../../assets/screenshots/cli-stats.png)
+
+## The Six Metrics
+
+| Metric | Description |
+|---|---|
+| `cyclomaticComplexity` | Number of linearly independent paths through the program (McCabe). Each conditional, race branch, and loop adds 1. |
+| `cognitiveComplexity` | How hard the program is for a human to understand (Sonar-style). Penalizes nesting and non-linear flow more heavily than cyclomatic. |
+| `pathCount` | Total number of distinct execution paths. Returns a number, or `'unbounded'` if loops make enumeration infinite. |
+| `maxDepth` | Maximum nesting depth of the IR tree. Deep nesting indicates complex control flow. |
+| `maxParallelBreadth` | Largest number of concurrent branches in any `Effect.all` or `Effect.race` call. |
+| `decisionPoints` | Total number of branching points (conditionals, race arms, loops). |
+
+## Calculating Complexity
+
+### CLI
+
+```bash
+npx effect-analyze ./src/transfer.ts --format stats
+```
+
+This prints all six metrics along with analysis metadata (step count, service count, error types).
+
+### Library API
+
+```ts
+import { analyze, calculateComplexity } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const metrics = calculateComplexity(ir)
+
+console.log(metrics)
+// {
+//   cyclomaticComplexity: 3,
+//   cognitiveComplexity: 4,
+//   pathCount: 2,
+//   maxDepth: 2,
+//   maxParallelBreadth: 0,
+//   decisionPoints: 1,
+// }
+```
+
+## Assessing Severity
+
+Use `assessComplexity` to evaluate metrics against configurable thresholds and get actionable recommendations:
+
+```ts
+import { calculateComplexity, assessComplexity } from "effect-analyzer"
+
+const metrics = calculateComplexity(ir)
+const assessment = assessComplexity(metrics)
+
+console.log(assessment.severity)  // 'low' | 'moderate' | 'high' | 'critical'
+console.log(assessment.warnings)  // Array of specific warnings
+```
+
+Each warning includes a `metric`, `value`, `threshold`, and human-readable `message`.
+
+### Default Thresholds
+
+| Threshold | Value |
+|---|---|
+| `cyclomaticWarning` | 10 |
+| `cyclomaticError` | 20 |
+| `pathCountWarning` | 50 |
+| `maxDepthWarning` | 5 |
+
+Override thresholds by passing a second argument:
+
+```ts
+const assessment = assessComplexity(metrics, {
+  cyclomaticWarning: 15,
+  cyclomaticError: 30,
+  pathCountWarning: 100,
+  maxDepthWarning: 8,
+})
+```
+
+## Formatting a Summary
+
+Use `formatComplexitySummary` to produce a human-readable string:
+
+```ts
+import { calculateComplexity, formatComplexitySummary } from "effect-analyzer"
+
+const metrics = calculateComplexity(ir)
+const summary = formatComplexitySummary(metrics)
+
+console.log(summary)
+// Cyclomatic: 3 | Cognitive: 4 | Paths: 2 | Depth: 2 | Parallel: 0 | Decisions: 1
+```
+
+## Understanding the Metrics
+
+### Cyclomatic Complexity
+
+Counts the number of linearly independent paths. A program with no branches has cyclomatic complexity 1. Each `if`, `match` arm, `race` branch, or `loop` adds 1.
+
+**Guidelines:**
+- 1-5: simple, easy to test
+- 6-10: moderate, manageable
+- 11-20: complex, consider refactoring
+- 21+: very complex, refactor into smaller programs
+
+### Cognitive Complexity
+
+Measures how hard the code is to *understand*, not just how many paths exist. Unlike cyclomatic complexity, cognitive complexity:
+
+- Penalizes **nesting** - an `if` inside a `loop` inside a `gen` scores higher
+- Penalizes **non-linear flow** - error handlers that re-enter the main flow
+
+A program can have low cyclomatic complexity but high cognitive complexity if it uses deeply nested structures.
+
+### Path Count
+
+The total number of distinct execution paths. This is the product of all branching factors in the program. A program with two conditionals each having two branches has 4 paths.
+
+When the program contains loops without a fixed bound, the path count is reported as `'unbounded'`.
+
+<Aside type="caution">
+Programs with `pathCount > 50` can be difficult to test exhaustively. Consider breaking them into smaller, composable programs.
+</Aside>
+
+### Max Depth
+
+The maximum nesting level of the IR tree. A flat sequence of yields has depth 1. Wrapping that in an `Effect.gen` inside an error handler inside a conditional increases depth.
+
+### Max Parallel Breadth
+
+The largest number of concurrent branches. `Effect.all([a, b, c], { concurrency: "unbounded" })` has breadth 3. Programs without parallel operations have breadth 0.
+
+### Decision Points
+
+The raw count of all branching nodes in the IR (conditionals, race arms, loops). This is a simpler measure than cyclomatic complexity - it counts branches without computing path independence.
+
+## Related
+
+- [Execution Paths](/effect-analyzer/analysis/paths/) - enumerate all paths through a program
+- [Test Coverage Matrix](/effect-analyzer/analysis/test-matrix/) - generate test cases from paths
+- [Strict Diagnostics](/effect-analyzer/project/diagnostics/) - lint rules based on complexity

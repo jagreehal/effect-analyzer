@@ -1,0 +1,267 @@
+---
+import type { Props } from '@astrojs/starlight/props';
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+---
+
+<div class="page-title-row">
+  <Default {...Astro.props}><slot /></Default>
+  <button
+    type="button"
+    class="copy-markdown-btn"
+    title="Copy this page as Markdown"
+    aria-label="Copy this page as Markdown"
+  >
+    <span class="copy-markdown-visual" aria-hidden="true">
+      <svg class="copy-markdown-icon copy-markdown-icon--clipboard" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke-linejoin="round">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M2.75 0.5C1.7835 0.5 1 1.2835 1 2.25V9.75C1 10.7165 1.7835 11.5 2.75 11.5H3.75H4.5V10H3.75H2.75C2.61193 10 2.5 9.88807 2.5 9.75V2.25C2.5 2.11193 2.61193 2 2.75 2H8.25C8.38807 2 8.5 2.11193 8.5 2.25V3H10V2.25C10 1.2835 9.2165 0.5 8.25 0.5H2.75ZM7.75 4.5C6.7835 4.5 6 5.2835 6 6.25V13.75C6 14.7165 6.7835 15.5 7.75 15.5H13.25C14.2165 15.5 15 14.7165 15 13.75V6.25C15 5.2835 14.2165 4.5 13.25 4.5H7.75ZM7.5 6.25C7.5 6.11193 7.61193 6 7.75 6H13.25C13.3881 6 13.5 6.11193 13.5 6.25V13.75C13.5 13.8881 13.3881 14 13.25 14H7.75C7.61193 14 7.5 13.8881 7.5 13.75V6.25Z" fill="currentColor"></path>
+      </svg>
+      <svg class="copy-markdown-icon copy-markdown-icon--check" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.5 8.5 6.5 11.5 12.5 4.5"></path>
+      </svg>
+    </span>
+    <span class="copy-label">Copy markdown</span>
+  </button>
+</div>
+
+<style>
+  .page-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .copy-markdown-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sl-color-gray-3);
+    font-size: 0.8125rem;
+    font-family: var(--sl-font);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .copy-markdown-btn:hover {
+    color: var(--sl-color-text);
+    border-color: var(--sl-color-gray-3);
+    background: var(--sl-color-gray-6);
+  }
+
+  .copy-markdown-visual {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  .copy-markdown-icon {
+    display: block;
+  }
+
+  .copy-markdown-icon--check {
+    display: none;
+  }
+
+  .copy-markdown-visual.is-success .copy-markdown-icon--clipboard {
+    display: none;
+  }
+
+  .copy-markdown-visual.is-success .copy-markdown-icon--check {
+    display: block;
+  }
+
+  .copy-label {
+    display: none;
+  }
+
+  @media (min-width: 40rem) {
+    .copy-label {
+      display: inline;
+    }
+  }
+</style>
+
+<script>
+  function htmlToMarkdown(el: Element): string {
+    const lines: string[] = [];
+
+    function processNode(node: Node): string {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent ?? '';
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+      const element = node as HTMLElement;
+      const tag = element.tagName.toLowerCase();
+
+      if (tag === 'footer') return '';
+      if (element.classList.contains('sl-banner')) return '';
+
+      if (tag === 'style' || tag === 'script' || tag === 'nav') return '';
+      if (element.classList.contains('copy-markdown-btn')) return '';
+      if (element.classList.contains('page-title-row')) {
+        return Array.from(element.children)
+          .filter(c => !c.classList.contains('copy-markdown-btn'))
+          .map(c => processNode(c))
+          .join('');
+      }
+
+      const childText = () => Array.from(node.childNodes).map(processNode).join('');
+
+      switch (tag) {
+        case 'h1': return `# ${childText().trim()}\n\n`;
+        case 'h2': return `## ${childText().trim()}\n\n`;
+        case 'h3': return `### ${childText().trim()}\n\n`;
+        case 'h4': return `#### ${childText().trim()}\n\n`;
+        case 'h5': return `##### ${childText().trim()}\n\n`;
+        case 'h6': return `###### ${childText().trim()}\n\n`;
+        case 'p': return `${childText().trim()}\n\n`;
+        case 'br': return '\n';
+        case 'strong':
+        case 'b': return `**${childText()}**`;
+        case 'em':
+        case 'i': return `*${childText()}*`;
+        case 'code': {
+          if (element.parentElement?.tagName.toLowerCase() === 'pre') {
+            return childText();
+          }
+          return `\`${childText()}\``;
+        }
+        case 'pre': {
+          const codeEl = element.querySelector('code');
+          const lang = codeEl?.className?.match(/language-(\w+)/)?.[1] ?? '';
+          const code = codeEl?.textContent ?? element.textContent ?? '';
+          return `\`\`\`${lang}\n${code.trim()}\n\`\`\`\n\n`;
+        }
+        case 'a': {
+          const href = element.getAttribute('href') ?? '';
+          const text = childText().trim();
+          if (!text) return '';
+          return `[${text}](${href})`;
+        }
+        case 'ul': {
+          const items = Array.from(element.children)
+            .map(li => `- ${processNode(li).trim()}`)
+            .join('\n');
+          return `${items}\n\n`;
+        }
+        case 'ol': {
+          const items = Array.from(element.children)
+            .map((li, i) => `${i + 1}. ${processNode(li).trim()}`)
+            .join('\n');
+          return `${items}\n\n`;
+        }
+        case 'li': return childText();
+        case 'blockquote': {
+          const content = childText().trim().split('\n').map(l => `> ${l}`).join('\n');
+          return `${content}\n\n`;
+        }
+        case 'hr': return '---\n\n';
+        case 'table': {
+          const rows = Array.from(element.querySelectorAll('tr'));
+          if (rows.length === 0) return '';
+          const tableLines: string[] = [];
+          rows.forEach((row, idx) => {
+            const cells = Array.from(row.querySelectorAll('th, td')).map(
+              c => (c.textContent ?? '').trim()
+            );
+            tableLines.push(`| ${cells.join(' | ')} |`);
+            if (idx === 0) {
+              tableLines.push(`| ${cells.map(() => '---').join(' | ')} |`);
+            }
+          });
+          return `${tableLines.join('\n')}\n\n`;
+        }
+        case 'img': {
+          const alt = element.getAttribute('alt') ?? '';
+          const src = element.getAttribute('src') ?? '';
+          return `![${alt}](${src})`;
+        }
+        default:
+          return childText();
+      }
+    }
+
+    lines.push(processNode(el));
+    return lines.join('').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function getPageMarkdown(): string {
+    const main = document.querySelector('main');
+    if (main) return htmlToMarkdown(main);
+    const content = document.querySelector('.sl-markdown-content');
+    return content ? htmlToMarkdown(content) : '';
+  }
+
+  async function copyMarkdownToClipboard(btn: HTMLElement): Promise<void> {
+    const md = getPageMarkdown();
+    const visual = btn.querySelector('.copy-markdown-visual');
+    const label = btn.querySelector('.copy-label');
+
+    const setIconSuccess = (ok: boolean) => {
+      visual?.classList.toggle('is-success', ok);
+      if (ok) {
+        btn.setAttribute('aria-label', 'Copied to clipboard');
+      } else {
+        btn.setAttribute('aria-label', 'Copy this page as Markdown');
+      }
+    };
+
+    try {
+      await navigator.clipboard.writeText(md);
+      setIconSuccess(true);
+      setTimeout(() => setIconSuccess(false), 2000);
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = md;
+        ta.style.position = 'fixed';
+        ta.style.left = '0';
+        ta.style.top = '0';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        setIconSuccess(true);
+        setTimeout(() => setIconSuccess(false), 2000);
+      } catch {
+        if (label) label.textContent = 'Copy failed';
+        btn.setAttribute('aria-label', 'Copy failed');
+        setTimeout(() => {
+          if (label) label.textContent = 'Copy markdown';
+          btn.setAttribute('aria-label', 'Copy this page as Markdown');
+        }, 2000);
+      }
+    }
+  }
+
+  function bindCopyMarkdownButtons(): void {
+    document.querySelectorAll('.copy-markdown-btn').forEach((btn) => {
+      if ((btn as HTMLElement).dataset.bound === '1') return;
+      (btn as HTMLElement).dataset.bound = '1';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void copyMarkdownToClipboard(btn as HTMLElement);
+      });
+    });
+  }
+
+  document.addEventListener('astro:page-load', bindCopyMarkdownButtons);
+  bindCopyMarkdownButtons();
+</script>

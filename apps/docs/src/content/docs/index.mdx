@@ -1,0 +1,57 @@
+---
+title: effect-analyzer
+description: Static analysis for Effect-TS code - extract structure, calculate complexity, and generate visualizations without executing your code.
+template: splash
+hero:
+  tagline: Understand your Effect programs at a glance. Extract structure, calculate complexity, and generate Mermaid diagrams - all without running your code.
+  actions:
+    - text: Get Started
+      link: /effect-analyzer/quick-start/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/jagreehal/effect-analyzer
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## See It in Action
+
+![Railway diagram showing a transfer program with service dependencies and error branches](../../assets/screenshots/railway-diagram.png)
+
+![Plain-English explanation of a real-world Effect upload service with retry and concurrency](../../assets/screenshots/explain-real-world.png)
+
+## Features
+
+<CardGrid>
+  <Card title="Static Analysis" icon="magnifier">
+    Analyze Effect programs without execution. Extracts generators, pipes, services, layers, error handlers, and control flow.
+  </Card>
+  <Card title="Mermaid Diagrams" icon="document">
+    Auto-generate flowcharts, railway diagrams, service maps, error flows, concurrency views, and more.
+  </Card>
+  <Card title="Complexity Metrics" icon="warning">
+    Calculate cyclomatic complexity, cognitive complexity, path counts, nesting depth, and parallel breadth.
+  </Card>
+  <Card title="Semantic Diff" icon="pencil">
+    Compare two versions of an Effect program to see what changed - steps added, removed, or modified.
+  </Card>
+</CardGrid>
+
+## Quick Start
+
+```bash
+# Install
+npm install effect-analyzer
+
+# Analyze a file
+npx effect-analyze ./src/my-program.ts
+
+# Generate a railway diagram
+npx effect-analyze ./src/my-program.ts --format mermaid-railway
+
+# Compare versions
+npx effect-analyze HEAD:program.ts program.ts --diff
+```

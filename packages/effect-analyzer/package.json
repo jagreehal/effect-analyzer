@@ -1,0 +1,76 @@
+{
+  "name": "effect-analyzer",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Static analysis for Effect-TS code. Analyze Effect code to extract structure, calculate complexity, and generate visualizations.",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "bin": {
+    "effect-analyze": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./effect-workflow": {
+      "types": "./dist/effect-workflow.d.ts",
+      "import": "./dist/effect-workflow.js",
+      "require": "./dist/effect-workflow.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lsp": "node dist/lsp/server.js",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "clean": "rm -rf dist",
+    "quality": "pnpm type-check && pnpm test && pnpm lint",
+    "effect:fetch": "tsx scripts/fetch-effect-repo.ts"
+  },
+  "keywords": [
+    "effect", "effect-ts", "static-analysis", "ts-morph",
+    "typescript", "visualization", "mermaid", "functional-programming"
+  ],
+  "author": "Jag Reehal <jag@jagreehal.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "effect": ">=3.0.0",
+    "@effect/platform": ">=0.70.0"
+  },
+  "peerDependenciesMeta": {
+    "effect": { "optional": false },
+    "@effect/platform": { "optional": true }
+  },
+  "dependencies": {
+    "effect": "^3.21.0",
+    "ts-morph": "^27.0.2"
+  },
+  "optionalDependencies": {
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "devDependencies": {
+    "@effect/eslint-plugin": "^0.3.2",
+    "@eslint/js": "^10.0.1",
+    "@total-typescript/ts-reset": "^0.6.1",
+    "@types/node": "^25.5.0",
+    "eslint": "^10.1.0",
+    "ts-morph": "^27.0.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^4.1.0"
+  }
+}

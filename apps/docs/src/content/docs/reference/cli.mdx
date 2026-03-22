@@ -1,0 +1,196 @@
+---
+title: CLI Reference
+description: Complete command-line reference for the effect-analyze CLI.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `effect-analyze` CLI analyzes Effect TypeScript files and produces diagrams, metrics, and reports.
+
+## Usage
+
+```bash
+effect-analyze [path] [options]
+```
+
+When `path` is a file, the analyzer processes that file. When it is a directory, it processes all TypeScript files within it. Multiple paths can be provided for diff mode.
+
+## General Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `-f, --format <format>` | Output format (see [All Formats](/effect-analyzer/diagrams/all-formats/)) | `auto` |
+| `-o, --output <file>` | Write output to a file instead of stdout | stdout |
+| `--pretty` | Pretty-print output (overrides `--compact`) | on |
+| `--compact` | Compact output (no indentation) | off |
+| `--no-color` | Disable colored terminal output | color on |
+| `--quiet` | Suppress verbose status messages | off |
+| `--tsconfig <path>` | Path to a custom `tsconfig.json` | auto-detected |
+| `--include-trivial` | Include trivial programs (schemas, thin wrappers) that are excluded by default | off |
+| `--no-metadata` | Exclude analysis metadata from JSON output | off |
+| `-h, --help` | Print help and exit | - |
+
+## Diagram Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `--direction <dir>` | Mermaid flow direction: `TB`, `LR`, `BT`, `RL` | `TB` |
+| `--style-guide` | Apply style-guide heuristics for cleaner, more readable diagrams | off |
+| `--no-style-guide` | Explicitly disable style-guide mode | - |
+
+## Analysis Modes
+
+| Flag | Description |
+|---|---|
+| `--diff` | Compare two program versions (see [Semantic Diff](/effect-analyzer/project/diff/)) |
+| `--regression` | Flag removed steps as regressions (use with `--diff`) |
+| `--watch` | Re-analyze when the file changes |
+| `--cache` | Cache analysis results in watch mode to skip unchanged files |
+| `--coverage-audit` | Run a project-wide coverage audit (see [Coverage Audit](/effect-analyzer/project/coverage-audit/)) |
+| `--migration` | Alias for `--format migration` |
+
+## Directory Mode Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `--colocate` | Write `.effect-analysis.md` next to each source file | off |
+| `--no-colocate` | Print a summary to stdout instead of writing files | - |
+| `--colocate-suffix <suffix>` | Custom suffix for colocated files | `effect-analysis` |
+| `--service-map` | Show a deduplicated service registry across the project | on |
+| `--no-service-map` | Disable the project-wide service map | - |
+| `--no-colocate-enhanced` | Use standard Mermaid instead of enhanced format for colocated files | - |
+
+## Coverage Audit Options
+
+These flags are used with `--coverage-audit`:
+
+| Flag | Description |
+|---|---|
+| `--show-suspicious-zeros` | Show files with no Effect programs that look suspicious |
+| `--show-top-unknown` | Show files with the highest unknown node rates |
+| `--show-top-unknown-reasons` | Include reasons for unknown nodes |
+| `--show-by-folder` | Aggregate results by folder |
+| `--json-summary` | Output audit results as JSON |
+| `--per-file-timing` | Include per-file timing data |
+| `--min-meaningful-nodes <n>` | Minimum node count to consider a file meaningful |
+| `--known-effect-internals-root <path>` | Treat local paths as Effect-like |
+| `--exclude-from-suspicious-zero <pattern>` | Exclude patterns from suspicious-zero reporting |
+
+## Quality Options
+
+| Flag | Description |
+|---|---|
+| `--quality` | Compute diagram quality metrics for each program |
+| `--quality-eslint <path>` | Load diagram quality hints from an ESLint JSON file |
+
+## OpenAPI Options
+
+| Flag | Description |
+|---|---|
+| `--export <name>` | Export name of the HttpApi (with `--format openapi-runtime`) |
+
+## Output Formats
+
+### Diagrams
+
+`auto` `mermaid` `mermaid-railway` `mermaid-paths` `mermaid-enhanced` `mermaid-services` `mermaid-errors` `mermaid-decisions` `mermaid-causes` `mermaid-concurrency` `mermaid-timeline` `mermaid-layers` `mermaid-retry` `mermaid-testability` `mermaid-dataflow`
+
+### Structured
+
+`json` `stats` `explain` `summary` `matrix` `showcase`
+
+### API Documentation
+
+`api-docs` `openapi-paths` `openapi-runtime`
+
+### Project
+
+`migration`
+
+## Examples
+
+### Analyze a single file with auto-detection
+
+```bash
+effect-analyze src/transfer.ts
+```
+
+### Generate a railway diagram and save to file
+
+```bash
+effect-analyze src/transfer.ts -f mermaid-railway -o transfer.md
+```
+
+### Analyze a directory with colocated output
+
+```bash
+effect-analyze src/ --colocate
+```
+
+### Run a coverage audit with JSON output
+
+```bash
+effect-analyze src/ --coverage-audit --json-summary
+```
+
+### Compare with the last commit
+
+```bash
+effect-analyze src/transfer.ts --diff
+```
+
+### Compare two branches
+
+```bash
+effect-analyze main:src/transfer.ts feature:src/transfer.ts --diff
+```
+
+### Diff with regression detection
+
+```bash
+effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff --regression
+```
+
+### Watch mode with caching
+
+```bash
+effect-analyze src/transfer.ts --watch --cache
+```
+
+### Find migration opportunities
+
+```bash
+effect-analyze src/ --format migration
+```
+
+### Generate complexity stats
+
+```bash
+effect-analyze src/transfer.ts --format stats
+```
+
+### Plain-English explanation
+
+```bash
+effect-analyze src/transfer.ts --format explain
+```
+
+### Left-to-right flowchart with style guide
+
+```bash
+effect-analyze src/transfer.ts --format mermaid --direction LR --style-guide
+```
+
+### Project-wide service map
+
+```bash
+effect-analyze src/ --service-map
+```
+
+### OpenAPI spec generation
+
+```bash
+effect-analyze src/api.ts --format openapi-runtime --export MyApi -o openapi.json
+```

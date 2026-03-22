@@ -1,0 +1,138 @@
+---
+title: Migration Assistant
+description: Find code patterns in your project that could be migrated to Effect.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **migration assistant** scans your TypeScript files for patterns that have idiomatic Effect equivalents. It helps teams plan and execute a gradual migration to Effect by identifying exactly where imperative or Promise-based code could be replaced.
+
+## Running the Migration Assistant
+
+### Single File
+
+```bash
+npx effect-analyze ./src/legacy-service.ts --format migration
+```
+
+### Entire Project
+
+```bash
+npx effect-analyze ./src --format migration
+```
+
+This scans all TypeScript files in the directory and produces a consolidated report of migration opportunities.
+
+## Detected Patterns
+
+The migration assistant detects the following patterns and suggests their Effect equivalents:
+
+| Pattern | Suggestion |
+|---|---|
+| `try/catch` | `Effect.try` or `Effect.tryPromise` with catch handler |
+| `Promise.all` | `Effect.all([...], { concurrency: "unbounded" })` |
+| `Promise.race` | `Effect.race(first, second)` |
+| `setTimeout` | `Effect.sleep(Duration.millis(n))` |
+| `setInterval` | `Schedule.spaced(Duration.millis(n))` |
+| `setImmediate` | `Effect.sync` + `queueMicrotask` or `Effect.async` |
+| `fetch()` | `HttpClient.request` or `@effect/platform` HttpClient |
+| `http.request` / `https.request` | `HttpClient.request` or `@effect/platform` HttpClient |
+| `new XMLHttpRequest()` | `HttpClient.request` or `@effect/platform` HttpClient |
+| `dns.lookup` / `dns.resolve` | `Effect.promise` or `dns.promises` |
+| `fs.exists` (callback) | `Effect.promise` or `fs.promises.access` |
+| `new EventEmitter()` | `PubSub.bounded<T>()` or `PubSub.unbounded<T>()` |
+| `new Worker()` | `Worker.make` or `@effect/platform` Worker |
+| Class-based DI (`*Service`, `*Repository`, `*Client`) | `Context.Tag<T>()` + `Layer.effect` or `Layer.succeed` |
+
+<Aside type="note">
+The migration assistant uses heuristic pattern matching, not type analysis. It may produce false positives for patterns that look similar but serve a different purpose. Review each suggestion before applying.
+</Aside>
+
+## Report Output
+
+The migration report includes:
+
+- **File path** and **line number** for each opportunity
+- **Pattern name** - what was detected
+- **Suggestion** - the Effect equivalent
+- **Code snippet** - the first 80 characters of the matching code
+
+Example output:
+
+```
+## Migration Opportunities
+
+Found 7 opportunities across 3 files.
+
+### src/legacy-service.ts
+
+| Line | Pattern | Suggestion |
+|------|---------|------------|
+| 12 | try/catch | Effect.try or Effect.tryPromise with catch handler |
+| 28 | Promise.all | Effect.all([...], { concurrency: "unbounded" }) |
+| 45 | fetch() | HttpClient.request or @effect/platform HttpClient |
+
+### src/utils/timer.ts
+
+| Line | Pattern | Suggestion |
+|------|---------|------------|
+| 5 | setTimeout | Effect.sleep(Duration.millis(n)) |
+| 18 | setInterval | Schedule.spaced(Duration.millis(n)) |
+```
+
+## Programmatic Usage
+
+### Single File
+
+```ts
+import { findMigrationOpportunities } from "effect-analyzer"
+
+const opportunities = findMigrationOpportunities("./src/legacy-service.ts")
+
+for (const opp of opportunities) {
+  console.log(`${opp.filePath}:${opp.line} - ${opp.pattern} → ${opp.suggestion}`)
+}
+```
+
+### Entire Project
+
+```ts
+import { findMigrationOpportunitiesInProject, formatMigrationReport } from "effect-analyzer"
+
+const report = findMigrationOpportunitiesInProject("./src")
+
+console.log(`Found ${report.opportunities.length} opportunities across ${report.fileCount} files`)
+
+const markdown = formatMigrationReport(report)
+console.log(markdown)
+```
+
+### Analyzing Source Strings
+
+Pass a source string directly for testing or integration:
+
+```ts
+import { findMigrationOpportunities } from "effect-analyzer"
+
+const opportunities = findMigrationOpportunities("virtual.ts", `
+  async function fetchUser(id: string) {
+    try {
+      const response = await fetch(\`/api/users/\${id}\`)
+      return response.json()
+    } catch (error) {
+      console.error(error)
+      throw error
+    }
+  }
+`)
+
+// Detects: try/catch, fetch()
+```
+
+## Related
+
+- [Coverage Audit](/effect-analyzer/project/coverage-audit/) - understand Effect adoption across your project
+- [Quick Start](/effect-analyzer/quick-start/) - get started with effect-analyzer
+- [CLI Reference](/effect-analyzer/reference/cli/) - `--format migration` flag

@@ -1,0 +1,156 @@
+---
+title: Quick Start
+description: Analyze your first Effect program in under five minutes.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This guide walks you through analyzing a real Effect program, viewing diagrams, and exploring different output formats.
+
+## Creating a Sample Program
+
+Create a file called `transfer.ts` with a typical Effect workflow:
+
+```ts
+import { Effect, Context } from "effect"
+
+class AccountService extends Context.Tag("AccountService")<
+  AccountService,
+  {
+    readonly getBalance: (id: string) => Effect.Effect<number, AccountNotFound>
+    readonly debit: (id: string, amount: number) => Effect.Effect<void, InsufficientFunds>
+    readonly credit: (id: string, amount: number) => Effect.Effect<void, AccountNotFound>
+  }
+>() {}
+
+class AuditLog extends Context.Tag("AuditLog")<
+  AuditLog,
+  { readonly record: (event: string) => Effect.Effect<void> }
+>() {}
+
+class AccountNotFound {
+  readonly _tag = "AccountNotFound"
+  constructor(readonly id: string) {}
+}
+
+class InsufficientFunds {
+  readonly _tag = "InsufficientFunds"
+  constructor(readonly available: number, readonly requested: number) {}
+}
+
+export const transfer = (from: string, to: string, amount: number) =>
+  Effect.gen(function* () {
+    const accounts = yield* AccountService
+    const audit = yield* AuditLog
+
+    const balance = yield* accounts.getBalance(from)
+    if (balance < amount) {
+      yield* Effect.fail(new InsufficientFunds(balance, amount))
+    }
+
+    yield* accounts.debit(from, amount)
+    yield* accounts.credit(to, amount)
+    yield* audit.record(`Transferred ${amount} from ${from} to ${to}`)
+
+    return { from, to, amount }
+  })
+```
+
+## Running the Analyzer
+
+Run the analyzer with no format flag to use **auto mode**, which selects the best diagrams for your program:
+
+```bash
+npx effect-analyze ./transfer.ts
+```
+
+Auto mode examines your program's structure and picks the most relevant views. For this program, it will typically select a railway diagram (linear happy path with error branches) plus a service dependency map.
+
+## Trying Specific Formats
+
+### Railway Diagram
+
+Generate a focused railway-style view:
+
+```bash
+npx effect-analyze ./transfer.ts --format mermaid-railway
+```
+
+The railway diagram shows the happy path as a straight line with error branches forking off to the side. This is ideal for understanding the success flow and where failures can occur.
+
+### JSON IR
+
+Export the raw intermediate representation:
+
+```bash
+npx effect-analyze ./transfer.ts --format json
+```
+
+The JSON output contains the full IR tree - every step, service dependency, error type, and source location. Use this for integration with your own tools.
+
+### Plain-English Explanation
+
+Get a narrative description of what the program does:
+
+```bash
+npx effect-analyze ./transfer.ts --format explain
+```
+
+This produces a human-readable walkthrough of the program's behavior, useful for documentation or code reviews.
+
+### Complexity Stats
+
+View complexity metrics:
+
+```bash
+npx effect-analyze ./transfer.ts --format stats
+```
+
+This reports cyclomatic complexity, cognitive complexity, path count, nesting depth, and parallel breadth.
+
+## Saving Output to a File
+
+Write the output to a file with the `-o` flag:
+
+```bash
+npx effect-analyze ./transfer.ts --format mermaid-railway -o transfer-diagram.md
+```
+
+## Watch Mode
+
+Re-analyze automatically when the file changes during development:
+
+```bash
+npx effect-analyze ./transfer.ts --watch
+```
+
+<Aside type="note">
+Watch mode re-runs the analysis on every save, printing fresh output to stdout. Combine with `--cache` to skip re-analysis when the file content hasn't changed.
+</Aside>
+
+## Using the Library API
+
+For programmatic access, import the analyzer directly:
+
+```ts
+import { analyze, renderMermaid, calculateComplexity } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./transfer.ts").single())
+
+// Generate a Mermaid diagram
+const diagram = await Effect.runPromise(renderMermaid(ir))
+
+// Calculate complexity
+const metrics = calculateComplexity(ir)
+console.log(metrics.cyclomaticComplexity) // e.g. 3
+```
+
+## What to Explore Next
+
+- [Diagram Overview](/effect-analyzer/diagrams/overview/) - understand auto-detection and all diagram types
+- [Complexity Metrics](/effect-analyzer/analysis/complexity/) - deep dive into the 6 complexity metrics
+- [Coverage Audit](/effect-analyzer/project/coverage-audit/) - scan your entire project
+- [CLI Reference](/effect-analyzer/reference/cli/) - every flag and option

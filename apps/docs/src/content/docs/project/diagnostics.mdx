@@ -1,0 +1,142 @@
+---
+title: Strict Diagnostics
+description: Validate Effect programs against strict rules for error types, concurrency, and resource safety.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **strict diagnostics** module validates your Effect programs against a set of rules that catch common issues - missing error types, unhandled parallel errors, potential fiber leaks, and more. Think of it as a linter purpose-built for Effect patterns.
+
+## Running Diagnostics
+
+```ts
+import { analyze, validateStrict, formatDiagnostics } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const result = validateStrict(ir)
+
+console.log(result.valid)       // true if no errors
+console.log(result.errors)      // Error-severity diagnostics
+console.log(result.warnings)    // Warning-severity diagnostics
+
+const output = formatDiagnostics(result)
+console.log(output)
+```
+
+## Diagnostic Rules
+
+The validator checks 10 rules:
+
+| Rule | Severity | Description |
+|---|---|---|
+| `missing-error-type` | error | An effect step that can fail has no declared error type |
+| `unknown-error-type` | warning | An effect step has `unknown` as its error type |
+| `parallel-missing-errors` | error | Effects inside `Effect.all` lack error types, making parallel failure behavior unclear |
+| `race-missing-errors` | error | Effects inside `Effect.race` lack error types |
+| `effect-without-handler` | warning | An effect produces errors but no handler (`catchAll`, `catchTag`) exists |
+| `fiber-potential-leak` | warning | A fiber is forked but never joined or interrupted |
+| `resource-missing-scope` | warning | `acquireRelease` used outside an explicit `Scope` |
+| `unbounded-concurrency` | warning | `Effect.all` without a `concurrency` option - defaults to sequential but may be unintentional |
+| `unused-service` | warning | A service is required but never used in the program body |
+| `dead-code-path` | warning | A code path that can never execute (e.g., code after `Effect.die`) |
+
+## Validation Options
+
+Customize which rules are active:
+
+```ts
+const result = validateStrict(ir, {
+  requireErrors: true,          // Enforce error type declarations (default: true)
+  requireParallelErrors: true,  // Enforce error types in parallel/race (default: true)
+  warningsAsErrors: false,      // Promote all warnings to errors (default: false)
+})
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `requireErrors` | `boolean` | `true` | Require effect nodes to declare error types |
+| `requireParallelErrors` | `boolean` | `true` | Require error types specifically in parallel/race contexts |
+| `warningsAsErrors` | `boolean` | `false` | Treat warnings as errors (useful for strict CI) |
+
+## Formatting Output
+
+### Human-Readable
+
+```ts
+import { formatDiagnostics } from "effect-analyzer"
+
+const output = formatDiagnostics(result)
+console.log(output)
+```
+
+Example output:
+
+```
+ERROR [missing-error-type] Step "getBalance" can fail but has no declared error type
+  at src/transfer.ts:15:5
+  Fix: Add an error type annotation or use Effect.catchAll
+
+WARNING [fiber-potential-leak] Fiber forked at "backgroundSync" is never joined
+  at src/transfer.ts:42:3
+  Fix: Use Fiber.join or Effect.scoped to manage the fiber lifecycle
+
+2 errors, 1 warning
+```
+
+### JSON
+
+```ts
+import { formatDiagnosticsJSON } from "effect-analyzer"
+
+const json = formatDiagnosticsJSON(result)
+console.log(json)
+```
+
+### Summary
+
+```ts
+import { getSummary } from "effect-analyzer"
+
+const summary = getSummary(result)
+console.log(summary)
+// { errors: 2, warnings: 1, total: 3 }
+```
+
+## Diagnostic Structure
+
+Each `StrictDiagnostic` contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `rule` | `StrictRule` | The rule that triggered this diagnostic |
+| `severity` | `'error' \| 'warning'` | Diagnostic severity |
+| `message` | `string` | Human-readable description |
+| `fix` | `string \| undefined` | Suggested fix |
+| `location` | `SourceLocation \| undefined` | File, line, and column |
+| `nodeId` | `string \| undefined` | IR node that triggered the diagnostic |
+
+## CI Integration
+
+Use `warningsAsErrors: true` and check `result.valid` in your CI pipeline:
+
+```ts
+const result = validateStrict(ir, { warningsAsErrors: true })
+
+if (!result.valid) {
+  console.error(formatDiagnostics(result))
+  process.exit(1)
+}
+```
+
+<Aside type="caution">
+Strict diagnostics validate the IR, not the runtime behavior. A program that passes all diagnostics can still have runtime issues. Use diagnostics alongside standard TypeScript type checking and testing.
+</Aside>
+
+## Related
+
+- [Error Analysis](/effect-analyzer/analysis/errors/) - deeper error propagation analysis
+- [Complexity Metrics](/effect-analyzer/analysis/complexity/) - complexity-based quality checks
+- [Coverage Audit](/effect-analyzer/project/coverage-audit/) - project-wide quality reporting

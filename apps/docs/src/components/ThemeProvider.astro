@@ -1,0 +1,56 @@
+---
+/**
+ * Fork of Starlight’s ThemeProvider: first visit defaults to dark (not system preference).
+ * `localStorage` key `starlight-theme`: missing = dark; '' = auto; `light` | `dark` = explicit.
+ */
+import Icon from '../../node_modules/@astrojs/starlight/user-components/Icon.astro';
+---
+
+{/* This is intentionally inlined to avoid FOUC. */}
+<script is:inline>
+	window.StarlightThemeProvider = (() => {
+		const getRaw = () =>
+			typeof localStorage !== 'undefined' ? localStorage.getItem('starlight-theme') : null;
+		const resolveTheme = () => {
+			const raw = getRaw();
+			if (raw === 'light' || raw === 'dark') return raw;
+			if (raw === '') {
+				return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+			}
+			return 'dark';
+		};
+		const resolvePicker = (explicit) => {
+			if (explicit !== undefined) return explicit;
+			const raw = getRaw();
+			if (raw === 'light' || raw === 'dark') return raw;
+			if (raw === '') return 'auto';
+			return 'dark';
+		};
+		const theme = resolveTheme();
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(explicitTheme) {
+				const pick = resolvePicker(explicitTheme);
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = pick;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + pick);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script>
+
+<template id="theme-icons">
+	<Icon name="sun" class="light" />
+	<Icon name="moon" class="dark" />
+	<Icon name="laptop" class="auto" />
+</template>

@@ -1,0 +1,69 @@
+---
+title: Installation
+description: Install effect-analyzer and get started.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Installing the Package
+
+Install `effect-analyzer` using your preferred package manager:
+
+```bash
+# npm
+npm install effect-analyzer
+
+# pnpm
+pnpm add effect-analyzer
+
+# yarn
+yarn add effect-analyzer
+```
+
+`ts-morph` (the TypeScript AST parser that powers all static analysis) is bundled automatically.
+
+<Aside type="note">
+`effect` (version 3.0.0 or later) is a peer dependency. If your project already uses Effect, you likely have it installed. If not, add it:
+
+```bash
+npm install effect
+```
+</Aside>
+
+## Global CLI Installation
+
+If you want the `effect-analyze` command available globally, install with the `-g` flag:
+
+```bash
+npm install -g effect-analyzer
+```
+
+This lets you run `effect-analyze` from any directory without `npx`.
+
+## Verify Installation
+
+Confirm everything is set up correctly:
+
+```bash
+npx effect-analyze --help
+```
+
+You should see the CLI help output listing all available flags and formats.
+
+## TypeScript Configuration
+
+The analyzer auto-detects your `tsconfig.json` for type information. If you need to point it at a specific config, use the `--tsconfig` flag:
+
+```bash
+npx effect-analyze ./src/program.ts --tsconfig ./tsconfig.app.json
+```
+
+<Aside type="caution">
+If no `tsconfig.json` is found, the analyzer still works but type extraction (error types, service requirements) will be less accurate. For best results, ensure a `tsconfig.json` is present in your project root or specify one explicitly.
+</Aside>
+
+## Next Steps
+
+Head to the [Quick Start](/effect-analyzer/quick-start/) to analyze your first Effect program.
