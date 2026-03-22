@@ -593,7 +593,7 @@ describe('effect-analyzer (domain)', () => {
   });
 
   describe('Type extraction (21.3) Stream / Layer / Schedule / Cause', () => {
-    it('extracts Stream<A,E,R>, Layer<ROut,E,RIn>, Schedule<Out,In,R>, Cause<E> type args', async () => {
+    it('extracts Stream<A,E,R>, Layer<ROut,E,RIn>, Schedule<Out,In,R>, Cause<E> type args', () => {
       const project = new Project({ useInMemoryFileSystem: true });
       const file = project.createSourceFile(
         'type-args.ts',

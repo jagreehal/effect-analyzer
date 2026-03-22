@@ -1359,7 +1359,7 @@ describe('effect-analyzer', () => {
       expect(result.root.programName).toBe('encodeUserProgram');
     });
 
-    it('detects Schema.Serializable and Schema.SerializableWithResult as serializable composition', async () => {
+    it('detects Schema.Serializable and Schema.SerializableWithResult as serializable composition', () => {
       const project = new Project({ useInMemoryFileSystem: true });
       const file = project.createSourceFile(
         'serializable.ts',
