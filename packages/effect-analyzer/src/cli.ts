@@ -1158,7 +1158,7 @@ const runProjectMode = (
 
     // Write API docs if HttpApi structure found (when colocating)
     if (doColocate) {
-      const apiStructures = yield* Effect.tryPromise(async () => {
+      const apiStructures = yield* Effect.tryPromise(() => {
         const project = options.tsconfig
           ? new Project({ tsConfigFilePath: options.tsconfig })
           : new Project({ skipAddingFilesFromTsConfig: true });
@@ -1171,7 +1171,7 @@ const runProjectMode = (
             // skip
           }
         }
-        return allStructures;
+        return Promise.resolve(allStructures);
       }).pipe(Effect.catchAll(() => Effect.succeed([] as HttpApiStructure[])));
       if (apiStructures.length > 0) {
         const apiDocsPath = join(resolvedPath, 'api-docs.md');

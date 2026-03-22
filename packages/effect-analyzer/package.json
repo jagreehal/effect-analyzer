@@ -51,6 +51,15 @@
   ],
   "author": "Jag Reehal <jag@jagreehal.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagreehal/effect-analyzer.git",
+    "directory": "packages/effect-analyzer"
+  },
+  "bugs": {
+    "url": "https://github.com/jagreehal/effect-analyzer/issues"
+  },
+  "homepage": "https://github.com/jagreehal/effect-analyzer/tree/main/packages/effect-analyzer#readme",
   "peerDependencies": {
     "effect": ">=3.0.0",
     "@effect/platform": ">=0.70.0"
