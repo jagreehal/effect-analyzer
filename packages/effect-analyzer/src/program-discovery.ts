@@ -879,6 +879,18 @@ export const findEffectPrograms = (
           type: 'direct',
           ...(inferTypeAnnotatedDiscovery(decl) ?? inferDirectInitializerDiscovery(initializer)),
         });
+      } else if (!looksLikeEffect && !programs.some((p) => p.name === name)) {
+        // Even if the initializer doesn't look like Effect code, check type annotations
+        // This catches arrow functions like: export const f = (args, deps): Effect.Effect<T> => deps.call(args)
+        const typeDiscovery = inferTypeAnnotatedDiscovery(decl);
+        if (typeDiscovery) {
+          programs.push({
+            name,
+            node: decl,
+            type: 'direct',
+            ...typeDiscovery,
+          });
+        }
       }
     }
   }
@@ -1089,6 +1101,27 @@ export const findEffectPrograms = (
           ...(inferTypeAnnotatedDiscovery(getter) ?? inferMethodReturnDiscovery(returnStatements)),
         });
       }
+    }
+  }
+
+  // Discover exported function declarations whose return type is Effect.Effect
+  const functionDeclarations = sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration);
+  for (const fnDecl of functionDeclarations) {
+    const name = fnDecl.getName();
+    if (!name) continue;
+    if (programs.some((p) => p.name === name)) continue;
+    if (!fnDecl.isExported()) continue;
+    // Skip overload signatures (no body) — only discover the implementation
+    if (!fnDecl.getBody()) continue;
+
+    const returnTypeNode = fnDecl.getReturnTypeNode();
+    if (returnTypeNode && hasEffectFamilyTypeHint(returnTypeNode.getText())) {
+      programs.push({
+        name,
+        node: fnDecl,
+        type: 'functionDeclaration',
+        ...buildDiscoveryInfo('high', 'exported function with Effect-family return type'),
+      });
     }
   }
 

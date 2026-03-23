@@ -4,18 +4,8 @@
  * Uses the effect-workflow entrypoint so workflow detection is enabled.
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'fs';
 import { Effect } from 'effect';
 import { analyze } from './effect-workflow';
-import { resolve } from 'path';
-
-const workflowDir = resolve(__dirname, '..', '..', '..', 'js', 'effect-workflow', 'src');
-const hasWorkflowRepo = existsSync(workflowDir);
-
-const effectPackageWorkflowPath =
-  process.env.EFFECT_WORKFLOW_PACKAGE_PATH ??
-  resolve(__dirname, '..', '..', '..', 'js', 'awaitly', '__temp', 'effect', 'packages', 'workflow');
-const hasEffectPackageWorkflow = existsSync(effectPackageWorkflowPath);
 
 describe('workflow pattern analysis (effect-workflow)', () => {
   it('analyzes Workflow.run(Workflow.make(..., fn)) inline', async () => {
@@ -67,27 +57,44 @@ describe('workflow pattern analysis (effect-workflow)', () => {
     expect(ir.metadata.stats.totalEffects).toBeGreaterThan(0);
   });
 
-  it.skipIf(!hasWorkflowRepo)(
-    'analyzes real effect-workflow source files',
-    { timeout: 15_000 },
-    async () => {
-      // workflow.test.ts may define programs inside test closures (not top-level),
-      // so we only assert the analyzer runs without throwing.
-      const exit = await Effect.runPromiseExit(
-        analyze(resolve(workflowDir, 'workflow.test.ts')).all(),
-      );
+  it('analyzes workflow source with test-like closures without crashing', { timeout: 15_000 }, async () => {
+    // Simulates workflow test files where programs are inside closures
+    const source = `
+      import { Effect } from "effect";
+      import { Workflow } from "effect-workflow";
 
-      // Either we discover programs or we get NO_EFFECTS_FOUND — both are valid
-      // depending on how the external repo structures its test file.
-      expect(exit._tag).toMatch(/^(Success|Failure)$/);
-    },
-  );
+      const deps = { fetchUser: () => Effect.succeed({ id: "u1" }) };
+      describe("checkout", () => {
+        it("works", async () => {
+          const result = Workflow.run(
+            Workflow.make("checkout", deps, ({ step, deps }) =>
+              Effect.gen(function* () {
+                const user = yield* step("fetch", () => deps.fetchUser(), { key: "u1" });
+                return user.id;
+              })
+            )
+          );
+        });
+      });
+    `;
 
-  it.skipIf(!hasWorkflowRepo)('analyzes effect-workflow runtime without crashing', async () => {
-    // runtime/index.ts is a barrel re-export file — no top-level Effect programs
-    // expected. We just assert the analyzer doesn't throw unexpectedly.
     const exit = await Effect.runPromiseExit(
-      analyze(resolve(workflowDir, 'runtime', 'index.ts')).all(),
+      analyze.source(source).all(),
+    );
+    // Either discovers programs or NO_EFFECTS_FOUND — both valid
+    expect(exit._tag).toMatch(/^(Success|Failure)$/);
+  });
+
+  it('analyzes barrel re-export files without crashing', async () => {
+    // Simulates runtime/index.ts barrel file
+    const source = `
+      export { createWorkflow } from "./workflow";
+      export { createRuntime } from "./runtime";
+      export type { WorkflowOptions } from "./types";
+    `;
+
+    const exit = await Effect.runPromiseExit(
+      analyze.source(source).all(),
     );
 
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -140,23 +147,43 @@ describe('workflow pattern analysis (effect-workflow)', () => {
     });
   });
 
-  it.skipIf(!hasEffectPackageWorkflow)(
-    'analyzes Effect packages/workflow source without throwing',
-    { timeout: 20_000 },
-    async () => {
-      const srcIndex = resolve(effectPackageWorkflowPath, 'src', 'index.ts');
-      const workflowTs = resolve(effectPackageWorkflowPath, 'src', 'Workflow.ts');
-      const exitIndex = await Effect.runPromiseExit(
-        analyze(srcIndex).all(),
-      );
-      const exitWorkflow = await Effect.runPromiseExit(
-        analyze(workflowTs).all(),
-      );
-      expect(exitIndex._tag).toMatch(/^(Success|Failure)$/);
-      expect(exitWorkflow._tag).toMatch(/^(Success|Failure)$/);
-      if (exitWorkflow._tag === 'Success' && exitWorkflow.value.length > 0) {
-        expect(exitWorkflow.value.some((ir) => ir.root.source === 'workflow-execute' || ir.root.source === 'run' || ir.root.source === 'generator')).toBe(true);
-      }
-    },
-  );
+  it('analyzes @effect/workflow-style source without throwing', { timeout: 15_000 }, async () => {
+    // Simulates @effect/workflow package patterns: Workflow.make(options) + workflow.execute
+    const indexSource = `
+      export * from "./Workflow";
+      export * from "./Activity";
+    `;
+    const workflowSource = `
+      import * as Workflow from "@effect/workflow";
+      import * as Schema from "effect/Schema";
+      import { Effect } from "effect";
+
+      const checkout = Workflow.make({
+        name: "checkout",
+        payload: Schema.Struct({ userId: Schema.String }),
+        idempotencyKey: (p: { userId: string }) => p.userId,
+      });
+
+      export const runCheckout = checkout.execute({ userId: "u1" });
+
+      export const program = Effect.gen(function* () {
+        const result = yield* checkout.execute({ userId: "u2" });
+        return result;
+      });
+    `;
+
+    const exitIndex = await Effect.runPromiseExit(
+      analyze.source(indexSource).all(),
+    );
+    const exitWorkflow = await Effect.runPromiseExit(
+      analyze.source(workflowSource).all(),
+    );
+    expect(exitIndex._tag).toMatch(/^(Success|Failure)$/);
+    expect(exitWorkflow._tag).toMatch(/^(Success|Failure)$/);
+    if (exitWorkflow._tag === 'Success' && exitWorkflow.value.length > 0) {
+      expect(exitWorkflow.value.some((ir) =>
+        ir.root.source === 'workflow-execute' || ir.root.source === 'run' || ir.root.source === 'generator'
+      )).toBe(true);
+    }
+  });
 });

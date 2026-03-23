@@ -135,25 +135,27 @@ export function diffPrograms(
       const candidates: number[] = [];
       for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
         if (!matchedAfterIdx.has(aIdx) && afterSteps[aIdx]?.fingerprint === beforeStep.fingerprint) {
-          if (requireSameContainer && afterSteps[aIdx]!.containerType !== beforeStep.containerType) continue;
+          const afterCandidate = afterSteps[aIdx];
+          if (requireSameContainer && afterCandidate && afterCandidate.containerType !== beforeStep.containerType) continue;
           candidates.push(aIdx);
         }
       }
       if (candidates.length === 0) continue;
 
       // Pick best candidate by closest index
-      let bestIdx = candidates[0]!;
-      let bestDist = Math.abs(afterSteps[bestIdx]!.index - beforeStep.index);
+      let bestIdx = candidates[0] ?? 0;
+      let bestDist = Math.abs((afterSteps[bestIdx]?.index ?? 0) - beforeStep.index);
       for (let i = 1; i < candidates.length; i++) {
-        const aIdx = candidates[i]!;
-        const dist = Math.abs(afterSteps[aIdx]!.index - beforeStep.index);
+        const aIdx = candidates[i] ?? 0;
+        const dist = Math.abs((afterSteps[aIdx]?.index ?? 0) - beforeStep.index);
         if (dist < bestDist) {
           bestIdx = aIdx;
           bestDist = dist;
         }
       }
 
-      const afterStep = afterSteps[bestIdx]!;
+      const afterStep = afterSteps[bestIdx];
+      if (!afterStep) continue;
       matchedBeforeIdx.add(bIdx);
       matchedAfterIdx.add(bestIdx);
 

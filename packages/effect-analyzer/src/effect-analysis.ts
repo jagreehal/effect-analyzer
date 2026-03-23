@@ -23,6 +23,7 @@ import type {
   MethodDeclaration,
   ImportSpecifier,
   VariableStatement,
+  TaggedTemplateExpression,
 } from 'ts-morph';
 import { loadTsMorph } from './ts-morph-loader';
 import type { AnalysisError, AnalyzerOptions, AnalysisWarning, AnalysisStats } from './types';
@@ -436,6 +437,26 @@ export const analyzeEffectExpression = (
       }
     }
 
+
+    // Handle tagged template expressions (e.g. sql`CREATE TABLE...`)
+    // These are commonly used in Effect SQL clients and return Effects
+    if (node.getKind() === SyntaxKind.TaggedTemplateExpression) {
+      const taggedTemplate = node as TaggedTemplateExpression;
+      const tagText = taggedTemplate.getTag().getText();
+      const effectNode: StaticEffectNode = {
+        id: generateId(),
+        type: 'effect',
+        callee: tagText,
+        description: 'side-effect',
+        location: extractLocation(node, filePath, opts.includeLocations ?? false),
+      };
+      stats.totalEffects++;
+      return {
+        ...effectNode,
+        displayName: computeDisplayName(effectNode),
+        semanticRole: 'side-effect' as const,
+      };
+    }
 
     // Default: unknown
     const unknownNode: StaticUnknownNode = {

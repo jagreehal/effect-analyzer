@@ -261,6 +261,65 @@ export const analyzeProgramNode = (
       case 'direct': {
         const initializer = (node as VariableDeclaration).getInitializer();
         if (initializer) {
+          // Detect Effect.fn("name")(function* () { ... }) curried call pattern
+          const { SyntaxKind: SK } = loadTsMorph();
+          if (initializer.getKind() === SK.CallExpression) {
+            const outerCall = initializer as CallExpression;
+            const outerExpr = outerCall.getExpression();
+            // Check if the outer expression is itself a call to Effect.fn/Effect.fnUntraced
+            if (outerExpr.getKind() === SK.CallExpression) {
+              const innerCall = outerExpr as CallExpression;
+              const innerCallee = innerCall.getExpression().getText();
+              if (innerCallee.endsWith('.fn') || innerCallee.endsWith('.fnUntraced')) {
+                // The generator function is the first argument of the outer call
+                const outerArgs = outerCall.getArguments();
+                const genArg = outerArgs.find(
+                  (arg) =>
+                    arg.getKind() === SK.FunctionExpression ||
+                    arg.getKind() === SK.ArrowFunction,
+                );
+                if (genArg) {
+                  // Extract traced name from Effect.fn("name")
+                  const fnArgs = innerCall.getArguments();
+                  let tracedName: string | undefined;
+                  if (fnArgs.length > 0) {
+                    const firstArg = fnArgs[0]?.getText() ?? '';
+                    const strMatch = /^["'`](.+?)["'`]$/.exec(firstArg);
+                    if (strMatch) tracedName = strMatch[1];
+                  }
+                  const constructorKind = innerCallee.endsWith('.fnUntraced') ? 'fnUntraced' as const : 'fn' as const;
+
+                  // Create Effect.fn metadata node preserving constructor info
+                  const fnMetaNode: StaticEffectNode = {
+                    id: generateId(),
+                    type: 'effect',
+                    callee: innerCallee,
+                    location: extractLocation(innerCall, filePath, opts.includeLocations ?? false),
+                    constructorKind,
+                    ...(tracedName ? { tracedName } : {}),
+                  };
+                  stats.totalEffects++;
+                  const enrichedFnNode: StaticEffectNode = {
+                    ...fnMetaNode,
+                    displayName: computeDisplayName(fnMetaNode),
+                    semanticRole: computeSemanticRole(fnMetaNode),
+                  };
+
+                  // Analyze the generator body
+                  const genChildren = yield* analyzeGeneratorFunction(
+                    genArg,
+                    sourceFile,
+                    filePath,
+                    opts,
+                    warnings,
+                    stats,
+                  );
+
+                  return [enrichedFnNode, ...genChildren];
+                }
+              }
+            }
+          }
           const analyzed = yield* analyzeEffectExpression(
             initializer,
             sourceFile,
@@ -327,6 +386,26 @@ export const analyzeProgramNode = (
 
         const { SyntaxKind: SK } = loadTsMorph();
         const returnStatements = body.getDescendantsOfKind(SK.ReturnStatement);
+        const children: StaticFlowNode[] = [];
+        for (const ret of returnStatements) {
+          const expr = (ret).getExpression();
+          if (expr) {
+            const result = yield* analyzeEffectExpression(
+              expr, sourceFile, filePath, opts, warnings, stats,
+            );
+            children.push(result);
+          }
+        }
+        return children;
+      }
+
+      case 'functionDeclaration': {
+        const fnDecl = node as FunctionDeclaration;
+        const body = fnDecl.getBody();
+        if (!body) return [];
+
+        const { SyntaxKind: SK2 } = loadTsMorph();
+        const returnStatements = body.getDescendantsOfKind(SK2.ReturnStatement);
         const children: StaticFlowNode[] = [];
         for (const ret of returnStatements) {
           const expr = (ret).getExpression();
