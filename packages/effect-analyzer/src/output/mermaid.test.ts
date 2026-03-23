@@ -9,7 +9,7 @@ import {
   summarizePathSteps,
   renderEnhancedMermaid,
 } from './mermaid';
-import type { StaticEffectIR, StaticEffectNode, StaticGeneratorNode } from '../types';
+import type { StaticEffectIR, StaticEffectNode, StaticGeneratorNode, StaticDecisionNode, StaticFlowNode } from '../types';
 
 function makeEffectNode(id: string, callee: string): StaticEffectNode {
   return {
@@ -82,6 +82,28 @@ describe('mermaid', () => {
       ]);
       const diagram = renderStaticMermaid(ir);
       expect(diagram).toContain('testProgram');
+    });
+
+    it('only emits classDef for styles actually used by nodes', () => {
+      const ir = makeIR([
+        makeEffectNode('e1', 'Effect.succeed'),
+      ]);
+      const diagram = renderStaticMermaid(ir);
+      // Start and end styles should always be emitted
+      expect(diagram).toContain('classDef startStyle');
+      expect(diagram).toContain('classDef endStyle');
+      // effectStyle should be emitted since we have an effect node
+      expect(diagram).toContain('classDef effectStyle');
+      // Styles for node types NOT present should NOT be emitted
+      expect(diagram).not.toContain('classDef parallelStyle');
+      expect(diagram).not.toContain('classDef raceStyle');
+      expect(diagram).not.toContain('classDef retryStyle');
+      expect(diagram).not.toContain('classDef timeoutStyle');
+      expect(diagram).not.toContain('classDef resourceStyle');
+      expect(diagram).not.toContain('classDef layerStyle');
+      expect(diagram).not.toContain('classDef streamStyle');
+      expect(diagram).not.toContain('classDef channelStyle');
+      expect(diagram).not.toContain('classDef sinkStyle');
     });
 
     it('respects direction option', () => {
@@ -186,6 +208,76 @@ describe('mermaid', () => {
   });
 
   describe('renderEnhancedMermaid', () => {
+    it('does not duplicate type signature when displayName is present', () => {
+      const effectWithType = makeEffectNode('e1', 'deps.validateTransfer');
+      const typed = effectWithType as StaticEffectNode & {
+        typeSignature?: unknown;
+        displayName?: string;
+        semanticRole?: string;
+      };
+      typed.typeSignature = {
+        successType: 'ValidatedTransfer',
+        errorType: 'ValidationError',
+        requirementsType: 'never',
+        isInferred: true,
+        typeConfidence: 'declared',
+      };
+      typed.displayName = 'validated <- deps.validateTransfer';
+      typed.semanticRole = 'side-effect';
+      const ir = makeIR([
+        makeGeneratorNode('gen-1', [{ effect: effectWithType }]),
+      ]);
+      const diagram = renderEnhancedMermaid(ir);
+      // displayName should appear
+      expect(diagram).toContain('validated <- deps.validateTransfer');
+      // semantic role should still be appended
+      expect(diagram).toContain('side-effect');
+      // type signature should NOT appear (it would be a duplicate)
+      const matches = diagram.match(/ValidatedTransfer/g);
+      expect(matches).toBeNull();
+    });
+
+    it('still appends type signature when displayName is NOT present', () => {
+      const effectWithType = makeEffectNode('e1', 'Effect.succeed');
+      (effectWithType as StaticEffectNode & { typeSignature?: unknown }).typeSignature = {
+        successType: 'number',
+        errorType: 'never',
+        requirementsType: 'never',
+        isInferred: true,
+        typeConfidence: 'declared',
+      };
+      const ir = makeIR([
+        makeGeneratorNode('gen-1', [{ effect: effectWithType }]),
+      ]);
+      const diagram = renderEnhancedMermaid(ir);
+      expect(diagram).toContain('number');
+    });
+
+    it('keeps type signature in static Mermaid when displayName is present', () => {
+      const effectWithType = makeEffectNode('e1', 'deps.validateTransfer');
+      const typed = effectWithType as StaticEffectNode & {
+        typeSignature?: unknown;
+        displayName?: string;
+      };
+      typed.typeSignature = {
+        successType: 'ValidatedTransfer',
+        errorType: 'ValidationError',
+        requirementsType: 'never',
+        isInferred: true,
+        typeConfidence: 'declared',
+      };
+      typed.displayName = 'validated <- deps.validateTransfer';
+      const ir = makeIR([
+        makeGeneratorNode('gen-1', [{ effect: effectWithType }]),
+      ]);
+
+      const diagram = renderStaticMermaid(ir);
+
+      expect(diagram).toContain('validated <- deps.validateTransfer');
+      expect(diagram).toContain('ValidatedTransfer');
+      expect(diagram).toContain('ValidationError');
+    });
+
     it('produces diagram with type annotations when effect has typeSignature', () => {
       const effectWithType = makeEffectNode('e1', 'Effect.succeed');
       (effectWithType as StaticEffectNode & { typeSignature?: unknown }).typeSignature = {
@@ -202,6 +294,36 @@ describe('mermaid', () => {
       expect(diagram).toContain('Start');
       expect(diagram).toContain('End');
       expect(diagram).toContain('number');
+    });
+  });
+
+  describe('decision nodes', () => {
+    it('does not create orphan rectangular nodes for decision type', () => {
+      const decision: StaticDecisionNode = {
+        id: 'dec-1',
+        type: 'decision',
+        decisionId: 'dec-1',
+        label: 'Is valid?',
+        condition: 'isValid',
+        source: 'raw-if',
+        onTrue: [makeEffectNode('e1', 'Effect.succeed')],
+        onFalse: [makeEffectNode('e2', 'Effect.fail')],
+      };
+      const ir = makeIR([decision as unknown as StaticFlowNode]);
+      const diagram = renderStaticMermaid(ir);
+
+      // The diamond decision node should exist
+      expect(diagram).toContain('{');
+      expect(diagram).toContain('Is valid?');
+
+      // Count how many node definitions reference "Is valid?" — should be exactly 1 (the diamond)
+      const nodeDefLines = diagram.split('\n').filter(
+        (line) => line.includes('Is valid?') && (line.includes('[') || line.includes('{'))
+      );
+      expect(nodeDefLines).toHaveLength(1);
+      // That single definition should be the diamond shape, not a rectangle
+      expect(nodeDefLines[0]).toContain('{');
+      expect(nodeDefLines[0]).not.toMatch(/\["/);
     });
   });
 });

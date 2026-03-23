@@ -447,6 +447,21 @@ function isFunctionBoundary(node: Node): boolean {
 }
 
 /**
+ * Check if a call expression is the DIRECT expression of a yield* statement.
+ * Returns true only when the call's immediate parent is a YieldExpression,
+ * meaning the statement walker already fully handles this call as a yielded effect.
+ *
+ * This does NOT filter sub-expressions (e.g., Effect.fn("name") inside
+ * yield* Effect.fn("name")(fn)) — those are legitimately picked up by
+ * the non-yielded scanner.
+ */
+function isDirectYieldExpression(call: Node): boolean {
+  const { SyntaxKind } = loadTsMorph();
+  const parent = call.getParent();
+  return parent !== undefined && parent.getKind() === SyntaxKind.YieldExpression;
+}
+
+/**
  * Boundary-aware check: does `node` contain (or is itself) a YieldExpression
  * without crossing into nested function/class bodies?
  */
@@ -1773,11 +1788,23 @@ export const analyzeGeneratorFunction = (
     // This intentionally includes calls nested inside yield* arguments — the existing
     // behavior produces additional entries for sub-expressions like Effect.provide()
     // inside pipe chains, which tests and downstream consumers rely on.
+    //
+    // However, we must skip calls that are the DIRECT argument of a yield*
+    // expression (these are already fully handled by the statement-level walker).
+    // Without this filter, Effect.fail/succeed calls inside generator yield*
+    // statements get duplicated as flat sibling nodes, causing incorrect diagrams
+    // (e.g., fail nodes appearing on the success path after a conditional branch).
     const calls = body.getDescendantsOfKind(SyntaxKind.CallExpression);
     for (const call of calls) {
       // Skip Effect.withSpan calls — they are merged as annotations on pipe nodes
       const callCallee = call.getExpression().getText();
       if (callCallee.includes('withSpan')) continue;
+
+      // Skip calls that are the direct expression of a yield* — already
+      // handled by the statement-level walker. Only skip the top-level call
+      // (e.g. yield* Effect.succeed(x)), not sub-expressions within it
+      // (e.g. Effect.fn("name") inside yield* Effect.fn("name")(fn)).
+      if (isDirectYieldExpression(call)) continue;
 
       const aliases = getAliasesForFile(sourceFile);
       if (isEffectLikeCallExpression(call, sourceFile, aliases, opts.knownEffectInternalsRoot)) {
