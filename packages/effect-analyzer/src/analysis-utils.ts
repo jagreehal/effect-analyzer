@@ -426,7 +426,7 @@ export interface EffectProgram {
   readonly discoveryReason?: string;
   readonly node: CallExpression | FunctionDeclaration | VariableDeclaration | ClassDeclaration
     | PropertyDeclaration | MethodDeclaration | GetAccessorDeclaration;
-  readonly type: 'generator' | 'direct' | 'pipe' | 'run' | 'workflow-execute' | 'class' | 'classProperty' | 'classMethod';
+  readonly type: 'generator' | 'direct' | 'pipe' | 'run' | 'workflow-execute' | 'class' | 'classProperty' | 'classMethod' | 'functionDeclaration';
 }
 
 // =============================================================================

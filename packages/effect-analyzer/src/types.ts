@@ -964,7 +964,7 @@ export interface StaticEffectProgram extends StaticBaseNode {
   /** Name of the program (from file name or variable) */
   readonly programName: string;
   /** Entry point: gen, direct, pipe, run, workflow-execute, or class */
-  readonly source: 'generator' | 'direct' | 'pipe' | 'run' | 'workflow-execute' | 'class' | 'classProperty' | 'classMethod';
+  readonly source: 'generator' | 'direct' | 'pipe' | 'run' | 'workflow-execute' | 'class' | 'classProperty' | 'classMethod' | 'functionDeclaration';
   /** Discovery confidence based on alias/path resolution vs heuristics */
   readonly discoveryConfidence?: 'high' | 'medium' | 'low';
   /** Best-effort reason used to classify this as an Effect program */

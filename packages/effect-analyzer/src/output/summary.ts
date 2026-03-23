@@ -21,6 +21,7 @@ const SOURCE_ABBREVIATIONS: Record<StaticEffectIR['root']['source'], string> = {
   class: 'class',
   classProperty: 'classProp',
   classMethod: 'classMeth',
+  functionDeclaration: 'fnDecl',
 };
 
 function abbreviateSource(source: StaticEffectIR['root']['source']): string {

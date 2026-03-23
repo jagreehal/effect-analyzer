@@ -159,10 +159,60 @@ function countUnknownReasons(nodes: readonly StaticFlowNode[]): Map<string, numb
   return byReason;
 }
 
+/** Modules from `effect` that do NOT produce Effect programs on their own. */
+const NON_PROGRAM_EFFECT_MODULES = new Set([
+  'Option', 'Either', 'Predicate', 'Order', 'Equivalence',
+  'Hash', 'Equal', 'Inspectable', 'Pipeable', 'Types',
+  'Brand', 'Chunk', 'HashMap', 'HashSet', 'List',
+  'SortedMap', 'SortedSet', 'Duration', 'DateTime',
+  'BigInt', 'BigDecimal', 'Number', 'String', 'Struct',
+  'Tuple', 'ReadonlyArray', 'Array', 'Record',
+  'Schema', 'ServiceMap', 'Data', 'Match', 'Function',
+]);
+
 function fileImportsEffect(filePath: string): boolean {
   try {
     const content = readFileSync(filePath, 'utf-8');
-    return /from\s+["'](?:effect|effect\/|@effect\/)/.test(content);
+    if (!/from\s+["'](?:effect|effect\/|@effect\/)/.test(content)) return false;
+
+    // Check if all runtime (non-type) named imports from "effect" are non-program modules
+    // `import type { ... }` lines are always safe (type-only, no runtime behavior)
+    const runtimeImportMatches = content.matchAll(/import\s+{([^}]+)}\s+from\s+["']effect["']/g);
+    let hasAnyRuntimeImport = false;
+    let allNonProgram = true;
+    for (const match of runtimeImportMatches) {
+      // Skip if this is actually an `import type` statement (the regex above won't match `import type {`)
+      // But we need to check for inline `type` specifiers like `import { type Effect, Schema } from "effect"`
+      const names = match[1]!.split(',')
+        .map(s => s.trim())
+        .filter(s => !s.startsWith('type '))  // skip inline type imports
+        .map(s => s.split(/\s+as\s+/)[0]!.trim())
+        .filter(Boolean);
+      for (const name of names) {
+        hasAnyRuntimeImport = true;
+        if (!NON_PROGRAM_EFFECT_MODULES.has(name)) {
+          allNonProgram = false;
+          break;
+        }
+      }
+      if (!allNonProgram) break;
+    }
+
+    if (hasAnyRuntimeImport && allNonProgram) return false;
+
+    // Check for namespace imports: import * as X from "effect" or "effect/..."
+    const hasNamespaceImport = /import\s+\*\s+as\s+\w+\s+from\s+["'](?:effect|effect\/|@effect\/)/.test(content);
+    if (hasNamespaceImport) return true;
+
+    // Check for named/namespace imports from effect submodules (e.g. "effect/Effect", "@effect/...")
+    // These weren't caught by the exact "effect" regex above
+    const hasSubmoduleImport = /import\s+{[^}]+}\s+from\s+["'](?:effect\/|@effect\/)/.test(content);
+    if (hasSubmoduleImport) return true;
+
+    // If only `import type` statements exist (no runtime imports at all), not suspicious
+    if (!hasAnyRuntimeImport) return false;
+
+    return true;
   } catch {
     return false;
   }

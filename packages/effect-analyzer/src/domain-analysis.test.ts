@@ -783,6 +783,134 @@ export const program = E.gen(function* () {
       expect(allNodes.some(n => n.constructorKind === 'promise')).toBe(true);
     });
 
+    it('should analyze Effect.fn generator body children (not treat as opaque)', { timeout: 20_000 }, async () => {
+      const results = await Effect.runPromise(
+        analyze(resolve(fixturesDir, 'effect-fn-toplevel.ts')).all(),
+      );
+      expect(results.length).toBeGreaterThanOrEqual(1);
+
+      // The processOrder program should have a generator node with yields inside
+      const processOrder = results.find(ir => ir.root.programName.includes('processOrder'));
+      expect(processOrder).toBeDefined();
+
+      // Walk all nodes to find generator nodes
+      const allNodes: import('./types').StaticFlowNode[] = [];
+      const walk = (node: import('./types').StaticFlowNode) => {
+        allNodes.push(node);
+        const children = Option.getOrElse(getStaticChildren(node), () => []);
+        children.forEach(walk);
+      };
+      processOrder!.root.children.forEach(walk);
+
+      // Should have a generator node with yields (not just a single effect node)
+      const generatorNode = allNodes.find(n => n.type === 'generator');
+      expect(generatorNode).toBeDefined();
+      if (generatorNode && 'yields' in generatorNode) {
+        // Should have at least 3 yields: succeed, log, tryPromise
+        expect(generatorNode.yields.length).toBeGreaterThanOrEqual(3);
+      }
+    });
+
+    it('should preserve Effect.fn constructor metadata for top-level Effect.fn programs', { timeout: 20_000 }, async () => {
+      const results = await Effect.runPromise(
+        analyze(resolve(fixturesDir, 'effect-fn-toplevel.ts')).all(),
+      );
+      const processOrder = results.find(ir => ir.root.programName === 'processOrder');
+      expect(processOrder).toBeDefined();
+
+      const allNodes: import('./types').StaticFlowNode[] = [];
+      const walk = (node: import('./types').StaticFlowNode) => {
+        allNodes.push(node);
+        const children = Option.getOrElse(getStaticChildren(node), () => []);
+        children.forEach(walk);
+      };
+      processOrder!.root.children.forEach(walk);
+
+      const fnNode = allNodes.find(
+        (node): node is import('./types').StaticEffectNode =>
+          isStaticEffectNode(node) && node.constructorKind === 'fn',
+      );
+
+      expect(fnNode).toBeDefined();
+      expect(fnNode?.tracedName).toBe('processOrder');
+    });
+
+    it('should recognize tagged template literals as side-effect nodes, not unknown', { timeout: 20_000 }, async () => {
+      const results = await Effect.runPromise(
+        analyze(resolve(fixturesDir, 'tagged-template-sql.ts')).all(),
+      );
+      expect(results.length).toBeGreaterThanOrEqual(1);
+
+      const ir = results[0]!;
+      // Collect all nodes
+      const allNodes: import('./types').StaticFlowNode[] = [];
+      const walk = (node: import('./types').StaticFlowNode) => {
+        allNodes.push(node);
+        const children = Option.getOrElse(getStaticChildren(node), () => []);
+        children.forEach(walk);
+      };
+      ir.root.children.forEach(walk);
+
+      // The tagged template SQL expressions should NOT be "unknown" nodes
+      const unknownNodes = allNodes.filter(n => n.type === 'unknown');
+      expect(unknownNodes.length).toBe(0);
+
+      // Should have effect nodes for the SQL operations (tagged templates)
+      const effectNodes = allNodes.filter(n => n.type === 'effect');
+      // At least: SqlClient.SqlClient + 3 sql tagged template operations
+      expect(effectNodes.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('should discover exported functions returning Effect.Effect as programs', { timeout: 20_000 }, async () => {
+      const results = await Effect.runPromise(
+        analyze(resolve(fixturesDir, 'utility-effect-functions.ts')).all(),
+      );
+      // Should find at least 2 programs (requireItem, validateInput)
+      expect(results.length).toBeGreaterThanOrEqual(2);
+
+      const programNames = results.map(ir => ir.root.programName);
+      expect(programNames).toContain('requireItem');
+      expect(programNames).toContain('validateInput');
+    });
+
+    it('should prefer exported function implementations over overload signatures', { timeout: 20_000 }, async () => {
+      const source = `
+import { Effect } from "effect"
+
+export function lookup(id: string): Effect.Effect<string>
+export function lookup(id: number): Effect.Effect<number>
+export function lookup(id: string | number): Effect.Effect<string | number> {
+  return Effect.succeed(id)
+}
+`;
+
+      const results = await Effect.runPromise(analyze.source(source).all());
+      const lookup = results.find(ir => ir.root.programName === 'lookup');
+      expect(lookup).toBeDefined();
+      expect(lookup!.root.children.length).toBeGreaterThan(0);
+    });
+
+    it('should discover arrow functions with Effect.Effect return type annotation', { timeout: 20_000 }, async () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'eff-arrow-'));
+      const fpath = join(tmp, 'delegating.ts');
+      writeFileSync(fpath, [
+        'import { Effect } from "effect"',
+        '',
+        'export const executeTransfer = (',
+        '  args: { id: string },',
+        '  deps: { post: (a: { id: string }) => Effect.Effect<string> }',
+        '): Effect.Effect<string> => deps.post(args)',
+        '',
+      ].join('\n'));
+      try {
+        const results = await Effect.runPromise(analyze(fpath).all());
+        expect(results.length).toBeGreaterThanOrEqual(1);
+        expect(results[0]!.root.programName).toBe('executeTransfer');
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+
     it('should differentiate Data.tagged as tagged-enum semantic', async () => {
       const source = `
 import { Data } from "effect"
