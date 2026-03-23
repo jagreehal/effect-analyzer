@@ -227,6 +227,15 @@ function renderStaticMermaidInternal(
   const styles = { ...DEFAULT_STYLES, ...opts.styles };
   lines.push('');
   lines.push('  %% Styles');
+
+  // Collect which style keys are actually used by nodes in the diagram
+  const usedStyleKeys = new Set<string>(['start', 'end']);
+  for (const [, styleClass] of context.styleClasses) {
+    // styleClass values are like "effectStyle", "decisionStyle" — strip "Style" suffix to get the key
+    const key = styleClass.endsWith('Style') ? styleClass.slice(0, -5) : styleClass;
+    usedStyleKeys.add(key);
+  }
+
   if (styles.start) {
     lines.push(`  classDef startStyle ${styles.start}`);
   }
@@ -234,7 +243,7 @@ function renderStaticMermaidInternal(
     lines.push(`  classDef endStyle ${styles.end}`);
   }
   for (const [key, value] of Object.entries(styles)) {
-    if (value && key !== 'start' && key !== 'end') {
+    if (value && key !== 'start' && key !== 'end' && usedStyleKeys.has(key)) {
       lines.push(`  classDef ${key}Style ${value}`);
     }
   }
@@ -499,13 +508,17 @@ function getNodeLabel(
   }
 
   // Standard/Verbose: use displayName if available
+  let usedDisplayName = false;
   if (opts.detail !== 'compact' && node.displayName) {
     label = node.displayName;
+    usedDisplayName = true;
   }
 
   // Verbose: append type signature and semantic role
+  // Skip inline type signature when annotations already carry one (enhanced renderer)
+  const annotationsHaveTypeSig = annotations?.some((a) => a.startsWith('<') && a.includes(','));
   if (opts.detail === 'verbose') {
-    if (node.type === 'effect' && opts.includeTypeSignatures && node.typeSignature) {
+    if (!annotationsHaveTypeSig && node.type === 'effect' && opts.includeTypeSignatures && node.typeSignature) {
       const sig = node.typeSignature;
       label += `\n<${sig.successType}, ${sig.errorType}, ${sig.requirementsType}>`;
     }
@@ -515,7 +528,13 @@ function getNodeLabel(
   }
 
   if (annotations?.length) {
-    label += '\n' + annotations.join('\n');
+    // When displayName is used, skip type signature annotations to avoid duplication
+    const filteredAnnotations = usedDisplayName
+      ? annotations.filter((a) => !a.startsWith('<') || !a.includes(','))
+      : annotations;
+    if (filteredAnnotations.length) {
+      label += '\n' + filteredAnnotations.join('\n');
+    }
   }
   return label;
 }
@@ -538,7 +557,8 @@ function renderNode(
   const styleClass = getNodeStyleClass(node);
 
   // Skip the "Generator (N yields)" box so the diagram shows the actual yield steps (varName <- callee, types, etc.)
-  if (node.type !== 'generator') {
+  // Skip decision nodes too — the case 'decision' block creates its own diamond-shaped node.
+  if (node.type !== 'generator' && node.type !== 'decision') {
     lines.push(`  ${nodeId}["${escapeLabel(label)}"]`);
     context.styleClasses.set(nodeId, styleClass);
     context.nodeIdMap.set(node.id, nodeId);
@@ -808,6 +828,7 @@ function renderNode(
       const condLabel = node.label || truncate(node.condition, 25);
       lines.push(`  ${decisionId}{"${escapeLabel(condLabel)}"}`);
       context.styleClasses.set(decisionId, 'decisionStyle');
+      context.nodeIdMap.set(node.id, decisionId);
 
       // Render true branch
       const trueResult = renderNodes(node.onTrue, context, lines);
