@@ -87,7 +87,8 @@ describe('Quality fixes', () => {
 
   describe('Issue 6: Diff should use stable IDs', () => {
     // `stepsAdded` counts unmatched effect steps after fingerprint + container passes.
-    // A middle insert can surface as 2 in the summary depending on match order; keep as regression lock.
+    // After fixing duplicate yield counting (direct yield* calls are no longer re-added
+    // by the non-yielded scanner), the diff correctly detects 1 new step.
     it('produces stable diffs when a step is added', { timeout: 20_000 }, async () => {
       const [before] = await Effect.runPromise(analyzeEffectSource(`
         import { Effect } from "effect";
@@ -107,7 +108,7 @@ describe('Quality fixes', () => {
         });
       `));
       const diff = diffPrograms(before!, after!);
-      expect(diff.summary.stepsAdded).toBe(2);
+      expect(diff.summary.stepsAdded).toBe(1);
       expect(diff.summary.stepsRemoved).toBe(0);
       expect(diff.summary.stepsRenamed).toBe(0);
     });

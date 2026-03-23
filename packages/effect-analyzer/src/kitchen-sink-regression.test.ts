@@ -96,10 +96,8 @@ describe('kitchen-sink regression (improve.md P0)', () => {
     expect(genWithServices).toBeDefined();
     if (genWithServices) {
       const mermaid = await Effect.runPromise(renderMermaid(genWithServices, { direction: 'TB' }));
-      expect(
-        mermaid.includes('string, never, never') ||
-          mermaid.includes('&lt;string, never, never&gt;'),
-      ).toBe(true);
+      // Type signatures are omitted when displayName is present (avoids duplication)
+      // Semantic role annotation should still be present
       expect(mermaid).toContain('(side-effect)');
     }
   });
