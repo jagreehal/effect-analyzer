@@ -3,12 +3,16 @@ title: effect-analyzer
 description: Static analysis for Effect-TS code - extract structure, calculate complexity, and generate visualizations without executing your code.
 template: splash
 hero:
-  tagline: Understand your Effect programs at a glance. Extract structure, calculate complexity, and generate Mermaid diagrams - all without running your code.
+  tagline: Paste Effect code into a live browser playground, export interactive analysis pages, and generate diagrams without running your program.
   actions:
-    - text: Get Started
-      link: /effect-analyzer/quick-start/
+    - text: Try Live Playground
+      link: /effect-analyzer/playground/
       icon: right-arrow
       variant: primary
+    - text: Open HTML Demo
+      link: /effect-analyzer/reference/html-viewer/
+      icon: right-arrow
+      variant: secondary
     - text: View on GitHub
       link: https://github.com/jagreehal/effect-analyzer
       icon: external
@@ -17,11 +21,76 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
+## The Standout Features
+
+<CardGrid>
+  <Card title="Live Browser Playground" icon="document">
+    Paste Effect code into a static in-browser playground and get a rendered railway diagram immediately.
+
+    [Open the playground](/effect-analyzer/playground/)
+  </Card>
+  <Card title="Interactive HTML Export" icon="pencil">
+    Generate a shareable analysis page with search, filters, path explorer, themes, and embedded IR.
+
+    [Open the HTML demo](/effect-analyzer/reference/html-viewer/)
+  </Card>
+</CardGrid>
+
+These two features are what make the library easy to share: one lets people try it instantly, the other turns analysis into a linkable artifact.
+
 ## See It in Action
 
-![Railway diagram showing a transfer program with service dependencies and error branches](../../assets/screenshots/railway-diagram.png)
+Example fixture: `packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts`
 
-![Plain-English explanation of a real-world Effect upload service with retry and concurrency](../../assets/screenshots/explain-real-world.png)
+```ts
+export const transferWorkflow = (
+  fromAccountId: string,
+  toAccountId: string,
+  amount: number,
+) =>
+  Effect.gen(function* () {
+    const accounts = yield* AccountService
+    const audit = yield* AuditLog
+
+    const balance = yield* accounts.getBalance(fromAccountId)
+    if (balance < amount) {
+      return yield* Effect.fail(new InsufficientFundsError(balance, amount))
+    }
+
+    yield* accounts.debit(fromAccountId, amount)
+    yield* accounts.credit(toAccountId, amount)
+    yield* audit.record(`Transferred ${amount} from ${fromAccountId} to ${toAccountId}`)
+  })
+```
+
+```text
+$ npx effect-analyze ./src/__fixtures__/docs/transfer-workflow.ts --format explain
+
+transferWorkflow (generator):
+  1. Yields accounts <- AccountService
+  2. Yields audit <- AuditLog
+  3. Yields balance <- accounts.getBalance
+  4. If balance < amount:
+    Returns:
+      Calls fail - constructor
+  5. Calls accounts.debit
+  6. Calls accounts.credit
+  7. Calls audit.record
+
+  Services required: AccountService, AuditLog
+  Error paths: AccountNotFoundError, InsufficientFundsError
+  Concurrency: sequential (no parallelism)
+```
+
+```mermaid
+flowchart LR
+  prog["transferWorkflow"]
+
+  svc_AccountService{{"AccountService"}}
+  prog -->|requires| svc_AccountService
+  svc_AuditLog{{"AuditLog"}}
+  prog -->|requires| svc_AuditLog
+```
 
 ## Features
 
@@ -39,6 +108,12 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     Compare two versions of an Effect program to see what changed - steps added, removed, or modified.
   </Card>
 </CardGrid>
+
+## Start With The Visuals
+
+- [Try the live playground](/effect-analyzer/playground/) to paste code and see the railway diagram in the browser.
+- [Open the interactive HTML demo](/effect-analyzer/reference/html-viewer/) to see the exported viewer embedded directly in the docs.
+- [Read the `t3code` case study](/effect-analyzer/case-studies/t3code/) to see Mermaid diff output used on a real codebase.
 
 ## Quick Start
 

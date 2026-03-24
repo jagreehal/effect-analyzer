@@ -9,7 +9,17 @@ import { Aside } from '@astrojs/starlight/components';
 
 The **service map** diagram shows which `Context.Tag` services your Effect program depends on and how steps in the program consume those services. For project-wide analysis, the `--service-map` flag produces a deduplicated registry of all services across your codebase.
 
-![Service dependency map showing transfer program depending on AccountRepo and AuditLog](../../../assets/screenshots/services-diagram.png)
+Example fixture: `packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts`
+
+```mermaid
+flowchart LR
+  prog["transferWorkflow"]
+
+  svc_AccountService{{"AccountService"}}
+  prog -->|requires| svc_AccountService
+  svc_AuditLog{{"AuditLog"}}
+  prog -->|requires| svc_AuditLog
+```
 
 ## Generating a Service Map
 
@@ -19,19 +29,7 @@ npx effect-analyze ./src/transfer.ts --format mermaid-services
 
 This produces a Mermaid diagram that groups steps by the services they require. Each service appears as a node, with edges connecting it to the steps that consume it.
 
-For a program that depends on `AccountService` and `AuditLog`:
-
-```mermaid
-graph TB
-  subgraph Services
-    S1[AccountService]
-    S2[AuditLog]
-  end
-  S1 --> getBalance
-  S1 --> debit
-  S1 --> credit
-  S2 --> audit.record
-```
+For this program, the analyzer reports `AccountService` and `AuditLog` as required services.
 
 ## When Auto Mode Selects Services
 

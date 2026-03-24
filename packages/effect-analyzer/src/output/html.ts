@@ -131,11 +131,12 @@ export function renderInteractiveHTML(
     .toolbar label { font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer; }
     .toolbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
 
-    .layout { display: grid; grid-template-columns: 1fr 380px; height: calc(100vh - 90px); }
+    .layout { display: grid; grid-template-columns: 1fr minmax(260px, 380px); height: calc(100vh - 90px); }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
 
     .diagram-pane { overflow: auto; padding: 1rem; border-right: 1px solid var(--border); }
     .diagram-pane .mermaid { min-height: 200px; }
+    .diagram-pane .mermaid:not(.themed) svg { visibility: hidden; }
 
     .sidebar { overflow-y: auto; display: flex; flex-direction: column; }
     .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--header-bg); }
@@ -258,6 +259,9 @@ export function renderInteractiveHTML(
       var vars = MERMAID_THEME_VARS[themeName] || MERMAID_THEME_VARS.midnight;
       var svg = document.querySelector('.mermaid svg');
       if (!svg) return;
+      // Mark container as themed so CSS can reveal the SVG
+      var container = document.getElementById('mermaid-diagram');
+      if (container) container.classList.add('themed');
       // Override all label-container shapes (nodes)
       var shapes = svg.querySelectorAll('.label-container');
       shapes.forEach(function(el) {
@@ -300,10 +304,18 @@ export function renderInteractiveHTML(
       if (!skipRerender) {
         var el = document.getElementById('mermaid-diagram');
         if (el) {
+          // Restore diagram source text before re-rendering (after initial render the element contains SVG, not source)
+          var dataOn = document.getElementById('toggleDataFlow').checked;
+          var errorOn = document.getElementById('toggleErrorFlow').checked;
+          var src = DIAGRAMS.base;
+          if (dataOn) src = DIAGRAMS.dataFlow;
+          if (errorOn) src = DIAGRAMS.errorFlow;
+          if (dataOn && errorOn) src = DIAGRAMS.dataFlow;
+          el.textContent = src;
           el.removeAttribute('data-processed');
+          el.classList.remove('themed');
           mermaid.init(undefined, el);
-          // Re-apply node colors after Mermaid re-renders
-          setTimeout(function() { rethemeSvgNodes(name); }, 500);
+          rethemeOnRender(name);
         }
       }
       // Update active state in menu
@@ -338,6 +350,33 @@ export function renderInteractiveHTML(
       });
     }
 
+    // Retheme as soon as mermaid inserts an SVG into the diagram element.
+    // Uses a MutationObserver to avoid timing guesswork and prevent the flash
+    // of default classDef colors (e.g. green Start node) before theme colors apply.
+    // The SVG stays hidden (via CSS visibility:hidden) until rethemeSvgNodes adds .themed.
+    function rethemeOnRender(themeName) {
+      var el = document.getElementById('mermaid-diagram');
+      if (!el) return;
+      el.classList.remove('themed');
+      function applyAfterFrame() {
+        // Yield two frames so mermaid finishes applying its inline !important styles
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            rethemeSvgNodes(themeName);
+          });
+        });
+      }
+      // If SVG is already present (synchronous path), retheme after frame
+      if (el.querySelector('svg')) { applyAfterFrame(); return; }
+      var obs = new MutationObserver(function(mutations, observer) {
+        if (el.querySelector('svg')) {
+          observer.disconnect();
+          applyAfterFrame();
+        }
+      });
+      obs.observe(el, { childList: true, subtree: true });
+    }
+
     // Apply initial theme (skip re-render since Mermaid hasn't rendered yet)
     applyTheme(resolveTheme(), true);
 
@@ -345,6 +384,9 @@ export function renderInteractiveHTML(
     var currentThemeName = resolveTheme();
     var initVars = MERMAID_THEME_VARS[currentThemeName] || MERMAID_THEME_VARS.midnight;
     mermaid.initialize({ startOnLoad: true, theme: 'base', themeVariables: initVars, securityLevel: 'loose' });
+
+    // Watch for the initial mermaid render and retheme immediately
+    rethemeOnRender(currentThemeName);
 
     const IR_DATA = ${irJson};
     const PATHS_DATA = ${pathsJson};
@@ -470,11 +512,12 @@ export function renderInteractiveHTML(
       if (dataOn) src = DIAGRAMS.dataFlow;
       if (errorOn) src = DIAGRAMS.errorFlow;
       if (dataOn && errorOn) src = DIAGRAMS.dataFlow; // data takes precedence
-      el.innerHTML = src;
+      el.textContent = src;
       el.removeAttribute('data-processed');
+      el.classList.remove('themed');
       mermaid.init(undefined, el);
       var curTheme = document.documentElement.getAttribute('data-theme') || 'midnight';
-      setTimeout(function() { rethemeSvgNodes(curTheme); }, 500);
+      rethemeOnRender(curTheme);
     }
 
     // Path selection
@@ -518,26 +561,32 @@ export function renderInteractiveHTML(
       document.querySelectorAll('.sidebar-tabs button')[0].classList.add('active');
     }
 
-    // Register Mermaid click callbacks and apply theme to SVG after rendering
-    document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(function() {
-        rethemeSvgNodes(document.documentElement.getAttribute('data-theme') || 'midnight');
-        var svgNodes = document.querySelectorAll('.mermaid svg .node');
-        svgNodes.forEach(function(el) {
-          el.style.cursor = 'pointer';
-          el.addEventListener('click', function() {
-            var id = el.id || '';
-            // Mermaid node IDs often have prefixes; try to match against nodeIndex
-            for (var key in nodeIndex) {
-              if (id.indexOf(key) >= 0 || id.indexOf(key.replace(/[^a-zA-Z0-9]/g, '_')) >= 0) {
-                showNodeDetails(key);
-                return;
-              }
+    // Register Mermaid click callbacks after rendering.
+    // The initial retheme is handled by rethemeOnRender above.
+    function bindNodeClicks() {
+      var svgNodes = document.querySelectorAll('.mermaid svg .node');
+      svgNodes.forEach(function(el) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', function() {
+          var id = el.id || '';
+          for (var key in nodeIndex) {
+            if (id.indexOf(key) >= 0 || id.indexOf(key.replace(/[^a-zA-Z0-9]/g, '_')) >= 0) {
+              showNodeDetails(key);
+              return;
             }
-          });
+          }
         });
-      }, 1000);
-    });
+      });
+    }
+    // Observe the diagram element; bind clicks once SVG appears
+    (function() {
+      var el = document.getElementById('mermaid-diagram');
+      if (!el) return;
+      var obs = new MutationObserver(function() {
+        if (el.querySelector('svg')) { obs.disconnect(); bindNodeClicks(); }
+      });
+      obs.observe(el, { childList: true, subtree: true });
+    })();
   </scr` + `ipt>
 </body>
 </html>`;

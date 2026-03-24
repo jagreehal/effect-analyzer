@@ -14,6 +14,10 @@
     "@fontsource-variable/inter": "^5.0.0",
     "@fontsource/jetbrains-mono": "^5.0.0",
     "astro": "^5.10.0",
-    "sharp": "^0.33.0"
+    "astro-mermaid": "^2.0.1",
+    "effect": "^3.21.0",
+    "mermaid": "^11.13.0",
+    "sharp": "^0.33.0",
+    "ts-morph": "^27.0.2"
   }
 }

@@ -9,7 +9,38 @@ import { Aside } from '@astrojs/starlight/components';
 
 The **semantic diff** compares two versions of an Effect program at the IR level, not the text level. It reports structural changes - steps added, removed, modified, or moved - giving you a meaningful view of what changed in the program's behavior.
 
-![Diff output showing added steps, removed steps, and structural changes](../../../assets/screenshots/diff-output.png)
+Example fixture pair:
+`packages/effect-analyzer/src/__fixtures__/docs/send-money-before.ts`
+and
+`packages/effect-analyzer/src/__fixtures__/docs/send-money-after.ts`
+
+```text
+# Effect Program Diff: sendMoney -> sendMoney
+
+## Summary
+
+| Metric | Count |
+|--------|-------|
+| Added | 8 |
+| Removed | 1 |
+| Renamed | 0 |
+| Moved | 0 |
+| Unchanged | 7 |
+| Structural changes | 1 |
+
+## Step Changes
+
+- transfers.execute
++ FraudScreening
++ Notifications
++ fraud.screen
++ transfers.execute(...).pipe
++ notifications.sendConfirmation
+
+## Structural Changes
+
+- retry block added
+```
 
 ## Basic Usage
 
