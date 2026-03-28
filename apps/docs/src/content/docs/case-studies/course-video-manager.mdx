@@ -1,19 +1,19 @@
 ---
 title: course-video-manager
-description: Using effect-analyzer to recover publishing, export, and validation workflows from a real Effect-heavy application.
+description: Analyzing a real Effect-heavy desktop app for video course publishing, export, and media processing.
 sidebar:
   order: 1
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-`course-video-manager` is a desktop app for managing video courses: publishing, export, upload, validation, thumbnails, filesystem coordination, and media processing. It uses Effect throughout. If effect-analyzer is useful here, it is useful on real operational software.
+`course-video-manager` is a desktop app for managing video courses: publishing, export, upload, validation, thumbnails, filesystem coordination, and media processing. It uses Effect throughout.
 
-## Audit Signal
+This walkthrough follows the path a new contributor or reviewer would take: start with the audit to find where the interesting code lives, then drill into specific files to understand how they work.
 
-Coverage audit on the two main directories:
+## Step 1: Where does the interesting code live?
 
-### `app/services`
+A new contributor's first question on any repo is which directories matter.
 
 ```bash
 npx effect-analyze ./app/services --coverage-audit --show-by-folder --tsconfig ./tsconfig.json
@@ -29,8 +29,6 @@ Analyzable coverage: 100.0%
 Unknown node rate: 3.32%
 ```
 
-### `app/routes`
-
 ```bash
 npx effect-analyze ./app/routes --coverage-audit --show-by-folder --tsconfig ./tsconfig.json
 ```
@@ -45,11 +43,15 @@ Analyzable coverage: 100.0%
 Unknown node rate: 11.76%
 ```
 
-The service layer has a low unknown rate (3.32%). The route layer has high coverage but is structurally noisier (11.76% unknown). Zero files failed to parse in either directory.
+The service layer has a low unknown rate (3.32%). The route layer has high coverage but is structurally noisier (11.76% unknown), reflecting the mix of framework glue and Effect logic in route handlers. Zero files failed to parse in either directory.
 
-## Example 1: The Course Editor Dispatch Table
+**Without the analyzer**, you would need to open dozens of files to figure out where the business logic concentrates. The audit narrows that search immediately.
 
-`course-editor-service-handler.ts` contains the event dispatch table that drives the course editing UI:
+## Step 2: How does the editor work?
+
+The next question is practical: how do I add a new editor operation, and what pattern should I follow?
+
+Reading `course-editor-service-handler.ts` directly means scrolling through hundreds of lines of switch cases, service calls, and DB queries. The analyzer extracts the structure:
 
 ```bash
 npx effect-analyze ./app/services/course-editor-service-handler.ts --format explain --tsconfig ./tsconfig.json
@@ -109,14 +111,12 @@ handleCourseEditorEvent (direct):
   Services required: CourseWriteService, DBFunctionsService
 ```
 
-In one glance a reviewer sees:
+Now a contributor adding a new operation can see:
 
-- the complete event vocabulary (18 operations)
-- which operations delegate to the write service vs. hitting the DB directly
-- the split between higher-level write operations (via `CourseWriteService`) and direct DB updates
-- `update-section-name` has special logic (read, check, conditionally rename)
-
-The service map makes the boundary explicit:
+- all 18 existing operations and the pattern each follows
+- which operations go through `CourseWriteService` vs. hitting the DB directly
+- that `update-section-name` has special logic (read, check, conditionally rename) while most other updates are straightforward
+- where to add their new case and which pattern to follow
 
 ```mermaid
 flowchart LR
@@ -128,9 +128,11 @@ flowchart LR
   prog -->|requires| svc_DBFunctionsService
 ```
 
-## Example 2: Post-Write Validation Is an Architectural Invariant
+**Without the analyzer**, understanding the dispatch table means reading the entire file and mentally tracking which cases delegate to which service. The explain output gives you the complete map in one command.
 
-`course-write-service.ts` exposes a design decision that matters: writes are coupled to sync validation as part of the runtime boundary.
+## Step 3: What happens when I write data?
+
+A reviewer looking at a write-path bug needs to know: what does the write service depend on, and is there validation?
 
 ```bash
 npx effect-analyze ./app/services/course-write-service.ts --format mermaid-services --tsconfig ./tsconfig.json
@@ -150,7 +152,7 @@ flowchart LR
   prog -->|requires| svc_FileSystem_FileSystem
 ```
 
-The explain output makes the invariant explicit:
+Four services. The presence of `CourseRepoSyncValidationService` in the dependency graph raises a question: when does validation run? The explain output answers it:
 
 ```text
 withPostValidation (generator):
@@ -158,11 +160,11 @@ withPostValidation (generator):
   2. Calls runValidation
 ```
 
-The main write path passes through post-validation. The analyzer surfaces this design decision without inspecting the implementation details.
+A main write path passes through post-validation. The analyzer surfaces this design decision without inspecting the implementation details.
 
-## Example 3: Batch Export Is a Real Workflow
+## Step 4: How does video export work?
 
-`batch-export.server.ts` demonstrates structural recovery of a genuine production pipeline:
+A contributor debugging a failed export needs to understand the pipeline. The source file has nested loops, retry logic, and service calls interleaved with filesystem operations:
 
 ```bash
 npx effect-analyze ./app/services/batch-export.server.ts --format explain --tsconfig ./tsconfig.json
@@ -187,7 +189,7 @@ batchExportProgram (generator):
   Services required: DBFunctionsService, VideoProcessingService, FileSystem.FileSystem
 ```
 
-The railway diagram captures the same workflow in a different visual:
+The railway diagram shows the same flow linearly:
 
 ```mermaid
 flowchart LR
@@ -200,11 +202,13 @@ flowchart LR
   G -->|ok| Done((Success))
 ```
 
-The shape is immediately readable: walk the course tree, detect missing exports, process remaining videos, retry failures. That recovers the skeleton of the export pipeline statically.
+Walk the course tree, detect missing exports, process remaining videos, retry failures. That recovers the skeleton of the export pipeline statically.
 
-## Example 4: YouTube Upload with Resource Control
+**Without the analyzer**, a contributor would need to trace through the nested loops and service calls manually to understand the export flow. With it, they see the pipeline shape in seconds and know exactly where retry logic applies.
 
-`youtube-upload-service.ts` demonstrates that the analyzer can recover resource acquisition patterns:
+## Step 5: How does YouTube upload handle resources?
+
+`youtube-upload-service.ts` uses a resumable upload pattern. The source mixes Promise wrappers, resource management, and chunked iteration:
 
 ```bash
 npx effect-analyze ./app/services/youtube-upload-service.ts --format explain --tsconfig ./tsconfig.json
@@ -229,11 +233,11 @@ result (generator):
     Yields response <- tryPromise
 ```
 
-The analyzer surfaces the acquire/use/release pattern and the chunked upload loop. A reviewer unfamiliar with the code immediately sees: open a resumable upload session, stream chunks until completion, and manage the upload resource with explicit acquire/use/release structure.
+The recovered shape is: initiate a resumable upload session, stream chunks until completion, and manage the upload resource with explicit acquire/use/release structure.
 
-## Example 5: FFmpeg Resource Control with Semaphores
+## Step 6: How does FFmpeg encoding handle concurrency?
 
-`ffmpeg-commands.ts` shows the analyzer recovering concurrency primitives in media processing infrastructure:
+Before touching any media infrastructure code, a reviewer needs to know what concurrency controls exist:
 
 ```bash
 npx effect-analyze ./app/services/ffmpeg-commands.ts --format explain --tsconfig ./tsconfig.json
@@ -255,14 +259,14 @@ program-2 (generator):
 
 The GPU and CPU semaphores indicate explicit throttling of encoding work to avoid saturating hardware resources. Separate stdout/stderr effect handling is also visible in the subprocess path.
 
-## What the Analyzer Recovers (and What It Does Not)
+## What the analyzer recovers (and what it does not)
 
-The examples above show that the analyzer recovers:
+Across this walkthrough, the analyzer recovered:
 
 - workflow shape (editor dispatch, batch export, upload sequence)
 - service boundaries (write, validation, DB, video processing)
 - concurrency primitives (semaphores, paired subprocess handling)
 - resource structure (upload acquire/use/release)
-- event vocabulary (editor operations)
+- event vocabulary (18 editor operations)
 
 It does not by itself prove business correctness, media output correctness, or external side-effect success. Some route-layer analysis has higher unknown-node noise than the service layer, reflecting the mix of framework glue and Effect logic in route handlers.

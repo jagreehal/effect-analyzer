@@ -1,6 +1,6 @@
 ---
 title: t3code
-description: Using effect-analyzer to surface the evented backend architecture inside T3 Code.
+description: Analyzing the evented backend architecture inside T3 Code, a web GUI for coding agents.
 sidebar:
   order: 2
 ---
@@ -9,9 +9,9 @@ import { Aside } from '@astrojs/starlight/components';
 
 `t3code` is a minimal web GUI for coding agents. Its backend is evented rather than CRUD-shaped, with explicit orchestration via a command queue, event store, and projection pipeline.
 
-Shared concurrency primitives are factored into reusable layers, while the frontend sits mostly outside the workflow model.
+This walkthrough follows the path a new contributor would take: audit to find where the architecture lives, explain to understand individual components, then diff to review a real commit.
 
-## Audit Signal
+## Step 1: Where does the architecture live?
 
 ```bash
 npx effect-analyze ./apps/server --coverage-audit --show-by-folder --tsconfig ./apps/server/tsconfig.json
@@ -41,13 +41,13 @@ Analyzable coverage: 100.0%
 Unknown node rate: 2.22%
 ```
 
-- the backend has 147 analyzable programs with zero failures
-- the shared package also contains analyzable effectful code
-- 3.87% unknown node rate across the server
+147 analyzable programs in the server, zero failures, 3.87% unknown node rate.
 
-## Example 1: The Orchestration Engine
+**Without the analyzer**, a new contributor would need to browse the directory tree and open files to figure out which parts of the server contain the orchestration logic vs. utility code. The audit points directly to the operational core.
 
-`OrchestrationEngine.ts` is the core of the agent runtime:
+## Step 2: How does the orchestration engine work?
+
+`OrchestrationEngine.ts` is the core of the agent runtime. Reading it directly means working through 200+ lines of queue setup, stream processing, worker management, and error handling. The analyzer extracts the structure:
 
 ```bash
 npx effect-analyze ./apps/server/src/orchestration/Layers/OrchestrationEngine.ts \
@@ -71,14 +71,12 @@ makeOrchestrationEngine (generator):
     OrchestrationCommandReceiptRepository, OrchestrationProjectionPipeline
 ```
 
-The output shows:
+Now a contributor understands the runtime shape:
 
-- a command queue and an event pub/sub
+- a command queue and an event pub/sub for communication
 - an event store used for replay (`eventStore.readAll`)
 - a projection pipeline for read models
-- a scoped worker consuming the system
-
-The service map makes the boundary explicit:
+- a scoped worker running within the orchestration scope
 
 ```mermaid
 flowchart LR
@@ -94,7 +92,7 @@ flowchart LR
   prog -->|requires| svc_OrchestrationProjectionPipeline
 ```
 
-The same file also contains the `dispatch` helper, which reveals the Queue + Deferred delivery pattern used throughout the system:
+The same file also contains the `dispatch` helper:
 
 ```text
 dispatch (generator):
@@ -104,11 +102,11 @@ dispatch (generator):
     deferred.await
 ```
 
-Create a delivery receipt, enqueue work, await confirmation. This pattern recurs across the codebase.
+Create a delivery receipt, enqueue work, await confirmation. This Queue + Deferred pattern recurs across the codebase (see Step 5).
 
-## Example 2: The Event Dispatch Table
+## Step 3: What events does the agent runtime handle?
 
-If the orchestration engine shows the system boundary, `ProviderCommandReactor.ts` shows the domain routing logic:
+A contributor adding a new agent capability needs to know: what events exist, and what handles each one?
 
 ```bash
 npx effect-analyze ./apps/server/src/orchestration/Layers/ProviderCommandReactor.ts \
@@ -133,9 +131,9 @@ processDomainEvent (generator):
       Calls processSessionStopRequested
 ```
 
-This recovers the event vocabulary of the runtime and the handler each event routes to.
+Six event types, each mapped to a clear handling path. A contributor adding a seventh now knows exactly where to add it and what the pattern looks like.
 
-The `make` function reveals the full service boundary:
+The `make` function shows what services the reactor depends on:
 
 ```text
 make (generator):
@@ -151,9 +149,9 @@ make (generator):
     GitCore, TextGeneration, ServerSettingsService
 ```
 
-## Example 3: Semantic Diff on Runtime Capability
+## Step 4: Reviewing a commit that adds a new capability
 
-Commit `12edc345` added plan interaction mode and user-input response handling to the provider reactor.
+Commit `12edc345` added plan interaction mode and user-input response handling. The text diff touches dozens of lines across error handling, cache logic, and the reactor constructor. The semantic diff shows what actually changed structurally:
 
 ```bash
 npx effect-analyze \
@@ -161,8 +159,6 @@ npx effect-analyze \
   12edc345:apps/server/src/orchestration/Layers/ProviderCommandReactor.ts \
   --diff --tsconfig ./apps/server/tsconfig.json
 ```
-
-The diff output for `processDomainEvent`:
 
 ```text
 # Effect Program Diff: processDomainEvent -> processDomainEvent
@@ -181,8 +177,6 @@ The diff output for `processDomainEvent`:
 + processUserInputResponseRequested (added)
 ```
 
-And for the `make` function, which gained infrastructure to support the new capability:
-
 ```text
 # Effect Program Diff: make -> make
 
@@ -200,18 +194,20 @@ And for the `make` function, which gained infrastructure to support the new capa
 Steps: Generator (2 yields)
 ```
 
-The "Added program: program-3" means the constructor gained a small new effectful setup path alongside the new handler.
+The `Added program: program-3` line means the constructor gained a small new setup path alongside the new handler.
 
-At a glance:
+A reviewer now knows:
 
-- the reactor gained a new routed capability (`processUserInputResponseRequested`)
+- the reactor gained one new routed capability (`processUserInputResponseRequested`)
 - the rest of the event surface (6 handlers) stayed stable
 - the `make` function gained 3 supporting steps and a new sub-program
-- no structural changes
+- no structural churn beyond the added capability
 
-## Example 4: The Queue + Deferred Delivery Pattern
+**Without the analyzer**, a reviewer would need to read the full text diff and mentally separate the new event handler from the surrounding refactoring noise. The semantic diff isolates the structural change: one new event, everything else unchanged.
 
-`pushBus.ts` uses the same concurrency idiom seen in the orchestration engine:
+## Step 5: Is the concurrency pattern consistent?
+
+The orchestration engine uses Queue + Deferred for dispatch (Step 2). Does the rest of the codebase follow the same pattern?
 
 ```bash
 npx effect-analyze ./apps/server/src/wsServer/pushBus.ts \
@@ -237,4 +233,6 @@ makeServerPushBus.publishClient (generator):
     deferred.await
 ```
 
-The same Queue + Deferred shape appears in the orchestration engine's `dispatch` path, showing architectural consistency across the codebase.
+Same shape: create a deferred, offer to a queue, await the result. The push bus and the orchestration engine both use this pattern, showing architectural consistency across the codebase.
+
+**Without the analyzer**, you would only discover this by reading both files and recognizing the pattern yourself. With the analyzer, the structural similarity is visible at a glance.
