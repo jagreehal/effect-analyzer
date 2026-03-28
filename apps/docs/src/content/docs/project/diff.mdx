@@ -1,13 +1,13 @@
 ---
 title: Semantic Diff
-description: Compare two versions of an Effect program to see structural changes — invaluable for reviewing AI-generated PRs.
+description: Compare two versions of an Effect program to see structural changes, invaluable for reviewing AI-generated PRs.
 sidebar:
   order: 2
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **semantic diff** compares two versions of an Effect program at the IR level, not the text level. It reports structural changes — steps added, removed, moved, or renamed — giving you a meaningful view of what changed in the program's behavior.
+The **semantic diff** compares two versions of an Effect program at the IR level, not the text level. It reports structural changes (steps added, removed, moved, or renamed) giving you a meaningful view of what changed in the program's behavior.
 
 This is especially useful when **reviewing AI-generated code** where the text diff can be large and hard to follow, but the structural change may be quite targeted.
 
@@ -69,8 +69,8 @@ flowchart LR
 ### The after: AI-generated "production-ready" version
 
 The AI agent added:
-- **FraudScreening** service — screens every transfer before execution
-- **Notifications** service — sends a confirmation after success
+- **FraudScreening** service, screens every transfer before execution
+- **Notifications** service, sends a confirmation after success
 - **Retry with exponential backoff** on `transfers.execute`
 - New error types: `FraudRiskError`, `ConfirmationFailedError`
 
@@ -190,16 +190,16 @@ npx effect-analyze \
 
 ### What a reviewer learns in 10 seconds
 
-1. **7 unchanged steps** — the core flow (validate → get rate → check balance → fail path) is untouched
-2. **1 removed step** (`transfers.execute`) — replaced by the `.pipe(Effect.retry(...))` variant
-3. **2 new service dependencies** — `FraudScreening` and `Notifications` are new blast radius
-4. **1 structural change** — a `retry` block was added (exponential backoff on the transfer)
-5. **New error surface** — the railway diagram shows `FraudRisk` and `ConfirmationFailed` as new error branches
+1. **7 unchanged steps**: the core flow (validate, get rate, check balance, fail path) is untouched
+2. **1 removed step** (`transfers.execute`): replaced by the `.pipe(Effect.retry(...))` variant
+3. **2 new service dependencies**: `FraudScreening` and `Notifications` are new blast radius
+4. **1 structural change**: a `retry` block was added (exponential backoff on the transfer)
+5. **New error surface**: the railway diagram shows `FraudRisk` and `ConfirmationFailed` as new error branches
 
 <Aside type="tip" title="Key reviewer question">
 The AI added `notifications.sendConfirmation` **after** the transfer succeeds but **without** error handling on the notification itself. A `ConfirmationFailedError` would propagate up and fail the entire workflow even though the money was already sent. Is that intentional?
 
-This is the kind of question the semantic diff makes obvious — the structural view shows the notification step sits on the happy path with no `catchTag` around it.
+This is the kind of question the semantic diff makes obvious. The structural view shows the notification step sits on the happy path with no `catchTag` around it.
 </Aside>
 
 ## Basic Usage
@@ -249,9 +249,9 @@ The diff engine classifies every step in both versions:
 
 Beyond individual steps, the diff also reports:
 
-- **Structural changes** — new or removed `retry`, `parallel`, `race`, `error-handler` blocks
-- **Added programs** — entirely new Effect programs in the file
-- **Removed programs** — Effect programs that no longer exist
+- **Structural changes**: new or removed `retry`, `parallel`, `race`, `error-handler` blocks
+- **Added programs**: entirely new Effect programs in the file
+- **Removed programs**: Effect programs that no longer exist
 
 ## Output Formats
 
@@ -304,7 +304,7 @@ Renders the "after" program as a flowchart with color-coded nodes: **green** for
 
 ## Regression Mode
 
-Flag removed steps as regressions — useful in CI to catch when an AI agent accidentally deletes error handling or removes a service call:
+Flag removed steps as regressions. Useful in CI to catch when an AI agent accidentally deletes error handling or removes a service call:
 
 ```bash
 npx effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff --regression
@@ -358,7 +358,7 @@ The diff operates on the IR structure, not on raw text. Two programs with identi
 
 ## Related
 
-- [Coverage Audit](/effect-analyzer/project/coverage-audit/) — project-wide analysis
-- [CLI Reference](/effect-analyzer/reference/cli/) — `--diff` and `--regression` flags
-- [Complexity Metrics](/effect-analyzer/analysis/complexity/) — track complexity changes over time
-- [Interactive HTML Viewer](/effect-analyzer/reference/html-viewer/) — explore the before/after programs visually
+- [Coverage Audit](/effect-analyzer/project/coverage-audit/) - project-wide analysis
+- [CLI Reference](/effect-analyzer/reference/cli/) - `--diff` and `--regression` flags
+- [Complexity Metrics](/effect-analyzer/analysis/complexity/) - track complexity changes over time
+- [Interactive HTML Viewer](/effect-analyzer/reference/html-viewer/) - explore the before/after programs visually
