@@ -1,10 +1,22 @@
 import { defineConfig } from 'astro/config';
+import { fileURLToPath } from 'node:url';
 import starlight from '@astrojs/starlight';
+import astroMermaid from 'astro-mermaid';
+
+const perfHooksShim = fileURLToPath(new URL('./src/shims/perf-hooks.ts', import.meta.url));
 
 export default defineConfig({
   site: 'https://jagreehal.github.io',
   base: '/effect-analyzer',
+  vite: {
+    resolve: {
+      alias: {
+        perf_hooks: perfHooksShim,
+      },
+    },
+  },
   integrations: [
+    astroMermaid(),
     starlight({
       title: 'effect-analyzer',
       favicon: '/favicon.svg',
@@ -65,10 +77,18 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Case Studies',
+          items: [
+            { label: 'course-video-manager', slug: 'case-studies/course-video-manager' },
+            { label: 't3code', slug: 'case-studies/t3code' },
+          ],
+        },
+        {
           label: 'Reference',
           items: [
             { label: 'CLI', slug: 'reference/cli' },
             { label: 'Library API', slug: 'reference/api' },
+            { label: 'Browser Playground', link: '/playground/' },
             { label: 'Interactive HTML', slug: 'reference/html-viewer' },
           ],
         },

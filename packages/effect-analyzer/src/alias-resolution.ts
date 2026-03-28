@@ -3,10 +3,15 @@
  * barrel resolution, and Effect-like call detection.
  */
 
-import { existsSync } from 'fs';
-import { dirname, resolve, join, sep } from 'path';
 import type { SourceFile, CallExpression, PropertyAccessExpression } from 'ts-morph';
 import { loadTsMorph } from './ts-morph-loader';
+import {
+  PATH_SEPARATOR,
+  dirnamePath,
+  resolvePath,
+  joinPath,
+  hasPathPrefix,
+} from './path-utils';
 import {
   API_PREFIXES,
   isEffectPackageSpecifier,
@@ -23,6 +28,27 @@ const effectAliasCache = new WeakMap<SourceFile, Set<string>>();
 
 /** Per-SourceFile symbol-resolution cache — avoids repeated TypeChecker lookups. */
 const symbolResolutionCache = new WeakMap<SourceFile, Map<string, boolean>>();
+
+interface FsModuleLike {
+  readonly existsSync?: (path: string) => boolean;
+}
+
+const getNodeExistsSync = (): ((path: string) => boolean) | undefined => {
+  const maybeProcess = (
+    globalThis as {
+      process?: { getBuiltinModule?: (id: string) => unknown };
+    }
+  ).process;
+  const fsBuiltin =
+    maybeProcess?.getBuiltinModule?.('node:fs') ??
+    maybeProcess?.getBuiltinModule?.('fs');
+
+  if (!fsBuiltin || typeof fsBuiltin !== 'object') {
+    return undefined;
+  }
+
+  return (fsBuiltin as FsModuleLike).existsSync;
+};
 
 // =============================================================================
 // Barrel and re-export resolution
@@ -60,18 +86,18 @@ export function resolveBarrelSourceFile(
   specifier: string,
 ): SourceFile | undefined {
   if (!specifier.startsWith('.')) return undefined;
-  const baseDir = dirname(currentFilePath);
-  const resolved = resolve(baseDir, specifier);
+  const baseDir = dirnamePath(currentFilePath);
+  const resolved = resolvePath(baseDir, specifier);
   const candidates: string[] = [
     resolved,
     `${resolved}.ts`,
     `${resolved}.tsx`,
     `${resolved}.js`,
     `${resolved}.jsx`,
-    join(resolved, 'index.ts'),
-    join(resolved, 'index.tsx'),
-    join(resolved, 'index.js'),
-    join(resolved, 'index.jsx'),
+    joinPath(resolved, 'index.ts'),
+    joinPath(resolved, 'index.tsx'),
+    joinPath(resolved, 'index.js'),
+    joinPath(resolved, 'index.jsx'),
   ];
   for (const p of candidates) {
     const f = project.getSourceFile(p);
@@ -89,18 +115,23 @@ export function resolveModulePath(
   specifier: string,
 ): string | undefined {
   if (!specifier.startsWith('.')) return undefined;
-  const baseDir = dirname(currentFilePath);
-  const resolved = resolve(baseDir, specifier);
+  const existsSync = getNodeExistsSync();
+  if (!existsSync) {
+    return undefined;
+  }
+
+  const baseDir = dirnamePath(currentFilePath);
+  const resolved = resolvePath(baseDir, specifier);
   const candidates: string[] = [
     resolved,
     `${resolved}.ts`,
     `${resolved}.tsx`,
     `${resolved}.js`,
     `${resolved}.jsx`,
-    join(resolved, 'index.ts'),
-    join(resolved, 'index.tsx'),
-    join(resolved, 'index.js'),
-    join(resolved, 'index.jsx'),
+    joinPath(resolved, 'index.ts'),
+    joinPath(resolved, 'index.tsx'),
+    joinPath(resolved, 'index.js'),
+    joinPath(resolved, 'index.jsx'),
   ];
   return candidates.find((p) => existsSync(p));
 }
@@ -117,13 +148,9 @@ export function isSpecifierUnderKnownEffectInternalsRoot(
 ): boolean {
   if (!knownEffectInternalsRoot || !specifier.startsWith('.')) return false;
   const normalizedSpecifier = specifier.replace(/\\/g, '/');
-  const resolvedPath = resolve(dirname(currentFilePath), specifier);
-  const normalizedResolved = resolve(resolvedPath);
-  const normalizedRoot = resolve(knownEffectInternalsRoot);
-  if (
-    normalizedResolved === normalizedRoot ||
-    normalizedResolved.startsWith(normalizedRoot + sep)
-  ) {
+  const normalizedResolved = resolvePath(dirnamePath(currentFilePath), specifier);
+  const normalizedRoot = resolvePath(knownEffectInternalsRoot);
+  if (hasPathPrefix(normalizedResolved, normalizedRoot)) {
     return true;
   }
 
@@ -132,7 +159,8 @@ export function isSpecifierUnderKnownEffectInternalsRoot(
   // Preserve regression coverage in source-mode while keeping path resolution primary
   // for real files.
   const isSyntheticSourcePath =
-    currentFilePath === 'temp.ts' || currentFilePath.endsWith(`${sep}temp.ts`);
+    currentFilePath === 'temp.ts' ||
+    currentFilePath.endsWith(`${PATH_SEPARATOR}temp.ts`);
   if (isSyntheticSourcePath) {
     return normalizedSpecifier.startsWith('./internal/') || normalizedSpecifier.startsWith('../internal/');
   }

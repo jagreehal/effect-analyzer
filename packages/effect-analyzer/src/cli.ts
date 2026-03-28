@@ -2,6 +2,7 @@
  * CLI entry point for effect-analyzer
  */
 
+import './register-node-ts-morph';
 import { resolve, sep, join, dirname, extname } from 'path';
 import { watch, existsSync } from 'fs';
 import * as fs from 'node:fs/promises';

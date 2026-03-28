@@ -11,6 +11,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 Think of it as a compiler front-end for Effect workflows. Where a compiler turns source into machine code, effect-analyzer turns source into understanding.
 
+The fastest way to see that value is not the CLI output. It is the [live browser playground](/effect-analyzer/playground/) and the [interactive HTML viewer](/effect-analyzer/reference/html-viewer/). Those are the strongest product demos because they let people see the structure immediately and share it with others.
+
 ## What It Detects
 
 The analyzer recognizes a broad set of Effect patterns and control-flow constructs:
@@ -59,19 +61,71 @@ effect-analyzer ships with over 25 output formats:
 
 ## Real-World Example
 
-Here is effect-analyzer running against a production Effect codebase - a video course management system with 93 TypeScript files and 67 Effect programs:
+The docs now use committed fixtures instead of screenshots, so the examples below are real analyzer output you can reproduce locally.
 
-![Coverage audit of a real Effect project](../../assets/screenshots/coverage-audit.png)
+Example fixture:
+`packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts`
 
-One command scans the entire `services/` directory in under 2 seconds, reporting coverage, unknown node rates, and zero-program categories.
+```text
+$ npx effect-analyze ./src/__fixtures__/docs/transfer-workflow.ts --format explain
 
-Running `--format explain` on a single service instantly produces a human-readable summary of a 500-line upload workflow with retry strategies and concurrent operations:
+transferWorkflow (generator):
+  1. Yields accounts <- AccountService
+  2. Yields audit <- AuditLog
+  3. Yields balance <- accounts.getBalance
+  4. If balance < amount:
+    Returns:
+      Calls fail - constructor
+  5. Calls accounts.debit
+  6. Calls accounts.credit
+  7. Calls audit.record
 
-![Plain-English explanation of a real-world upload service](../../assets/screenshots/explain-real-world.png)
+  Services required: AccountService, AuditLog
+  Error paths: AccountNotFoundError, InsufficientFundsError
+  Concurrency: sequential (no parallelism)
+```
 
-And `--diff` shows exactly what changed between two versions of a program - steps added, removed, and structural changes like new retry blocks:
+Project-wide audit example:
+`packages/effect-analyzer/src/__fixtures__/docs/audit`
 
-![Semantic diff showing structural changes between program versions](../../assets/screenshots/diff-output.png)
+```text
+$ npx effect-analyze ./src/__fixtures__/docs/audit --coverage-audit
+
+Discovered: 4
+Analyzed:   2
+Zero programs: 2
+Suspicious zeros: 0
+Failed:     0
+Coverage:   50.0%
+Analyzable coverage: 100.0%
+Unknown node rate: 0.00%
+Zero categories: barrel/index=1, config/build=0, test/dtslint=0, type-only=0, suspicious=0, other=1
+```
+
+Diff example:
+`packages/effect-analyzer/src/__fixtures__/docs/send-money-before.ts`
+vs
+`packages/effect-analyzer/src/__fixtures__/docs/send-money-after.ts`
+
+```text
+$ npx effect-analyze ./src/__fixtures__/docs/send-money-before.ts ./src/__fixtures__/docs/send-money-after.ts --diff
+
+# Effect Program Diff: sendMoney -> sendMoney
+
+Added: 8
+Removed: 1
+Unchanged: 7
+Structural changes: 1
+
+- transfers.execute
++ FraudScreening
++ Notifications
++ fraud.screen
++ notifications.sendConfirmation
+
+Structural Changes
+- retry block added
+```
 
 ## Next Steps
 

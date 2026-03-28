@@ -457,8 +457,7 @@ function isFunctionBoundary(node: Node): boolean {
  */
 function isDirectYieldExpression(call: Node): boolean {
   const { SyntaxKind } = loadTsMorph();
-  const parent = call.getParent();
-  return parent !== undefined && parent.getKind() === SyntaxKind.YieldExpression;
+  return call.getParent()?.getKind() === SyntaxKind.YieldExpression;
 }
 
 /**

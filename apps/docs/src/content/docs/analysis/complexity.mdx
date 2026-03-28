@@ -9,7 +9,36 @@ import { Aside } from '@astrojs/starlight/components';
 
 effect-analyzer calculates six complexity metrics for every Effect program it analyzes. Use these metrics to identify programs that may be difficult to understand, test, or maintain.
 
-![Complexity stats output for a transfer program](../../../assets/screenshots/cli-stats.png)
+Current CLI `--format stats` output for `packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts`:
+
+```json
+[
+  {
+    "program": "transferWorkflow",
+    "stats": {
+      "totalEffects": 7,
+      "parallelCount": 0,
+      "raceCount": 0,
+      "errorHandlerCount": 0,
+      "retryCount": 0,
+      "timeoutCount": 0,
+      "resourceCount": 0,
+      "loopCount": 0,
+      "conditionalCount": 0,
+      "layerCount": 0,
+      "interruptionCount": 0,
+      "unknownCount": 0,
+      "decisionCount": 1,
+      "switchCount": 0,
+      "tryCatchCount": 0,
+      "terminalCount": 1,
+      "opaqueCount": 0
+    }
+  }
+]
+```
+
+The JSON above is the current structural stats payload from the CLI. The six derived complexity metrics discussed on this page come from `calculateComplexity()` in the library API.
 
 ## The Six Metrics
 
