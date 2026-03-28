@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import './src/register-node-ts-morph';
 
 // Some tests use mkdtempSync(join(tmpdir(), ...)).
 // On constrained environments, the system temp dir can be full (ENOSPC).
@@ -9,4 +10,3 @@ mkdirSync(tmpRoot, { recursive: true });
 process.env.TMPDIR = tmpRoot;
 process.env.TMP = tmpRoot;
 process.env.TEMP = tmpRoot;
-

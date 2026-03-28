@@ -9,7 +9,18 @@ import { Aside } from '@astrojs/starlight/components';
 
 The **interactive HTML viewer** generates a self-contained HTML page that embeds your program's diagram, IR, paths, and complexity data. Open it in any browser for a rich exploration experience with search, filtering, overlays, and multiple color themes.
 
-![Interactive HTML viewer showing a flowchart with complexity metrics sidebar](../../../assets/screenshots/html-viewer.png)
+## Live Example
+
+The docs now include a real exported viewer built from the transfer workflow fixture:
+
+<iframe
+  src="/effect-analyzer/demos/transfer-analysis.html"
+  title="Interactive HTML viewer demo"
+  style="width: 100%; height: 760px; border: 1px solid var(--sl-color-gray-5); border-radius: 16px; background: var(--sl-color-black);"
+  loading="lazy"
+></iframe>
+
+[Open the demo in a full tab](/effect-analyzer/demos/transfer-analysis.html)
 
 ## Generating an HTML Viewer
 
@@ -20,7 +31,10 @@ import { analyze, renderInteractiveHTML } from "effect-analyzer"
 import { Effect } from "effect"
 import { writeFileSync } from "fs"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(
+  analyze("./src/transfer.ts").named("transferWorkflow")
+)
+
 const html = renderInteractiveHTML(ir, {
   title: "Transfer Analysis",
   theme: "midnight",
@@ -30,6 +44,10 @@ writeFileSync("transfer.html", html)
 ```
 
 Open `transfer.html` in a browser to explore the analysis.
+
+<Aside type="note">
+Use `.named("...")` when a file contains more than one analyzable program. `.single()` only works when the analyzer finds exactly one program in that file.
+</Aside>
 
 ## Options
 
@@ -116,7 +134,9 @@ import { analyze, renderInteractiveHTML } from "effect-analyzer"
 import { Effect } from "effect"
 import { writeFileSync } from "fs"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(
+  analyze("./src/transfer.ts").named("transferWorkflow")
+)
 
 // Generate with the ocean theme
 const html = renderInteractiveHTML(ir, {

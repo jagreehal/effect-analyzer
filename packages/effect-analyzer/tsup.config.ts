@@ -5,6 +5,7 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
+      browser: 'src/browser.ts',
       'effect-workflow': 'src/effect-workflow.ts',
     },
     format: ['cjs', 'esm'],
