@@ -7,71 +7,51 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-`t3code` describes itself as a minimal web GUI for coding agents. That makes it a strong case study for effect-analyzer because the interesting question is not "does this repo use Effect?" but "can static analysis recover the actual runtime architecture that makes agent orchestration work?"
+`t3code` is a minimal web GUI for coding agents. Its backend is evented rather than CRUD-shaped, with explicit orchestration via a command queue, event store, and projection pipeline.
 
-For this repository, the answer is yes.
-
-## Why This Study Works
-
-The best repositories for effect-analyzer are not the ones that merely contain Effect syntax. They are the ones where the operational core is expressed through queues, workers, streams, services, event stores, and orchestration loops.
-
-`t3code` fits that shape unusually well:
-
-- the backend is evented, not CRUD-shaped
-- orchestration is explicit
-- shared concurrency primitives are factored into reusable layers
-- the frontend is mostly outside the workflow model, which makes the architectural boundary visible
-
-That is exactly the kind of result a repo author can share: "here is our runtime architecture, recovered statically."
+Shared concurrency primitives are factored into reusable layers, while the frontend sits mostly outside the workflow model.
 
 ## Audit Signal
-
-The first useful result is simply where the analyzable operational code lives.
-
-### `apps/server`
 
 ```bash
 npx effect-analyze ./apps/server --coverage-audit --show-by-folder --tsconfig ./apps/server/tsconfig.json
 ```
 
 ```text
-Discovered: 179
-Analyzed:   133
-Zero programs: 46
+Discovered: 197
+Analyzed:   147
+Zero programs: 50
 Failed:     0
-Coverage:   74.3%
+Coverage:   74.6%
 Analyzable coverage: 100.0%
-Unknown node rate: 3.58%
+Unknown node rate: 3.87%
 ```
-
-### `packages/shared`
 
 ```bash
 npx effect-analyze ./packages/shared --coverage-audit --show-by-folder --tsconfig ./packages/shared/tsconfig.json
 ```
 
 ```text
-Discovered: 11
+Discovered: 12
 Analyzed:   6
-Zero programs: 5
+Zero programs: 6
 Failed:     0
-Coverage:   54.5%
+Coverage:   50.0%
 Analyzable coverage: 100.0%
-Unknown node rate: 2.06%
+Unknown node rate: 2.22%
 ```
 
-That is already a useful architectural read:
-
-- the backend is heavily analyzable
-- the shared package contains real operational primitives
-- the interesting parts of the repo are not buried in UI code
+- the backend has 147 analyzable programs with zero failures
+- the shared package also contains analyzable effectful code
+- 3.87% unknown node rate across the server
 
 ## Example 1: The Orchestration Engine
 
-The strongest single example in the repo is [OrchestrationEngine.ts](/Users/jreehal/dev/temp/t3code/apps/server/src/orchestration/Layers/OrchestrationEngine.ts).
+`OrchestrationEngine.ts` is the core of the agent runtime:
 
 ```bash
-npx effect-analyze ./apps/server/src/orchestration/Layers/OrchestrationEngine.ts --format explain --tsconfig ./apps/server/tsconfig.json
+npx effect-analyze ./apps/server/src/orchestration/Layers/OrchestrationEngine.ts \
+  --format explain --tsconfig ./apps/server/tsconfig.json
 ```
 
 ```text
@@ -86,23 +66,19 @@ makeOrchestrationEngine (generator):
     Calls eventStore.readAll
   9. Fiber forkScoped (scoped):
     Calls worker
-  12. Stream: runCollect
-    Calls eventStore.readFromSequence
 
   Services required: SqlClient.SqlClient, OrchestrationEventStore,
     OrchestrationCommandReceiptRepository, OrchestrationProjectionPipeline
 ```
 
-This is the kind of output that sells the library because it tells a reviewer something non-trivial immediately:
+The output shows:
 
-- there is a command queue
-- there is an event store
-- there is a projection pipeline
-- there is a scoped worker consuming the system
+- a command queue and an event pub/sub
+- an event store used for replay (`eventStore.readAll`)
+- a projection pipeline for read models
+- a scoped worker consuming the system
 
-That is not generic "Effect code". That is the skeleton of the runtime.
-
-The service map makes the boundary even clearer:
+The service map makes the boundary explicit:
 
 ```mermaid
 flowchart LR
@@ -118,25 +94,25 @@ flowchart LR
   prog -->|requires| svc_OrchestrationProjectionPipeline
 ```
 
-And the stats show that the analyzer is recovering a genuinely central subsystem rather than a toy example:
+The same file also contains the `dispatch` helper, which reveals the Queue + Deferred delivery pattern used throughout the system:
 
-```json
-{
-  "program": "makeOrchestrationEngine",
-  "stats": {
-    "totalEffects": 36,
-    "errorHandlerCount": 1,
-    "unknownCount": 2
-  }
-}
+```text
+dispatch (generator):
+  1. result = deferred.create
+  2. queue.offer
+  3. Returns:
+    deferred.await
 ```
+
+Create a delivery receipt, enqueue work, await confirmation. This pattern recurs across the codebase.
 
 ## Example 2: The Event Dispatch Table
 
-If the orchestration engine shows the system boundary, [ProviderCommandReactor.ts](/Users/jreehal/dev/temp/t3code/apps/server/src/orchestration/Layers/ProviderCommandReactor.ts) shows the domain routing logic.
+If the orchestration engine shows the system boundary, `ProviderCommandReactor.ts` shows the domain routing logic:
 
 ```bash
-npx effect-analyze ./apps/server/src/orchestration/Layers/ProviderCommandReactor.ts --format explain --tsconfig ./apps/server/tsconfig.json
+npx effect-analyze ./apps/server/src/orchestration/Layers/ProviderCommandReactor.ts \
+  --format explain --tsconfig ./apps/server/tsconfig.json
 ```
 
 ```text
@@ -157,110 +133,103 @@ processDomainEvent (generator):
       Calls processSessionStopRequested
 ```
 
-This is much stronger than a generic complexity screenshot. The analyzer has recovered the public event vocabulary of the agent runtime and the handler each event routes to.
+This recovers the event vocabulary of the runtime and the handler each event routes to.
 
-That is exactly the kind of artifact a maintainer can share:
+The `make` function reveals the full service boundary:
 
-- it helps new contributors understand the runtime model
-- it shows the repo has a coherent event contract
-- it demonstrates that the analyzer is useful on code with real domain meaning
+```text
+make (generator):
+  1. Yields orchestrationEngine <- OrchestrationEngineService
+  2. Yields providerService <- ProviderService
+  3. Yields git <- GitCore
+  4. Yields textGeneration <- TextGeneration
+  5. Yields serverSettingsService <- ServerSettingsService
+  6. handledTurnStartKeys = cache.create
+  7. Yields worker <- makeDrainableWorker
+
+  Services required: OrchestrationEngineService, ProviderService,
+    GitCore, TextGeneration, ServerSettingsService
+```
 
 ## Example 3: Semantic Diff on Runtime Capability
 
-The strongest diff example in this repo is commit `12edc345`, which added plan interaction mode and user-input response handling to the provider reactor.
-
-This is a good sales demo because the change is not cosmetic. The runtime gained a new event path:
+Commit `12edc345` added plan interaction mode and user-input response handling to the provider reactor.
 
 ```bash
 npx effect-analyze \
   12edc345^:apps/server/src/orchestration/Layers/ProviderCommandReactor.ts \
   12edc345:apps/server/src/orchestration/Layers/ProviderCommandReactor.ts \
-  --diff \
-  --format mermaid
+  --diff --tsconfig ./apps/server/tsconfig.json
 ```
 
-```mermaid
-flowchart TB
-
-  %% Program: processDomainEvent
-
-  start((Start))
-  end_node((End))
-
-  n2["Switch: event.type"]
-  switch_3{"Switch: event.type"}
-  n4["thread <- resolveThread (side-effect)"]
-  n5["ensureSessionForThread (side-effect)"]
-  n6["processTurnStartRequested (side-effect)"]
-  n7["processTurnInterruptRequested (side-effect)"]
-  n8["processApprovalResponseRequested (side-effect)"]
-  n9["processUserInputResponseRequested (side-effect)"]
-  n10["processSessionStopRequested (side-effect)"]
-  switchWarn_11{{"⚠ fallthrough"}}
-
-  n4 --> n5
-  switch_3 -->|"thread.runtime-mode-set"| n4
-  switch_3 -->|"thread.turn-start-requested"| n6
-  switch_3 -->|"thread.turn-interrupt-requested"| n7
-  switch_3 -->|"thread.approval-response-requested"| n8
-  switch_3 -->|"thread.user-input-response-requested"| n9
-  switch_3 -->|"thread.session-stop-requested"| n10
-  switch_3 -->|note| switchWarn_11
-  start --> switch_3
-  n5 --> end_node
-  n6 --> end_node
-  n7 --> end_node
-  n8 --> end_node
-  n9 --> end_node
-  n10 --> end_node
-
-  classDef startStyle fill:#c8e6c9,stroke:#2e7d32
-  classDef endStyle fill:#ffcdd2,stroke:#c62828
-  classDef effectStyle fill:#90EE90,stroke:#333,stroke-width:2px
-  classDef switchStyle fill:#FFD700,stroke:#333,stroke-width:2px
-  classDef opaqueStyle fill:#FF9800,stroke:#333,stroke-width:2px
-  class start startStyle
-  class end_node endStyle
-  class n2 switchStyle
-  class switch_3 switchStyle
-  class n4 effectStyle
-  class n5 effectStyle
-  class n6 effectStyle
-  class n7 effectStyle
-  class n8 effectStyle
-  class n9 effectStyle
-  class n10 effectStyle
-  class switchWarn_11 opaqueStyle
-  style n9 fill:#d4edda,stroke:#28a745,stroke-width:2px
-```
-
-This is what a maintainer wants from a semantic diff at a glance:
-
-- the reactor gained a new routed capability
-- the rest of the event surface stayed stable
-- the added node is visually obvious without reading the whole file
-
-The text diff backs that picture up:
+The diff output for `processDomainEvent`:
 
 ```text
-Added: 1
-Removed: 0
-Unchanged: 6
+# Effect Program Diff: processDomainEvent -> processDomainEvent
 
-+ processUserInputResponseRequested
+## Summary
+
+| Metric | Count |
+|--------|-------|
+| Added | 1 |
+| Removed | 0 |
+| Unchanged | 6 |
+| Structural changes | 0 |
+
+## Step Changes
+
++ processUserInputResponseRequested (added)
 ```
 
-This is a much better showcase for the diff feature than a generic before/after snippet. It proves the analyzer can report new runtime behavior in the same visual language people use to explain systems.
+And for the `make` function, which gained infrastructure to support the new capability:
+
+```text
+# Effect Program Diff: make -> make
+
+## Summary
+
+| Metric | Count |
+|--------|-------|
+| Added | 3 |
+| Removed | 0 |
+| Unchanged | 28 |
+| Structural changes | 0 |
+
+## Added program: program-3
+
+Steps: Generator (2 yields)
+```
+
+The "Added program: program-3" means the constructor gained a small new effectful setup path alongside the new handler.
+
+At a glance:
+
+- the reactor gained a new routed capability (`processUserInputResponseRequested`)
+- the rest of the event surface (6 handlers) stayed stable
+- the `make` function gained 3 supporting steps and a new sub-program
+- no structural changes
 
 ## Example 4: The Queue + Deferred Delivery Pattern
 
-[pushBus.ts](/Users/jreehal/dev/temp/t3code/apps/server/src/wsServer/pushBus.ts) is smaller, but it proves a different point: the analyzer can consistently recover the same concurrency idiom across the repo.
+`pushBus.ts` uses the same concurrency idiom seen in the orchestration engine:
 
 ```bash
-npx effect-analyze ./apps/server/src/wsServer/pushBus.ts --format explain --tsconfig ./apps/server/tsconfig.json
+npx effect-analyze ./apps/server/src/wsServer/pushBus.ts \
+  --format explain --tsconfig ./apps/server/tsconfig.json
 ```
 
 ```text
+makeServerPushBus (generator):
+  1. Yields nextSequence <- Ref.make
+  2. queue = queue.create
+  3. Fiber forkScoped (scoped):
+    Calls forever
+  ...
+  10. Calls forever
+  11. queue.take
+  ...
+  17. queue.offer
+
 makeServerPushBus.publishClient (generator):
   1. delivered = deferred.create
   2. queue.offer
@@ -268,25 +237,4 @@ makeServerPushBus.publishClient (generator):
     deferred.await
 ```
 
-This is compact and highly legible. A reader who has never seen the file now understands the pattern in seconds:
-
-1. create a delivery receipt
-2. enqueue work
-3. await confirmation
-
-That same Queue + Deferred shape also appears in the orchestration engine's `dispatch` path. The fact that effect-analyzer surfaces that repeated pattern is one of the strongest arguments for using it on real codebases.
-
-## Why This Page Is More Shareable
-
-The current best pitch for effect-analyzer on `t3code` is not "it found lots of Effect files." It is:
-
-- it identified the backend as the operational center
-- it recovered the orchestration engine boundary statically
-- it extracted the event dispatch table that defines the agent runtime
-- it showed the same concurrency idiom recurring across subsystems
-
-That is concrete enough for the repo authors to share without overselling. It reflects the architecture they actually built.
-
-<Aside type="note">
-The main limitation in this repo is still label quality around some nested Effect helpers and stream internals. The case study is strongest when it leans on orchestration boundaries, dispatch tables, and recurring concurrency patterns rather than on the noisiest low-level labels.
-</Aside>
+The same Queue + Deferred shape appears in the orchestration engine's `dispatch` path, showing architectural consistency across the codebase.

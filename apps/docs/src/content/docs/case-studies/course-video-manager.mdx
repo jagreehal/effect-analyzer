@@ -7,11 +7,11 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-`course-video-manager` is a better case study than a generic sample app because the repository has a clear product shape: publishing, export, upload, validation, thumbnails, filesystem coordination, and media processing. If effect-analyzer is useful here, it is useful on real operational software.
+`course-video-manager` is a desktop app for managing video courses: publishing, export, upload, validation, thumbnails, filesystem coordination, and media processing. It uses Effect throughout. If effect-analyzer is useful here, it is useful on real operational software.
 
 ## Audit Signal
 
-The first result worth sharing is how cleanly the analyzer separates the operational backend from the rest of the app.
+Coverage audit on the two main directories:
 
 ### `app/services`
 
@@ -20,13 +20,13 @@ npx effect-analyze ./app/services --coverage-audit --show-by-folder --tsconfig .
 ```
 
 ```text
-Discovered: 93
-Analyzed:   67
+Discovered: 94
+Analyzed:   68
 Zero programs: 26
 Failed:     0
-Coverage:   72.0%
+Coverage:   72.3%
 Analyzable coverage: 100.0%
-Unknown node rate: 3.37%
+Unknown node rate: 3.32%
 ```
 
 ### `app/routes`
@@ -45,17 +45,92 @@ Analyzable coverage: 100.0%
 Unknown node rate: 11.76%
 ```
 
-That already tells a useful story:
+The service layer has a low unknown rate (3.32%). The route layer has high coverage but is structurally noisier (11.76% unknown). Zero files failed to parse in either directory.
 
-- the service layer is heavily Effect-shaped
-- the route layer is also highly analyzable
-- the repo’s operational workflow is not hidden behind framework glue
+## Example 1: The Course Editor Dispatch Table
 
-This is a good promotional angle because it shows effect-analyzer working on a mixed production repository, not on a toy fixture.
+`course-editor-service-handler.ts` contains the event dispatch table that drives the course editing UI:
 
-## Example 1: Post-Write Validation Is an Architectural Invariant
+```bash
+npx effect-analyze ./app/services/course-editor-service-handler.ts --format explain --tsconfig ./tsconfig.json
+```
 
-The best single "sell" in this repo is [course-write-service.ts](/Users/jreehal/dev/temp/course-video-manager/app/services/course-write-service.ts).
+```text
+handleCourseEditorEvent (direct):
+  1. Yields service <- CourseWriteService
+  2. Yields db <- DBFunctionsService
+  3. Switch on event.type:
+    Case "create-section":
+      Returns: Calls service.addGhostSection
+    Case "update-section-name":
+      Yields section <- db.getSectionWithHierarchyById
+      If parsed:
+        Returns: Calls service.renameSection
+      Calls db.updateSectionPath
+    Case "update-section-description":
+      Calls db.getSectionWithHierarchyById
+      Calls db.updateSectionDescription
+    Case "archive-section":
+      Returns: Calls service.archiveSection
+    Case "reorder-sections":
+      Returns: Calls service.reorderSections
+    Case "add-ghost-lesson":
+      Returns: Calls service.addGhostLesson
+    Case "create-real-lesson":
+      Returns: Calls service.createRealLesson
+    Case "update-lesson-name":
+      Returns: Calls service.renameLesson
+    Case "update-lesson-title":
+      Yields lesson <- db.getLessonWithHierarchyById
+      Calls db.updateLesson
+    Case "update-lesson-description":
+      Calls db.getLessonWithHierarchyById
+      Calls db.updateLesson
+    Case "update-lesson-icon":
+      Calls db.getLessonWithHierarchyById
+      Calls db.updateLesson
+    Case "update-lesson-priority":
+      Calls db.getLessonWithHierarchyById
+      Calls db.updateLesson
+    Case "update-lesson-dependencies":
+      Calls db.getLessonWithHierarchyById
+      Calls db.updateLesson
+    Case "delete-lesson":
+      Returns: Calls service.deleteLesson
+    Case "reorder-lessons":
+      Returns: Calls service.reorderLessons
+    Case "move-lesson-to-section":
+      Returns: Calls service.moveToSection
+    Case "convert-to-ghost":
+      Returns: Calls service.convertToGhost
+    Case "create-on-disk":
+      Returns: Calls service.materializeGhost
+
+  Services required: CourseWriteService, DBFunctionsService
+```
+
+In one glance a reviewer sees:
+
+- the complete event vocabulary (18 operations)
+- which operations delegate to the write service vs. hitting the DB directly
+- the split between higher-level write operations (via `CourseWriteService`) and direct DB updates
+- `update-section-name` has special logic (read, check, conditionally rename)
+
+The service map makes the boundary explicit:
+
+```mermaid
+flowchart LR
+  prog["handleCourseEditorEvent"]
+
+  svc_CourseWriteService{{"CourseWriteService"}}
+  prog -->|requires| svc_CourseWriteService
+  svc_DBFunctionsService{{"DBFunctionsService"}}
+  prog -->|requires| svc_DBFunctionsService
+```
+
+## Example 2: Post-Write Validation Is an Architectural Invariant
+
+`course-write-service.ts` exposes a design decision that matters: writes are coupled to sync validation as part of the runtime boundary.
 
 ```bash
 npx effect-analyze ./app/services/course-write-service.ts --format mermaid-services --tsconfig ./tsconfig.json
@@ -75,9 +150,7 @@ flowchart LR
   prog -->|requires| svc_FileSystem_FileSystem
 ```
 
-That output is worth sharing because it exposes a real design decision: writes are coupled to sync validation as part of the runtime boundary.
-
-The explain output makes that explicit:
+The explain output makes the invariant explicit:
 
 ```text
 withPostValidation (generator):
@@ -85,35 +158,11 @@ withPostValidation (generator):
   2. Calls runValidation
 ```
 
-This is exactly the sort of example the current page should lead with. It is not just "here is a service map." It shows an invariant the repo author actually cares about.
+The main write path passes through post-validation. The analyzer surfaces this design decision without inspecting the implementation details.
 
-## Example 2: The Upload Route Is Thin on Purpose
+## Example 3: Batch Export Is a Real Workflow
 
-The route-level example that best represents the app is [api.videos.$videoId.upload.ts](/Users/jreehal/dev/temp/course-video-manager/app/routes/api.videos.$videoId.upload.ts).
-
-```bash
-npx effect-analyze './app/routes/api.videos.$videoId.upload.ts' --format mermaid-railway --tsconfig ./tsconfig.json
-```
-
-```mermaid
-flowchart LR
-  A[publishService <- CoursePublishService] -->|ok| B[filePath <- publishService.resolveExportPath]
-  B -->|ok| C[accessToken <- getValidAccessToken]
-  C -->|ok| D[result <- uploadVideoToYouTube]
-  D -->|ok| Done((Success))
-```
-
-This is a strong example because a maintainer can point to it and say:
-
-- the route is a thin orchestration boundary
-- the publish path is explicit
-- the heavy lifting is delegated into services
-
-That is a much better advertisement for the analyzer than a screenshot of a dense CLI dump.
-
-## Example 3: Batch Export Really Is a Workflow
-
-[batch-export.server.ts](/Users/jreehal/dev/temp/course-video-manager/app/services/batch-export.server.ts) is one of the best examples of structural recovery in the repo.
+`batch-export.server.ts` demonstrates structural recovery of a genuine production pipeline:
 
 ```bash
 npx effect-analyze ./app/services/batch-export.server.ts --format explain --tsconfig ./tsconfig.json
@@ -130,40 +179,61 @@ batchExportProgram (generator):
     Iterates (forOf) over section.lessons:
       Iterates (forOf) over lesson.videos:
         If video.clips.length > 0:
-          Iterates (exists) over exportedVideoPath:
-            (unknown: Could not determine loop body)
+          Iterates (exists) over exportedVideoPath
   7. Iterates (forEach) over unexportedVideos:
     Calls videoProcessing.exportVideoClips(...)
   8. Retries (max 2, custom)
+
+  Services required: DBFunctionsService, VideoProcessingService, FileSystem.FileSystem
 ```
 
-This is compelling because it captures the real workflow shape:
+The railway diagram captures the same workflow in a different visual:
 
-- walk the course tree
-- detect missing exports
-- process remaining videos
-- retry failures
-
-The stats reinforce that this is not trivial glue code:
-
-```json
-{
-  "program": "batchExportProgram",
-  "stats": {
-    "totalEffects": 11,
-    "loopCount": 5,
-    "retryCount": 1,
-    "decisionCount": 1,
-    "unknownCount": 0
-  }
-}
+```mermaid
+flowchart LR
+  A[db <- DBFunctionsService] -->|ok| B[videoProcessing <- VideoProcessingService]
+  B -->|ok| C[fs <- FileSystem.FileSystem]
+  C -->|ok| D[version <- db.getVersionWithSections]
+  D -->|ok| E[loop over sections/lessons/videos]
+  E -->|ok| F[forEach unexportedVideos]
+  F -->|ok| G["retry (max 2)"]
+  G -->|ok| Done((Success))
 ```
 
-For a repo author, this is shareable because it shows the analyzer recovering the shape of a real export pipeline, not just counting nodes.
+The shape is immediately readable: walk the course tree, detect missing exports, process remaining videos, retry failures. That recovers the skeleton of the export pipeline statically.
 
-## Example 4: Resource Control Around FFmpeg
+## Example 4: YouTube Upload with Resource Control
 
-The repo also has a strong infrastructure story in [ffmpeg-commands.ts](/Users/jreehal/dev/temp/course-video-manager/app/services/ffmpeg-commands.ts).
+`youtube-upload-service.ts` demonstrates that the analyzer can recover resource acquisition patterns:
+
+```bash
+npx effect-analyze ./app/services/youtube-upload-service.ts --format explain --tsconfig ./tsconfig.json
+```
+
+```text
+uploadVideoToYouTube (generator):
+  1. Yields fileSize <- try
+  2. Yields uploadUri <- initiateResumableUpload
+  3. Calls logInfo
+  4. result = Acquires resource:
+    Calls tryPromise
+    Uses:
+      Calls gen
+    Then releases:
+      Calls promise
+  5. Calls logInfo
+
+result (generator):
+  1. Iterates (while) over offset < fileSize:
+    Calls tryPromise
+    Yields response <- tryPromise
+```
+
+The analyzer surfaces the acquire/use/release pattern and the chunked upload loop. A reviewer unfamiliar with the code immediately sees: open a resumable upload session, stream chunks until completion, and manage the upload resource with explicit acquire/use/release structure.
+
+## Example 5: FFmpeg Resource Control with Semaphores
+
+`ffmpeg-commands.ts` shows the analyzer recovering concurrency primitives in media processing infrastructure:
 
 ```bash
 npx effect-analyze ./app/services/ffmpeg-commands.ts --format explain --tsconfig ./tsconfig.json
@@ -179,21 +249,20 @@ effect (generator):
 program-2 (generator):
   1. Yields process <- Command.start
   2. [stdout, stderr] = Runs 2 effects in sequential (concurrency: 2)
+
+  Concurrency: uses parallelism / racing
 ```
 
-This is a better supporting example than several of the current ones because it proves the analyzer can surface resource and concurrency structure in media-processing code, which is a core part of what this application does.
+The GPU and CPU semaphores indicate explicit throttling of encoding work to avoid saturating hardware resources. Separate stdout/stderr effect handling is also visible in the subprocess path.
 
-## Why These Examples Sell The Analyzer Better
+## What the Analyzer Recovers (and What It Does Not)
 
-The strongest pitch for effect-analyzer on `course-video-manager` is:
+The examples above show that the analyzer recovers:
 
-- it reveals runtime invariants like post-write validation
-- it shows route handlers as thin orchestration boundaries
-- it recovers genuine workflows like batch export
-- it surfaces resource control patterns in FFmpeg/media infrastructure
+- workflow shape (editor dispatch, batch export, upload sequence)
+- service boundaries (write, validation, DB, video processing)
+- concurrency primitives (semaphores, paired subprocess handling)
+- resource structure (upload acquire/use/release)
+- event vocabulary (editor operations)
 
-That is materially stronger than pages full of generic narration and screenshots. These examples tell a maintainer something worth reposting: "the analyzer recovered the shape of our publishing system from source alone."
-
-<Aside type="note">
-The current weak spot in this repo is still label quality around some nested helpers, loop bodies, and stream internals. The case study is strongest when it emphasizes workflow shape and dependency boundaries, where the analyzer is already persuasive.
-</Aside>
+It does not by itself prove business correctness, media output correctness, or external side-effect success. Some route-layer analysis has higher unknown-node noise than the service layer, reflecting the mix of framework glue and Effect logic in route handlers.
