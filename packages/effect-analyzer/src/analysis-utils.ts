@@ -120,17 +120,11 @@ export function collectDependencies(nodes: readonly StaticFlowNode[]): Dependenc
         if ((node.semanticRole === 'environment' || node.semanticRole === 'side-effect') && node.callee) {
           const callee = node.callee;
           // Heuristic: service tags typically start with uppercase or are dotted identifiers like FileSystem.FileSystem
+          // Skip known Effect/JS namespaces and built-in types
+          const firstSegment = callee.split('.')[0] ?? callee;
           const looksLikeService = /^[A-Z]/.test(callee)
-            && !callee.startsWith('Effect.')
-            && !callee.startsWith('Schema.')
-            && !callee.startsWith('Data.')
-            && !callee.startsWith('Config.')
-            && !callee.startsWith('Command.')
-            && !callee.startsWith('Stream.')
-            && !callee.startsWith('Option.')
-            && !callee.startsWith('Either.')
-            && !callee.startsWith('Cause.')
-            && !callee.startsWith('Exit.');
+            && !KNOWN_EFFECT_NAMESPACES.has(firstSegment)
+            && !BUILT_IN_TYPE_NAMES.has(firstSegment);
           if (looksLikeService && !byName.has(callee)) {
             byName.set(callee, {
               name: callee,
@@ -731,6 +725,26 @@ export function computeDisplayName(node: StaticFlowNode, variableName?: string):
       return `Unknown: ${truncate(node.reason, 30)}`;
   }
 }
+
+// =============================================================================
+// Node Counting
+// =============================================================================
+
+/**
+ * Count non-unknown nodes in an IR tree, recursing into children.
+ */
+export const countMeaningfulNodes = (nodes: readonly StaticFlowNode[]): number => {
+  let count = 0;
+  const walk = (list: readonly StaticFlowNode[]) => {
+    for (const node of list) {
+      if (node.type !== 'unknown') count++;
+      const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
+      if (children.length > 0) walk(children);
+    }
+  };
+  walk(nodes);
+  return count;
+};
 
 /**
  * Classify a StaticFlowNode into a SemanticRole for display styling and filtering.

@@ -297,6 +297,176 @@ describe('mermaid', () => {
     });
   });
 
+  describe('compact detail level', () => {
+    it('collapses inner generators to summary nodes', () => {
+      const innerGen = makeGeneratorNode('inner-gen', [
+        { effect: makeEffectNode('ie1', 'db.query') },
+        { effect: makeEffectNode('ie2', 'db.insert') },
+        { effect: makeEffectNode('ie3', 'db.commit') },
+      ]);
+      (innerGen as any).name = 'processMessage';
+
+      const outerGen = makeGeneratorNode('outer-gen', [
+        { effect: makeEffectNode('e1', 'Effect.log') },
+        { effect: innerGen as any },
+        { effect: makeEffectNode('e2', 'Effect.succeed') },
+      ]);
+      const ir = makeIR([outerGen]);
+
+      const diagram = renderStaticMermaid(ir, { detail: 'compact' });
+
+      expect(diagram).toContain('processMessage (3 steps)');
+      expect(diagram).not.toContain('db.query');
+      expect(diagram).not.toContain('db.insert');
+      expect(diagram).not.toContain('db.commit');
+      expect(diagram).toContain('Effect.log');
+      expect(diagram).toContain('Effect.succeed');
+    });
+
+    it('does not collapse root-level generator children', () => {
+      const gen = makeGeneratorNode('gen-1', [
+        { effect: makeEffectNode('e1', 'Effect.log') },
+        { effect: makeEffectNode('e2', 'Effect.succeed') },
+      ]);
+      const ir = makeIR([gen]);
+
+      const diagram = renderStaticMermaid(ir, { detail: 'compact' });
+
+      expect(diagram).toContain('Effect.log');
+      expect(diagram).toContain('Effect.succeed');
+    });
+
+    it('falls back to Generator label when inner generator has no name', () => {
+      const innerGen = makeGeneratorNode('inner-gen', [
+        { effect: makeEffectNode('ie1', 'db.query') },
+        { effect: makeEffectNode('ie2', 'db.insert') },
+      ]);
+      const outerGen = makeGeneratorNode('outer-gen', [
+        { effect: innerGen as any },
+      ]);
+      const ir = makeIR([outerGen]);
+
+      const diagram = renderStaticMermaid(ir, { detail: 'compact' });
+
+      expect(diagram).toContain('Generator (2 steps)');
+      expect(diagram).not.toContain('db.query');
+    });
+
+    it('collapses nested generators inside top-level parallel branches', () => {
+      const branchGen = makeGeneratorNode('branch-gen', [
+        { effect: makeEffectNode('ie1', 'db.query') },
+        { effect: makeEffectNode('ie2', 'db.insert') },
+      ]);
+      (branchGen as any).name = 'processBranch';
+
+      const parallel = {
+        id: 'p1',
+        type: 'parallel',
+        callee: 'Effect.all',
+        children: [branchGen as any],
+        mode: 'parallel',
+      } satisfies StaticFlowNode;
+
+      const ir = makeIR([parallel]);
+      const diagram = renderStaticMermaid(ir, { detail: 'compact' });
+
+      expect(diagram).toContain('processBranch (2 steps)');
+      expect(diagram).not.toContain('db.query');
+      expect(diagram).not.toContain('db.insert');
+    });
+
+    it('collapses nested generators inside top-level decision branches', () => {
+      const branchGen = makeGeneratorNode('branch-gen', [
+        { effect: makeEffectNode('ie1', 'db.query') },
+        { effect: makeEffectNode('ie2', 'db.insert') },
+      ]);
+      (branchGen as any).name = 'processBranch';
+
+      const decision: StaticDecisionNode = {
+        id: 'dec-compact',
+        type: 'decision',
+        decisionId: 'dec-compact',
+        label: 'Should process?',
+        condition: 'shouldProcess',
+        source: 'raw-if',
+        onTrue: [branchGen as any],
+        onFalse: [makeEffectNode('e-false', 'Effect.void')],
+      };
+
+      const ir = makeIR([decision as unknown as StaticFlowNode]);
+      const diagram = renderStaticMermaid(ir, { detail: 'compact' });
+
+      expect(diagram).toContain('processBranch (2 steps)');
+      expect(diagram).not.toContain('db.query');
+      expect(diagram).not.toContain('db.insert');
+    });
+  });
+
+  describe('auto detail level selection', () => {
+    function makeWideGenerator(count: number): StaticGeneratorNode {
+      const yields = Array.from({ length: count }, (_, i) => ({
+        effect: makeEffectNode(`e${i}`, `step${i}`),
+      }));
+      return makeGeneratorNode('wide-gen', yields);
+    }
+
+    it('uses verbose for programs with < 30 nodes', () => {
+      const ir = makeIR([makeWideGenerator(10)]);
+      const diagram = renderStaticMermaid(ir);
+      for (let i = 0; i < 10; i++) {
+        expect(diagram).toContain(`step${i}`);
+      }
+    });
+
+    it('uses standard for programs with 30-80 nodes', () => {
+      const ir = makeIR([makeWideGenerator(40)]);
+      const diagram = renderStaticMermaid(ir);
+      for (let i = 0; i < 40; i++) {
+        expect(diagram).toContain(`step${i}`);
+      }
+    });
+
+    it('uses compact for programs with > 80 nodes and collapses inner programs', () => {
+      const innerGens = Array.from({ length: 10 }, (_, i) => {
+        const inner = makeGeneratorNode(`inner-${i}`,
+          Array.from({ length: 10 }, (_, j) => ({
+            effect: makeEffectNode(`e${i}-${j}`, `inner.step${i}.${j}`),
+          }))
+        );
+        (inner as any).name = `innerProgram${i}`;
+        return inner;
+      });
+      const outerGen = makeGeneratorNode('outer',
+        innerGens.map(g => ({ effect: g as any }))
+      );
+      const ir = makeIR([outerGen]);
+
+      const diagram = renderStaticMermaid(ir);
+
+      expect(diagram).toContain('innerProgram0 (10 steps)');
+      expect(diagram).not.toContain('inner.step0.0');
+    });
+
+    it('explicit detail overrides auto-selection', () => {
+      const innerGens = Array.from({ length: 10 }, (_, i) => {
+        const inner = makeGeneratorNode(`inner-${i}`,
+          Array.from({ length: 10 }, (_, j) => ({
+            effect: makeEffectNode(`e${i}-${j}`, `inner.step${i}.${j}`),
+          }))
+        );
+        return inner;
+      });
+      const outerGen = makeGeneratorNode('outer',
+        innerGens.map(g => ({ effect: g as any }))
+      );
+      const ir = makeIR([outerGen]);
+
+      const diagram = renderStaticMermaid(ir, { detail: 'verbose' });
+
+      expect(diagram).toContain('inner.step0.0');
+    });
+  });
+
   describe('decision nodes', () => {
     it('does not create orphan rectangular nodes for decision type', () => {
       const decision: StaticDecisionNode = {
