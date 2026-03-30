@@ -13,8 +13,6 @@ import { Effect, Console, Exit, Option } from 'effect';
 import { analyze } from './analyze';
 import { analyzeEffectSource, analyzeEffectFile } from './static-analyzer';
 import {
-  getStaticChildren,
-  type StaticFlowNode,
   type StaticEffectIR,
   type DiagramQuality,
 } from './types';
@@ -28,6 +26,7 @@ import { renderRailwayMermaid } from './output/mermaid-railway';
 import { renderServicesMermaid, renderServicesMermaidFromMap } from './output/mermaid-services';
 import { renderErrorsMermaid } from './output/mermaid-errors';
 import { renderDecisionsMermaid } from './output/mermaid-decisions';
+import { countMeaningfulNodes } from './analysis-utils';
 import { renderCausesMermaid } from './output/mermaid-causes';
 import { renderConcurrencyMermaid } from './output/mermaid-concurrency';
 import { renderTimelineMermaid } from './output/mermaid-timeline';
@@ -48,7 +47,7 @@ import {
 import { getCached, setCached } from './analysis-cache';
 import { runCoverageAudit, analyzeProject } from './project-analyzer';
 import { writeColocatedOutputForFile, writeAllServiceArtifacts } from './output/colocate';
-import { renderMultipleExplanations } from './output/explain';
+import { renderExplanation, renderMultipleExplanations } from './output/explain';
 import { renderMultipleSummaries } from './output/summary';
 import { renderDependencyMatrix, renderDependencyMatrixFromServiceMap } from './output/matrix';
 import { renderServiceGraphMermaid } from './output/mermaid';
@@ -84,6 +83,7 @@ interface CLIOptions {
   readonly pretty: boolean;
   readonly includeMetadata: boolean;
   readonly direction: MermaidDirection;
+  readonly detail: 'compact' | 'standard' | 'verbose' | undefined;
   readonly tsconfig: string | undefined;
   readonly colocate: boolean;
   readonly noColocate: boolean;
@@ -121,6 +121,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let pretty = true;
   let includeMetadata = true;
   let direction: MermaidDirection = 'TB';
+  let detail: CLIOptions['detail'] = undefined;
   let tsconfig: string | undefined;
   let colocate = false;
   let noColocate = false;
@@ -219,6 +220,11 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
         value === 'RL'
       ) {
         direction = value;
+      }
+    } else if (arg === '--detail') {
+      const value = args[++i];
+      if (value === 'compact' || value === 'standard' || value === 'verbose') {
+        detail = value;
       }
     } else if (arg === '--tsconfig') {
       tsconfig = args[++i];
@@ -326,6 +332,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     pretty,
     includeMetadata,
     direction,
+    detail,
     tsconfig,
     colocate,
     noColocate,
@@ -375,6 +382,7 @@ Options:
   --export <name>          For openapi-runtime: export name of HttpApi (default: first/default)
   -o, --output <file>      Output file (default: stdout)
   -d, --direction <dir>    Mermaid diagram direction: TB | LR | BT | RL (default: TB)
+  --detail <level>         Mermaid detail level: compact | standard | verbose (default: auto based on size)
   -c, --compact            Compact output (no formatting)
   --pretty                 Pretty-print output (default; overrides --compact)
   --tsconfig <path>        Path to tsconfig.json for resolution (e.g. when analyzing external repo)
@@ -612,18 +620,6 @@ const runAnalysis = (
 ): Effect.Effect<void, unknown> =>
   Effect.gen(function* () {
     const style = createStyle(options.color && process.stdout.isTTY);
-    const countMeaningfulNodes = (nodes: readonly StaticFlowNode[]): number => {
-      let count = 0;
-      const walk = (list: readonly StaticFlowNode[]) => {
-        for (const node of list) {
-          if (node.type !== 'unknown') count++;
-          const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
-          if (children.length > 0) walk(children);
-        }
-      };
-      walk(nodes);
-      return count;
-    };
 
     const analyzerOptions =
       options.tsconfig !== undefined
@@ -741,18 +737,34 @@ const runAnalysis = (
         const seenContent = new Set<string>();
         for (const ir of filteredIrs) {
           const formats = selectFormats(ir);
-          for (const fmt of formats) {
-            const renderer = autoRenderers[fmt];
-            if (renderer) {
-              const rendered = renderer(ir);
-              // Skip empty/trivial diagrams
-              if (rendered.includes('((No steps))') || rendered.includes('((No errors))') || rendered.includes('((No ')) continue;
-              // Skip duplicate content
-              if (seenContent.has(rendered)) continue;
-              seenContent.add(rendered);
-              const programLabel = filteredIrs.length > 1 ? ` [${ir.root.programName}]` : '';
-              diagrams.push(`%% ${fmt}${programLabel}\n${rendered}`);
+          for (const sel of formats) {
+            const programLabel = filteredIrs.length > 1 ? ` [${ir.root.programName}]` : '';
+
+            if (sel.format === 'explain') {
+              const rendered = renderExplanation(ir);
+              if (!seenContent.has(rendered)) {
+                seenContent.add(rendered);
+                diagrams.push(`%% explain${programLabel}\n${rendered}`);
+              }
+              continue;
             }
+
+            // Build rendered output, respecting detail level if specified
+            let rendered: string;
+            if (sel.detail && sel.format === 'mermaid') {
+              rendered = renderStaticMermaid(ir, { direction: options.direction, detail: sel.detail });
+            } else {
+              const renderer = autoRenderers[sel.format];
+              if (!renderer) continue;
+              rendered = renderer(ir);
+            }
+
+            // Skip empty/trivial diagrams
+            if (rendered.includes('((No steps))') || rendered.includes('((No errors))') || rendered.includes('((No ')) continue;
+            // Skip duplicate content
+            if (seenContent.has(rendered)) continue;
+            seenContent.add(rendered);
+            diagrams.push(`%% ${sel.format}${programLabel}\n${rendered}`);
           }
         }
         output = diagrams.join('\n\n');
@@ -801,7 +813,10 @@ const runAnalysis = (
       case 'mermaid': {
         const diagrams: string[] = [];
         for (const ir of filteredIrs) {
-          const diagram = yield* renderMermaid(ir, { direction: options.direction });
+          const diagram = yield* renderMermaid(ir, {
+            direction: options.direction,
+            ...(options.detail ? { detail: options.detail } : {}),
+          });
           diagrams.push(diagram);
         }
         output = diagrams.join('\n\n');
@@ -824,7 +839,10 @@ const runAnalysis = (
       case 'mermaid-enhanced': {
         const enhancedDiagrams: string[] = [];
         for (const ir of filteredIrs) {
-          enhancedDiagrams.push(renderEnhancedMermaid(ir, { direction: options.direction }));
+          enhancedDiagrams.push(renderEnhancedMermaid(ir, {
+            direction: options.direction,
+            ...(options.detail ? { detail: options.detail } : {}),
+          }));
         }
         output = enhancedDiagrams.join('\n\n');
         break;

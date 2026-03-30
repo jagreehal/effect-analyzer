@@ -21,7 +21,7 @@ import type {
 import { getStaticChildren } from '../types';
 import { buildDataFlowGraph } from '../data-flow';
 import { analyzeErrorFlow, analyzeErrorPropagation } from '../error-flow';
-import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
+import { DEFAULT_LABEL_MAX, truncateDisplayText, countMeaningfulNodes } from '../analysis-utils';
 
 // =============================================================================
 // Default styles (include start/end for Start/End nodes)
@@ -162,12 +162,19 @@ function renderStaticMermaidInternal(
   options?: Partial<MermaidOptions>,
   nodeLabelAnnotations?: Map<string, string[]>,
 ): { lines: string[]; context: RenderContext } {
+  const autoDetail = (): MermaidDetailLevel => {
+    const nodeCount = countMeaningfulNodes(ir.root.children);
+    if (nodeCount > 80) return 'compact';
+    if (nodeCount >= 30) return 'standard';
+    return 'verbose';
+  };
+
   const opts: ResolvedMermaidOptions = {
     ...DEFAULT_OPTIONS,
     ...options,
     useSubgraphs: options?.useSubgraphs ?? true,
     showConditions: options?.showConditions ?? true,
-    detail: (options?.detail ?? 'verbose'),
+    detail: options?.detail ?? autoDetail(),
   };
   const context: RenderContext = {
     opts,
@@ -355,6 +362,7 @@ function renderNodes(
   nodes: readonly StaticFlowNode[],
   context: RenderContext,
   lines: string[],
+  depth = 0,
 ): RenderResult {
   if (nodes.length === 0) {
     return { firstNodeId: null, lastNodeIds: [] };
@@ -364,7 +372,7 @@ function renderNodes(
   let prevLastNodeIds: string[] = [];
 
   for (const node of nodes) {
-    const result = renderNode(node, context, lines);
+    const result = renderNode(node, context, lines, depth);
     if (firstNodeId === null && result.firstNodeId) {
       firstNodeId = result.firstNodeId;
     }
@@ -550,6 +558,7 @@ function renderNode(
   node: StaticFlowNode,
   context: RenderContext,
   lines: string[],
+  depth = 0,
 ): RenderResult {
   const nodeId = getNodeId(node, context);
   const annotations = context.nodeLabelAnnotations?.get(node.id);
@@ -564,13 +573,30 @@ function renderNode(
     context.nodeIdMap.set(node.id, nodeId);
   }
 
+  // Compact mode: at depth > 0, render compound nodes as leaf nodes (don't recurse)
+  // This prevents deeply nested structures from exploding the diagram.
+  // Leaf types (effect, unknown) always render as-is regardless of depth.
+  const compactLeafTypes = new Set(['effect', 'unknown', 'opaque', 'terminal', 'exit', 'schedule']);
+  if (context.opts.detail === 'compact' && depth > 0 && !compactLeafTypes.has(node.type)) {
+    // For generators, emit the summary node (generator skips pre-emission above)
+    if (node.type === 'generator') {
+      const summaryName = node.name || node.displayName || 'Generator';
+      const summaryLabel = `${summaryName} (${node.yields.length} steps)`;
+      lines.push(`  ${nodeId}["${escapeLabel(summaryLabel)}"]`);
+      context.styleClasses.set(nodeId, styleClass);
+      context.nodeIdMap.set(node.id, nodeId);
+    }
+    // All other compound types already have their node emitted above
+    return { firstNodeId: nodeId, lastNodeIds: [nodeId] };
+  }
+
   switch (node.type) {
     case 'effect':
     case 'unknown':
       return { firstNodeId: nodeId, lastNodeIds: [nodeId] };
 
     case 'stream': {
-      const childResult = renderNode(node.source, context, lines);
+      const childResult = renderNode(node.source, context, lines, depth + 1);
       if (childResult.firstNodeId) {
         context.edges.push({ from: nodeId, to: childResult.firstNodeId });
       }
@@ -579,7 +605,7 @@ function renderNode(
 
     case 'concurrency-primitive': {
       if (node.source) {
-        const childResult = renderNode(node.source, context, lines);
+        const childResult = renderNode(node.source, context, lines, depth + 1);
         if (childResult.firstNodeId) {
           context.edges.push({ from: nodeId, to: childResult.firstNodeId });
         }
@@ -590,7 +616,7 @@ function renderNode(
 
     case 'fiber': {
       if (node.fiberSource) {
-        const childResult = renderNode(node.fiberSource, context, lines);
+        const childResult = renderNode(node.fiberSource, context, lines, depth + 1);
         if (childResult.firstNodeId) {
           context.edges.push({ from: nodeId, to: childResult.firstNodeId });
         }
@@ -602,7 +628,7 @@ function renderNode(
     case 'generator': {
       // Sequential: yield1 -> yield2 -> ... (no "Generator (N yields)" box; show each yield's name/callee/types)
       const children = node.yields.map((y) => y.effect);
-      const result = renderNodes(children, context, lines);
+      const result = renderNodes(children, context, lines, depth + 1);
       if (result.firstNodeId) {
         return {
           firstNodeId: result.firstNodeId,
@@ -619,7 +645,7 @@ function renderNode(
     case 'pipe': {
       // Sequential: initial -> t1 -> t2 -> ...
       const chain = [node.initial, ...node.transformations];
-      const result = renderNodes(chain, context, lines);
+      const result = renderNodes(chain, context, lines, depth + 1);
       if (result.firstNodeId) {
         context.edges.push({ from: nodeId, to: result.firstNodeId });
       }
@@ -642,7 +668,7 @@ function renderNode(
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (!child) continue;
-        const branchResult = renderNode(child, context, lines);
+        const branchResult = renderNode(child, context, lines, depth + 1);
         if (branchResult.firstNodeId) {
           context.edges.push({
             from: forkId,
@@ -669,7 +695,7 @@ function renderNode(
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (!child) continue;
-        const branchResult = renderNode(child, context, lines);
+        const branchResult = renderNode(child, context, lines, depth + 1);
         if (branchResult.firstNodeId) {
           context.edges.push({
             from: forkId,
@@ -685,7 +711,7 @@ function renderNode(
     }
 
     case 'error-handler': {
-      const sourceResult = renderNode(node.source, context, lines);
+      const sourceResult = renderNode(node.source, context, lines, depth + 1);
       const handlerNodeId = `err_handler_${++context.nodeCounter}`;
       lines.push(`  ${handlerNodeId}["${node.handlerType}"]`);
       context.styleClasses.set(handlerNodeId, 'errorHandlerStyle');
@@ -698,7 +724,7 @@ function renderNode(
       }
       let lastIds = [handlerNodeId];
       if (node.handler) {
-        const handlerResult = renderNode(node.handler, context, lines);
+        const handlerResult = renderNode(node.handler, context, lines, depth + 1);
         if (handlerResult.firstNodeId) {
           context.edges.push({ from: handlerNodeId, to: handlerResult.firstNodeId });
         }
@@ -712,7 +738,7 @@ function renderNode(
 
     case 'retry':
     case 'timeout': {
-      const sourceResult = renderNode(node.source, context, lines);
+      const sourceResult = renderNode(node.source, context, lines, depth + 1);
       const wrapperId = `${node.type}_${++context.nodeCounter}`;
       const label =
         node.type === 'retry'
@@ -733,7 +759,7 @@ function renderNode(
     }
 
     case 'resource': {
-      const acquireResult = renderNode(node.acquire, context, lines);
+      const acquireResult = renderNode(node.acquire, context, lines, depth + 1);
       const resourceId = `resource_${++context.nodeCounter}`;
       lines.push(`  ${resourceId}["Resource"]`);
       context.styleClasses.set(resourceId, 'resourceStyle');
@@ -745,7 +771,7 @@ function renderNode(
       }
       let lastIds = [resourceId];
       if (node.use) {
-        const useResult = renderNode(node.use, context, lines);
+        const useResult = renderNode(node.use, context, lines, depth + 1);
         if (useResult.firstNodeId) {
           context.edges.push({ from: resourceId, to: useResult.firstNodeId });
         }
@@ -764,7 +790,7 @@ function renderNode(
       context.styleClasses.set(decisionId, 'conditionalStyle');
       context.edges.push({ from: nodeId, to: decisionId });
 
-      const onTrueResult = renderNode(node.onTrue, context, lines);
+      const onTrueResult = renderNode(node.onTrue, context, lines, depth + 1);
       if (onTrueResult.firstNodeId) {
         context.edges.push({
           from: decisionId,
@@ -775,7 +801,7 @@ function renderNode(
       const lastNodeIds: string[] = [...onTrueResult.lastNodeIds];
 
       if (node.onFalse) {
-        const onFalseResult = renderNode(node.onFalse, context, lines);
+        const onFalseResult = renderNode(node.onFalse, context, lines, depth + 1);
         if (onFalseResult.firstNodeId) {
           context.edges.push({
             from: decisionId,
@@ -802,7 +828,7 @@ function renderNode(
       context.styleClasses.set(loopId, 'loopStyle');
       context.edges.push({ from: nodeId, to: loopId });
 
-      const bodyResult = renderNode(node.body, context, lines);
+      const bodyResult = renderNode(node.body, context, lines, depth + 1);
       if (bodyResult.firstNodeId) {
         context.edges.push({ from: loopId, to: bodyResult.firstNodeId, label: 'iterate' });
       }
@@ -813,7 +839,7 @@ function renderNode(
     }
 
     case 'layer': {
-      const result = renderNodes(node.operations, context, lines);
+      const result = renderNodes(node.operations, context, lines, depth + 1);
       if (result.firstNodeId) {
         context.edges.push({ from: nodeId, to: result.firstNodeId });
       }
@@ -831,7 +857,7 @@ function renderNode(
       context.nodeIdMap.set(node.id, decisionId);
 
       // Render true branch
-      const trueResult = renderNodes(node.onTrue, context, lines);
+      const trueResult = renderNodes(node.onTrue, context, lines, depth + 1);
       if (trueResult.firstNodeId) {
         context.edges.push({ from: decisionId, to: trueResult.firstNodeId, label: 'yes' });
       }
@@ -839,7 +865,7 @@ function renderNode(
 
       // Render false branch
       if (node.onFalse && node.onFalse.length > 0) {
-        const falseResult = renderNodes(node.onFalse, context, lines);
+        const falseResult = renderNodes(node.onFalse, context, lines, depth + 1);
         if (falseResult.firstNodeId) {
           context.edges.push({ from: decisionId, to: falseResult.firstNodeId, label: 'no' });
         }
@@ -859,7 +885,7 @@ function renderNode(
       const lastNodeIds: string[] = [];
       for (const caseItem of node.cases) {
         const caseLabel = caseItem.labels.join(' / ');
-        const caseResult = renderNodes(caseItem.body, context, lines);
+        const caseResult = renderNodes(caseItem.body, context, lines, depth + 1);
         if (caseResult.firstNodeId) {
           context.edges.push({ from: switchId, to: caseResult.firstNodeId, label: caseLabel });
         }
@@ -879,7 +905,7 @@ function renderNode(
     }
 
     case 'try-catch': {
-      const tryResult = renderNodes(node.tryBody, context, lines);
+      const tryResult = renderNodes(node.tryBody, context, lines, depth + 1);
       const allLastIds: string[] = [...tryResult.lastNodeIds];
 
       if (node.catchBody && node.catchBody.length > 0) {
@@ -893,7 +919,7 @@ function renderNode(
           context.edges.push({ from: lastId, to: catchId, label: 'on error' });
         }
 
-        const catchResult = renderNodes(node.catchBody, context, lines);
+        const catchResult = renderNodes(node.catchBody, context, lines, depth + 1);
         if (catchResult.firstNodeId) {
           context.edges.push({ from: catchId, to: catchResult.firstNodeId });
         }
@@ -901,7 +927,7 @@ function renderNode(
       }
 
       if (node.finallyBody && node.finallyBody.length > 0) {
-        const finallyResult = renderNodes(node.finallyBody, context, lines);
+        const finallyResult = renderNodes(node.finallyBody, context, lines, depth + 1);
         if (finallyResult.firstNodeId) {
           for (const lastId of allLastIds) {
             context.edges.push({ from: lastId, to: finallyResult.firstNodeId, label: 'finally' });
@@ -927,7 +953,7 @@ function renderNode(
 
       // Render value (e.g., return yield* effect)
       if (node.value && node.value.length > 0) {
-        const valueResult = renderNodes(node.value, context, lines);
+        const valueResult = renderNodes(node.value, context, lines, depth + 1);
         if (valueResult.firstNodeId) {
           context.edges.push({ from: nodeId, to: valueResult.firstNodeId });
         }
@@ -955,7 +981,7 @@ function renderNode(
       context.nodeIdMap.set(node.id, causeId);
 
       if (node.children && node.children.length > 0) {
-        const childResult = renderNodes([...node.children], context, lines);
+        const childResult = renderNodes([...node.children], context, lines, depth + 1);
         if (childResult.firstNodeId) {
           context.edges.push({ from: causeId, to: childResult.firstNodeId });
         }
@@ -1008,7 +1034,7 @@ function renderNode(
     case 'transform': {
       // Rectangle for Transform nodes — recurse into source child
       if (node.source) {
-        const sourceResult = renderNode(node.source, context, lines);
+        const sourceResult = renderNode(node.source, context, lines, depth + 1);
         if (sourceResult.lastNodeIds.length > 0) {
           context.edges.push({ from: sourceResult.lastNodeIds[0]!, to: nodeId });
         }
@@ -1025,7 +1051,7 @@ function renderNode(
       context.nodeIdMap.set(node.id, chanId);
 
       if (node.source) {
-        const sourceResult = renderNode(node.source, context, lines);
+        const sourceResult = renderNode(node.source, context, lines, depth + 1);
         if (sourceResult.lastNodeIds.length > 0) {
           context.edges.push({ from: sourceResult.lastNodeIds[0]!, to: chanId });
         }
@@ -1042,7 +1068,7 @@ function renderNode(
       context.nodeIdMap.set(node.id, sinkId);
 
       if (node.source) {
-        const sourceResult = renderNode(node.source, context, lines);
+        const sourceResult = renderNode(node.source, context, lines, depth + 1);
         if (sourceResult.lastNodeIds.length > 0) {
           context.edges.push({ from: sourceResult.lastNodeIds[0]!, to: sinkId });
         }
@@ -1059,14 +1085,14 @@ function renderNode(
       context.nodeIdMap.set(node.id, intId);
 
       if (node.source) {
-        const sourceResult = renderNode(node.source, context, lines);
+        const sourceResult = renderNode(node.source, context, lines, depth + 1);
         if (sourceResult.firstNodeId) {
           context.edges.push({ from: intId, to: sourceResult.firstNodeId });
         }
         const lastIds = [...sourceResult.lastNodeIds];
 
         if (node.handler) {
-          const handlerResult = renderNode(node.handler, context, lines);
+          const handlerResult = renderNode(node.handler, context, lines, depth + 1);
           if (sourceResult.lastNodeIds.length > 0 && handlerResult.firstNodeId) {
             context.edges.push({ from: sourceResult.lastNodeIds[0]!, to: handlerResult.firstNodeId, label: 'on interrupt' });
           }
@@ -1094,8 +1120,7 @@ export function renderStaticMermaid(
   ir: StaticEffectIR,
   options?: Partial<MermaidOptions>,
 ): string {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
-  const { lines } = renderStaticMermaidInternal(ir, opts);
+  const { lines } = renderStaticMermaidInternal(ir, options);
   return lines.join('\n');
 }
 
@@ -1507,9 +1532,12 @@ export function renderEnhancedMermaid(
 ): string {
   const enhancedOpts = { ...DEFAULT_ENHANCED_OPTIONS, ...options };
   const nodeLabelAnnotations = collectEnhancedAnnotations(ir, enhancedOpts);
+  // Pass original options' detail (if any) so auto-selection can kick in
+  const mermaidOpts: Partial<MermaidOptions> = { ...enhancedOpts };
+  if (!options?.detail) delete (mermaidOpts as Record<string, unknown>).detail;
   const { lines } = renderStaticMermaidInternal(
     ir,
-    enhancedOpts as Partial<MermaidOptions>,
+    mermaidOpts,
     nodeLabelAnnotations,
   );
   return lines.join('\n');

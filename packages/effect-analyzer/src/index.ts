@@ -460,7 +460,7 @@ export { diffPrograms, renderDiffMarkdown, renderDiffJSON, renderDiffMermaid, pa
 // Auto-format
 // =============================================================================
 
-export { selectFormats } from './output/auto-format';
+export { selectFormats, type FormatSelection } from './output/auto-format';
 
 // =============================================================================
 // Types

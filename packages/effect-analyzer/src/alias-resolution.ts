@@ -357,11 +357,24 @@ export function getEffectSubmoduleAliasMap(sourceFile: SourceFile): Map<string, 
   for (const decl of sourceFile.getImportDeclarations()) {
     const specifier = decl.getModuleSpecifierValue();
     if (!specifier || !isEffectPackageSpecifier(specifier)) continue;
+
+    // Handle namespace imports: import * as L from "effect/Layer" => L -> Layer
     const nsImport = decl.getNamespaceImport();
-    if (!nsImport) continue;
-    const aliasName = nsImport.getText();
-    const canonical = canonicalNamespaceFromSpecifier(specifier);
-    map.set(aliasName, canonical);
+    if (nsImport) {
+      const aliasName = nsImport.getText();
+      const canonical = canonicalNamespaceFromSpecifier(specifier);
+      map.set(aliasName, canonical);
+      continue;
+    }
+
+    // Handle named imports with aliases: import { Match as M } from "effect" => M -> Match
+    for (const named of decl.getNamedImports()) {
+      const alias = named.getAliasNode()?.getText();
+      if (alias) {
+        const originalName = named.getName();
+        map.set(alias, originalName);
+      }
+    }
   }
   effectSubmoduleAliasCache.set(sourceFile, map);
   return map;

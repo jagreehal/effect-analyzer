@@ -368,7 +368,7 @@ export const analyzeEffectExpression = (
         const effectNode: StaticEffectNode = {
           id: generateId(),
           type: 'effect',
-          callee: text,
+          callee: normalizeEffectCallee(text, sourceFile),
           location: extractLocation(
             node,
             filePath,
@@ -1030,8 +1030,8 @@ export const analyzeEffectCall = (
     const effectNode: StaticEffectNode = {
       id: generateId(),
       type: 'effect',
-      callee,
-      description: serviceCall ? 'service-call' : getSemanticDescriptionWithAliases(callee, getAliasesForFile(sourceFile)),
+      callee: normalizedCallee,
+      description: serviceCall ? 'service-call' : getSemanticDescriptionWithAliases(normalizedCallee, getAliasesForFile(sourceFile)),
       location,
       jsdocDescription: effectJSDoc,
       jsdocTags: extractJSDocTags(call),
@@ -1061,7 +1061,7 @@ export const analyzeEffectCall = (
  */
 const tryResolveServiceCall = (
   call: CallExpression,
-  _sourceFile: SourceFile,
+  sourceFile: SourceFile,
 ): StaticEffectNode['serviceCall'] => {
   const { SyntaxKind } = loadTsMorph();
   const expr = call.getExpression();
@@ -1074,9 +1074,13 @@ const tryResolveServiceCall = (
   const methodName = propAccess.getName();
   const objectName = objExpr.getText();
 
-  // Skip if first segment is a known Effect/JS namespace
+  // Skip if first segment is a known Effect/JS namespace (resolve aliases first)
   const firstSegment = objectName.split('.')[0] ?? objectName;
   if (KNOWN_EFFECT_NAMESPACES.has(firstSegment)) return undefined;
+  // Resolve aliases: e.g. "M" -> "Match", "S" -> "Schema"
+  const normalized = normalizeEffectCallee(objectName, sourceFile);
+  const normalizedFirstSegment = normalized.split('.')[0] ?? normalized;
+  if (KNOWN_EFFECT_NAMESPACES.has(normalizedFirstSegment)) return undefined;
 
   try {
     const type = objExpr.getType();

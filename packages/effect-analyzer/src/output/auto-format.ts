@@ -1,6 +1,7 @@
 import { Option } from 'effect';
-import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
+import { getStaticChildren, type StaticEffectIR, type StaticFlowNode, type MermaidDetailLevel } from '../types';
 import { inferBestDiagramType } from './auto-diagram';
+import { countMeaningfulNodes } from '../analysis-utils';
 
 export type AutoFormat =
   | 'mermaid'
@@ -15,6 +16,11 @@ export type AutoFormat =
   | 'mermaid-dataflow'
   | 'mermaid-causes'
   | 'mermaid-timeline';
+
+export interface FormatSelection {
+  readonly format: AutoFormat | 'explain';
+  readonly detail?: MermaidDetailLevel | undefined;
+}
 
 interface FormatScore {
   format: AutoFormat;
@@ -32,13 +38,14 @@ function hasCauseSignals(node: StaticFlowNode): boolean {
 }
 
 /**
- * Analyzes the IR and returns the most relevant format names to render.
- * Includes `mermaid-railway` or `mermaid` as baseline (auto-detected),
- * plus up to 2 specialized formats based on what's interesting in the program.
+ * Analyzes the IR and returns the most relevant formats to render.
+ * Size-aware: large programs get explain + compact mermaid,
+ * small programs get mermaid/railway + specialized diagrams.
  */
-export function selectFormats(ir: StaticEffectIR): AutoFormat[] {
+export function selectFormats(ir: StaticEffectIR): FormatSelection[] {
   const stats = ir.metadata.stats;
   const root = ir.root;
+  const nodeCount = countMeaningfulNodes(root.children);
 
   const scores: FormatScore[] = [
     {
@@ -51,7 +58,6 @@ export function selectFormats(ir: StaticEffectIR): AutoFormat[] {
     },
     {
       format: 'mermaid-errors',
-      // Only select errors view if there are actual typed errors (not just error handlers)
       score: root.errorTypes.length > 0 ? root.errorTypes.length * 2 + stats.errorHandlerCount * 2 : 0,
     },
     {
@@ -84,12 +90,24 @@ export function selectFormats(ir: StaticEffectIR): AutoFormat[] {
     },
   ];
 
-  const top = scores
+  const top: FormatSelection[] = scores
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 2)
-    .map((s) => s.format);
+    .map((s) => ({ format: s.format }));
 
-  const baseline: AutoFormat = inferBestDiagramType(ir) === 'railway' ? 'mermaid-railway' : 'mermaid';
-  return [baseline, ...top];
+  const baselineDiagramType: AutoFormat = inferBestDiagramType(ir) === 'railway' ? 'mermaid-railway' : 'mermaid';
+
+  // Small programs: mermaid baseline, no explain
+  if (nodeCount < 30) {
+    return [{ format: baselineDiagramType }, ...top];
+  }
+
+  // Medium programs: explain first, then mermaid with standard detail
+  if (nodeCount <= 80) {
+    return [{ format: 'explain' }, { format: baselineDiagramType, detail: 'standard' }, ...top];
+  }
+
+  // Large programs: explain first, then mermaid with compact detail
+  return [{ format: 'explain' }, { format: baselineDiagramType, detail: 'compact' }, ...top];
 }

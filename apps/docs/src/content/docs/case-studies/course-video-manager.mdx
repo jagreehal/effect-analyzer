@@ -7,61 +7,25 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-`course-video-manager` is a desktop app for managing video courses: publishing, export, upload, validation, thumbnails, filesystem coordination, and media processing. It uses Effect throughout.
+`course-video-manager` is a desktop app for managing video courses: publishing, export, upload, validation, thumbnails, filesystem coordination, and media processing. It uses Effect throughout. This walkthrough shows what the analyzer produces on the key files — no special flags needed.
 
-This walkthrough follows the path a new contributor or reviewer would take: start with the audit to find where the interesting code lives, then drill into specific files to understand how they work.
+## How does the editor work?
 
-## Step 1: Where does the interesting code live?
-
-A new contributor's first question on any repo is which directories matter.
+The course editor service handler is a large switch dispatcher. Run it with no format flag:
 
 ```bash
-npx effect-analyze ./app/services --coverage-audit --show-by-folder --tsconfig ./tsconfig.json
+npx effect-analyze ./app/services/course-editor-service-handler.ts \
+  --tsconfig ./tsconfig.json
 ```
 
-```text
-Discovered: 94
-Analyzed:   68
-Zero programs: 26
-Failed:     0
-Coverage:   72.3%
-Analyzable coverage: 100.0%
-Unknown node rate: 3.32%
-```
-
-```bash
-npx effect-analyze ./app/routes --coverage-audit --show-by-folder --tsconfig ./tsconfig.json
-```
-
-```text
-Discovered: 106
-Analyzed:   98
-Zero programs: 8
-Failed:     0
-Coverage:   92.5%
-Analyzable coverage: 100.0%
-Unknown node rate: 11.76%
-```
-
-The service layer has a low unknown rate (3.32%). The route layer has high coverage but is structurally noisier (11.76% unknown), reflecting the mix of framework glue and Effect logic in route handlers. Zero files failed to parse in either directory.
-
-**Without the analyzer**, you would need to open dozens of files to figure out where the business logic concentrates. The audit narrows that search immediately.
-
-## Step 2: How does the editor work?
-
-The next question is practical: how do I add a new editor operation, and what pattern should I follow?
-
-Reading `course-editor-service-handler.ts` directly means scrolling through hundreds of lines of switch cases, service calls, and DB queries. The analyzer extracts the structure:
-
-```bash
-npx effect-analyze ./app/services/course-editor-service-handler.ts --format explain --tsconfig ./tsconfig.json
-```
+The analyzer auto-selects explain + mermaid + services + decisions:
 
 ```text
 handleCourseEditorEvent (direct):
-  1. Yields service <- CourseWriteService
-  2. Yields db <- DBFunctionsService
-  3. Switch on event.type:
+  1. Calls fn
+  2. Yields service <- CourseWriteService
+  3. Yields db <- DBFunctionsService
+  4. Switch on event.type:
     Case "create-section":
       Returns: Calls service.addGhostSection
     Case "update-section-name":
@@ -111,12 +75,7 @@ handleCourseEditorEvent (direct):
   Services required: CourseWriteService, DBFunctionsService
 ```
 
-Now a contributor adding a new operation can see:
-
-- all 18 existing operations and the pattern each follows
-- which operations go through `CourseWriteService` vs. hitting the DB directly
-- that `update-section-name` has special logic (read, check, conditionally rename) while most other updates are straightforward
-- where to add their new case and which pattern to follow
+A contributor adding a new operation can see all 19 existing operations and the pattern each follows — which go through `CourseWriteService` vs. hitting the DB directly, and that `update-section-name` has special logic while most updates are straightforward.
 
 ```mermaid
 flowchart LR
@@ -128,14 +87,11 @@ flowchart LR
   prog -->|requires| svc_DBFunctionsService
 ```
 
-**Without the analyzer**, understanding the dispatch table means reading the entire file and mentally tracking which cases delegate to which service. The explain output gives you the complete map in one command.
-
-## Step 3: What happens when I write data?
-
-A reviewer looking at a write-path bug needs to know: what does the write service depend on, and is there validation?
+## What happens when I write data?
 
 ```bash
-npx effect-analyze ./app/services/course-write-service.ts --format mermaid-services --tsconfig ./tsconfig.json
+npx effect-analyze ./app/services/course-write-service.ts \
+  --tsconfig ./tsconfig.json
 ```
 
 ```mermaid
@@ -152,7 +108,7 @@ flowchart LR
   prog -->|requires| svc_FileSystem_FileSystem
 ```
 
-Four services. The presence of `CourseRepoSyncValidationService` in the dependency graph raises a question: when does validation run? The explain output answers it:
+Four services. The presence of `CourseRepoSyncValidationService` raises a question: when does validation run?
 
 ```text
 withPostValidation (generator):
@@ -160,15 +116,16 @@ withPostValidation (generator):
   2. Calls runValidation
 ```
 
-A main write path passes through post-validation. The analyzer surfaces this design decision without inspecting the implementation details.
+The main write path passes through post-validation. The analyzer surfaces this design decision without inspecting the implementation details.
 
-## Step 4: How does video export work?
-
-A contributor debugging a failed export needs to understand the pipeline. The source file has nested loops, retry logic, and service calls interleaved with filesystem operations:
+## How does video export work?
 
 ```bash
-npx effect-analyze ./app/services/batch-export.server.ts --format explain --tsconfig ./tsconfig.json
+npx effect-analyze ./app/services/batch-export.server.ts \
+  --tsconfig ./tsconfig.json
 ```
+
+The analyzer auto-selects mermaid + services + retry for this file:
 
 ```text
 batchExportProgram (generator):
@@ -183,35 +140,19 @@ batchExportProgram (generator):
         If video.clips.length > 0:
           Iterates (exists) over exportedVideoPath
   7. Iterates (forEach) over unexportedVideos:
-    Calls videoProcessing.exportVideoClips(...)
+    Calls videoProcessing.exportVideoClips
   8. Retries (max 2, custom)
 
   Services required: DBFunctionsService, VideoProcessingService, FileSystem.FileSystem
 ```
 
-The railway diagram shows the same flow linearly:
+Walk the course tree, detect missing exports, process remaining videos, retry failures. The retry diagram appears automatically as a bonus.
 
-```mermaid
-flowchart LR
-  A[db <- DBFunctionsService] -->|ok| B[videoProcessing <- VideoProcessingService]
-  B -->|ok| C[fs <- FileSystem.FileSystem]
-  C -->|ok| D[version <- db.getVersionWithSections]
-  D -->|ok| E[loop over sections/lessons/videos]
-  E -->|ok| F[forEach unexportedVideos]
-  F -->|ok| G["retry (max 2)"]
-  G -->|ok| Done((Success))
-```
-
-Walk the course tree, detect missing exports, process remaining videos, retry failures. That recovers the skeleton of the export pipeline statically.
-
-**Without the analyzer**, a contributor would need to trace through the nested loops and service calls manually to understand the export flow. With it, they see the pipeline shape in seconds and know exactly where retry logic applies.
-
-## Step 5: How does YouTube upload handle resources?
-
-`youtube-upload-service.ts` uses a resumable upload pattern. The source mixes Promise wrappers, resource management, and chunked iteration:
+## How does YouTube upload handle resources?
 
 ```bash
-npx effect-analyze ./app/services/youtube-upload-service.ts --format explain --tsconfig ./tsconfig.json
+npx effect-analyze ./app/services/youtube-upload-service.ts \
+  --tsconfig ./tsconfig.json
 ```
 
 ```text
@@ -225,7 +166,6 @@ uploadVideoToYouTube (generator):
       Calls gen
     Then releases:
       Calls promise
-  5. Calls logInfo
 
 result (generator):
   1. Iterates (while) over offset < fileSize:
@@ -233,14 +173,13 @@ result (generator):
     Yields response <- tryPromise
 ```
 
-The recovered shape is: initiate a resumable upload session, stream chunks until completion, and manage the upload resource with explicit acquire/use/release structure.
+Initiate a resumable upload session, stream chunks until completion, manage the upload resource with explicit acquire/use/release.
 
-## Step 6: How does FFmpeg encoding handle concurrency?
-
-Before touching any media infrastructure code, a reviewer needs to know what concurrency controls exist:
+## How does FFmpeg encoding handle concurrency?
 
 ```bash
-npx effect-analyze ./app/services/ffmpeg-commands.ts --format explain --tsconfig ./tsconfig.json
+npx effect-analyze ./app/services/ffmpeg-commands.ts \
+  --tsconfig ./tsconfig.json
 ```
 
 ```text
@@ -251,22 +190,55 @@ effect (generator):
   ...
 
 program-2 (generator):
-  1. Yields process <- Command.start
+  1. Yields process <- start
   2. [stdout, stderr] = Runs 2 effects in sequential (concurrency: 2)
 
   Concurrency: uses parallelism / racing
 ```
 
-The GPU and CPU semaphores indicate explicit throttling of encoding work to avoid saturating hardware resources. Separate stdout/stderr effect handling is also visible in the subprocess path.
+GPU and CPU semaphores indicate explicit throttling of encoding work. Separate stdout/stderr handling with concurrency 2 in the subprocess path.
 
-## What the analyzer recovers (and what it does not)
+## Finding what to analyze
 
-Across this walkthrough, the analyzer recovered:
+```bash
+npx effect-analyze ./app/services --coverage-audit --show-by-folder \
+  --tsconfig ./tsconfig.json
+```
 
-- workflow shape (editor dispatch, batch export, upload sequence)
-- service boundaries (write, validation, DB, video processing)
-- concurrency primitives (semaphores, paired subprocess handling)
-- resource structure (upload acquire/use/release)
-- event vocabulary (18 editor operations)
+```text
+Discovered: 94
+Analyzed:   68
+Zero programs: 26
+Failed:     0
+Coverage:   72.3%
+Analyzable coverage: 100.0%
+Unknown node rate: 3.32%
+```
 
-It does not by itself prove business correctness, media output correctness, or external side-effect success. Some route-layer analysis has higher unknown-node noise than the service layer, reflecting the mix of framework glue and Effect logic in route handlers.
+```bash
+npx effect-analyze ./app/routes --coverage-audit --show-by-folder \
+  --tsconfig ./tsconfig.json
+```
+
+```text
+Discovered: 106
+Analyzed:   98
+Zero programs: 8
+Failed:     0
+Coverage:   92.5%
+Analyzable coverage: 100.0%
+Unknown node rate: 11.76%
+```
+
+The service layer has a low unknown rate (3.32%). The route layer has high coverage but is structurally noisier (11.76%), reflecting the mix of framework glue and Effect logic in route handlers.
+
+## Quick reference
+
+| What you want | Command |
+|---------------|---------|
+| Best output automatically | just run `npx effect-analyze <path>` |
+| Force text summary | `--format explain` |
+| Force flowchart | `--format mermaid` |
+| Service dependency map | `--format mermaid-services` |
+| Find which files have Effect code | `--coverage-audit --show-by-folder` |
+| Compare two versions of a file | `--diff old.ts new.ts` |

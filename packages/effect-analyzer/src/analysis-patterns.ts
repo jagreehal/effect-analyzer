@@ -414,12 +414,49 @@ export const BUILT_IN_TYPE_NAMES = new Set([
 ]);
 
 export const KNOWN_EFFECT_NAMESPACES = new Set([
+  // Core runtime — these are never services themselves
   'Effect', 'Layer', 'Stream', 'Queue', 'PubSub', 'Deferred', 'Semaphore',
   'Mailbox', 'SubscriptionRef', 'Scope', 'Fiber', 'Runtime', 'ManagedRuntime', 'Cause', 'Exit',
+  // Data types
   'Data', 'Option', 'Either', 'Chunk', 'HashMap', 'HashSet', 'List',
-  'SortedMap', 'SortedSet', 'Match', 'Config', 'Schema', 'Schedule',
-  'Metric', 'Tracer', 'Logger', 'FiberRef', 'FiberHandle', 'FiberSet',
-  'FiberMap', 'Cache', 'ScopedCache', 'RateLimiter', 'Supervisor',
+  'SortedMap', 'SortedSet',
+  // Matching, config, schema (S is a common alias for Schema)
+  'Match', 'Config', 'Schema', 'Schedule', 'S',
+  // Observability
+  'Metric', 'Tracer', 'Logger',
+  // Fiber management
+  'FiberRef', 'FiberHandle', 'FiberSet', 'FiberMap',
+  // Caching
+  'Cache', 'ScopedCache', 'RateLimiter', 'Supervisor',
+  // Refs and state
+  'Ref', 'SynchronizedRef', 'Context',
+  // Pure utilities — never services
+  'Random', 'Clock', 'Duration', 'DateTime', 'Predicate', 'Tuple', 'Struct',
+  'Record', 'Encoding', 'Order', 'Equivalence', 'Brand', 'Inspectable',
+  'Equal', 'Hash', 'Differ', 'Types', 'Unify', 'Pipeable',
+  // Streams / channels / sinks
+  'Sink', 'Channel', 'GroupBy', 'Take',
+  // STM
+  'STM', 'TRef', 'TMap', 'TSet', 'TArray', 'TQueue', 'TPubSub', 'TDeferred', 'TSemaphore',
+  // HTTP request/response builders — utility namespaces, not services
+  'HttpClientRequest', 'HttpClientResponse', 'HttpClientError',
+  'HttpServerRequest', 'HttpServerResponse', 'HttpRouter', 'HttpApiEndpoint',
+  'HttpApiGroup', 'HttpApi', 'HttpApiBuilder', 'HttpApiSecurity', 'HttpMiddleware',
+  'FetchHttpClient', 'NodeHttpClient', 'BunHttpClient',
+  // Command (the Effect platform process command, not a service)
+  'Command',
+  // SQL utilities
+  'SqlSchema', 'SqlResolver', 'SqlMigrator',
+  // RPC utilities
+  'Rpc', 'RpcRouter', 'RpcGroup', 'RpcApi', 'RpcSerialization',
+  // Cluster / distributed
+  'Entity', 'ClusterSchema', 'MessageState', 'Sharding',
+  // Printer / docs
+  'Printer', 'Doc', 'DocTree', 'PageWidth', 'Optimize',
+  // AI
+  'AiToolkit', 'Completions', 'AiInput', 'AiResponse',
+  // OpenTelemetry
+  'NodeSdk', 'WebSdk',
 ]);
 
 export const isServiceTagCallee = (callee: string): boolean => {
