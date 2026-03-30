@@ -1,5 +1,11 @@
 # effect-analyzer-docs
 
+## 0.0.5
+
+### Patch Changes
+
+- 08bd948: Fixes Issue #25
+
 ## 0.0.4
 
 ### Patch Changes
