@@ -398,11 +398,13 @@ export const extractServiceRequirements = (
   
   for (const service of services) {
     const sourceFile = locationNode.getSourceFile();
-    const { line, column } = sourceFile.getLineAndColumnAtPos(locationNode.getStart());
+    const offset = locationNode.getStart();
+    const { line, column } = sourceFile.getLineAndColumnAtPos(offset);
     const location: SourceLocation = {
       filePath: sourceFile.getFilePath(),
       line,
       column,
+      offset,
     };
     
     requirements.push({

@@ -282,11 +282,13 @@ export const extractSchemaOperation = (
   const validationPaths = extractValidationPaths(nodeType);
   
   const sourceFile = node.getSourceFile();
-  const { line, column } = sourceFile.getLineAndColumnAtPos(node.getStart());
+  const offset = node.getStart();
+  const { line, column } = sourceFile.getLineAndColumnAtPos(offset);
   const location: SourceLocation = {
     filePath: sourceFile.getFilePath(),
     line: line + 1,
     column,
+    offset,
   };
   
   return {

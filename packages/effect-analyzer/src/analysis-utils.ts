@@ -167,6 +167,8 @@ export const extractLocation = (
     column,
     endLine: end.line,
     endColumn: end.column,
+    offset: pos,
+    endOffset: endPos,
   };
 };
 
