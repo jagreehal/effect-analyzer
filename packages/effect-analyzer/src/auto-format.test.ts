@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectFormats } from './output/auto-format';
+import { selectFormats, type FormatSelection } from './output/auto-format';
 import type { StaticCauseNode, StaticEffectIR, StaticEffectNode, StaticGeneratorNode } from './types';
 
 const makeNode = (overrides: Partial<StaticEffectNode> & { id: string; callee: string }): StaticEffectNode => ({
@@ -62,10 +62,15 @@ const makeGeneratorIR = (
   references: new Map(),
 });
 
+/** Helper: check if any FormatSelection in the array has the given format name */
+const hasFormat = (formats: FormatSelection[], name: string) =>
+  formats.some((f) => f.format === name);
+
 describe('selectFormats', () => {
   it('returns only mermaid-railway for a basic program with no special features', () => {
     const ir = makeGeneratorIR();
-    expect(selectFormats(ir)).toEqual(['mermaid-railway']);
+    const formats = selectFormats(ir);
+    expect(formats).toEqual([{ format: 'mermaid-railway' }]);
   });
 
   it('includes mermaid-services when program has dependencies', () => {
@@ -76,8 +81,8 @@ describe('selectFormats', () => {
       ],
     });
     const formats = selectFormats(ir);
-    expect(formats).toContain('mermaid-railway');
-    expect(formats).toContain('mermaid-services');
+    expect(hasFormat(formats, 'mermaid-railway')).toBe(true);
+    expect(hasFormat(formats, 'mermaid-services')).toBe(true);
   });
 
   it('includes mermaid-concurrency when program has parallel + race', () => {
@@ -85,8 +90,8 @@ describe('selectFormats', () => {
       stats: { parallelCount: 2, raceCount: 1 },
     });
     const formats = selectFormats(ir);
-    expect(formats).toContain('mermaid-railway');
-    expect(formats).toContain('mermaid-concurrency');
+    expect(hasFormat(formats, 'mermaid-railway')).toBe(true);
+    expect(hasFormat(formats, 'mermaid-concurrency')).toBe(true);
   });
 
   it('includes mermaid-errors when program has error types and handlers', () => {
@@ -95,8 +100,8 @@ describe('selectFormats', () => {
       stats: { errorHandlerCount: 3 },
     });
     const formats = selectFormats(ir);
-    expect(formats).toContain('mermaid-railway');
-    expect(formats).toContain('mermaid-errors');
+    expect(hasFormat(formats, 'mermaid-railway')).toBe(true);
+    expect(hasFormat(formats, 'mermaid-errors')).toBe(true);
   });
 
   it('includes mermaid-retry when program has retry + timeout', () => {
@@ -104,8 +109,8 @@ describe('selectFormats', () => {
       stats: { retryCount: 2, timeoutCount: 1 },
     });
     const formats = selectFormats(ir);
-    expect(formats).toContain('mermaid-railway');
-    expect(formats).toContain('mermaid-retry');
+    expect(hasFormat(formats, 'mermaid-railway')).toBe(true);
+    expect(hasFormat(formats, 'mermaid-retry')).toBe(true);
   });
 
   it('returns at most 3 formats when multiple features are present', () => {
@@ -135,14 +140,14 @@ describe('selectFormats', () => {
     const formats = selectFormats(ir);
     expect(formats.length).toBeLessThanOrEqual(3);
     // Complex programs with structural nodes get 'mermaid' as baseline
-    expect(formats[0]).toBe('mermaid');
+    expect(formats[0].format).toBe('mermaid');
   });
 
   it('includes mermaid-dataflow for pipe-sourced programs', () => {
     const ir = makeGeneratorIR({ source: 'pipe' });
     const formats = selectFormats(ir);
-    expect(formats).toContain('mermaid-railway');
-    expect(formats).toContain('mermaid-dataflow');
+    expect(hasFormat(formats, 'mermaid-railway')).toBe(true);
+    expect(hasFormat(formats, 'mermaid-dataflow')).toBe(true);
   });
 
   it('includes mermaid-layers when program has layers', () => {
@@ -150,8 +155,8 @@ describe('selectFormats', () => {
       stats: { layerCount: 3 },
     });
     const formats = selectFormats(ir);
-    expect(formats).toContain('mermaid-railway');
-    expect(formats).toContain('mermaid-layers');
+    expect(hasFormat(formats, 'mermaid-railway')).toBe(true);
+    expect(hasFormat(formats, 'mermaid-layers')).toBe(true);
   });
 
   it('includes mermaid-causes when the IR contains cause nodes', () => {
@@ -182,8 +187,8 @@ describe('selectFormats', () => {
     };
 
     const formats = selectFormats(ir);
-    expect(formats).toContain('mermaid-railway');
-    expect(formats).toContain('mermaid-causes');
+    expect(hasFormat(formats, 'mermaid-railway')).toBe(true);
+    expect(hasFormat(formats, 'mermaid-causes')).toBe(true);
   });
 
   it('always includes a diagram baseline as the first format', () => {
@@ -195,7 +200,7 @@ describe('selectFormats', () => {
     ];
     for (const ir of testCases) {
       const formats = selectFormats(ir);
-      expect(['mermaid-railway', 'mermaid']).toContain(formats[0]);
+      expect(['mermaid-railway', 'mermaid']).toContain(formats[0].format);
     }
   });
 });
