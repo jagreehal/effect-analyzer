@@ -1,5 +1,11 @@
 # effect-analyzer
 
+## 0.1.7
+
+### Patch Changes
+
+- 81e2c99: Added case study for foldkit
+
 ## 0.1.6
 
 ### Patch Changes
