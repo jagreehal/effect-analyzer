@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url';
 import starlight from '@astrojs/starlight';
 import astroMermaid from 'astro-mermaid';
 
-const perfHooksShim = fileURLToPath(new URL('./src/shims/perf-hooks.ts', import.meta.url));
+const perfHooksShim = fileURLToPath(
+  new URL('./src/shims/perf-hooks.ts', import.meta.url),
+);
 
 export default defineConfig({
   site: 'https://jagreehal.github.io',
@@ -31,7 +33,11 @@ export default defineConfig({
         replacesTitle: false,
       },
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/jagreehal/effect-analyzer' },
+        {
+          icon: 'github',
+          label: 'GitHub',
+          href: 'https://github.com/jagreehal/effect-analyzer',
+        },
       ],
       customCss: [
         '@fontsource-variable/inter',
@@ -79,8 +85,12 @@ export default defineConfig({
         {
           label: 'Case Studies',
           items: [
-            { label: 'course-video-manager', slug: 'case-studies/course-video-manager' },
+            {
+              label: 'course-video-manager',
+              slug: 'case-studies/course-video-manager',
+            },
             { label: 't3code', slug: 'case-studies/t3code' },
+            { label: 'foldkit', slug: 'case-studies/foldkit' },
           ],
         },
         {
