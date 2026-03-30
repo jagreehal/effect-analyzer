@@ -13,3 +13,4 @@ tsup.config.bundled_*.mjs
 ___*
 .DS_Store
 .astro/
+docs/

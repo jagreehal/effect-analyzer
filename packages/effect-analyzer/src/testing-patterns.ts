@@ -33,8 +33,9 @@ function getLoc(
   node: { getStart: () => number },
   sf: { getLineAndColumnAtPos: (p: number) => { line: number; column: number } },
 ): SourceLocation {
-  const { line, column } = sf.getLineAndColumnAtPos(node.getStart());
-  return { filePath, line: line + 1, column };
+  const offset = node.getStart();
+  const { line, column } = sf.getLineAndColumnAtPos(offset);
+  return { filePath, line: line + 1, column, offset };
 }
 
 /**

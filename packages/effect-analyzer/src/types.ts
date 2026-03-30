@@ -25,6 +25,10 @@ export interface SourceLocation {
   readonly endLine?: number | undefined;
   /** End column number */
   readonly endColumn?: number | undefined;
+  /** Character offset from start of file (0-indexed) */
+  readonly offset?: number | undefined;
+  /** Character end offset from start of file (0-indexed) */
+  readonly endOffset?: number | undefined;
 }
 
 /**
