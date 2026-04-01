@@ -1,0 +1,7 @@
+createSendMoneyWorkflow (generator):
+  1. validated = Effect.pipe — service-call
+  2. rate = Effect.pipe — service-call
+
+  Services required: Effect
+  Error paths: RateUnavailableError, ValidationError
+  Concurrency: sequential (no parallelism)

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Railway Evolution — Static Analysis of a Money Transfer Workflow</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&family=Satoshi:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Instrument Serif"', 'Georgia', 'serif'],
+            body: ['Satoshi', 'system-ui', 'sans-serif'],
+            mono: ['"DM Mono"', 'monospace'],
+          },
+          colors: {
+            ink: '#0a0a0a',
+            paper: '#f5f0e8',
+            warm: '#e8dfd0',
+            accent: '#c44d2b',
+            ok: '#2d6a4f',
+            err: '#9d0208',
+            muted: '#6b6560',
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background: #f5f0e8; }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 100;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 256px 256px;
+    }
+    .step-card {
+      opacity: 0;
+      transform: translateY(32px);
+      animation: rise 0.6s ease-out forwards;
+    }
+    @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+    .mermaid-wrap svg { max-width: 100%; height: auto; }
+    .timeline-dot { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(196,77,43,0.3); }
+      50% { box-shadow: 0 0 0 8px rgba(196,77,43,0); }
+    }
+    .err-tag { animation: slideIn 0.4s ease-out both; }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .stat-num { font-variant-numeric: tabular-nums; }
+    #progress { transform-origin: left; transform: scaleX(0); transition: transform 0.1s linear; }
+  </style>
+</head>
+<body class="font-body text-ink min-h-screen relative">
+  <div class="fixed top-0 left-0 right-0 h-[2px] z-50">
+    <div id="progress" class="h-full bg-accent w-full"></div>
+  </div>
+
+  <header class="relative overflow-hidden border-b border-ink/10">
+    <div class="max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-20">
+      <p class="font-mono text-[11px] tracking-[0.2em] uppercase text-muted mb-6">Static Analysis &middot; Effect-TS &middot; Deterministic</p>
+      <h1 class="font-display text-5xl md:text-7xl lg:text-8xl leading-[0.95] tracking-tight max-w-4xl">
+        Railway<br/>
+        <span class="italic text-accent">Evolution</span>
+      </h1>
+      <p class="mt-8 text-lg md:text-xl text-muted max-w-2xl leading-relaxed">
+        A money transfer workflow, built step by step. Each diagram below is the <strong class="text-ink">raw, unedited output</strong> of <span class="font-mono text-ink text-[0.9em]">effect-analyze</span> reading the TypeScript source. No code executed, no approximation.
+      </p>
+      <div class="mt-10 flex items-center gap-3 text-sm text-muted">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-ink/10 bg-ink/[0.02]">
+          <span class="w-2 h-2 rounded-full bg-ok"></span> ok path
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-ink/10 bg-ink/[0.02]">
+          <span class="w-2 h-2 rounded-full bg-err"></span> error branch
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-ink/10 bg-ink/[0.02]">
+          <span class="font-mono text-[11px]">generated from local analyzer</span>
+        </span>
+      </div>
+    </div>
+    <div class="absolute bottom-0 left-0 right-0 h-8 bg-paper" style="clip-path: polygon(0 100%, 100% 0, 100% 100%)"></div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-16 md:py-24">
+
+    <section id="step-1" class="step-card mb-20 md:mb-28" style="animation-delay: 0.1s">
+      <div class="flex items-start gap-6 mb-8">
+        <div class="flex-shrink-0 flex flex-col items-center">
+          <div class="timeline-dot w-10 h-10 rounded-full bg-accent text-paper flex items-center justify-center font-display text-xl font-bold">1</div>
+        </div>
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl">Step 1: Validate input</h2>
+          <p class="text-muted mt-2 max-w-lg">One operation. One possible failure. The type system already knows what can go wrong.</p>
+        </div>
+      </div>
+      <div class="ml-0 md:ml-16">
+        <div class="bg-white border border-ink/8 rounded-lg p-6 md:p-10 shadow-sm">
+          <div class="mermaid-wrap">
+            <pre class="mermaid">
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+            </pre>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.0s">ValidationError</span>
+        </div>
+        <div class="mt-3 flex gap-6 text-xs font-mono text-muted">
+          <span class="stat-num"><strong class="text-ink">1</strong> effect</span>
+          <span class="stat-num"><strong class="text-ink">1</strong> error path</span>
+        </div>
+        <details class="mt-4">
+          <summary class="text-xs font-mono text-muted cursor-pointer hover:text-ink transition-colors">raw effect-analyze output</summary>
+          <pre class="mt-2 p-4 bg-ink text-paper/80 rounded-lg text-xs font-mono overflow-x-auto leading-relaxed">createSendMoneyWorkflow (generator):
+  1. validated = Effect.pipe — service-call
+
+  Services required: Effect
+  Error paths: ValidationError
+  Concurrency: sequential (no parallelism)</pre>
+        </details>
+      </div>
+    </section>
+
+    <section id="step-2" class="step-card mb-20 md:mb-28" style="animation-delay: 0.2s">
+      <div class="flex items-start gap-6 mb-8">
+        <div class="flex-shrink-0 flex flex-col items-center">
+          <div class="timeline-dot w-10 h-10 rounded-full bg-accent text-paper flex items-center justify-center font-display text-xl font-bold">2</div>
+        </div>
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl">Step 2: + Fetch exchange rate</h2>
+          <p class="text-muted mt-2 max-w-lg">A second step, a second way to fail. The error channel grows automatically.</p>
+        </div>
+      </div>
+      <div class="ml-0 md:ml-16">
+        <div class="bg-white border border-ink/8 rounded-lg p-6 md:p-10 shadow-sm">
+          <div class="mermaid-wrap">
+            <pre class="mermaid">
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]
+            </pre>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.0s">RateUnavailableError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.1s">ValidationError</span>
+        </div>
+        <div class="mt-3 flex gap-6 text-xs font-mono text-muted">
+          <span class="stat-num"><strong class="text-ink">2</strong> effects</span>
+          <span class="stat-num"><strong class="text-ink">2</strong> error paths</span>
+        </div>
+        <details class="mt-4">
+          <summary class="text-xs font-mono text-muted cursor-pointer hover:text-ink transition-colors">raw effect-analyze output</summary>
+          <pre class="mt-2 p-4 bg-ink text-paper/80 rounded-lg text-xs font-mono overflow-x-auto leading-relaxed">createSendMoneyWorkflow (generator):
+  1. validated = Effect.pipe — service-call
+  2. rate = Effect.pipe — service-call
+
+  Services required: Effect
+  Error paths: RateUnavailableError, ValidationError
+  Concurrency: sequential (no parallelism)</pre>
+        </details>
+      </div>
+    </section>
+
+    <section id="step-3" class="step-card mb-20 md:mb-28" style="animation-delay: 0.3s">
+      <div class="flex items-start gap-6 mb-8">
+        <div class="flex-shrink-0 flex flex-col items-center">
+          <div class="timeline-dot w-10 h-10 rounded-full bg-accent text-paper flex items-center justify-center font-display text-xl font-bold">3</div>
+        </div>
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl">Step 3: + Check balance &amp; convert</h2>
+          <p class="text-muted mt-2 max-w-lg">Balance check introduces a new failure mode. The compiler tracks it, you don't have to.</p>
+        </div>
+      </div>
+      <div class="ml-0 md:ml-16">
+        <div class="bg-white border border-ink/8 rounded-lg p-6 md:p-10 shadow-sm">
+          <div class="mermaid-wrap">
+            <pre class="mermaid">
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| C["balance #lt;- deps.getBalance"]
+  C -->|ok| D["converted #lt;- deps.convertCurrency#lpar;{
+      amount: validated.…"]
+  D -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]
+  D -->|err| DE["InsufficientFunds"]
+            </pre>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.0s">InsufficientFundsError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.1s">RateUnavailableError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.2s">ValidationError</span>
+        </div>
+        <div class="mt-3 flex gap-6 text-xs font-mono text-muted">
+          <span class="stat-num"><strong class="text-ink">4</strong> effects</span>
+          <span class="stat-num"><strong class="text-ink">3</strong> error paths</span>
+        </div>
+        <details class="mt-4">
+          <summary class="text-xs font-mono text-muted cursor-pointer hover:text-ink transition-colors">raw effect-analyze output</summary>
+          <pre class="mt-2 p-4 bg-ink text-paper/80 rounded-lg text-xs font-mono overflow-x-auto leading-relaxed">createSendMoneyWorkflow (generator):
+  1. validated = Effect.pipe — service-call
+  2. rate = Effect.pipe — service-call
+  3. balance = Effect.pipe — service-call
+  4. converted = Effect.pipe — service-call
+
+  Services required: Effect
+  Error paths: InsufficientFundsError, RateUnavailableError, ValidationError
+  Concurrency: sequential (no parallelism)</pre>
+        </details>
+      </div>
+    </section>
+
+    <section id="step-4" class="step-card mb-20 md:mb-28" style="animation-delay: 0.4s">
+      <div class="flex items-start gap-6 mb-8">
+        <div class="flex-shrink-0 flex flex-col items-center">
+          <div class="timeline-dot w-10 h-10 rounded-full bg-accent text-paper flex items-center justify-center font-display text-xl font-bold">4</div>
+        </div>
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl">Step 4: + Execute transfer</h2>
+          <p class="text-muted mt-2 max-w-lg">The money moves. Two new failure modes from the external provider. Still zero runtime needed to see them.</p>
+        </div>
+      </div>
+      <div class="ml-0 md:ml-16">
+        <div class="bg-white border border-ink/8 rounded-lg p-6 md:p-10 shadow-sm">
+          <div class="mermaid-wrap">
+            <pre class="mermaid">
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| C["balance #lt;- deps.getBalance"]
+  C -->|ok| D["converted #lt;- deps.convertCurrency#lpar;{
+      amount: validated.…"]
+  D -->|ok| E["transfer #lt;- deps.executeTransfer#lpar;{
+      recipientIban: vali…"]
+  E -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]
+  D -->|err| DE["InsufficientFunds"]
+  E -->|err| EE["TransferRejected / ProviderUnavailable"]
+            </pre>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.0s">InsufficientFundsError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.1s">ProviderUnavailableError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.2s">RateUnavailableError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.3s">TransferRejectedError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.4s">ValidationError</span>
+        </div>
+        <div class="mt-3 flex gap-6 text-xs font-mono text-muted">
+          <span class="stat-num"><strong class="text-ink">5</strong> effects</span>
+          <span class="stat-num"><strong class="text-ink">5</strong> error paths</span>
+        </div>
+        <details class="mt-4">
+          <summary class="text-xs font-mono text-muted cursor-pointer hover:text-ink transition-colors">raw effect-analyze output</summary>
+          <pre class="mt-2 p-4 bg-ink text-paper/80 rounded-lg text-xs font-mono overflow-x-auto leading-relaxed">createSendMoneyWorkflow (generator):
+  1. validated = Effect.pipe — service-call
+  2. rate = Effect.pipe — service-call
+  3. balance = Effect.pipe — service-call
+  4. converted = Effect.pipe — service-call
+  5. transfer = Effect.pipe — service-call
+
+  Services required: Effect
+  Error paths: InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
+  Concurrency: sequential (no parallelism)</pre>
+        </details>
+      </div>
+    </section>
+
+    <section id="step-5" class="step-card mb-20 md:mb-28" style="animation-delay: 0.5s">
+      <div class="flex items-start gap-6 mb-8">
+        <div class="flex-shrink-0 flex flex-col items-center">
+          <div class="timeline-dot w-10 h-10 rounded-full bg-accent text-paper flex items-center justify-center font-display text-xl font-bold">5</div>
+        </div>
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl">Step 5: + Send confirmation (complete)</h2>
+          <p class="text-muted mt-2 max-w-lg">The complete workflow. Six effects, six error channels, zero ambiguity. Every path is visible before a single line runs.</p>
+        </div>
+      </div>
+      <div class="ml-0 md:ml-16">
+        <div class="bg-white border border-ink/8 rounded-lg p-6 md:p-10 shadow-sm">
+          <div class="mermaid-wrap">
+            <pre class="mermaid">
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| C["balance #lt;- deps.getBalance"]
+  C -->|ok| D["converted #lt;- deps.convertCurrency#lpar;{
+      amount: validated.…"]
+  D -->|ok| E["transfer #lt;- deps.executeTransfer#lpar;{
+      recipientIban: vali…"]
+  E -->|ok| F["deps.sendConfirmation#lpar;{
+      transferId: transfer.transferI…"]
+  F -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]
+  D -->|err| DE["InsufficientFunds"]
+  E -->|err| EE["TransferRejected / ProviderUnavailable"]
+  F -->|err| FE["ConfirmationFailed"]
+            </pre>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.0s">ConfirmationFailedError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.1s">InsufficientFundsError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.2s">ProviderUnavailableError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.3s">RateUnavailableError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.4s">TransferRejectedError</span>
+          <span class="err-tag inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono bg-err/8 text-err border border-err/15" style="animation-delay:0.5s">ValidationError</span>
+        </div>
+        <div class="mt-3 flex gap-6 text-xs font-mono text-muted">
+          <span class="stat-num"><strong class="text-ink">6</strong> effects</span>
+          <span class="stat-num"><strong class="text-ink">6</strong> error paths</span>
+        </div>
+        <details class="mt-4">
+          <summary class="text-xs font-mono text-muted cursor-pointer hover:text-ink transition-colors">raw effect-analyze output</summary>
+          <pre class="mt-2 p-4 bg-ink text-paper/80 rounded-lg text-xs font-mono overflow-x-auto leading-relaxed">createSendMoneyWorkflow (generator):
+  1. validated = Effect.pipe — service-call
+  2. rate = Effect.pipe — service-call
+  3. balance = Effect.pipe — service-call
+  4. converted = Effect.pipe — service-call
+  5. transfer = Effect.pipe — service-call
+  6. Calls Effect.pipe — service-call
+
+  Services required: Effect
+  Error paths: ConfirmationFailedError, InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
+  Concurrency: sequential (no parallelism)</pre>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+    const progress = document.getElementById('progress');
+    window.addEventListener('scroll', () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const ratio = docHeight <= 0 ? 0 : scrollTop / docHeight;
+      progress.style.transform = 'scaleX(' + ratio + ')';
+    });
+  </script>
+</body>
+</html>

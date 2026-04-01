@@ -1,0 +1,3 @@
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| Done((Success))
+  A -->|err| AE["Validation"]

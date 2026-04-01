@@ -1,0 +1,15 @@
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| C["balance #lt;- deps.getBalance"]
+  C -->|ok| D["converted #lt;- deps.convertCurrency#lpar;{
+      amount: validated.…"]
+  D -->|ok| E["transfer #lt;- deps.executeTransfer#lpar;{
+      recipientIban: vali…"]
+  E -->|ok| F["deps.sendConfirmation#lpar;{
+      transferId: transfer.transferI…"]
+  F -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]
+  D -->|err| DE["InsufficientFunds"]
+  E -->|err| EE["TransferRejected / ProviderUnavailable"]
+  F -->|err| FE["ConfirmationFailed"]

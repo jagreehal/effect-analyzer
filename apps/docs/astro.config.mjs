@@ -61,6 +61,14 @@ export default defineConfig({
             { label: 'Service Maps', slug: 'diagrams/services' },
             { label: 'Error Flows', slug: 'diagrams/errors' },
             { label: 'All Formats', slug: 'diagrams/all-formats' },
+            {
+              label: 'transfer-observability',
+              slug: 'diagrams/transfer-observability',
+            },
+            {
+              label: 'transfer-evolution',
+              slug: 'diagrams/transfer-evolution',
+            },
           ],
         },
         {

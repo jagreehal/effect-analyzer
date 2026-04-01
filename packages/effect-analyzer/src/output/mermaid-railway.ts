@@ -249,13 +249,13 @@ export function renderRailwayMermaid(
       const nextId = stepId(i + 1);
       const nextLabel = escapeLabel(nextStep.label);
       if (i === 0) {
-        lines.push(`  ${id}[${label}] -->|ok| ${nextId}[${nextLabel}]`);
+        lines.push(`  ${id}["${label}"] -->|ok| ${nextId}["${nextLabel}"]`);
       } else {
-        lines.push(`  ${id} -->|ok| ${nextId}[${nextLabel}]`);
+        lines.push(`  ${id} -->|ok| ${nextId}["${nextLabel}"]`);
       }
     } else {
       if (i === 0) {
-        lines.push(`  ${id}[${label}] -->|ok| Done((Success))`);
+        lines.push(`  ${id}["${label}"] -->|ok| Done((Success))`);
       } else {
         lines.push(`  ${id} -->|ok| Done((Success))`);
       }
@@ -274,14 +274,14 @@ export function renderRailwayMermaid(
       const errLabel = escapeLabel(
         errorTypes.map(stripErrorSuffix).join(' / ')
       );
-      errorLines.push(`  ${id} -->|err| ${errId}[${errLabel}]`);
+      errorLines.push(`  ${id} -->|err| ${errId}["${errLabel}"]`);
     }
   } else if (ir.root.errorTypes.length > 0) {
     const lastId = stepId(steps.length - 1);
     const errLabel = escapeLabel(
       ir.root.errorTypes.map(stripErrorSuffix).join(' / ')
     );
-    errorLines.push(`  ${lastId} -->|err| Errors[${errLabel}]`);
+    errorLines.push(`  ${lastId} -->|err| Errors["${errLabel}"]`);
   }
 
   return [...lines, ...errorLines].join('\n');
