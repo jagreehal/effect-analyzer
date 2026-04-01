@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:transfer-observability": "pnpm --dir ../../packages/effect-analyzer build && node ./scripts/generate-transfer-observability.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",

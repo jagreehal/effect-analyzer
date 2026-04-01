@@ -91,6 +91,14 @@ export default defineConfig({
             },
             { label: 't3code', slug: 'case-studies/t3code' },
             { label: 'foldkit', slug: 'case-studies/foldkit' },
+            {
+              label: 'transfer-observability',
+              slug: 'case-studies/transfer-observability',
+            },
+            {
+              label: 'transfer-evolution',
+              slug: 'case-studies/transfer-evolution',
+            },
           ],
         },
         {

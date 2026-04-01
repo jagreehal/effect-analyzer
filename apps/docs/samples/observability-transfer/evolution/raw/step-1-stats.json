@@ -1,0 +1,24 @@
+[
+  {
+    "program": "createSendMoneyWorkflow",
+    "stats": {
+      "totalEffects": 1,
+      "parallelCount": 0,
+      "raceCount": 0,
+      "errorHandlerCount": 0,
+      "retryCount": 0,
+      "timeoutCount": 0,
+      "resourceCount": 0,
+      "loopCount": 0,
+      "conditionalCount": 0,
+      "layerCount": 0,
+      "interruptionCount": 0,
+      "unknownCount": 0,
+      "decisionCount": 0,
+      "switchCount": 0,
+      "tryCatchCount": 0,
+      "terminalCount": 0,
+      "opaqueCount": 0
+    }
+  }
+]

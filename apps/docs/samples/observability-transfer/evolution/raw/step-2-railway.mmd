@@ -1,0 +1,5 @@
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]

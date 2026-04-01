@@ -108,7 +108,7 @@ describe('renderRailwayMermaid', () => {
       references: new Map(),
     };
     const result = renderRailwayMermaid(ir);
-    expect(result).toContain('Errors[Database / Network]');
+    expect(result).toContain('Errors["Database / Network"]');
   });
 
   it('respects direction option', () => {
@@ -204,6 +204,25 @@ describe('renderRailwayMermaid', () => {
     const result = renderRailwayMermaid(ir);
     expect(result).not.toContain('<never>');
     expect(result).toContain('#lt;never#gt;');
+    expect(result).toContain('["Parse"]');
+  });
+
+  it('quotes labels so mermaid-significant braces do not break parsing', () => {
+    const ir = makeGeneratorIR([
+      {
+        effect: makeNode({
+          id: 'n1',
+          callee: 'deps.convertCurrency',
+          displayName: 'converted <- deps.convertCurrency({ amount: validated.amount })',
+          typeSignature: makeSig('InsufficientFundsError'),
+        }),
+      },
+    ]);
+
+    const result = renderRailwayMermaid(ir);
+
+    expect(result).toContain('A["converted #lt;- deps.convertCurrency#lpar;{ amount: validated.amount…"]');
+    expect(result).toContain('AE["InsufficientFunds"]');
   });
 
   it('generates IDs beyond 26 steps', () => {
@@ -311,7 +330,7 @@ describe('renderRailwayMermaid', () => {
       { effect: makeNode({ id: 'n1', callee: 'doThing', displayName: 'Do Thing', typeSignature: makeSig('SomeError') }) },
     ]);
     const result = renderRailwayMermaid(ir);
-    expect(result).toContain('A[Do Thing] -->|ok| Done((Success))');
-    expect(result).toContain('A -->|err| AE[Some]');
+    expect(result).toContain('A["Do Thing"] -->|ok| Done((Success))');
+    expect(result).toContain('A -->|err| AE["Some"]');
   });
 });

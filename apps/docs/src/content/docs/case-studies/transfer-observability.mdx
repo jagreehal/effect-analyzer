@@ -1,0 +1,196 @@
+---
+title: Transfer Observability
+description: A worked Effect workflow showing how static analysis improves implementation, review, testing, and communication.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This transfer workflow is a good example of what `effect-analyzer` is actually for.
+
+It is not just about drawing a diagram. It is about turning an Effect program into something a team can reason about before they run it, before they review the PR, and before somebody has to explain the design to the rest of the company.
+
+The full demo fixture now lives in the docs app at `apps/docs/samples/observability-transfer`, and the generated public demo is rebuilt from it by `pnpm run generate:transfer-observability`. That gives the docs a simple contract: when the analyzer changes, rerun the generator and Astro will serve the new output.
+
+That fixture includes:
+
+- the workflow source
+- the domain types and errors
+- per-file `.effect-analysis.md` outputs
+- the step-by-step railway evolution page
+
+## The Workflow
+
+The core workflow is small, but it already carries the shape of a real system: validation, rates, balance lookup, conversion, transfer execution, and confirmation.
+
+```ts title="apps/docs/samples/observability-transfer/send-money-workflow.ts"
+export const createSendMoneyWorkflow = (deps: SendMoneyDeps) => (input: TransferInput) =>
+  Effect.gen(function*() {
+    const validated = yield* deps.validateTransfer(input).pipe(Effect.withSpan("validate"))
+    const rate = yield* deps
+      .fetchRate({ from: validated.fromCurrency, to: validated.toCurrency })
+      .pipe(Effect.withSpan("fetchRate"))
+    const balance = yield* deps.getBalance().pipe(Effect.withSpan("getBalance"))
+    const converted = yield* deps
+      .convertCurrency({
+        amount: validated.amount,
+        rate: rate.rate,
+        fromCurrency: validated.fromCurrency,
+        toCurrency: validated.toCurrency,
+        balance
+      })
+      .pipe(Effect.withSpan("convert"))
+    const transfer = yield* deps
+      .executeTransfer({
+        recipientIban: validated.recipientIban,
+        amount: converted.convertedAmount,
+        currency: validated.toCurrency
+      })
+      .pipe(Effect.withSpan("executeTransfer"))
+    yield* deps
+      .sendConfirmation({
+        transferId: transfer.transferId,
+        amount: converted.convertedAmount,
+        currency: validated.toCurrency
+      })
+      .pipe(Effect.withSpan("confirm"))
+
+    return {
+      transferId: transfer.transferId,
+      convertedAmount: converted.convertedAmount,
+      rate: rate.rate
+    }
+  }).pipe(Effect.withSpan("sendMoney"))
+```
+
+From this alone, the analyzer can already tell us the sequential structure and the full error surface.
+
+```text
+createSendMoneyWorkflow (generator):
+  1. validated = Effect.pipe — service-call
+  2. rate = Effect.pipe — service-call
+  3. balance = Effect.pipe — service-call
+  4. converted = Effect.pipe — service-call
+  5. transfer = Effect.pipe — service-call
+  6. Calls Effect.pipe — service-call
+
+  Services required: Effect
+  Error paths: ConfirmationFailedError, InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
+  Concurrency: sequential (no parallelism)
+```
+
+That is the first important point: the program is already a description, and `effect-analyzer` turns that description into something visible.
+
+## Run It Yourself
+
+Use the copied demo directly from the docs workspace:
+
+```bash
+# Regenerate all analysis artifacts used by the docs
+pnpm --dir apps/docs run generate:transfer-observability
+
+# Explain the full workflow
+npx effect-analyze apps/docs/samples/observability-transfer/send-money-workflow.ts --format explain
+
+# Show the happy path and every failure branch
+npx effect-analyze apps/docs/samples/observability-transfer/send-money-workflow.ts --format mermaid-railway
+
+# Inspect the generated progressive build-up of the workflow in docs content
+open apps/docs/src/content/docs/case-studies/transfer-evolution.mdx
+```
+
+The docs build also runs that generator automatically via `prebuild`, so the published site stays aligned with the current analyzer implementation.
+
+The generated Mermaid walkthrough now has its own docs page:
+
+- [Open the generated Transfer Evolution page](/effect-analyzer/case-studies/transfer-evolution/)
+
+## What This Gives You In Code
+
+Effect programs are compositional descriptions of work. The analyzer makes that composition visible.
+
+In this example, the value is not only that we can see six steps. The value is that we can see:
+
+- which step introduces which error
+- where the external boundary lives
+- where money movement actually happens
+- where the workflow becomes irreversible
+- where observability spans have been attached
+
+That changes how you implement the next version. If you add retries, compensation, fraud checks, or notification fallback, you are not editing blind. You can immediately check whether the structure still says what you think it says.
+
+## What This Gives You In Review
+
+This is where static analysis starts paying rent.
+
+A reviewer looking at a normal text diff still has to reconstruct the workflow in their head. A reviewer looking at the analyzed workflow can ask better questions immediately:
+
+- Did we add a new failure mode on the happy path?
+- Did we move an irreversible operation earlier?
+- Did confirmation failure become workflow failure?
+- Did a new dependency expand the blast radius?
+- Did a retry change the operational semantics or just the syntax?
+
+<Aside type="tip" title="Why this matters for AI-generated code">
+AI agents are often locally plausible and globally unclear. A structural view is the fastest way to check whether the generated code changed the shape of the program, not just the text.
+</Aside>
+
+This is the same reason the [Semantic Diff](/effect-analyzer/project/diff/) feature is so useful. Teams do not really review lines, they review meaning. The analyzer gives them a better approximation of meaning.
+
+## What This Gives You For Tests
+
+The transfer example is also a test planning tool.
+
+Once the workflow is explicit, the test conversation gets simpler:
+
+- one test for invalid input
+- one test for unavailable rates
+- one test for insufficient funds
+- one test for provider outage
+- one test for transfer rejection
+- one test for confirmation failure after a successful transfer
+- one test for the happy path
+
+That is not magic. It is just the error surface made concrete.
+
+The usual problem with workflow testing is not that teams cannot write tests. It is that they forget one path, or they only test the steps they can see easily in source. Analysis reduces that omission risk.
+
+## What This Gives You For Story And Communication
+
+This is the part teams usually underestimate.
+
+The progression in the transfer demo is almost a product story:
+
+1. Validate the request.
+2. Fetch the exchange rate.
+3. Check balance and convert.
+4. Execute the transfer.
+5. Send confirmation.
+
+That same progression works across different audiences:
+
+- for engineers, it is the execution model
+- for reviewers, it is the change surface
+- for QA, it is the test matrix
+- for product, it is the user journey and failure story
+- for leadership, it is a compact explanation of operational risk
+
+The generated railway evolution page works because it preserves this shape. It lets you walk somebody through the workflow without hand-drawing a diagram, without maintaining a stale architecture slide, and without pretending the docs are more accurate than the code.
+
+In other words, the code remains the source of truth, but the source of truth becomes communicable.
+
+## The Effect Point Of View
+
+The style of programming Effect encourages is already structural. Programs are values. Dependencies are explicit. Failure is part of the type. Composition is the main move.
+
+`effect-analyzer` leans into that model.
+
+It does not try to infer intent from runtime traces after the fact. It reads the program description and tells you what shape of work you have built. That is why it is useful so early:
+
+- while writing the code
+- while reviewing the code
+- while planning tests
+- while explaining the system
+
+If your code is an executable story, static analysis gives you a way to read the story clearly.
