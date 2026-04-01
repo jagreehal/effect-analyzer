@@ -1,5 +1,11 @@
 # effect-analyzer-docs
 
+## 0.0.6
+
+### Patch Changes
+
+- a3637cf: Added more case studies
+
 ## 0.0.5
 
 ### Patch Changes
