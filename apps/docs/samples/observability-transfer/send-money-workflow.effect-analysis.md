@@ -3,7 +3,7 @@
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/send-money-workflow.ts`
-- **Analyzed**: 2026-04-01T19:13:23.423Z
+- **Analyzed**: 2026-04-01T19:18:09.605Z
 - **Source Type**: generator
 
 ## Effect Flow

@@ -3,7 +3,7 @@
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/convert-currency.ts`
-- **Analyzed**: 2026-04-01T19:13:21.787Z
+- **Analyzed**: 2026-04-01T19:18:07.995Z
 - **Source Type**: generator
 
 ## Effect Flow

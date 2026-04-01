@@ -61,6 +61,14 @@ export default defineConfig({
             { label: 'Service Maps', slug: 'diagrams/services' },
             { label: 'Error Flows', slug: 'diagrams/errors' },
             { label: 'All Formats', slug: 'diagrams/all-formats' },
+            {
+              label: 'transfer-observability',
+              slug: 'diagrams/transfer-observability',
+            },
+            {
+              label: 'transfer-evolution',
+              slug: 'diagrams/transfer-evolution',
+            },
           ],
         },
         {
@@ -91,14 +99,6 @@ export default defineConfig({
             },
             { label: 't3code', slug: 'case-studies/t3code' },
             { label: 'foldkit', slug: 'case-studies/foldkit' },
-            {
-              label: 'transfer-observability',
-              slug: 'case-studies/transfer-observability',
-            },
-            {
-              label: 'transfer-evolution',
-              slug: 'case-studies/transfer-evolution',
-            },
           ],
         },
         {

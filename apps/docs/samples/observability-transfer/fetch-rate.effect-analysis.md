@@ -3,7 +3,7 @@
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/fetch-rate.ts`
-- **Analyzed**: 2026-04-01T19:13:22.757Z
+- **Analyzed**: 2026-04-01T19:18:08.954Z
 - **Source Type**: generator
 
 ## Effect Flow

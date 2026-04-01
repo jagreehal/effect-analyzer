@@ -3,7 +3,7 @@
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/execute-transfer.ts`
-- **Analyzed**: 2026-04-01T19:13:22.134Z
+- **Analyzed**: 2026-04-01T19:18:08.330Z
 - **Source Type**: direct
 
 ## Effect Flow

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/external-client.ts`
-- **Analyzed**: 2026-04-01T19:13:22.444Z
+- **Analyzed**: 2026-04-01T19:18:08.635Z
 - **Source Type**: direct
 
 ## Effect Flow
@@ -51,7 +51,7 @@ fetchRatesFromApi (direct):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/external-client.ts`
-- **Analyzed**: 2026-04-01T19:13:22.444Z
+- **Analyzed**: 2026-04-01T19:18:08.635Z
 - **Source Type**: direct
 
 ## Effect Flow
@@ -97,7 +97,7 @@ postTransferToProvider (direct):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/external-client.ts`
-- **Analyzed**: 2026-04-01T19:13:22.445Z
+- **Analyzed**: 2026-04-01T19:18:08.636Z
 - **Source Type**: direct
 
 ## Effect Flow

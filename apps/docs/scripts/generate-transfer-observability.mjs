@@ -16,7 +16,7 @@ const evolutionDir = resolve(sampleDir, 'evolution');
 const rawDir = resolve(evolutionDir, 'raw');
 const generatedEvolutionDocPath = resolve(
   docsRoot,
-  'src/content/docs/case-studies/transfer-evolution.mdx',
+  'src/content/docs/diagrams/transfer-evolution.mdx',
 );
 
 const TOP_LEVEL_SAMPLE_FILES = [
@@ -224,7 +224,7 @@ const renderEvolutionDocPage = (steps) => {
   lines.push(
     '## Related',
     '',
-    '- [Transfer Observability](/effect-analyzer/case-studies/transfer-observability/) for the narrative around implementation, review, testing, and communication.',
+    '- [Transfer Observability](/effect-analyzer/diagrams/transfer-observability/) for the narrative around implementation, review, testing, and communication.',
     '',
   );
 
@@ -307,9 +307,12 @@ const main = async () => {
     recursive: true,
     force: true,
   });
-  await rm(resolve(docsRoot, 'public/demos/transfer-observability-analysis.html'), {
-    force: true,
-  });
+  await rm(
+    resolve(docsRoot, 'public/demos/transfer-observability-analysis.html'),
+    {
+      force: true,
+    },
+  );
   await rm(resolve(docsRoot, 'public/demos/transfer-analysis.html'), {
     force: true,
   });
