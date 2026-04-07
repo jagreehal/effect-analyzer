@@ -10,7 +10,11 @@ import type {
   StaticFlowNode,
   StaticEffectProgram,
 } from '../types';
-import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
+import {
+  DEFAULT_LABEL_MAX,
+  canonicalizeServiceDisplayName,
+  truncateDisplayText,
+} from '../analysis-utils';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -23,6 +27,11 @@ function shortLabel(node: StaticFlowNode): string {
   const t = (s: string, max = DEFAULT_LABEL_MAX) => truncateDisplayText(s, max);
   switch (node.type) {
     case 'effect': {
+      if (node.constructorKind === 'callback') return t(node.tracedName ?? node.displayName ?? node.callee);
+      if (node.usePattern) {
+        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName;
+        return t(`${wrapper}.use`);
+      }
       if (node.serviceCall) {
         return t(`${node.serviceCall.serviceType}.${node.serviceCall.methodName}`);
       }
@@ -53,7 +62,9 @@ function shortLabel(node: StaticFlowNode): string {
     case 'layer':
       return node.provides ? `Layer(${node.provides.join(', ')})` : 'Layer';
     case 'stream':
-      return 'Stream';
+      return node.pipeline.length > 0
+        ? `Stream.${node.pipeline.map((op) => op.operation).join(' -> ')}`
+        : 'Stream';
     case 'fiber':
       return `Fiber.${node.operation}`;
     case 'concurrency-primitive':
@@ -95,6 +106,15 @@ interface WalkState {
   serviceCallsSeen: Set<string>;
 }
 
+const shouldSuppressExplainEffectNode = (node: Extract<StaticFlowNode, { type: 'effect' }>): boolean => {
+  if (node.serviceCall || node.usePattern || node.constructorKind === 'callback') return false;
+  if (node.constructorKind === 'fn' || node.constructorKind === 'fnUntraced') return true;
+  if (node.description === 'function-lift' || node.callee === 'fn' || node.callee === 'Effect.fn') {
+    return true;
+  }
+  return false;
+};
+
 // ---------------------------------------------------------------------------
 // Core recursive walker
 // ---------------------------------------------------------------------------
@@ -113,8 +133,43 @@ export function explainNode(
   switch (node.type) {
     // ----- effect -----------------------------------------------------------
     case 'effect': {
+      if (shouldSuppressExplainEffectNode(node)) break;
+      if (node.constructorKind === 'callback') {
+        const label = truncateDisplayText(
+          node.tracedName ?? node.displayName ?? node.callee,
+          DEFAULT_LABEL_MAX,
+        );
+        lines.push(`${pad}Registers callback bridge: ${label}`);
+        if (node.asyncCallback) {
+          lines.push(
+            `${pad}  Callback: ${node.asyncCallback.resumeCallCount} resume call${node.asyncCallback.resumeCallCount === 1 ? '' : 's'}${node.asyncCallback.returnsCanceller ? ', returns cleanup' : ''}`,
+          );
+        }
+        if (node.callbackBody && node.callbackBody.length > 0) {
+          lines.push(`${pad}  Inner effects:`);
+          for (const child of node.callbackBody) {
+            lines.push(...explainNode(child, depth + 2, state));
+          }
+        }
+        break;
+      }
+      if (node.usePattern) {
+        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName;
+        state.serviceCallsSeen.add(canonicalizeServiceDisplayName(wrapper));
+        const desc = node.description ? ` — ${node.description}` : '';
+        lines.push(`${pad}Uses ${wrapper} via .use callback${desc}`);
+        if (node.callbackBody && node.callbackBody.length > 0) {
+          lines.push(`${pad}  Callback:`);
+          for (const child of node.callbackBody) {
+            lines.push(...explainNode(child, depth + 2, state));
+          }
+        }
+        break;
+      }
       if (node.serviceCall) {
-        state.serviceCallsSeen.add(node.serviceCall.serviceType);
+        state.serviceCallsSeen.add(
+          canonicalizeServiceDisplayName(node.serviceCall.serviceType),
+        );
         // Tag-style service acquisition (e.g. yield* Logger)
         if (
           node.callee.includes('Tag') ||
@@ -139,6 +194,12 @@ export function explainNode(
           lines.push(`${pad}Yields ${label}`);
         } else {
           lines.push(`${pad}Calls ${label}${desc}`);
+        }
+      }
+      if (node.callbackBody && node.callbackBody.length > 0) {
+        lines.push(`${pad}  Callback:`);
+        for (const child of node.callbackBody) {
+          lines.push(...explainNode(child, depth + 2, state));
         }
       }
       break;
@@ -393,6 +454,12 @@ export function explainNode(
         : '';
       lines.push(`${pad}Iterates (${node.loopType})${src}:`);
       lines.push(...explainNode(node.body, depth + 1, state));
+      if (node.callbackBody && node.callbackBody.length > 0) {
+        lines.push(`${pad}  Callback:`);
+        for (const child of node.callbackBody) {
+          lines.push(...explainNode(child, depth + 2, state));
+        }
+      }
       break;
     }
 
@@ -417,8 +484,36 @@ export function explainNode(
     case 'stream': {
       const ops = node.pipeline.map((o) => o.operation).join(' -> ');
       const sinkPart = node.sink ? ` -> ${node.sink}` : '';
-      lines.push(`${pad}Stream: ${ops}${sinkPart}`);
+      const serviceStreamSource =
+        node.source.type === 'effect' &&
+        node.source.serviceCall &&
+        node.source.serviceCall.methodName.startsWith('stream')
+          ? `${node.source.serviceCall.serviceType}.${node.source.serviceCall.methodName}`
+          : undefined;
+      const isReactor =
+        node.pipeline.some((op) => op.operation === 'runForEach') &&
+        (node.constructorType === 'fromPubSub' ||
+          node.constructorType === 'fromSubscriptionRef' ||
+          node.constructorType === 'fromEventListener' ||
+          serviceStreamSource !== undefined);
+      if (isReactor) {
+        const sourceKind =
+          serviceStreamSource ??
+          node.constructorType?.replace(/^from/, '') ??
+          'event source';
+        lines.push(`${pad}Background stream reactor (${sourceKind}): ${ops}${sinkPart}`);
+      } else {
+        lines.push(`${pad}Stream: ${ops}${sinkPart}`);
+      }
       lines.push(...explainNode(node.source, depth + 1, state));
+      for (const op of node.pipeline) {
+        if (op.callbackBody && op.callbackBody.length > 0) {
+          lines.push(`${pad}  ${op.operation} callback:`);
+          for (const child of op.callbackBody) {
+            lines.push(...explainNode(child, depth + 2, state));
+          }
+        }
+      }
       break;
     }
 
@@ -519,7 +614,11 @@ export function explainNode(
 
     // ----- opaque -----------------------------------------------------------
     case 'opaque': {
-      lines.push(`${pad}(opaque: ${node.reason})`);
+      if (node.reason === 'callback-body' || node.reason === 'predicate') {
+        lines.push(`${pad}${truncateDisplayText(node.sourceText, DEFAULT_LABEL_MAX)}`);
+      } else {
+        lines.push(`${pad}(opaque: ${node.reason})`);
+      }
       break;
     }
 
@@ -545,7 +644,18 @@ function renderProgram(program: StaticEffectProgram, _ir: StaticEffectIR): strin
 
   // Collect body lines from children
   const bodyLines: string[] = [];
-  for (const child of program.children) {
+  const visibleChildren =
+    program.children.length > 1 &&
+    program.children[0]?.type === 'effect' &&
+    (program.children[0].constructorKind === 'fn' ||
+      program.children[0].constructorKind === 'fnUntraced')
+      ? program.children.slice(1)
+      : program.children;
+  const childrenToRender =
+    visibleChildren.some((child) => child.type === 'generator')
+      ? visibleChildren.filter((child) => child.type === 'generator')
+      : visibleChildren;
+  for (const child of childrenToRender) {
     bodyLines.push(...explainNode(child, 1, state));
   }
 
@@ -561,10 +671,14 @@ function renderProgram(program: StaticEffectProgram, _ir: StaticEffectIR): strin
   // Services required
   const services = new Set<string>();
   for (const dep of program.dependencies) {
-    services.add(dep.name);
+    if (dep.name !== 'Effect') {
+      services.add(canonicalizeServiceDisplayName(dep.name));
+    }
   }
   Array.from(state.serviceCallsSeen).forEach((svc) => {
-    services.add(svc);
+    if (svc !== 'Effect') {
+      services.add(canonicalizeServiceDisplayName(svc));
+    }
   });
   if (services.size > 0) {
     footer.push(`  Services required: ${Array.from(services).join(', ')}`);

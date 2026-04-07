@@ -29,6 +29,43 @@ import { getStaticChildren } from './types';
 import { splitTopLevelUnion } from './type-extractor';
 import { KNOWN_EFFECT_NAMESPACES, BUILT_IN_TYPE_NAMES } from './analysis-patterns';
 
+const EFFECT_RUNTIME_PRIMITIVE_NAMES = new Set([
+  'Ref',
+  'SynchronizedRef',
+  'FiberRef',
+  'TxRef',
+  'TRef',
+  'Queue',
+  'TQueue',
+  'TxQueue',
+  'PubSub',
+  'TPubSub',
+  'Deferred',
+  'TDeferred',
+  'Semaphore',
+  'TSemaphore',
+  'SubscriptionRef',
+  'Mailbox',
+]);
+
+const isRuntimePrimitiveDependency = (name: string): boolean => {
+  const firstSegment = name.split('.')[0] ?? name;
+  return EFFECT_RUNTIME_PRIMITIVE_NAMES.has(firstSegment);
+};
+
+const CANONICAL_EFFECT_SERVICE_NAMES = new Map<string, string>([
+  ['FileSystem', 'FileSystem.FileSystem'],
+  ['Path', 'Path.Path'],
+  ['Terminal', 'Terminal.Terminal'],
+  ['Clock', 'Clock.Clock'],
+  ['Random', 'Random.Random'],
+  ['Console', 'Console.Console'],
+  ['Scope', 'Scope.Scope'],
+]);
+
+export const canonicalizeServiceDisplayName = (name: string): string =>
+  CANONICAL_EFFECT_SERVICE_NAMES.get(name) ?? name;
+
 // =============================================================================
 // Default Options
 // =============================================================================
@@ -105,9 +142,11 @@ export function collectDependencies(nodes: readonly StaticFlowNode[]): Dependenc
         const reqs = (node).requiredServices;
         if (reqs) {
           for (const r of reqs) {
-            if (!byName.has(r.serviceId)) {
-              byName.set(r.serviceId, {
-                name: r.serviceId,
+            if (isRuntimePrimitiveDependency(r.serviceId)) continue;
+            const displayName = canonicalizeServiceDisplayName(r.serviceId);
+            if (!byName.has(displayName)) {
+              byName.set(displayName, {
+                name: displayName,
                 typeSignature: r.serviceType,
                 isLayer: false,
               });
@@ -125,9 +164,11 @@ export function collectDependencies(nodes: readonly StaticFlowNode[]): Dependenc
           const looksLikeService = /^[A-Z]/.test(callee)
             && !KNOWN_EFFECT_NAMESPACES.has(firstSegment)
             && !BUILT_IN_TYPE_NAMES.has(firstSegment);
-          if (looksLikeService && !byName.has(callee)) {
-            byName.set(callee, {
-              name: callee,
+          if (isRuntimePrimitiveDependency(callee)) continue;
+          const displayName = canonicalizeServiceDisplayName(callee);
+          if (looksLikeService && !byName.has(displayName)) {
+            byName.set(displayName, {
+              name: displayName,
               typeSignature: node.typeSignature?.requirementsType,
               isLayer: false,
             });
@@ -621,6 +662,10 @@ export function computeDisplayName(node: StaticFlowNode, variableName?: string):
   switch (node.type) {
     case 'effect': {
       const fnName = extractFunctionName(node.callee);
+      if (node.usePattern) {
+        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName;
+        return truncate(`${wrapper}.use`, 60);
+      }
       if (variableName) {
         return truncate(`${variableName} <- ${fnName}`, 60);
       }
@@ -755,7 +800,7 @@ export function computeSemanticRole(node: StaticFlowNode): SemanticRole {
   switch (node.type) {
     case 'effect': {
       // Service call detection: explicit serviceCall/serviceMethod fields
-      if (node.serviceCall || node.serviceMethod) return 'service-call';
+      if (node.serviceCall || node.serviceMethod || node.usePattern) return 'service-call';
       // Description-based heuristic: descriptions mentioning "service" or "layer"
       const desc = node.description?.toLowerCase() ?? '';
       if (desc.includes('service')) return 'service-call';

@@ -110,11 +110,15 @@ export function analyzeFiberLeaks(ir: StaticEffectIR): FiberLeakAnalysis {
   const joinIds: JoinSet = new Set();
 
   collectForks(ir.root.children, rawForks, joinIds);
+  const hasSingleFork = rawForks.length === 1;
 
   const forks: FiberForkInfo[] = rawForks.map((fork) => {
-    // A join is "associated" if there's a joinPoint referencing this fork,
-    // or if any join node appears in the same program tree (conservative heuristic)
-    const hasJoin = joinIds.size > 0;
+    // Prefer explicit fork-to-join association through joinPoint.
+    // Fall back to a single-fork heuristic only when there is exactly one fork in the tree.
+    const hasJoin =
+      joinIds.has(fork.id) ||
+      (!!fork.name && joinIds.has(fork.name)) ||
+      (hasSingleFork && joinIds.size > 0);
     const risk = classifyFork(fork, hasJoin);
 
     const info: FiberForkInfo = {

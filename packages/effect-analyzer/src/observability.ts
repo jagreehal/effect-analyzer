@@ -15,6 +15,9 @@ import { Option } from 'effect';
 export interface SpanInfo {
   nodeId: string;
   name?: string;
+  parentSpanId?: string;
+  depth?: number;
+  childEffectCount?: number;
   location?: { line: number; column: number };
 }
 
@@ -36,6 +39,7 @@ export interface ObservabilityAnalysis {
   spans: SpanInfo[];
   logPoints: LogPointInfo[];
   metrics: MetricInfo[];
+  untracedEffects: string[];
   coverage: {
     effectCount: number;
     effectsWithSpans: number;
@@ -111,24 +115,51 @@ export function analyzeObservability(ir: StaticEffectIR): ObservabilityAnalysis 
   const spans: SpanInfo[] = [];
   const logPoints: LogPointInfo[] = [];
   const metrics: MetricInfo[] = [];
+  const untracedEffects: string[] = [];
   let effectCount = 0;
   let effectsWithSpans = 0;
   let effectsWithMetrics = 0;
   let errorHandlersWithLogging = 0;
   let errorHandlerCount = 0;
 
-  function visit(nodes: readonly StaticFlowNode[], underSpan: boolean, underMetric: boolean) {
+  function visit(
+    nodes: readonly StaticFlowNode[],
+    spanStack: string[],
+    underMetric: boolean,
+  ) {
     for (const node of nodes) {
+      const nextSpanStack = [...spanStack];
+      if (node.spanName) {
+        const span: SpanInfo = {
+          nodeId: node.id,
+          name: node.spanName,
+          depth: spanStack.length,
+          ...(spanStack.length > 0 ? { parentSpanId: spanStack[spanStack.length - 1] } : {}),
+        };
+        if (node.location) {
+          span.location = { line: node.location.line, column: node.location.column };
+        }
+        spans.push(span);
+        nextSpanStack.push(node.id);
+      }
       if (node.type === 'effect') {
         const eff = node;
         const callee = eff.callee ?? '';
         effectCount++;
-        if (isSpanCallee(callee)) {
+        if (isSpanCallee(callee) && !node.spanName) {
           const s: SpanInfo = { nodeId: eff.id };
           if (eff.location) s.location = { line: eff.location.line, column: eff.location.column };
           spans.push(s);
         }
-        if (underSpan) effectsWithSpans++;
+        if (nextSpanStack.length > 0) effectsWithSpans++;
+        else if (
+          !isLogCallee(callee) &&
+          !isMetricCallee(callee) &&
+          !isSpanCallee(callee) &&
+          !eff.usePattern
+        ) {
+          untracedEffects.push(eff.id);
+        }
         if (isLogCallee(callee)) {
           const lp: LogPointInfo = { nodeId: eff.id, level: getLogLevel(callee) };
           if (eff.location) lp.location = { line: eff.location.line, column: eff.location.column };
@@ -164,19 +195,39 @@ export function analyzeObservability(ir: StaticEffectIR): ObservabilityAnalysis 
         }
       }
       const children = Option.getOrElse(getStaticChildren(node), () => []);
-      const thisIsSpan = node.type === 'effect' && isSpanCallee((node).callee ?? '');
       const thisIsMetric = node.type === 'effect' && isMetricCallee((node).callee ?? '');
-      const nextUnderSpan = underSpan || thisIsSpan;
       const nextUnderMetric = underMetric || thisIsMetric;
-      if (children.length > 0) visit(children, nextUnderSpan, nextUnderMetric);
+      if (children.length > 0) visit(children, nextSpanStack, nextUnderMetric);
     }
   }
-  visit(ir.root.children, false, false);
+  visit(ir.root.children, [], false);
+
+  const spanChildCounts = new Map<string, number>();
+  const countEffectsInSpan = (
+    nodes: readonly StaticFlowNode[],
+    activeSpans: string[],
+  ): void => {
+    for (const node of nodes) {
+      const nextSpans = node.spanName ? [...activeSpans, node.id] : activeSpans;
+      if (node.type === 'effect' && nextSpans.length > 0) {
+        for (const spanId of nextSpans) {
+          spanChildCounts.set(spanId, (spanChildCounts.get(spanId) ?? 0) + 1);
+        }
+      }
+      const children = Option.getOrElse(getStaticChildren(node), () => []);
+      if (children.length > 0) countEffectsInSpan(children, nextSpans);
+    }
+  };
+  countEffectsInSpan(ir.root.children, []);
+  for (const span of spans) {
+    span.childEffectCount = spanChildCounts.get(span.nodeId) ?? 0;
+  }
 
   return {
     spans,
     logPoints,
     metrics,
+    untracedEffects,
     coverage: {
       effectCount,
       effectsWithSpans,

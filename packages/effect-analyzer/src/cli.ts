@@ -54,6 +54,10 @@ import { renderServiceGraphMermaid } from './output/mermaid';
 import { renderApiDocsMarkdown, renderOpenApiPaths } from './output/api-docs';
 import { extractHttpApiStructure, type HttpApiStructure } from './http-api-extractor';
 import {
+  extractProjectArchitecture,
+  renderProjectArchitecture,
+} from './project-architecture';
+import {
   computeProgramDiagramQuality,
   computeFileDiagramQuality,
   buildTopOffendersReport,
@@ -77,7 +81,7 @@ function createStyle(useColor: boolean) {
 }
 
 interface CLIOptions {
-  readonly format: 'auto' | 'json' | 'mermaid' | 'mermaid-paths' | 'mermaid-enhanced' | 'mermaid-railway' | 'mermaid-services' | 'mermaid-errors' | 'mermaid-decisions' | 'mermaid-causes' | 'mermaid-concurrency' | 'mermaid-timeline' | 'mermaid-layers' | 'mermaid-retry' | 'mermaid-testability' | 'mermaid-dataflow' | 'stats' | 'migration' | 'showcase' | 'explain' | 'summary' | 'matrix' | 'api-docs' | 'openapi-paths' | 'openapi-runtime';
+  readonly format: 'auto' | 'json' | 'mermaid' | 'mermaid-paths' | 'mermaid-enhanced' | 'mermaid-railway' | 'mermaid-services' | 'mermaid-errors' | 'mermaid-decisions' | 'mermaid-causes' | 'mermaid-concurrency' | 'mermaid-timeline' | 'mermaid-layers' | 'mermaid-retry' | 'mermaid-testability' | 'mermaid-dataflow' | 'stats' | 'migration' | 'showcase' | 'explain' | 'summary' | 'matrix' | 'architecture' | 'api-docs' | 'openapi-paths' | 'openapi-runtime';
   readonly openapiExport: string | undefined;
   readonly output: string | undefined;
   readonly pretty: boolean;
@@ -116,7 +120,7 @@ interface CLIOptions {
 
 function parseArgs(args: readonly string[]): { pathArg: string | undefined; options: CLIOptions } {
   let pathArg: string | undefined;
-  let format: CLIOptions['format'] = 'auto';
+      let format: CLIOptions['format'] = 'auto';
   let output: string | undefined;
   let pretty = true;
   let includeMetadata = true;
@@ -194,6 +198,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
         value === 'showcase' ||
         value === 'explain' ||
         value === 'summary' ||
+        value === 'architecture' ||
         value === 'matrix' ||
         value === 'api-docs' ||
         value === 'openapi-paths' ||
@@ -378,7 +383,7 @@ Usage: effect-analyze [PATH] [options]
   verbose output, enhanced Mermaid, colors). Use --no-colocate to skip writing files.
 
 Options:
-  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | stats | showcase | explain | summary | matrix | api-docs | openapi-paths | openapi-runtime (default: auto)
+  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | stats | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime (default: auto)
   --export <name>          For openapi-runtime: export name of HttpApi (default: first/default)
   -o, --output <file>      Output file (default: stdout)
   -d, --direction <dir>    Mermaid diagram direction: TB | LR | BT | RL (default: TB)
@@ -932,6 +937,13 @@ const runAnalysis = (
         output = JSON.stringify(showcasePayload, null, options.pretty ? 2 : undefined);
         break;
       }
+      case 'architecture': {
+        output = renderProjectArchitecture(
+          extractProjectArchitecture([resolvedPath], { tsconfig: options.tsconfig }),
+          dirname(resolvedPath),
+        );
+        break;
+      }
       case 'explain': {
         output = renderMultipleExplanations(filteredIrs);
         break;
@@ -1082,6 +1094,7 @@ const runProjectMode = (
       tsconfig: options.tsconfig,
       knownEffectInternalsRoot: options.knownEffectInternalsRoot,
       buildServiceMap: options.serviceMap,
+      buildArchitecture: true,
     });
 
     const byFile = projectResult.byFile;
@@ -1107,14 +1120,42 @@ const runProjectMode = (
       }
     }
     const fileCount = byFile.size;
+    const doColocate = !options.noColocate;
+    const architecture = projectResult.architecture;
+    const hasArchitecture = (architecture?.runtimes.length ?? 0) > 0;
     if (fileCount === 0) {
-      yield* Console.log(
-        style.yellow('No Effect programs found in discovered TypeScript files.'),
-      );
+      if (doColocate && hasArchitecture) {
+        const architecturePath = join(resolvedPath, 'architecture.md');
+        const architectureContent = renderProjectArchitecture(
+          architecture!,
+          resolvedPath,
+        );
+        yield* Effect.tryPromise(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
+          Effect.catchAll(() => Effect.succeed(undefined)),
+        );
+        if (!options.quiet) {
+          yield* Console.log(
+            style.green('  Architecture: ') + style.cyan(architecturePath),
+          );
+        }
+      }
+      if (options.format === 'architecture' && hasArchitecture) {
+        yield* Console.log('\n' + renderProjectArchitecture(architecture!, resolvedPath));
+      } else {
+        yield* Console.log(
+          style.yellow('No Effect programs found in discovered TypeScript files.'),
+        );
+      }
+      if (hasArchitecture) {
+        yield* Console.log(
+          style.dim(
+            `Detected ${String(architecture!.runtimes.length)} runtime architecture entr${architecture!.runtimes.length === 1 ? 'y' : 'ies'}.`,
+          ),
+        );
+      }
       return;
     }
 
-    const doColocate = !options.noColocate;
     let written = 0;
     if (doColocate) {
       for (const [filePath, programs] of byFile) {
@@ -1206,6 +1247,22 @@ const runProjectMode = (
       }
     }
 
+    if (doColocate && architecture && architecture.runtimes.length > 0) {
+      const architecturePath = join(resolvedPath, 'architecture.md');
+      const architectureContent = renderProjectArchitecture(
+        architecture,
+        resolvedPath,
+      );
+      yield* Effect.tryPromise(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
+        Effect.catchAll(() => Effect.succeed(undefined)),
+      );
+      if (!options.quiet) {
+        yield* Console.log(
+          style.green('  Architecture: ') + style.cyan(architecturePath),
+        );
+      }
+    }
+
     // Format-specific project output
     if (options.format === 'matrix') {
       const matrixOutput = options.serviceMap && projectResult.serviceMap
@@ -1222,6 +1279,10 @@ const runProjectMode = (
       yield* Console.log('\n' + renderMultipleExplanations(projectResult.allPrograms));
     } else if (options.format === 'summary') {
       yield* Console.log('\n' + renderMultipleSummaries(projectResult.allPrograms));
+    } else if (options.format === 'architecture') {
+      yield* Console.log(
+        '\n' + renderProjectArchitecture(architecture ?? { runtimes: [], commandDefinitions: [], layerAssemblies: [], filesScanned: 0 }, resolvedPath),
+      );
     }
 
     const totalPrograms = projectResult.allPrograms.length;
