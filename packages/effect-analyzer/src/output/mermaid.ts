@@ -968,7 +968,11 @@ function renderNode(
 
     case 'opaque': {
       const opaqueId = `opaque_${++context.nodeCounter}`;
-      lines.push(`  ${opaqueId}{{"${escapeLabel(`⚠ ${node.reason}`)}"}}`);
+      const opaqueLabel =
+        node.reason === 'callback-body' || node.reason === 'predicate'
+          ? node.sourceText
+          : `⚠ ${node.reason}`;
+      lines.push(`  ${opaqueId}{{"${escapeLabel(opaqueLabel)}"}}`);
       context.styleClasses.set(opaqueId, 'opaqueStyle');
       return { firstNodeId: opaqueId, lastNodeIds: [opaqueId] };
     }

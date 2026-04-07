@@ -40,6 +40,17 @@ export type {
   FileOutcome,
   CoverageAuditResult,
 } from './project-analyzer';
+export {
+  extractProjectArchitecture,
+  renderProjectArchitecture,
+} from './project-architecture';
+export type {
+  ProjectArchitectureSummary,
+  RuntimeArchitectureSummary,
+  RuntimeArchitectureStage,
+  CommandDefinitionSummary,
+  LayerAssemblySummary,
+} from './project-architecture';
 
 // Migration assistant (GAP 29)
 export {

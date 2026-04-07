@@ -55,4 +55,47 @@ export const main = Effect.gen(function* () {
       rmSync(root, { recursive: true, force: true });
     }
   }, 20_000);
+
+  it('can attach project architecture summaries', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'effect-analyze-architecture-project-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      mkdirSync(srcDir, { recursive: true });
+
+      writeFileSync(
+        join(srcDir, 'main.ts'),
+        `
+import * as Runtime from "./runtime";
+
+declare const Model: unknown;
+declare const init: unknown;
+declare const update: unknown;
+declare const view: unknown;
+declare const container: HTMLElement;
+
+export const program = Runtime.makeProgram({
+  Model,
+  init,
+  update,
+  view,
+  container,
+});
+`,
+        'utf8',
+      );
+
+      const result = await Effect.runPromise(
+        analyzeProject(srcDir, {
+          buildArchitecture: true,
+          maxDepth: 3,
+        }),
+      );
+
+      expect(result.architecture?.runtimes).toHaveLength(1);
+      expect(result.architecture?.runtimes[0]?.runtimeName).toBe('program');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
 });

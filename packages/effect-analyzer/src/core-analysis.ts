@@ -447,20 +447,6 @@ function isFunctionBoundary(node: Node): boolean {
 }
 
 /**
- * Check if a call expression is the DIRECT expression of a yield* statement.
- * Returns true only when the call's immediate parent is a YieldExpression,
- * meaning the statement walker already fully handles this call as a yielded effect.
- *
- * This does NOT filter sub-expressions (e.g., Effect.fn("name") inside
- * yield* Effect.fn("name")(fn)) — those are legitimately picked up by
- * the non-yielded scanner.
- */
-function isDirectYieldExpression(call: Node): boolean {
-  const { SyntaxKind } = loadTsMorph();
-  return call.getParent()?.getKind() === SyntaxKind.YieldExpression;
-}
-
-/**
  * Boundary-aware check: does `node` contain (or is itself) a YieldExpression
  * without crossing into nested function/class bodies?
  */
@@ -597,6 +583,22 @@ function collectYieldExpressionsDF(node: Node): Node[] {
     }
   });
   return results;
+}
+
+function collectCallExpressionsBoundaryAware(node: Node): CallExpression[] {
+  const { SyntaxKind } = loadTsMorph();
+  const calls: CallExpression[] = [];
+  const visit = (current: Node): void => {
+    current.forEachChild((child) => {
+      if (isFunctionBoundary(child)) return;
+      if (child.getKind() === SyntaxKind.CallExpression) {
+        calls.push(child as CallExpression);
+      }
+      visit(child);
+    });
+  };
+  visit(node);
+  return calls;
 }
 
 // =============================================================================
@@ -984,6 +986,7 @@ function analyzeYieldNode(
     }
     const enrichedEffect = {
       ...analyzed,
+      ...(variableName && analyzed.type === 'fiber' ? { name: variableName } : {}),
       displayName: computeDisplayName(analyzed, variableName),
       semanticRole: analyzed.semanticRole ?? computeSemanticRole(analyzed),
     };
@@ -1471,9 +1474,60 @@ function analyzeStatement(
         const retStmt = stmt as ReturnStatement;
         const expr = retStmt.getExpression();
 
-        if (!expr || !containsGeneratorYield(expr)) {
-          // return with no yield — skip (not interesting for the IR)
+        if (!expr) {
           return [];
+        }
+
+        if (!containsGeneratorYield(expr)) {
+          const { SyntaxKind } = loadTsMorph();
+          const entries: StaticFlowNode[] = [];
+          if (expr.getKind() === SyntaxKind.CallExpression) {
+            const analyzed = yield* analyzeEffectExpression(
+              expr,
+              ctx.sourceFile,
+              ctx.filePath,
+              ctx.opts,
+              ctx.warnings,
+              ctx.stats,
+              ctx.serviceScope,
+            );
+            if (analyzed.type !== 'unknown') {
+              entries.push(analyzed);
+            }
+          }
+
+          const descendantCalls = expr.getDescendantsOfKind(SyntaxKind.CallExpression);
+          for (const call of descendantCalls) {
+            const analyzed = yield* analyzeEffectExpression(
+              call,
+              ctx.sourceFile,
+              ctx.filePath,
+              ctx.opts,
+              ctx.warnings,
+              ctx.stats,
+              ctx.serviceScope,
+            );
+            if (analyzed.type !== 'unknown') {
+              const duplicate = entries.some(
+                (entry) =>
+                  entry.type === analyzed.type &&
+                  'id' in entry &&
+                  ((entry as StaticFlowNode & { callee?: string }).callee ===
+                    (analyzed as StaticFlowNode & { callee?: string }).callee),
+              );
+              if (!duplicate) entries.push(analyzed);
+            }
+          }
+
+          if (entries.length === 0) return [];
+          const termNode: StaticTerminalNode = {
+            id: generateId(),
+            type: 'terminal',
+            terminalKind: 'return',
+            value: entries,
+          };
+          ctx.stats.terminalCount++;
+          return [{ effect: termNode }];
         }
 
         // return yield* X or return (yield* X) — analyze the yield expression
@@ -1783,42 +1837,40 @@ export const analyzeGeneratorFunction = (
       yields = entries;
     }
 
-    // Also scan for non-yielded Effect-like call expressions (same as before).
-    // This intentionally includes calls nested inside yield* arguments — the existing
-    // behavior produces additional entries for sub-expressions like Effect.provide()
-    // inside pipe chains, which tests and downstream consumers rely on.
-    //
-    // However, we must skip calls that are the DIRECT argument of a yield*
-    // expression (these are already fully handled by the statement-level walker).
-    // Without this filter, Effect.fail/succeed calls inside generator yield*
-    // statements get duplicated as flat sibling nodes, causing incorrect diagrams
-    // (e.g., fail nodes appearing on the success path after a conditional branch).
-    const calls = body.getDescendantsOfKind(SyntaxKind.CallExpression);
-    for (const call of calls) {
-      // Skip Effect.withSpan calls — they are merged as annotations on pipe nodes
-      const callCallee = call.getExpression().getText();
-      if (callCallee.includes('withSpan')) continue;
-
-      // Skip calls that are the direct expression of a yield* — already
-      // handled by the statement-level walker. Only skip the top-level call
-      // (e.g. yield* Effect.succeed(x)), not sub-expressions within it
-      // (e.g. Effect.fn("name") inside yield* Effect.fn("name")(fn)).
-      if (isDirectYieldExpression(call)) continue;
-
-      const aliases = getAliasesForFile(sourceFile);
-      if (isEffectLikeCallExpression(call, sourceFile, aliases, opts.knownEffectInternalsRoot)) {
-        const analyzed = yield* analyzeEffectCall(
-          call,
-          sourceFile,
-          filePath,
-          opts,
-          warnings,
-          stats,
-          serviceScope,
-        );
-        yields.push({
-          effect: analyzed,
-        });
+    // Also scan for non-yielded Effect-like call expressions (same as before),
+    // but skip calls that live inside statements already handled by the
+    // statement-level yield walker. This avoids duplicating callback internals,
+    // resource constructors, and return-branch subexpressions as flat siblings.
+    if (body.getKind() === SyntaxKind.Block) {
+      for (const stmt of (body as Block).getStatements()) {
+        if (containsGeneratorYield(stmt)) continue;
+        const stmtKind = stmt.getKind();
+        if (
+          stmtKind !== SyntaxKind.ExpressionStatement &&
+          stmtKind !== SyntaxKind.VariableStatement
+        ) {
+          continue;
+        }
+        const calls = collectCallExpressionsBoundaryAware(stmt);
+        for (const call of calls) {
+          const callCallee = call.getExpression().getText();
+          if (callCallee.includes('withSpan')) continue;
+          const aliases = getAliasesForFile(sourceFile);
+          if (isEffectLikeCallExpression(call, sourceFile, aliases, opts.knownEffectInternalsRoot)) {
+            const analyzed = yield* analyzeEffectCall(
+              call,
+              sourceFile,
+              filePath,
+              opts,
+              warnings,
+              stats,
+              serviceScope,
+            );
+            yields.push({
+              effect: analyzed,
+            });
+          }
+        }
       }
     }
 

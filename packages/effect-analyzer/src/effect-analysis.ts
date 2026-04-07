@@ -129,6 +129,480 @@ const SCHEMA_OPS = [
   'Schema.decodeUnknownPromise',
 ];
 
+const isPromiseLikeText = (text: string): boolean =>
+  /\bPromise(?:<.*>)?\b/.test(text) || /\bthen\s*\(/.test(text);
+
+const EFFECT_RUNTIME_PRIMITIVE_PREFIXES = [
+  'Ref.',
+  'SynchronizedRef.',
+  'FiberRef.',
+  'TxRef.',
+  'TRef.',
+  'Queue.',
+  'TQueue.',
+  'TxQueue.',
+  'PubSub.',
+  'TPubSub.',
+  'Deferred.',
+  'TDeferred.',
+  'Semaphore.',
+  'TSemaphore.',
+  'SubscriptionRef.',
+  'Mailbox.',
+];
+
+const isEffectRuntimePrimitive = (text: string): boolean =>
+  EFFECT_RUNTIME_PRIMITIVE_PREFIXES.some((prefix) => text.startsWith(prefix));
+
+const isLikelyServiceStreamProperty = (propertyName: string): boolean =>
+  propertyName === 'stream' || propertyName.startsWith('stream');
+
+const normalizeInferredServiceType = (typeName: string): string =>
+  typeName.endsWith('Shape') ? typeName.slice(0, -'Shape'.length) : typeName;
+
+const inferServiceTypeFromObjectName = (objectName: string): string | undefined => {
+  if (!/^[a-zA-Z_$][\w$]*$/.test(objectName)) return undefined;
+  if (objectName.length === 0) return undefined;
+  const inferred = objectName[0]!.toUpperCase() + objectName.slice(1);
+  if (BUILT_IN_TYPE_NAMES.has(inferred) || KNOWN_EFFECT_NAMESPACES.has(inferred)) {
+    return undefined;
+  }
+  return inferred;
+};
+
+const tryResolveServicePropertyAccess = (
+  node: PropertyAccessExpression,
+): StaticEffectNode['serviceCall'] => {
+  const objectName = node.getExpression().getText();
+  const methodName = node.getName();
+  const firstSegment = objectName.split('.')[0] ?? objectName;
+  const fallback = inferServiceTypeFromObjectName(objectName);
+  if (KNOWN_EFFECT_NAMESPACES.has(firstSegment)) return undefined;
+
+  try {
+    const type = node.getExpression().getType();
+    const symbol = type.getSymbol() ?? type.getAliasSymbol();
+    if (!symbol) return fallback ? { serviceType: fallback, methodName, objectName } : undefined;
+    const typeName = normalizeInferredServiceType(symbol.getName());
+    if (
+      !typeName ||
+      typeName === '__type' ||
+      typeName === 'unknown' ||
+      typeName === 'any' ||
+      BUILT_IN_TYPE_NAMES.has(typeName)
+    ) {
+      return fallback ? { serviceType: fallback, methodName, objectName } : undefined;
+    }
+    return { serviceType: typeName, methodName, objectName };
+  } catch {
+    return fallback ? { serviceType: fallback, methodName, objectName } : undefined;
+  }
+};
+
+const classifyUseCallbackKind = (
+  fnNode: ArrowFunction | FunctionExpression,
+): 'promise' | 'effect' | 'unknown' => {
+  const body = fnNode.getBody();
+  const bodyText = body.getText();
+  if (
+    bodyText.includes('Effect.') ||
+    bodyText.includes('yield*') ||
+    bodyText.includes('.pipe(')
+  ) {
+    return 'effect';
+  }
+
+  if (isPromiseLikeText(bodyText)) {
+    return 'promise';
+  }
+
+  try {
+    const fnTypeText = fnNode.getType().getText();
+    if (fnTypeText.includes('Effect<') || fnTypeText.includes('Effect.Effect<')) {
+      return 'effect';
+    }
+    if (isPromiseLikeText(fnTypeText)) {
+      return 'promise';
+    }
+  } catch {
+    // best-effort classification only
+  }
+
+  return 'unknown';
+};
+
+const compactCallbackCalleeLabel = (call: CallExpression): string => {
+  let expr: Node = call.getExpression();
+  const { SyntaxKind } = loadTsMorph();
+  while (expr.getKind() === SyntaxKind.CallExpression) {
+    expr = (expr as CallExpression).getExpression();
+  }
+  return expr.getText();
+};
+
+const canonicalizeCallbackLabel = (label: string): string => {
+  const match = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\(/.exec(label);
+  return match?.[1] ?? label;
+};
+
+const CALLBACK_NOISE_LABELS = new Set([
+  'Effect.sync',
+  'Effect.succeed',
+  'Effect.fail',
+  'sync',
+  'succeed',
+  'fail',
+  'tap',
+  'recurs',
+  'map',
+  'flatMap',
+]);
+
+const shouldSkipCallbackSummaryLabel = (
+  label: string,
+  availableLabels: readonly string[],
+): boolean => {
+  if (!CALLBACK_NOISE_LABELS.has(label)) return false;
+  return availableLabels.some((candidate) => candidate !== label);
+};
+
+const summarizeLoopCallbackSource = (
+  loopType: StaticLoopNode['loopType'],
+  callbackBody: readonly StaticFlowNode[],
+): string => {
+  const labels = callbackBody.flatMap((node) => {
+    if (node.type === 'effect') {
+      return [canonicalizeCallbackLabel(node.callee)];
+    }
+    if (node.type === 'conditional') {
+      return [`if ${node.conditionLabel ?? node.condition}`];
+    }
+    return [];
+  });
+  const filtered = labels.filter((label, index) => {
+    if (labels.indexOf(label) !== index) return false;
+    return !shouldSkipCallbackSummaryLabel(label, labels);
+  });
+  if (filtered.length === 0) return 'callback body';
+  const joined = filtered.slice(0, 4).join(' -> ');
+  const suffix = filtered.length > 4 ? ' -> ...' : '';
+  return `${loopType} callback: ${joined}${suffix}`;
+};
+
+const buildCallbackSummaryNodes = (
+  fnNode: ArrowFunction | FunctionExpression,
+  filePath: string,
+  includeLocations: boolean,
+): readonly StaticFlowNode[] | undefined => {
+  const { SyntaxKind } = loadTsMorph();
+  const body = fnNode.getBody();
+  const calls: StaticFlowNode[] = [];
+  const seen = new Set<string>();
+
+  const collectFrom = (candidate: Node): void => {
+    if (candidate.getKind() === SyntaxKind.CallExpression) {
+      const call = candidate as CallExpression;
+      const callee = canonicalizeCallbackLabel(compactCallbackCalleeLabel(call));
+      if (seen.has(callee)) return;
+      seen.add(callee);
+      const callbackNode: StaticEffectNode = {
+        id: generateId(),
+        type: 'effect',
+        callee,
+        description: 'callback-call',
+        location: extractLocation(candidate, filePath, includeLocations),
+      };
+      calls.push({
+        ...callbackNode,
+        displayName: computeDisplayName(callbackNode),
+        semanticRole: computeSemanticRole(callbackNode),
+      });
+    }
+  };
+
+  if (body.getKind() === SyntaxKind.Block) {
+    for (const stmt of (body as Block).getStatements()) {
+      stmt.forEachDescendant((desc) => {
+        collectFrom(desc);
+        return undefined;
+      });
+    }
+  } else {
+    body.forEachDescendant((desc) => {
+      collectFrom(desc);
+      return undefined;
+    });
+    collectFrom(body);
+  }
+
+  const labels = calls.flatMap((node) => node.type === 'effect' ? [node.callee] : []);
+  const filtered = calls.filter((node) => {
+    if (node.type !== 'effect') return true;
+    return !shouldSkipCallbackSummaryLabel(node.callee, labels);
+  });
+
+  return filtered.length > 0 ? filtered : undefined;
+};
+
+const summarizeResumePayloads = (
+  fnNode: ArrowFunction | FunctionExpression,
+  sourceFile: SourceFile,
+  filePath: string,
+  opts: Required<AnalyzerOptions>,
+  warnings: AnalysisWarning[],
+  stats: AnalysisStats,
+  resumeParamName: string,
+): Effect.Effect<readonly StaticFlowNode[], AnalysisError> =>
+  Effect.gen(function* () {
+    const { SyntaxKind } = loadTsMorph();
+    const summaries: StaticFlowNode[] = [];
+    const seen = new Set<string>();
+    const body = fnNode.getBody();
+
+    const visit = (node: Node): void => {
+      if (node.getKind() === SyntaxKind.CallExpression) {
+        const call = node as CallExpression;
+        const expr = call.getExpression();
+        if (
+          expr.getKind() === SyntaxKind.Identifier &&
+          (expr as Identifier).getText() === resumeParamName
+        ) {
+          const payload = call.getArguments()[0];
+          if (payload) {
+            const payloadText = payload.getText();
+            const compactPayload =
+              payloadText.length > 48 ? `${payloadText.slice(0, 48)}...` : payloadText;
+            const key = compactPayload;
+            if (!seen.has(key)) {
+              seen.add(key);
+              summaries.push({
+                id: generateId(),
+                type: 'effect',
+                callee: `resume -> ${compactPayload}`,
+                description: 'callback-resume',
+                location: extractLocation(call, filePath, opts.includeLocations ?? false),
+              });
+            }
+          }
+        }
+      }
+      if (!isFunctionBoundaryForCallbackSummary(node)) {
+        node.forEachChild(visit);
+      }
+    };
+
+    if (body.getKind() === SyntaxKind.Block) {
+      for (const stmt of (body as Block).getStatements()) {
+        visit(stmt);
+      }
+    } else {
+      visit(body);
+    }
+
+    return summaries;
+  });
+
+const isFunctionBoundaryForCallbackSummary = (node: Node): boolean => {
+  const { SyntaxKind } = loadTsMorph();
+  const kind = node.getKind();
+  return (
+    kind === SyntaxKind.FunctionDeclaration ||
+    kind === SyntaxKind.FunctionExpression ||
+    kind === SyntaxKind.ArrowFunction ||
+    kind === SyntaxKind.MethodDeclaration
+  );
+};
+
+const summarizeNamedCallbackHandlers = (
+  fnNode: ArrowFunction | FunctionExpression,
+  sourceFile: SourceFile,
+  filePath: string,
+  opts: Required<AnalyzerOptions>,
+  warnings: AnalysisWarning[],
+  stats: AnalysisStats,
+  resumeParamName: string,
+): Effect.Effect<readonly StaticFlowNode[] | undefined, AnalysisError> =>
+  Effect.gen(function* () {
+    const { SyntaxKind } = loadTsMorph();
+    const body = fnNode.getBody();
+    if (body.getKind() !== SyntaxKind.Block) return undefined;
+
+    const summaries: StaticFlowNode[] = [];
+    const block = body as Block;
+    for (const stmt of block.getStatements()) {
+      if (stmt.getKind() === SyntaxKind.VariableStatement) {
+        for (const decl of (stmt as VariableStatement).getDeclarations()) {
+          const init = decl.getInitializer();
+          if (
+            init &&
+            (init.getKind() === SyntaxKind.ArrowFunction ||
+              init.getKind() === SyntaxKind.FunctionExpression)
+          ) {
+            const handlerFn = init as ArrowFunction | FunctionExpression;
+            const callbackBody = [
+              ...(yield* summarizeResumePayloads(
+                handlerFn,
+                sourceFile,
+                filePath,
+                opts,
+                warnings,
+                stats,
+                resumeParamName,
+              )),
+              ...filterHandlerSummaryNoise(
+                buildPureCallbackSummaryNodes(
+                  handlerFn,
+                  filePath,
+                  opts.includeLocations ?? false,
+                ) ?? [],
+              ),
+            ];
+            if (callbackBody.length > 0) {
+              const handlerNode: StaticEffectNode = {
+                id: generateId(),
+                type: 'effect',
+                callee: decl.getName(),
+                description: 'callback-handler',
+                callbackBody,
+                location: extractLocation(decl, filePath, opts.includeLocations ?? false),
+              };
+              summaries.push({
+                ...handlerNode,
+                displayName: computeDisplayName(handlerNode),
+                semanticRole: computeSemanticRole(handlerNode),
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return summaries.length > 0 ? summaries : undefined;
+  });
+
+const filterHandlerSummaryNoise = (
+  nodes: readonly StaticFlowNode[],
+): readonly StaticFlowNode[] => {
+  const seenEffectLabels = new Set<string>();
+  return nodes.filter((node) => {
+    if (node.type !== 'effect') return true;
+    if (node.callee === 'resume') return false;
+    if (node.callee === 'fail') return false;
+    if (
+      node.callee === 'succeed' ||
+      node.callee === 'succeedSome' ||
+      node.callee === 'succeedNone' ||
+      node.callee === 'Effect.fail' ||
+      node.callee === 'Effect.succeed' ||
+      node.callee === 'Effect.succeedSome' ||
+      node.callee === 'Effect.succeedNone'
+    ) {
+      return false;
+    }
+    if (
+      node.callee === 'succeed' ||
+      node.callee === 'succeedSome' ||
+      node.callee === 'succeedNone'
+    ) {
+      return false;
+    }
+    if (seenEffectLabels.has(node.callee)) return false;
+    seenEffectLabels.add(node.callee);
+    return true;
+  });
+};
+
+const buildPureCallbackSummaryNodes = (
+  fnNode: ArrowFunction | FunctionExpression,
+  filePath: string,
+  includeLocations: boolean,
+): readonly StaticFlowNode[] | undefined => {
+  const { SyntaxKind } = loadTsMorph();
+  const body = fnNode.getBody();
+  const summaries: StaticFlowNode[] = [];
+  const seen = new Set<string>();
+
+  const addEffectSummary = (label: string, description = 'callback-transform'): void => {
+    const canonicalLabel = canonicalizeCallbackLabel(label);
+    if (seen.has(canonicalLabel)) return;
+    seen.add(canonicalLabel);
+    const node: StaticEffectNode = {
+      id: generateId(),
+      type: 'effect',
+      callee: canonicalLabel,
+      description,
+      location: extractLocation(body, filePath, includeLocations),
+    };
+    summaries.push({
+      ...node,
+      displayName: computeDisplayName(node),
+      semanticRole: computeSemanticRole(node),
+    });
+  };
+
+  const addConditionalSummary = (condition: string): void => {
+    if (seen.has(`if:${condition}`)) return;
+    seen.add(`if:${condition}`);
+    summaries.push({
+      id: generateId(),
+      type: 'conditional',
+      conditionalType: 'if',
+      condition,
+      conditionLabel: condition,
+      onTrue: {
+        id: generateId(),
+        type: 'opaque',
+        reason: 'callback-branch',
+        sourceText: condition,
+        location: extractLocation(body, filePath, includeLocations),
+      },
+      location: extractLocation(body, filePath, includeLocations),
+    });
+  };
+
+  const visit = (candidate: Node): void => {
+    if (candidate.getKind() === SyntaxKind.CallExpression) {
+      const call = candidate as CallExpression;
+      addEffectSummary(call.getExpression().getText(), 'callback-call');
+    } else if (candidate.getKind() === SyntaxKind.BinaryExpression) {
+      const text = candidate.getText();
+      if (
+        text.includes('===') ||
+        text.includes('!==') ||
+        text.includes('>') ||
+        text.includes('<') ||
+        text.includes('%') ||
+        text.includes('&&') ||
+        text.includes('||')
+      ) {
+        addConditionalSummary(text);
+      }
+    } else if (
+      candidate.getKind() === SyntaxKind.Identifier ||
+      candidate.getKind() === SyntaxKind.NumericLiteral ||
+      candidate.getKind() === SyntaxKind.StringLiteral ||
+      candidate.getKind() === SyntaxKind.TrueKeyword ||
+      candidate.getKind() === SyntaxKind.FalseKeyword
+    ) {
+      return;
+    }
+    candidate.forEachChild(visit);
+  };
+
+  if (body.getKind() === SyntaxKind.Block) {
+    for (const stmt of (body as Block).getStatements()) {
+      visit(stmt);
+    }
+  } else {
+    visit(body);
+    if (summaries.length === 0) {
+      addEffectSummary(body.getText(), 'callback-transform');
+    }
+  }
+
+  return summaries.length > 0 ? summaries : undefined;
+};
+
 export const analyzePipeChain = (
   node: CallExpression,
   sourceFile: SourceFile,
@@ -136,6 +610,7 @@ export const analyzePipeChain = (
   opts: Required<AnalyzerOptions>,
   warnings: AnalysisWarning[],
   stats: AnalysisStats,
+  serviceScope?: Map<string, string>,
 ): Effect.Effect<readonly StaticFlowNode[], AnalysisError> =>
   Effect.gen(function* () {
     const { SyntaxKind } = loadTsMorph();
@@ -170,6 +645,7 @@ export const analyzePipeChain = (
       opts,
       warnings,
       stats,
+      serviceScope,
     );
 
     const transformations: StaticFlowNode[] = [];
@@ -182,6 +658,7 @@ export const analyzePipeChain = (
           opts,
           warnings,
           stats,
+          serviceScope,
         );
         transformations.push(analyzed);
       }
@@ -320,15 +797,14 @@ export const analyzeEffectExpression = (
         );
       }
 
-      const unknownNode: StaticUnknownNode = {
+      const opaqueNode = {
         id: generateId(),
-        type: 'unknown',
-        reason: 'Function does not return an Effect expression',
-        sourceCode: node.getText().slice(0, 100),
+        type: 'opaque' as const,
+        reason: 'Function body is a non-Effect callback',
+        sourceText: node.getText().slice(0, 100),
         location: extractLocation(node, filePath, opts.includeLocations ?? false),
       };
-      stats.unknownCount++;
-      return unknownNode;
+      return opaqueNode;
     }
 
     // Handle call expressions
@@ -364,6 +840,138 @@ export const analyzeEffectExpression = (
           ),
         };
       }
+      const objectText = (node as PropertyAccessExpression).getExpression().getText();
+      const propertyName = (node as PropertyAccessExpression).getName();
+      const serviceId = serviceScope?.get(objectText);
+      if (serviceId) {
+        const serviceEffectNode: StaticEffectNode = {
+          id: generateId(),
+          type: 'effect',
+          callee: text,
+          description: 'service-call',
+          requiredServices: [
+            {
+              serviceId,
+              serviceType: serviceId,
+              requiredAt: extractLocation(
+                node,
+                filePath,
+                opts.includeLocations ?? false,
+              ) ?? {
+                filePath,
+                line: 1,
+                column: 0,
+              },
+            },
+          ],
+          serviceCall: {
+            serviceType: serviceId,
+            methodName: propertyName,
+            objectName: objectText,
+          },
+          location: extractLocation(
+            node,
+            filePath,
+            opts.includeLocations ?? false,
+          ),
+        };
+        stats.totalEffects++;
+        if (isLikelyServiceStreamProperty(propertyName)) {
+          const streamNode: StaticStreamNode = {
+            id: generateId(),
+            type: 'stream',
+            source: {
+              ...serviceEffectNode,
+              displayName: computeDisplayName(serviceEffectNode),
+              semanticRole: computeSemanticRole(serviceEffectNode),
+            },
+            pipeline: [],
+            constructorType: 'other',
+            location: extractLocation(
+              node,
+              filePath,
+              opts.includeLocations ?? false,
+            ),
+          };
+          return {
+            ...streamNode,
+            displayName: computeDisplayName(streamNode),
+            semanticRole: computeSemanticRole(streamNode),
+          };
+        }
+        return {
+          ...serviceEffectNode,
+          displayName: computeDisplayName(serviceEffectNode),
+          semanticRole: computeSemanticRole(serviceEffectNode),
+        };
+      }
+
+      const inferredServiceCall = tryResolveServicePropertyAccess(
+        node as PropertyAccessExpression,
+      );
+      if (inferredServiceCall) {
+        const serviceEffectNode: StaticEffectNode = {
+          id: generateId(),
+          type: 'effect',
+          callee: text,
+          description: 'service-call',
+          requiredServices: [
+            {
+              serviceId: inferredServiceCall.serviceType,
+              serviceType: inferredServiceCall.serviceType,
+              requiredAt: extractLocation(
+                node,
+                filePath,
+                opts.includeLocations ?? false,
+              ) ?? {
+                filePath,
+                line: 1,
+                column: 0,
+              },
+            },
+          ],
+          serviceCall: inferredServiceCall,
+          serviceMethod: {
+            serviceId: inferredServiceCall.serviceType,
+            methodName: inferredServiceCall.methodName,
+          },
+          location: extractLocation(
+            node,
+            filePath,
+            opts.includeLocations ?? false,
+          ),
+        };
+        stats.totalEffects++;
+        if (isLikelyServiceStreamProperty(propertyName)) {
+          const streamNode: StaticStreamNode = {
+            id: generateId(),
+            type: 'stream',
+            source: {
+              ...serviceEffectNode,
+              displayName: computeDisplayName(serviceEffectNode),
+              semanticRole: computeSemanticRole(serviceEffectNode),
+            },
+            pipeline: [],
+            constructorType: 'other',
+            location: extractLocation(
+              node,
+              filePath,
+              opts.includeLocations ?? false,
+            ),
+          };
+          return {
+            ...streamNode,
+            displayName: computeDisplayName(streamNode),
+            semanticRole: computeSemanticRole(streamNode),
+          };
+        }
+        return {
+          ...serviceEffectNode,
+          displayName: computeDisplayName(serviceEffectNode),
+          semanticRole: computeSemanticRole(serviceEffectNode),
+        };
+      }
+
       if (isEffectCallee(text, getAliasesForFile(sourceFile), sourceFile)) {
         const effectNode: StaticEffectNode = {
           id: generateId(),
@@ -437,7 +1045,6 @@ export const analyzeEffectExpression = (
       }
     }
 
-
     // Handle tagged template expressions (e.g. sql`CREATE TABLE...`)
     // These are commonly used in Effect SQL clients and return Effects
     if (node.getKind() === SyntaxKind.TaggedTemplateExpression) {
@@ -508,8 +1115,33 @@ export const analyzeEffectCall = (
         opts,
         warnings,
         stats,
+        serviceScope,
       );
       if (nodes.length > 0 && nodes[0]) return nodes[0];
+    }
+
+    const isMethodPipe =
+      call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression &&
+      (call.getExpression() as PropertyAccessExpression).getName() === 'pipe';
+    if (isMethodPipe) {
+      const baseExpr = (call.getExpression() as PropertyAccessExpression).getExpression();
+      const baseText = baseExpr.getText();
+      const baseCallText =
+        baseExpr.getKind() === SyntaxKind.CallExpression
+          ? (baseExpr as CallExpression).getExpression().getText()
+          : baseText;
+      if (baseText.startsWith('Stream.') || baseCallText.startsWith('Stream.')) {
+        return yield* analyzeStreamCall(
+          call,
+          'Stream.pipe',
+          sourceFile,
+          filePath,
+          opts,
+          warnings,
+          stats,
+          serviceScope,
+        );
+      }
     }
 
     // Context.pick / Context.omit are pure operations (not Effects) but are useful
@@ -554,6 +1186,7 @@ export const analyzeEffectCall = (
         opts,
         warnings,
         stats,
+        serviceScope,
       );
     }
 
@@ -649,6 +1282,7 @@ export const analyzeEffectCall = (
         opts,
         warnings,
         stats,
+        serviceScope,
       );
     }
 
@@ -818,11 +1452,13 @@ export const analyzeEffectCall = (
 
     // Effect.sync/promise/async callback body (one level only)
     let callbackBody: readonly StaticFlowNode[] | undefined;
+    let usePattern: StaticEffectNode['usePattern'];
     const CONSTRUCTOR_CALLBACK_CALLEES = [
       'Effect.sync',
       'Effect.promise',
       'Effect.async',
       'Effect.asyncEffect',
+      'Effect.callback',
       'Effect.tryPromise',
       'Effect.suspend',
     ];
@@ -898,7 +1534,11 @@ export const analyzeEffectCall = (
         if (innerNodes.length > 0) callbackBody = innerNodes;
 
         // Effect.async/asyncEffect: resume/canceller patterns (GAP async callback interop)
-        if (callee.includes('Effect.async') || callee.includes('Effect.asyncEffect')) {
+        if (
+          callee.includes('Effect.async') ||
+          callee.includes('Effect.asyncEffect') ||
+          callee.includes('Effect.callback')
+        ) {
           const resumeParamName =
             fn.getParameters()[0]?.getName?.() ?? 'resume';
           let resumeCallCount = 0;
@@ -945,6 +1585,48 @@ export const analyzeEffectCall = (
             resumeParamName,
             resumeCallCount,
             returnsCanceller,
+          };
+
+          if (callee.includes('Effect.callback')) {
+            const handlerSummaries = yield* summarizeNamedCallbackHandlers(
+              fn,
+              sourceFile,
+              filePath,
+              opts,
+              warnings,
+              stats,
+              resumeParamName,
+            );
+            if (handlerSummaries && handlerSummaries.length > 0) {
+              callbackBody = handlerSummaries;
+            }
+          }
+        }
+      }
+    }
+
+    if (call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression) {
+      const propAccess = call.getExpression() as PropertyAccessExpression;
+      if (propAccess.getName() === 'use') {
+        const callbackArg = call.getArguments().find(
+          (arg) =>
+            arg.getKind() === SyntaxKind.ArrowFunction ||
+            arg.getKind() === SyntaxKind.FunctionExpression,
+        );
+        if (callbackArg) {
+          const callbackFn = callbackArg as ArrowFunction | FunctionExpression;
+          const callbackNodes = buildCallbackSummaryNodes(
+            callbackFn,
+            filePath,
+            opts.includeLocations ?? false,
+          );
+          if (callbackNodes) {
+            callbackBody = [...(callbackBody ?? []), ...callbackNodes];
+          }
+          const wrapperExpr = propAccess.getExpression().getText();
+          usePattern = {
+            wrapperName: serviceScope?.get(wrapperExpr) ?? wrapperExpr,
+            callbackKind: classifyUseCallbackKind(callbackFn),
           };
         }
       }
@@ -1003,6 +1685,7 @@ export const analyzeEffectCall = (
     if (callee.endsWith('.sync') || callee.endsWith('.succeed') || callee.endsWith('.fail') || callee.endsWith('.try') || callee.endsWith('.suspend')) constructorKind = 'sync';
     else if (callee.endsWith('.promise')) constructorKind = 'promise';
     else if (callee.endsWith('.async') || callee.endsWith('.asyncEffect')) constructorKind = 'async';
+    else if (callee.endsWith('.callback')) constructorKind = 'callback';
     else if (callee.endsWith('.never')) constructorKind = 'never';
     else if (callee.endsWith('.void')) constructorKind = 'void';
     else if (callee.endsWith('.fromNullable')) constructorKind = 'fromNullable';
@@ -1027,18 +1710,44 @@ export const analyzeEffectCall = (
       }
     }
 
+    if (
+      constructorKind === undefined &&
+      call.getExpression().getKind() === loadTsMorph().SyntaxKind.CallExpression
+    ) {
+      const innerCall = call.getExpression() as CallExpression;
+      const innerCallee = innerCall.getExpression().getText();
+      if (innerCallee.endsWith('.fn') || innerCallee.endsWith('.fnUntraced')) {
+        constructorKind = innerCallee.endsWith('.fnUntraced') ? 'fnUntraced' : 'fn';
+        const fnArgs = innerCall.getArguments();
+        if (fnArgs.length > 0) {
+          const firstArg = fnArgs[0]!.getText();
+          const strMatch = /^["'`](.+?)["'`]$/.exec(firstArg);
+          if (strMatch) tracedName = strMatch[1];
+        }
+      }
+    }
+
+    const filteredRequiredServices = requiredServices?.filter(
+      (service) => !isEffectRuntimePrimitive(service.serviceId),
+    );
+
     const effectNode: StaticEffectNode = {
       id: generateId(),
       type: 'effect',
       callee: normalizedCallee,
-      description: serviceCall ? 'service-call' : getSemanticDescriptionWithAliases(normalizedCallee, getAliasesForFile(sourceFile)),
+      description: usePattern
+        ? `use-pattern (${usePattern.callbackKind})`
+        : serviceCall
+          ? 'service-call'
+          : getSemanticDescriptionWithAliases(normalizedCallee, getAliasesForFile(sourceFile)),
       location,
       jsdocDescription: effectJSDoc,
       jsdocTags: extractJSDocTags(call),
       typeSignature,
-      requiredServices,
+      requiredServices: filteredRequiredServices,
       serviceCall,
       serviceMethod,
+      ...(usePattern ? { usePattern } : {}),
       callbackBody,
       ...(asyncCallback ? { asyncCallback } : {}),
       ...(provideKind ? { provideKind } : {}),
@@ -1530,9 +2239,80 @@ function analyzeStreamCall(
   opts: Required<AnalyzerOptions>,
   warnings: AnalysisWarning[],
   stats: AnalysisStats,
+  serviceScope?: Map<string, string>,
 ): Effect.Effect<StaticStreamNode, AnalysisError> {
   return Effect.gen(function* () {
     const args = call.getArguments();
+    const { SyntaxKind } = loadTsMorph();
+
+    if (
+      call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression &&
+      (call.getExpression() as PropertyAccessExpression).getName() === 'pipe'
+    ) {
+      const propAccess = call.getExpression() as PropertyAccessExpression;
+      const baseExpr = propAccess.getExpression();
+      const analyzedBase = yield* analyzeEffectExpression(
+        baseExpr,
+        sourceFile,
+        filePath,
+        opts,
+        warnings,
+        stats,
+        serviceScope,
+      );
+
+      const effectiveSource =
+        analyzedBase.type === 'stream' ? analyzedBase.source : analyzedBase;
+      const pipeline =
+        analyzedBase.type === 'stream' ? [...analyzedBase.pipeline] : [];
+      let sink =
+        analyzedBase.type === 'stream' ? analyzedBase.sink : undefined;
+      let backpressureStrategy =
+        analyzedBase.type === 'stream'
+          ? analyzedBase.backpressureStrategy
+          : undefined;
+      let constructorType =
+        analyzedBase.type === 'stream' ? analyzedBase.constructorType : undefined;
+
+      for (const arg of args) {
+        const analyzed = yield* analyzeEffectExpression(
+          arg,
+          sourceFile,
+          filePath,
+          opts,
+          warnings,
+          stats,
+          serviceScope,
+        );
+        if (analyzed.type === 'stream') {
+          pipeline.push(...analyzed.pipeline);
+          if (!sink && analyzed.sink) sink = analyzed.sink;
+          if (!backpressureStrategy && analyzed.backpressureStrategy) {
+            backpressureStrategy = analyzed.backpressureStrategy;
+          }
+          if (!constructorType && analyzed.constructorType) {
+            constructorType = analyzed.constructorType;
+          }
+        }
+      }
+
+      const streamNode: StaticStreamNode = {
+        id: generateId(),
+        type: 'stream',
+        source: effectiveSource,
+        pipeline,
+        ...(sink ? { sink } : {}),
+        ...(backpressureStrategy ? { backpressureStrategy } : {}),
+        ...(constructorType ? { constructorType } : {}),
+        location: extractLocation(call, filePath, opts.includeLocations ?? false),
+      };
+      return {
+        ...streamNode,
+        displayName: computeDisplayName(streamNode),
+        semanticRole: computeSemanticRole(streamNode),
+      };
+    }
+
     let source: StaticFlowNode;
     if (args.length > 0 && args[0]) {
       source = yield* analyzeEffectExpression(
@@ -1542,6 +2322,7 @@ function analyzeStreamCall(
         opts,
         warnings,
         stats,
+        serviceScope,
       );
     } else {
       source = {
@@ -1599,6 +2380,26 @@ function analyzeStreamCall(
       opName.includes('Effect') ||
       opName.startsWith('run') ||
       opName.includes('tap');
+    const callbackArg = args.find(
+      (arg) =>
+        arg.getKind() === SyntaxKind.ArrowFunction ||
+        arg.getKind() === SyntaxKind.FunctionExpression,
+    );
+    const callbackBody = callbackArg
+      ? (
+          opName.includes('Effect') || opName.includes('tap')
+            ? buildCallbackSummaryNodes(
+                callbackArg as ArrowFunction | FunctionExpression,
+                filePath,
+                opts.includeLocations ?? false,
+              )
+            : buildPureCallbackSummaryNodes(
+                callbackArg as ArrowFunction | FunctionExpression,
+                filePath,
+                opts.includeLocations ?? false,
+              )
+        )
+      : undefined;
     const opCategory = classifyOperator(opName);
     const cardinality: StreamOperatorInfo['estimatedCardinality'] =
       opCategory === 'filter' ? 'fewer' :
@@ -1631,6 +2432,7 @@ function analyzeStreamCall(
     const thisOp: StreamOperatorInfo = {
       operation: opName,
       isEffectful,
+      ...(callbackBody ? { callbackBody } : {}),
       estimatedCardinality: cardinality,
       category: opCategory,
       ...(windowSize !== undefined ? { windowSize } : {}),
@@ -1977,10 +2779,12 @@ function analyzeFiberCall(
 ): Effect.Effect<StaticFiberNode, AnalysisError> {
   return Effect.gen(function* () {
     const args = call.getArguments();
+    const { SyntaxKind } = loadTsMorph();
     let operation: StaticFiberNode['operation'] = 'fork';
     let isScoped = false;
     let isDaemon = false;
     let fiberSource: StaticFlowNode | undefined;
+    let joinPoint: string | undefined;
 
     if (callee.startsWith('Fiber.')) {
       if (callee.includes('awaitAll')) operation = 'awaitAll';
@@ -2029,6 +2833,17 @@ function analyzeFiberCall(
       );
     }
 
+    if (
+      (operation === 'join' || operation === 'await' || operation === 'interrupt' || operation === 'interruptFork') &&
+      args.length > 0 &&
+      args[0]
+    ) {
+      const firstArg = args[0];
+      if (firstArg.getKind() === SyntaxKind.Identifier) {
+        joinPoint = firstArg.getText();
+      }
+    }
+
     // Determine scope context: 'safe' when fork is scoped or inside Effect.scoped/Scope.make
     let scopeContext: string | undefined;
     if (isScoped) {
@@ -2055,6 +2870,7 @@ function analyzeFiberCall(
       fiberSource,
       isScoped,
       isDaemon,
+      ...(joinPoint ? { joinPoint } : {}),
       ...(scopeContext ? { scopeContext } : {}),
       location: extractLocation(call, filePath, opts.includeLocations ?? false),
     };
@@ -2172,6 +2988,7 @@ const analyzeParallelCall = (
   opts: Required<AnalyzerOptions>,
   warnings: AnalysisWarning[],
   stats: AnalysisStats,
+  serviceScope?: Map<string, string>,
 ): Effect.Effect<StaticParallelNode, AnalysisError> =>
   Effect.gen(function* () {
     const args = call.getArguments();
@@ -2194,6 +3011,7 @@ const analyzeParallelCall = (
             opts,
             warnings,
             stats,
+            serviceScope,
           );
           children.push(analyzed);
         }
@@ -2214,6 +3032,7 @@ const analyzeParallelCall = (
                 opts,
                 warnings,
                 stats,
+                serviceScope,
               );
               children.push(analyzed);
             }
@@ -3075,6 +3894,7 @@ const analyzeLoopCall = (
 ): Effect.Effect<StaticLoopNode, AnalysisError> =>
   Effect.gen(function* () {
     const args = call.getArguments();
+    const { SyntaxKind } = loadTsMorph();
 
     const loopType: StaticLoopNode['loopType'] =
       callee.includes('forEach') ? 'forEach' :
@@ -3101,11 +3921,12 @@ const analyzeLoopCall = (
       callee.includes('reduceRight') ||
       callee.includes('reduceWhile') ||
       callee.includes('reduceEffect')
-        ? 2
+        ? (args.length >= 3 ? 2 : 1)
         : 1;
 
     let iterSource: string | undefined;
     let body: StaticFlowNode;
+    let callbackBody: readonly StaticFlowNode[] | undefined;
 
     if (args.length > 0 && args[0]) {
       const rawSource = args[0].getText();
@@ -3113,20 +3934,65 @@ const analyzeLoopCall = (
     }
 
     if (args.length > bodyArgIndex && args[bodyArgIndex]) {
-      body = yield* analyzeEffectExpression(
-        args[bodyArgIndex],
-        sourceFile,
-        filePath,
-        opts,
-        warnings,
-        stats,
-      );
+      const bodyArg = args[bodyArgIndex]!;
+      const isFn =
+        bodyArg.getKind() === SyntaxKind.ArrowFunction ||
+        bodyArg.getKind() === SyntaxKind.FunctionExpression;
+      if (isFn) {
+        const fn = bodyArg as ArrowFunction | FunctionExpression;
+        const effectfulSummary = buildCallbackSummaryNodes(
+          fn,
+          filePath,
+          opts.includeLocations ?? false,
+        );
+        const pureSummary = buildPureCallbackSummaryNodes(
+          fn,
+          filePath,
+          opts.includeLocations ?? false,
+        );
+        callbackBody = effectfulSummary ?? pureSummary;
+        body =
+          callbackBody && callbackBody.length === 1
+            ? callbackBody[0]!
+            : {
+                id: generateId(),
+                type: 'opaque',
+                reason: 'callback-body',
+                sourceText: summarizeLoopCallbackSource(loopType, callbackBody ?? []),
+                location: extractLocation(bodyArg, filePath, opts.includeLocations ?? false),
+              };
+      } else {
+        body = yield* analyzeEffectExpression(
+          bodyArg,
+          sourceFile,
+          filePath,
+          opts,
+          warnings,
+          stats,
+        );
+      }
     } else {
-      body = {
-        id: generateId(),
-        type: 'unknown',
-        reason: 'Could not determine loop body',
-      };
+      const predicateArg = args[0];
+      const predicateLikeLoop =
+        loopType === 'exists' ||
+        loopType === 'every' ||
+        loopType === 'findFirst' ||
+        loopType === 'head';
+      if (predicateLikeLoop && predicateArg) {
+        body = {
+          id: generateId(),
+          type: 'opaque',
+          reason: 'predicate',
+          sourceText: predicateArg.getText().slice(0, 100),
+          location: extractLocation(predicateArg, filePath, opts.includeLocations ?? false),
+        };
+      } else {
+        body = {
+          id: generateId(),
+          type: 'unknown',
+          reason: 'Could not determine loop body',
+        };
+      }
     }
 
     stats.loopCount++;
@@ -3137,6 +4003,7 @@ const analyzeLoopCall = (
       loopType,
       iterSource,
       body,
+      ...(callbackBody ? { callbackBody } : {}),
       location: extractLocation(call, filePath, opts.includeLocations ?? false),
     };
     return {

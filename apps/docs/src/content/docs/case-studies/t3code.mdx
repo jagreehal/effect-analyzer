@@ -7,196 +7,397 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-`t3code` is a web GUI for coding agents. Its backend is evented rather than CRUD-shaped, with explicit orchestration via a command queue, event store, and projection pipeline. This walkthrough shows what the analyzer produces on the key architectural files — no special flags needed.
+`t3code` is a web GUI for coding agents. Its backend is not CRUD-shaped. It is built from Effect layers, evented reactors, provider registries, callback bridges, orchestration services, and projection pipelines.
 
-## OrchestrationEngine — just run it
+That makes it a good case study for the analyzer, because the hard part is not finding isolated Effects. It is recovering architecture from a large backend that is composed through layers and higher-order services.
 
-The orchestration engine is the core of the agent runtime. Run the analyzer with no format flag:
+This walkthrough is based on the current analyzer output against the real `t3code` repository.
+
+## Start with coverage, not a single file
+
+Running the coverage audit on the server source gives a good top-level picture:
 
 ```bash
-npx effect-analyze ./apps/server/src/orchestration/Layers/OrchestrationEngine.ts \
-  --tsconfig ./apps/server/tsconfig.json
+npx effect-analyze ./apps/server/src \
+  --coverage-audit \
+  --show-by-folder \
+  --quiet
 ```
 
-The analyzer detects 7 non-trivial programs and picks the best output for each:
+Current output:
 
 ```text
-%% explain [makeOrchestrationEngine]
-makeOrchestrationEngine (generator):
-  1. Yields sql <- SqlClient.SqlClient
-  2. Yields eventStore <- OrchestrationEventStore
-  3. Yields commandReceiptRepository <- OrchestrationCommandReceiptRepository
-  4. Yields projectionPipeline <- OrchestrationProjectionPipeline
-  5. commandQueue = queue.create
-  6. eventPubSub = pubsub.create
-  ...
-  8. Stream: runForEach
-    Calls eventStore.readAll
-  9. Fiber forkScoped (scoped):
-    Calls worker
+Discovered: 189
+Analyzed:   142
+Zero programs: 47
+Suspicious zeros: 0
+Failed:     0
+Coverage:   75.1%
+Analyzable coverage: 100.0%
+Unknown node rate: 1.46%
 
-  Services required: SqlClient.SqlClient, OrchestrationEventStore,
-    OrchestrationCommandReceiptRepository, OrchestrationProjectionPipeline
-
-%% mermaid-services [makeOrchestrationEngine]
-...
-
-%% mermaid [committedCommand]
-...
-
-%% mermaid [processDomainEvent]
-...
+Top unknown node reasons (by count):
+  71  Could not determine effect type
+  16  Could not determine loop body
 ```
 
-The 38-step main program gets explain automatically (too large for a readable diagram). Smaller programs like `committedCommand`, `reconcileReadModelAfterDispatchFailure`, and `dispatch` get mermaid flowcharts. The service map appears as a bonus diagram.
+The most important signals here are:
+
+- `142` analyzable programs in the server source
+- `0` failures
+- `0` suspicious zeros
+- `1.46%` unknown-node rate
+
+That is already enough to trust the analyzer as a repo navigation tool. The remaining misses are concentrated, not random.
+
+## Layer architecture is the strongest repo-wide view
+
+`t3code` server code is heavily layer-driven, so architecture mode is more useful than a raw per-file flowchart:
+
+```bash
+npx effect-analyze ./apps/server/src \
+  --format architecture \
+  --no-colocate \
+  --quiet
+```
+
+Current output starts like this:
+
+```text
+Project architecture (0 runtimes, 76 layer assemblies)
+
+Layer assemblies:
+  OrchestrationEngineLive (orchestration/Layers/OrchestrationEngine.ts)
+    Ops: effect
+    References: OrchestrationEngineService, makeOrchestrationEngine
+
+  OrchestrationProjectionPipelineLive (orchestration/Layers/ProjectionPipeline.ts)
+    Ops: effect(...).pipe -> provideMerge -> provideMerge -> provideMerge ...
+    References: NodeServices.layer, ProjectionProjectRepositoryLive, ProjectionThreadRepositoryLive, ...
+
+  ProviderRegistryLive (provider/Layers/ProviderRegistry.ts)
+    Ops: effect(...).pipe -> provideMerge -> provideMerge
+    References: CodexProviderLive, ClaudeProviderLive
+
+  RuntimeLayer (index.ts)
+    Ops: empty.pipe -> provideMerge -> provideMerge -> provideMerge -> ...
+    References: CliConfig.layer, ServerLive, OpenLive, NetService.layer, NodeServices.layer, FetchHttpClient.layer
+```
+
+For this codebase, that is the right starting point. The analyzer shows how the server is assembled:
+
+- orchestration services
+- persistence repositories
+- provider adapters and registries
+- runtime receipt bus
+- terminal integration
+- top-level runtime composition
+
+This is much closer to how a contributor actually needs to read the backend.
+
+## Small architecture files are very readable
+
+`serverLayers.ts` is a good example of where architecture mode is already concise:
+
+```bash
+npx effect-analyze ./apps/server/src/serverLayers.ts \
+  --format architecture \
+  --tsconfig ./apps/server/tsconfig.json \
+  --no-colocate \
+  --quiet
+```
+
+```text
+Project architecture (0 runtimes, 2 layer assemblies)
+
+Layer assemblies:
+  runtimeServicesLayer (serverLayers.ts)
+    Ops: mergeAll
+    References: orchestrationLayer, OrchestrationProjectionSnapshotQueryLive, checkpointStoreLayer, checkpointDiffQueryLayer, RuntimeReceiptBusLive
+
+  serverLayers-layer-2 (serverLayers.ts)
+    Ops: mergeAll(
+    orchestrationReactorLayer,
+    GitCoreLive,
+    gitManagerLayer,
+    terminalLayer,
+    KeybindingsLive,
+  ).pipe -> provideMerge
+    References: NodeServices.layer
+```
+
+This is exactly the kind of file where the analyzer helps immediately: it shows which layer groups exist and what they depend on, without making you read every import and `provideMerge` manually.
+
+## Callback bridges are now much clearer
+
+Callback-heavy code is one of the places where the analyzer is useful in `t3code`.
+
+Take the bootstrap reader:
+
+```bash
+npx effect-analyze ./apps/server/src/bootstrap.ts \
+  --format explain \
+  --tsconfig ./apps/server/tsconfig.json \
+  --quiet
+```
+
+Current output:
+
+```text
+readBootstrapEnvelope (direct):
+  1. Yields fdReady <- isFdReady
+  2. Yields stream <- makeBootstrapInputStream
+  3. Returns:
+    Pipes callback through:
+      Registers callback bridge: callback
+        Callback: 5 resume calls
+        Inner effects:
+          Calls cleanup — callback-handler
+          Calls handleError — callback-handler
+            Callback:
+              Calls resume -> Effect.succeedNone — callback-resume
+              Calls resume -> Effect.fail(...) — callback-resume
+              Calls isUnavailableBootstrapFdError — callback-call
+          Calls handleLine — callback-handler
+            Callback:
+              Calls resume -> Effect.succeedSome(parsed.success) — callback-resume
+              Calls resume -> Effect.fail(...) — callback-resume
+              Calls decodeJsonResult — callback-call
+              Calls Result.isSuccess — callback-call
+          Calls handleClose — callback-handler
+            Callback:
+              Calls resume -> Effect.succeedNone — callback-resume
+      Times out after timeoutMs
+      Transforms via map
+```
+
+This is much better than a flat `Calls fn` or generic `Effect.callback` entry. The analyzer now shows:
+
+- that this is a callback bridge
+- how many resume paths exist
+- the named handlers inside the bridge
+- the important resume payloads
+- the timeout and transform wrappers around it
+
+For `t3code`, that is exactly the kind of explanation that makes async boundary code readable.
+
+The Mermaid output is still useful when you want the condensed shape instead of the handler detail:
+
+```bash
+npx effect-analyze ./apps/server/src/bootstrap.ts \
+  --format mermaid \
+  --tsconfig ./apps/server/tsconfig.json \
+  --quiet
+```
 
 ```mermaid
-flowchart LR
-  prog["makeOrchestrationEngine"]
+flowchart TB
 
-  svc_SqlClient_SqlClient{{"SqlClient.SqlClient"}}
-  prog -->|requires| svc_SqlClient_SqlClient
-  svc_OrchestrationEventStore{{"OrchestrationEventStore"}}
-  prog -->|requires| svc_OrchestrationEventStore
-  svc_OrchestrationCommandReceiptRepository{{"OrchestrationCommandReceiptRepository"}}
-  prog -->|requires| svc_OrchestrationCommandReceiptRepository
-  svc_OrchestrationProjectionPipeline{{"OrchestrationProjectionPipeline"}}
-  prog -->|requires| svc_OrchestrationProjectionPipeline
+  %% Program: readBootstrapEnvelope
+
+  start((Start))
+  end_node((End))
+
+  n1["fn"]
+  n3["fdReady <- isFdReady (side-effect)"]
+  n4["stream <- makeBootstrapInputStream"]
+  n5["return"]
+  term_6(["return"])
+  n7["Pipe (2 steps)"]
+  n8["callback"]
+  n10["Effect"]
+  timeout_11["Timeout(timeoutMs)"]
+  n12["map (transform)"]
+
+  %% Edges
+  n3 --> n4
+  n8 --> n10
+  n10 --> timeout_11
+  timeout_11 --> n12
+  n7 --> n8
+  n5 --> n7
+  n12 --> term_6
+  n4 --> n5
+  n1 --> n3
+  start --> n1
+  n3 --> end_node
+
+  %% Styles
+  classDef startStyle fill:#c8e6c9,stroke:#2e7d32
+  classDef endStyle fill:#ffcdd2,stroke:#c62828
+  classDef effectStyle fill:#90EE90,stroke:#333,stroke-width:2px
+  classDef pipeStyle fill:#ADD8E6,stroke:#333,stroke-width:2px
+  classDef timeoutStyle fill:#87CEEB,stroke:#333,stroke-width:2px
+  classDef terminalStyle fill:#FF6B6B,stroke:#333,stroke-width:2px
+  classDef transformStyle fill:#A5D6A7,stroke:#388E3C,stroke-width:2px
+  class start startStyle
+  class end_node endStyle
+  class n1 effectStyle
+  class n3 effectStyle
+  class n4 effectStyle
+  class n5 terminalStyle
+  class term_6 terminalStyle
+  class n7 pipeStyle
+  class n8 effectStyle
+  class n10 effectStyle
+  class timeout_11 timeoutStyle
+  class n12 transformStyle
 ```
 
-A contributor now sees the runtime shape: a command queue and an event pub/sub for communication, an event store for replay (`eventStore.readAll`), a projection pipeline for read models, and a scoped worker.
+## Reactor streams are now recognizable
 
-The `dispatch` helper shows the Queue + Deferred pattern:
-
-```text
-dispatch (generator):
-  1. result = deferred.create
-  2. queue.offer
-  3. Returns:
-    deferred.await
-```
-
-Create a delivery receipt, enqueue work, await confirmation.
-
-## What events does the agent runtime handle?
+Provider registry code is another place where the analyzer now recovers useful stream structure:
 
 ```bash
-npx effect-analyze ./apps/server/src/orchestration/Layers/ProviderCommandReactor.ts \
-  --tsconfig ./apps/server/tsconfig.json
+npx effect-analyze ./apps/server/src/provider/Layers/ProviderRegistry.ts \
+  --format explain \
+  --tsconfig ./apps/server/tsconfig.json \
+  --quiet
 ```
 
 ```text
-%% explain [make]
-make (generator):
-  1. Yields orchestrationEngine <- OrchestrationEngineService
-  2. Yields providerService <- ProviderService
-  3. Yields git <- GitCore
-  4. Yields textGeneration <- TextGeneration
-  5. Yields serverSettingsService <- ServerSettingsService
-  6. handledTurnStartKeys = cache.create
-  7. Yields worker <- makeDrainableWorker
-  ...
-
-  Services required: OrchestrationEngineService, ProviderService,
-    GitCore, TextGeneration, ServerSettingsService
-
-%% mermaid [processDomainEvent]
-...
+ProviderRegistryLive (generator):
+  1. Yields codexProvider <- CodexProvider
+  2. Yields claudeProvider <- ClaudeProvider
+  3. changesPubSub = Acquires resource:
+    pubsub.create
+    Then releases:
+      Calls PubSub.shutdown
+  4. Yields providersRef <- make
+  5. Background stream reactor (CodexProvider.streamChanges): runForEach -> runForEach
+    Calls CodexProvider.streamChanges — service-call
+    runForEach callback:
+      Calls syncProviders — callback-call
+  6. Background stream reactor (ClaudeProvider.streamChanges): runForEach -> runForEach
+    Calls ClaudeProvider.streamChanges — service-call
+    runForEach callback:
+      Calls syncProviders — callback-call
 ```
 
-The `processDomainEvent` handler routes six event types:
+That is a real semantic improvement. The analyzer now understands that these are background reactors driven by provider change streams, not just anonymous stream pipelines.
+
+The nested refresh program is also clearer now:
 
 ```text
-processDomainEvent (generator):
-  1. Switch on event.type:
-    Case "thread.runtime-mode-set":
-      Yields thread <- resolveThread
-      Calls ensureSessionForThread
-    Case "thread.turn-start-requested":
-      Calls processTurnStartRequested
-    Case "thread.turn-interrupt-requested":
-      Calls processTurnInterruptRequested
-    Case "thread.approval-response-requested":
-      Calls processApprovalResponseRequested
-    Case "thread.user-input-response-requested":
-      Calls processUserInputResponseRequested
-    Case "thread.session-stop-requested":
-      Calls processSessionStopRequested
+ProviderRegistryLive.refresh (generator):
+  1. Switch on provider:
+    Case "codex":
+      Calls CodexProvider.refresh — service-call
+    Case "claudeAgent":
+      Calls ClaudeProvider.refresh — service-call
+    Case default:
+      Runs 2 effects in sequential (concurrency: unbounded):
+        Calls CodexProvider.refresh — service-call
+        Calls ClaudeProvider.refresh — service-call
+  2. Returns:
+    Calls syncProviders
 ```
 
-A contributor adding a seventh event type knows exactly where to add it and what pattern to follow.
+Earlier versions of the analyzer lost these service-property calls entirely.
 
-## Is the concurrency pattern consistent?
-
-The push bus uses the same Queue + Deferred dispatch pattern as the orchestration engine:
+For this file, Mermaid now captures the reactor and refresh structure reasonably well:
 
 ```bash
-npx effect-analyze ./apps/server/src/wsServer/pushBus.ts \
-  --tsconfig ./apps/server/tsconfig.json
+npx effect-analyze ./apps/server/src/provider/Layers/ProviderRegistry.ts \
+  --format mermaid \
+  --tsconfig ./apps/server/tsconfig.json \
+  --quiet
 ```
 
-```text
-makeServerPushBus (generator):
-  1. Yields nextSequence <- make
-  2. queue = queue.create
-  3. Fiber forkScoped (scoped):
-    Calls forever
-  ...
-  10. Calls forever
-  11. queue.take
-  ...
-  17. queue.offer
+```mermaid
+flowchart TB
 
-makeServerPushBus.publishClient (generator):
-  1. delivered = deferred.create
-  2. queue.offer
-  3. Returns:
-    deferred.await
+  %% Program: ProviderRegistryLive.refresh
+
+  start((Start))
+  end_node((End))
+
+  n2["Switch: provider"]
+  switch_3{"Switch: provider"}
+  n4["codexProvider.refresh (service-call)"]
+  n5["claudeProvider.refresh (service-call)"]
+  n6["Effect.all (2) (concurrency)"]
+  parallel_fork_7{{"All (2)"}}
+  parallel_join_7{{"Join"}}
+  n8["codexProvider.refresh (service-call)"]
+  n9["claudeProvider.refresh (service-call)"]
+  n10["return"]
+  term_11(["return"])
+  n12["syncProviders (side-effect)"]
+
+  %% Edges
+  switch_3 -->|'codex'| n4
+  switch_3 -->|'claudeAgent'| n5
+  n6 --> parallel_fork_7
+  parallel_fork_7 -->|codexProvider.refresh| n8
+  n8 --> parallel_join_7
+  parallel_fork_7 -->|claudeProvider.refresh| n9
+  n9 --> parallel_join_7
+  switch_3 -->|default| n6
+  n10 --> n12
+  n12 --> term_11
+  n4 --> n10
+  n5 --> n10
+  parallel_join_7 --> n10
+  start --> switch_3
+  switch_3 --> end_node
+
+  %% Styles
+  classDef startStyle fill:#c8e6c9,stroke:#2e7d32
+  classDef endStyle fill:#ffcdd2,stroke:#c62828
+  classDef effectStyle fill:#90EE90,stroke:#333,stroke-width:2px
+  classDef parallelStyle fill:#FFA500,stroke:#333,stroke-width:2px
+  classDef switchStyle fill:#FFD700,stroke:#333,stroke-width:2px
+  classDef terminalStyle fill:#FF6B6B,stroke:#333,stroke-width:2px
+  class start startStyle
+  class end_node endStyle
+  class n2 switchStyle
+  class switch_3 switchStyle
+  class n4 effectStyle
+  class n5 effectStyle
+  class n6 parallelStyle
+  class parallel_fork_7 parallelStyle
+  class parallel_join_7 parallelStyle
+  class n8 effectStyle
+  class n9 effectStyle
+  class n10 terminalStyle
+  class term_11 terminalStyle
+  class n12 effectStyle
 ```
 
-Same shape as `dispatch`: create a deferred, offer to a queue, await the result. The push bus and the orchestration engine both use this pattern, showing architectural consistency.
+## What the analyzer is good at on t3code
 
-## Finding what to analyze
+- recovering large-scale layer composition across the backend
+- identifying repository/service live layers and their references
+- explaining callback bridges like `Effect.callback(...)`
+- recognizing service-backed property effects such as `provider.refresh`
+- recognizing background stream reactors such as `runForEach(...).pipe(Effect.forkScoped)`
+- producing repo-level coverage metrics that are low-noise enough to guide further work
 
-```bash
-npx effect-analyze ./apps/server --coverage-audit --show-by-folder \
-  --tsconfig ./apps/server/tsconfig.json
-```
+## What still needs more work
 
-```text
-Discovered: 197
-Analyzed:   147
-Zero programs: 50
-Failed:     0
-Coverage:   74.6%
-Analyzable coverage: 100.0%
-Unknown node rate: 3.87%
-```
+The remaining misses are visible in the coverage report:
 
-147 analyzable programs in the server, zero failures, 3.87% unknown node rate.
+- `Could not determine effect type` is still the top unknown reason
+- some higher-order callback bodies still compress to generic loop or callback summaries
+- many zero-program files are legitimate service contracts, schema files, or test helpers rather than missed programs
 
-```bash
-npx effect-analyze ./packages/shared --coverage-audit --show-by-folder \
-  --tsconfig ./packages/shared/tsconfig.json
-```
+That means the next wins are mostly semantic depth, not broad discovery:
 
-```text
-Discovered: 12
-Analyzed:   6
-Zero programs: 6
-Failed:     0
-Coverage:   50.0%
-Analyzable coverage: 100.0%
-Unknown node rate: 2.22%
-```
+- better callback-body inference
+- richer loop-body summaries
+- better handling of service-contract and schema-only files in coverage reporting
 
-## Quick reference
+## Recommended workflow for t3code
 
-| What you want | Command |
-|---------------|---------|
-| Best output automatically | just run `npx effect-analyze <path>` |
-| Force text summary | `--format explain` |
-| Force flowchart | `--format mermaid` |
-| Service dependency map | `--format mermaid-services` |
-| Find where the architecture lives | `--coverage-audit --show-by-folder` |
-| Compare two versions of a file | `--diff old.ts new.ts` |
+For this repository, the best workflow is:
+
+1. run `--coverage-audit --show-by-folder` on the server source
+2. run `--format architecture` on the server source or on layer-heavy directories
+3. drill into individual files like `bootstrap.ts` or `ProviderRegistry.ts` with `--format explain`
+
+That matches the current analyzer well. `t3code` is not primarily a “show me one pretty flowchart” codebase. It is a “help me understand the architecture, then zoom in” codebase.
+
+<Aside type="note" title="Why this case study matters">
+`t3code` is a useful benchmark because it stresses exactly the parts of Effect code that are hardest to analyze well: layers, service properties, callback interop, reactors, and long-lived orchestration services.
+</Aside>

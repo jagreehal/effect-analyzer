@@ -193,6 +193,35 @@ describe('§5 Optional: false-positive review / excludeFromSuspiciousZeros', () 
     }
   });
 
+  it('should not classify lightweight Effect adapter files as suspicious zeros', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'adapter-zero-'));
+    const tsconfigPath = join(dir, 'tsconfig.json');
+    const adapterPath = join(dir, 'crash-ui.ts');
+    try {
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
+      writeFileSync(adapterPath, [
+        'import { Effect } from "effect";',
+        '',
+        'export const noOpDispatch = {',
+        '  dispatchAsync: (_message: unknown) => Effect.void,',
+        '  dispatchSync: (_message: unknown) => {},',
+        '};',
+        '',
+      ].join('\n'));
+
+      const audit = await Effect.runPromise(
+        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
+      );
+
+      expect(audit.suspiciousZeros).not.toContain(adapterPath);
+      expect(
+        audit.zeroProgramClassifications.find((entry) => entry.file === adapterPath)?.category,
+      ).toBe('other');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('should not classify Option-only import files as suspicious zeros', { timeout: 15_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'option-only-'));
     const tsconfigPath = join(dir, 'tsconfig.json');

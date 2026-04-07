@@ -113,9 +113,14 @@ export interface StaticEffectNode extends StaticBaseNode {
   } | undefined;
   /** Resolved service method when call is e.g. yield* db.query() and db is bound to a service tag */
   readonly serviceMethod?: { readonly serviceId: string; readonly methodName: string } | undefined;
+  /** Service wrapper callback pattern like `fileClient.use((client) => ...)` */
+  readonly usePattern?: {
+    readonly wrapperName: string;
+    readonly callbackKind: 'promise' | 'effect' | 'unknown';
+  } | undefined;
   /** Inner effects from Effect.sync/promise/async callback body (one level only) */
   readonly callbackBody?: readonly StaticFlowNode[] | undefined;
-  /** Effect.async/asyncEffect only: resume/canceller callback patterns (GAP async callback interop). */
+  /** Callback-style constructors: resume/canceller patterns for Effect.async/asyncEffect/callback. */
   readonly asyncCallback?: {
     readonly resumeParamName: string;
     readonly resumeCallCount: number;
@@ -124,7 +129,7 @@ export interface StaticEffectNode extends StaticBaseNode {
   /** Effect.provide only: whether context is provided via Layer, Context, or Runtime. */
   readonly provideKind?: 'layer' | 'context' | 'runtime' | undefined;
   /** Constructor subtype classification */
-  readonly constructorKind?: 'sync' | 'promise' | 'async' | 'never' | 'void' | 'fromNullable' | 'fn' | 'fnUntraced' | undefined;
+  readonly constructorKind?: 'sync' | 'promise' | 'async' | 'callback' | 'never' | 'void' | 'fromNullable' | 'fn' | 'fnUntraced' | undefined;
   /** FiberRef built-in name (e.g. currentLogLevel, currentConcurrency) */
   readonly fiberRefName?: string | undefined;
   /** Effect.fn traced name */
@@ -668,6 +673,8 @@ export interface StaticLoopNode extends StaticBaseNode {
   readonly iterSource?: string | undefined;
   /** Body of the loop */
   readonly body: StaticFlowNode;
+  /** Callback/reducer body summary for higher-order collection APIs */
+  readonly callbackBody?: readonly StaticFlowNode[] | undefined;
   /** Whether the loop contains an early exit (break/return) */
   readonly hasEarlyExit?: boolean | undefined;
   /** Yield expressions in the loop header (e.g. for-of with yield* in initializer) */
@@ -706,6 +713,8 @@ export interface StaticLayerNode extends StaticBaseNode {
 export interface StreamOperatorInfo {
   readonly operation: string;
   readonly isEffectful: boolean;
+  /** Callback/transformation body summary for higher-order stream operators */
+  readonly callbackBody?: readonly StaticFlowNode[] | undefined;
   readonly estimatedCardinality?: 'same' | 'fewer' | 'more' | 'unknown' | undefined;
   readonly category?:
     | 'constructor'

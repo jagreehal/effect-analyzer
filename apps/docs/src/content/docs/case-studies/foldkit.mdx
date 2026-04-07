@@ -7,173 +7,202 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-`foldkit` is a frontend framework for TypeScript built on Effect-TS, implementing The Elm Architecture. This case study shows what the analyzer produces on a real codebase — no special flags needed.
+`foldkit` is a frontend framework for TypeScript built on Effect-TS, implementing The Elm Architecture. It is a good stress test for the analyzer because it mixes small example apps, framework internals, long runtime orchestration files, subscriptions, managed resources, routing, and devtools.
 
-## runtime.ts — just run it
+This case study is based on the current analyzer output against the real `foldkit` repository.
 
-The foldkit runtime is a 1,287-line orchestration file. Run the analyzer with no format flag:
+## Project-level architecture is the strongest view now
+
+Run the analyzer at the repository root with the architecture format:
+
+```bash
+npx effect-analyze ./ \
+  --format architecture \
+  --no-colocate
+```
+
+Current output:
+
+```text
+Found 9 service(s), 33 unresolved.
+
+Project architecture (30 runtimes, 6 layer assemblies)
+...
+program (examples/todo/src/main.ts)
+  Constructor: Runtime.makeProgram
+  Loop: Flags -> init -> Model + Commands
+  Loop: Message -> update -> Model + Commands
+  Loop: Model -> view -> Html
+  Commands in file: GenerateTodo, SaveTodos
+  Capabilities: flags
+...
+overlayRuntime (packages/foldkit/src/devtools/overlay.ts)
+  Constructor: makeProgram
+  Loop: Flags -> init -> Model + Commands
+  Loop: Message -> update -> Model + Commands
+  Loop: Model -> view -> Html
+  Subscriptions: makeOverlaySubscriptions(store) -> Message stream
+  Devtools: false
+  Commands in file: JumpTo, InspectState, InspectLatest, Resume, Clear, LockScroll, UnlockScroll, ScrollToTop
+  Capabilities: flags, subscriptions, devtools
+...
+program (packages/website/src/main.ts)
+  Constructor: Runtime.makeProgram
+  Loop: Flags -> init -> Model + Commands
+  Loop: Message -> update -> Model + Commands
+  Loop: Model -> view -> Html
+  Subscriptions: subscriptions -> Message stream
+  Resources: Layer.mergeAll(...)
+  Routing: { onUrlRequest: ..., onUrlChange: ... } (onUrlRequest, onUrlChange)
+  Title: ({ route }) => routeTitle(route)
+  Devtools: { show: 'Always', mode: 'Inspect', ... }
+  Commands in file: InjectAnalytics, InjectSpeedInsights, CopySnippet, ...
+  Capabilities: flags, routing, subscriptions, resources, title, devtools
+```
+
+This is where the analyzer is most useful on `foldkit` today. It does not just find Effect programs. It reconstructs the application shape:
+
+- `Flags -> init -> Model + Commands`
+- `Message -> update -> Model + Commands`
+- `Model -> view -> Html`
+- optional capabilities like `routing`, `subscriptions`, `resources`, `managedResources`, `crash`, `slowView`, `title`, and `devtools`
+- command definitions per file
+
+For `foldkit`, that architecture summary is more valuable than a raw per-call diagram of every file.
+
+## Example app output is clean
+
+Running architecture mode on a single example app gives a compact Elm-style summary:
+
+```bash
+npx effect-analyze ./examples/todo/src \
+  --format architecture \
+  --no-colocate
+```
+
+```text
+Project architecture (1 runtime, 0 layer assemblies)
+
+program (main.ts)
+  Constructor: Runtime.makeProgram
+  Loop: Flags -> init -> Model + Commands
+  Loop: Message -> update -> Model + Commands
+  Loop: Model -> view -> Html
+  Commands in file: GenerateTodo, SaveTodos
+  Capabilities: flags
+
+Command definitions:
+  main.ts: GenerateTodo, SaveTodos
+```
+
+That is the level of summary most users want first when they open a `foldkit` app.
+
+The same example also produces small Mermaid diagrams well:
+
+```bash
+npx effect-analyze ./examples/todo/src/main.ts --format mermaid
+```
+
+```mermaid
+flowchart TB
+
+  %% Program: saveTodos
+
+  start((Start))
+  end_node((End))
+
+  n2["store <- KeyValueStore.KeyValueStore (service-call)"]
+  n3["store.set (side-effect)"]
+
+  %% Edges
+  n2 --> n3
+  start --> n2
+  n3 --> end_node
+
+  %% Styles
+  classDef startStyle fill:#c8e6c9,stroke:#2e7d32
+  classDef endStyle fill:#ffcdd2,stroke:#c62828
+  classDef effectStyle fill:#90EE90,stroke:#333,stroke-width:2px
+  class start startStyle
+  class end_node endStyle
+  class n2 effectStyle
+  class n3 effectStyle
+```
+
+That is still an important part of the tool. The analyzer works best on `foldkit` when you use architecture mode first, then drop to Mermaid for small, self-contained programs.
+
+## The large runtime file is still analyzable
+
+The main runtime file is still large and noisy, but the analyzer now gets enough structure out of it to be useful:
 
 ```bash
 npx effect-analyze ./packages/foldkit/src/runtime/runtime.ts \
-  --tsconfig ./packages/foldkit/tsconfig.json
+  --format explain
 ```
 
-The analyzer detects 12 non-trivial programs in the file and picks the best output for each one automatically:
+Excerpt from the current output:
 
 ```text
-%% explain [program-2]
 program-2 (generator):
   1. maybeResourceLayer = If resources:
     Provides layer:
       Calls resources
   2. managedResourceRefs = Iterates (forEach) over managedResourceEntries:
-    Calls Ref.make<Option.Option<unknown>>
+    (opaque: callback-body)
   3. Yields flags <- resolveFlags
   4. messageQueue = queue.create
   5. modelSubscriptionRef = subscriptionRef.create
   6. Iterates (forEach) over initCommands:
-    Fiber forkDaemon (daemon):
-      Calls command.effect.pipe
-  7. Yields modelRef <- Ref.make
+    (opaque: callback-body)
+  7. Yields modelRef <- make
   ...
   14. If Option.isSome(resolvedDevtools):
     Yields devtoolsStore <- createDevtoolsStore
-    ...
+    Calls set
+    Calls devtoolsStore.recordInit
+    Calls createOverlay
   15. Calls render
   16. If subscriptions:
-    Pipes subscriptions through ...
+    Pipes subscriptions through:
+      Calls subscriptions
+      Calls Record.toEntries
+      Iterates (forEach) ...
   17. Iterates (forEach) over managedResourceRefs:
     Calls forkManagedResourceLifecycle
   18. Pipes forever through:
     Calls forever
     Handles errors (catchAllCause)
-
-%% mermaid [program-2]
-flowchart TB
-  ... (compact detail auto-selected)
-
-%% mermaid-errors [program-2]
-...
-
-%% mermaid-railway [render]
-flowchart LR
-  ...
-
-%% mermaid-railway [acquire]
-flowchart LR
-  ...
 ```
 
-The 138-step main program (`program-2`) gets a plain-English explain first, then a compact mermaid diagram. Smaller programs like `render`, `acquire`, and `release` get clean railway diagrams. No flags required — the analyzer measures each program's size and picks accordingly:
+The important part is not perfect prettiness. It is that the analyzer now recovers the runtime shape:
 
-- **&lt;30 nodes:** mermaid or railway diagram
-- **30–80 nodes:** explain + standard mermaid
-- **&gt;80 nodes:** explain + compact mermaid
+- resource layer setup
+- managed resource reference creation
+- flag resolution
+- message queue and subscription reference setup
+- init command forking
+- devtools bootstrapping
+- render loop
+- subscription wiring
+- managed resource lifecycle forking
+- forever-processing loop
 
-You can always override with `--format explain`, `--format mermaid`, or `--detail compact|standard|verbose`.
+That is enough to orient a reader in a file that is otherwise hard to scan.
 
-## Small files produce great diagrams
+## Devtools store is now concise
 
-### generatePosition (snake example)
-
-```bash
-npx effect-analyze ./examples/snake/src/domain/apple.ts \
-  --tsconfig ./examples/snake/tsconfig.json
-```
-
-One small program, auto-selects mermaid:
-
-```mermaid
-flowchart TB
-  start((Start))
-  end_node((End))
-
-  n2["x <- Random.nextIntBetween"]
-  n3["y <- Random.nextIntBetween"]
-  decision_5{"Snake.contains(snake, pos)"}
-  n6["return"]
-  term_7(["return"])
-  n8["fail"]
-
-  n2 --> n3
-  n6 --> n8
-  n8 --> term_7
-  decision_5 -->|yes| n6
-  n3 --> decision_5
-  start --> n2
-  decision_5 --> end_node
-
-  classDef startStyle fill:#c8e6c9,stroke:#2e7d32
-  classDef endStyle fill:#ffcdd2,stroke:#c62828
-  classDef effectStyle fill:#90EE90,stroke:#333,stroke-width:2px
-  classDef decisionStyle fill:#DDA0DD,stroke:#333,stroke-width:2px
-  classDef terminalStyle fill:#FF6B6B,stroke:#333,stroke-width:2px
-  class start startStyle
-  class end_node endStyle
-  class n2 effectStyle
-  class n3 effectStyle
-  class decision_5 decisionStyle
-  class n6 terminalStyle
-  class term_7 terminalStyle
-  class n8 effectStyle
-```
-
-Generate a random position, check if it collides with the snake, fail if so. The caller wraps this in a retry (up to 100 attempts) — a creative use of Effect's retry combinator for constraint satisfaction.
-
-### fetchWeather (weather example)
-
-```bash
-npx effect-analyze ./examples/weather/src/main.ts \
-  --tsconfig ./examples/weather/tsconfig.json
-```
-
-Auto-selects railway for the linear happy path:
-
-```mermaid
-flowchart LR
-  A[decision] -->|ok| B[client <- HttpClient.HttpClient]
-  B -->|ok| C[geocodeResponse <- client.execute]
-  C -->|ok| D[decision]
-  D -->|ok| E[geocodeData <- S.decodeUnknown]
-  E -->|ok| F[geoResult <- geocodeData.results.pipe]
-  F -->|ok| G[weatherResponse <- client.execute]
-  G -->|ok| H[decision]
-  H -->|ok| I[weatherData <- S.decodeUnknown]
-  I -->|ok| J[isEmpty]
-  J -->|ok| K[HttpClientRequest.get]
-  K -->|ok| L[flatMap]
-  L -->|ok| M[fail]
-  M -->|ok| N[HttpClientRequest.get]
-  N -->|ok| O[getOrElse]
-  O -->|ok| Done((Success))
-```
-
-Validate input, geocode, fetch weather, decode. Three decision points correspond to three `if status !== 200` guards. The only detected service dependency: `HttpClient.HttpClient`.
-
-## Deeper examples
-
-### devtools store — time-travel debugging
+The current analyzer output for the devtools store is concise:
 
 ```bash
 npx effect-analyze ./packages/foldkit/src/devtools/store.ts \
-  --tsconfig ./packages/foldkit/tsconfig.json
+  --format explain
 ```
 
 ```text
 createDevtoolsStore (generator):
   1. stateRef = subscriptionRef.create
-  2. Calls has — immutable-collection
-  3. Calls get — immutable-collection
-  4. Calls map — option
-  5. Calls drop
-  6. Calls take
-  7. Iterates (reduce) over keyframeModel
-  8. Calls set — immutable-collection
-  9. Calls drop
-  10. Calls remove — immutable-collection
-  11. subscriptionRef.update
-  ...
-  30 steps total
+  2. Calls gen
+  3. subscriptionRef.update
 
 jumpTo (generator):
   1. state = subscriptionRef.get
@@ -181,102 +210,86 @@ jumpTo (generator):
   3. subscriptionRef.set
 
 resume (generator):
-  1. currentModel = (unknown)
+  1. currentModel = Bridge.getCurrentModel — service-call
   2. Calls bridge.render
   3. subscriptionRef.update
+
+  Services required: Bridge
 ```
 
-Keyframe snapshots in a HashMap, intermediate states replayed via `Array.reduce`, circular buffer eviction with `Array.drop` and `HashMap.remove`. `jumpTo` and `resume` are 3-step programs.
-
-### route parser — bidirectional combinators
+And for this file, Mermaid is still useful for the smaller programs:
 
 ```bash
-npx effect-analyze ./packages/foldkit/src/route/parser.ts \
-  --tsconfig ./packages/foldkit/tsconfig.json
+npx effect-analyze ./packages/foldkit/src/devtools/store.ts --format mermaid
+```
+
+```mermaid
+flowchart TB
+
+  %% Program: resume
+
+  start((Start))
+  end_node((End))
+
+  n2["currentModel <- bridge.getCurrentModel (service-call)"]
+  n3["bridge.render <unknown, never, never> (side-effect)"]
+  n4["subscriptionRef.update (concurrency)"]
+
+  %% Edges
+  n2 --> n3
+  n3 --> n4
+  start --> n2
+  n4 --> end_node
+
+  %% Styles
+  classDef startStyle fill:#c8e6c9,stroke:#2e7d32
+  classDef endStyle fill:#ffcdd2,stroke:#c62828
+  classDef effectStyle fill:#90EE90,stroke:#333,stroke-width:2px
+  classDef concurrencyPrimitiveStyle fill:#B0E0E6,stroke:#333,stroke-width:2px
+  class start startStyle
+  class end_node endStyle
+  class n2 effectStyle
+  class n3 effectStyle
+  class n4 concurrencyPrimitiveStyle
+```
+
+This is a better fit for real review. The analyzer now avoids inventing fake service dependencies for stateful primitives like `SubscriptionRef`, and it can recognize service-backed calls like `Bridge.getCurrentModel`.
+
+## What the analyzer is good at on foldkit
+
+- detecting `Runtime.makeProgram` style app loops across many apps
+- extracting command definitions at project scale
+- surfacing capabilities like routing, subscriptions, resources, managed resources, crash handlers, slow view hooks, title hooks, and devtools
+- recognizing service-backed calls in smaller generators
+- keeping large runtime files readable enough to navigate
+
+## What still compresses poorly
+
+Some framework internals are still only partially summarized:
+
+- callback-heavy `forEach` bodies in the runtime still show as `(opaque: callback-body)` in a few places
+- some helper-heavy pipes still collapse to generic calls like `Calls gen`
+- architecture extraction is stronger than low-level flow rendering on the largest internal files
+
+That is an acceptable tradeoff for now. On `foldkit`, the analyzer is already more useful as an architecture and orientation tool than as a perfect instruction-by-instruction renderer.
+
+## Coverage snapshot
+
+Project mode currently reports:
+
+```bash
+npx effect-analyze ./ \
+  --project \
+  --no-colocate
 ```
 
 ```text
-slash.parse (pipe):
-  1. Pipes parserA.parse through:
-    Calls parserA.parse
-    Transforms via flatMap
-
-slash.print (pipe):
-  1. Pipes parserA.print through:
-    Calls parserA.print
-    Transforms via flatMap
-
-  Error paths: ParseError
-
-parseUrlWithFallback (pipe):
-  1. Pipes url through:
-    Calls url
-    Calls parseUrl
-    Falls back (orElse) on error
-    Calls Effect.runSync
+Found 9 service(s), 33 unresolved.
+Analyzed 284 file(s), 1399 program(s).
 ```
 
-Every parser is a pair of Effect pipelines: parse URL → value, print value → URL. `parseUrlWithFallback` is where Effects meet the synchronous world: `Effect.runSync` at the top, with `orElse` for fallback.
+The analyzer is recovering the structure of the framework and its example applications at repository scale.
 
-### typing game — service wiring
-
-```bash
-npx effect-analyze ./packages/typing-game/client/src \
-  --tsconfig ./packages/typing-game/client/tsconfig.json
-```
-
-```text
-Found 2 service(s).
-
-createRoom (generator):
-  1. Yields client <- RoomsClient
-  2. Yields { player, room } <- client.createRoom
-
-  Services required: RoomsClient
-
-ProtocolLive (generator):
-  1. Yields { VITE_SERVER_URL } <- ViteEnvConfig
-  2. Calls RpcClient.layerProtocolHttp — rpc
-
-  Services required: ViteEnvConfig, RpcClient.layerProtocolHttp
-```
-
-2 services detected across 31 analyzed files. Only real services appear — `RoomsClient`, `ViteEnvConfig`, `KeyValueStore.KeyValueStore`. Import aliases like `M` for `Match` and `Str` for `String` are resolved automatically, so they don't show up as false service dependencies.
-
-## Finding what to analyze
-
-```bash
-npx effect-analyze ./packages/foldkit/src --coverage-audit --show-by-folder \
-  --tsconfig ./packages/foldkit/tsconfig.json
-```
-
-```text
-Discovered: 118
-Analyzed:   59
-Zero programs: 59
-Failed:     0
-Coverage:   50.0%
-Analyzable coverage: 100.0%
-Unknown node rate: 6.91%
-
-By top-level folder:
-  ui: ok=30 zero=27
-  task: ok=9 zero=2
-  devtools: ok=3 zero=0
-  route: ok=2 zero=2
-  runtime: ok=2 zero=6
-  ...
-```
-
-## Quick reference
-
-| What you want | Command |
-|---------------|---------|
-| Best output automatically | just run `npx effect-analyze <path>` |
-| Force text summary | `--format explain` |
-| Force flowchart | `--format mermaid` |
-| Force compact flowchart | `--format mermaid --detail compact` |
-| Happy-path linear diagram | `--format mermaid-railway` |
-| Service dependency map | `--format mermaid-services` |
-| Find which files have Effect code | `--coverage-audit --show-by-folder` |
-| Compare two versions of a file | `--diff old.ts new.ts` |
+<Aside type="note" title="Recommended workflow">
+For `foldkit`, start with `--format architecture` at the project or app level, then drill into individual files with `--format explain` only when you need implementation detail.
+</Aside>
