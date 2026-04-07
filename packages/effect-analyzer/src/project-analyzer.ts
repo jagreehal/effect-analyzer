@@ -13,6 +13,10 @@ import { getStaticChildren, isStaticUnknownNode } from './types';
 import { analyze } from './analyze';
 import { loadTsMorph } from './ts-morph-loader';
 import { buildProjectServiceMap } from './service-registry';
+import {
+  extractProjectArchitecture,
+  type ProjectArchitectureSummary,
+} from './project-architecture';
 
 // =============================================================================
 // Types
@@ -39,6 +43,8 @@ export interface ProjectAnalysisResult {
   readonly zeroProgramFiles: readonly string[];
   /** Project-level deduplicated service map (when --service-map is enabled) */
   readonly serviceMap?: ProjectServiceMap | undefined;
+  /** Project-level runtime architecture summary (when enabled). */
+  readonly architecture?: ProjectArchitectureSummary | undefined;
 }
 
 export interface AnalyzeProjectOptions {
@@ -54,6 +60,8 @@ export interface AnalyzeProjectOptions {
   readonly knownEffectInternalsRoot?: string | undefined;
   /** When true, build the deduplicated project-level service map (--service-map). */
   readonly buildServiceMap?: boolean | undefined;
+  /** When true, build a project-level runtime architecture summary. */
+  readonly buildArchitecture?: boolean | undefined;
 }
 
 /** Per-file outcome for coverage audit. */
@@ -119,6 +127,7 @@ const DEFAULT_OPTIONS: Required<Omit<AnalyzeProjectOptions, 'tsconfig'>> = {
   includePerFileTiming: false,
   excludeFromSuspiciousZeros: [],
   buildServiceMap: false,
+  buildArchitecture: false,
 };
 
 
@@ -241,6 +250,31 @@ function isTypeOnlyZeroCandidate(filePath: string): boolean {
       /^\s*import\s+type\b/m.test(content) ||
       /^\s*export\s+type\b/m.test(content)
     );
+  } catch {
+    return false;
+  }
+}
+
+function isLightweightEffectAdapterFile(filePath: string): boolean {
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const hasProgramLikeUsage =
+      /\byield\*/.test(content) ||
+      /\bEffect\.gen\b/.test(content) ||
+      /\bpipe\(/.test(content) ||
+      /\bEffect\.run(?:Promise|Sync|Fork|Callback)\b/.test(content) ||
+      /\bacquireRelease\b/.test(content) ||
+      /\bLayer\.(?:effect|scoped|merge|provide)\b/.test(content);
+    if (hasProgramLikeUsage) return false;
+
+    const effectConstructorMentions =
+      content.match(/\bEffect\.(?:void|succeed|fail|sync|try|promise|async)\b/g) ?? [];
+    if (effectConstructorMentions.length === 0) return false;
+
+    const callbackPropertyMentions =
+      content.match(/(?:readonly\s+)?[A-Za-z0-9_]+\s*:\s*\([^)]*\)\s*=>/g) ?? [];
+
+    return callbackPropertyMentions.length > 0;
   } catch {
     return false;
   }
@@ -524,6 +558,10 @@ export function analyzeProject(
       }
     }
 
+    const architecture = options.buildArchitecture
+      ? extractProjectArchitecture(files, { tsconfig: options.tsconfig })
+      : undefined;
+
     return {
       byFile,
       allPrograms,
@@ -532,6 +570,7 @@ export function analyzeProject(
       failedFiles,
       zeroProgramFiles,
       serviceMap,
+      architecture,
     };
   });
 }
@@ -647,7 +686,10 @@ export function runCoverageAudit(
       const importsEffect = fileImportsEffect(o.file);
       const expectedCategory = detectExpectedZeroCategory(o.file);
       const category: ZeroProgramCategory =
-        importsEffect && !isExcludedFromSuspicious(o.file) && expectedCategory === undefined
+        importsEffect &&
+        !isExcludedFromSuspicious(o.file) &&
+        expectedCategory === undefined &&
+        !isLightweightEffectAdapterFile(o.file)
           ? 'suspicious'
           : (expectedCategory ?? 'other');
 

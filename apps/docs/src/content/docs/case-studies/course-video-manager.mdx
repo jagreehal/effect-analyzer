@@ -1,157 +1,247 @@
 ---
 title: course-video-manager
-description: Analyzing a real Effect-heavy desktop app for video course publishing, export, and media processing.
+description: Analyzing a real Effect-heavy desktop app for course editing, export, upload, and media-processing workflows.
 sidebar:
   order: 1
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+`course-video-manager` is a desktop app for editing course structure, exporting lessons, uploading media, and coordinating a fairly large set of Effect services. This repo does not look like `foldkit`: there is no central runtime loop. The useful output is in service handlers, write pipelines, resource lifecycles, and layer composition.
 
-`course-video-manager` is a desktop app for managing video courses: publishing, export, upload, validation, thumbnails, filesystem coordination, and media processing. It uses Effect throughout. This walkthrough shows what the analyzer produces on the key files — no special flags needed.
+Current repo-wide output:
 
-## How does the editor work?
+```bash
+npx effect-analyze . --project --no-colocate --quiet
+```
 
-The course editor service handler is a large switch dispatcher. Run it with no format flag:
+```text
+Found 16 service(s), 5 unresolved.
+Analyzed 178 file(s), 784 program(s).
+```
+
+The project-wide architecture view is mostly about layer composition:
+
+```bash
+npx effect-analyze . --format architecture --no-colocate --quiet
+```
+
+```text
+Found 16 service(s), 5 unresolved.
+
+Project architecture (0 runtimes, 38 layer assemblies)
+...
+Analyzed 178 file(s), 784 program(s).
+```
+
+## Editor event dispatcher
+
+The strongest single file is the course editor event handler:
 
 ```bash
 npx effect-analyze ./app/services/course-editor-service-handler.ts \
+  --format explain \
   --tsconfig ./tsconfig.json
 ```
 
-The analyzer auto-selects explain + mermaid + services + decisions:
-
 ```text
 handleCourseEditorEvent (direct):
-  1. Calls fn
-  2. Yields service <- CourseWriteService
-  3. Yields db <- DBFunctionsService
-  4. Switch on event.type:
+  1. Yields service <- CourseWriteService
+  2. Yields db <- DBFunctionsService
+  3. Switch on event.type:
     Case "create-section":
-      Returns: Calls service.addGhostSection
+      Returns:
+        Calls service.addGhostSection
     Case "update-section-name":
       Yields section <- db.getSectionWithHierarchyById
       If parsed:
-        Returns: Calls service.renameSection
+        Returns:
+          Calls service.renameSection
       Calls db.updateSectionPath
     Case "update-section-description":
       Calls db.getSectionWithHierarchyById
       Calls db.updateSectionDescription
-    Case "archive-section":
-      Returns: Calls service.archiveSection
-    Case "reorder-sections":
-      Returns: Calls service.reorderSections
-    Case "add-ghost-lesson":
-      Returns: Calls service.addGhostLesson
-    Case "create-real-lesson":
-      Returns: Calls service.createRealLesson
-    Case "update-lesson-name":
-      Returns: Calls service.renameLesson
-    Case "update-lesson-title":
-      Yields lesson <- db.getLessonWithHierarchyById
-      Calls db.updateLesson
-    Case "update-lesson-description":
-      Calls db.getLessonWithHierarchyById
-      Calls db.updateLesson
-    Case "update-lesson-icon":
-      Calls db.getLessonWithHierarchyById
-      Calls db.updateLesson
-    Case "update-lesson-priority":
-      Calls db.getLessonWithHierarchyById
-      Calls db.updateLesson
-    Case "update-lesson-dependencies":
-      Calls db.getLessonWithHierarchyById
-      Calls db.updateLesson
-    Case "delete-lesson":
-      Returns: Calls service.deleteLesson
-    Case "reorder-lessons":
-      Returns: Calls service.reorderLessons
-    Case "move-lesson-to-section":
-      Returns: Calls service.moveToSection
-    Case "convert-to-ghost":
-      Returns: Calls service.convertToGhost
+    ...
     Case "create-on-disk":
-      Returns: Calls service.materializeGhost
+      Returns:
+        Calls service.materializeGhost
 
   Services required: CourseWriteService, DBFunctionsService
 ```
 
-A contributor adding a new operation can see all 19 existing operations and the pattern each follows — which go through `CourseWriteService` vs. hitting the DB directly, and that `update-section-name` has special logic while most updates are straightforward.
+This is exactly the kind of summary that helps when the file is a wide event switch: you can see which branches are pure write-service dispatch, which branches touch the DB directly, and which ones have extra control flow.
 
-```mermaid
-flowchart LR
-  prog["handleCourseEditorEvent"]
-
-  svc_CourseWriteService{{"CourseWriteService"}}
-  prog -->|requires| svc_CourseWriteService
-  svc_DBFunctionsService{{"DBFunctionsService"}}
-  prog -->|requires| svc_DBFunctionsService
-```
-
-## What happens when I write data?
+The Mermaid output is still useful here because the switch shape is big enough to benefit from a visual:
 
 ```bash
-npx effect-analyze ./app/services/course-write-service.ts \
+npx effect-analyze ./app/services/course-editor-service-handler.ts \
+  --format mermaid \
   --tsconfig ./tsconfig.json
 ```
 
 ```mermaid
-flowchart LR
-  prog["effect"]
+flowchart TB
 
-  svc_DBFunctionsService{{"DBFunctionsService"}}
-  prog -->|requires| svc_DBFunctionsService
-  svc_CourseRepoWriteService{{"CourseRepoWriteService"}}
-  prog -->|requires| svc_CourseRepoWriteService
-  svc_CourseRepoSyncValidationService{{"CourseRepoSyncValidationService"}}
-  prog -->|requires| svc_CourseRepoSyncValidationService
-  svc_FileSystem_FileSystem{{"FileSystem.FileSystem"}}
-  prog -->|requires| svc_FileSystem_FileSystem
+  %% Program: handleCourseEditorEvent
+
+  start((Start))
+  end_node((End))
+
+  n1["fn"]
+  n3["service <- CourseWriteService"]
+  n4["db <- DBFunctionsService"]
+  switch_6{"Switch: event.type"}
+  n10["section <- db.getSectionWithHierarchyById"]
+  decision_12{"parsed"}
+  n15["service.renameSection"]
+  n16["db.updateSectionPath"]
+  n17["db.getSectionWithHierarchyById"]
+  n18["db.updateSectionDescription"]
+  n34["lesson <- db.getLessonWithHierarchyById"]
+  n35["db.updateLesson"]
+  n58["service.materializeGhost"]
+
+  n3 --> n4
+  n10 --> decision_12
+  decision_12 -->|yes| n15
+  decision_12 --> n16
+  n17 --> n18
+  n34 --> n35
+  n4 --> switch_6
+  n1 --> n3
+  start --> n1
+  n16 --> end_node
+  n18 --> end_node
+  n35 --> end_node
+  n58 --> end_node
 ```
 
-Four services. The presence of `CourseRepoSyncValidationService` raises a question: when does validation run?
+## Write path and post-validation
+
+The write service is less polished than the editor handler, but it still surfaces the important architectural fact: writes run through DB, repo write, sync validation, and filesystem.
+
+```bash
+npx effect-analyze ./app/services/course-write-service.ts \
+  --format explain \
+  --tsconfig ./tsconfig.json
+```
 
 ```text
+effect (generator):
+  1. Yields db <- DBFunctionsService
+  2. Yields repoWrite <- CourseRepoWriteService
+  3. Yields syncService <- CourseRepoSyncValidationService
+  4. fileSystem = FileSystem.FileSystem — service-call
+  5. Returns:
+    Calls withPostValidation
+    Calls materializeGhost
+    Calls createRealLesson
+    Calls materializeCourseWithLesson
+    Calls convertToGhost
+    Calls reorderLessons
+    Calls reorderSections
+    Calls renameSection
+  6. Catches all errors on:
+    Calls Effect
+    Handler:
+      Calls fail — constructor
+
+  Services required: DBFunctionsService, CourseRepoWriteService, CourseRepoSyncValidationService, FileSystem
+
+---
+
 withPostValidation (generator):
   1. Yields result <- effect
   2. Calls runValidation
 ```
 
-The main write path passes through post-validation. The analyzer surfaces this design decision without inspecting the implementation details.
+The analyzer exposes the named write operations and shows that validation is part of the post-write pipeline rather than a separate phase.
 
-## How does video export work?
+## Batch export traversal
+
+The export flow is a good example of where the analyzer explains the shape of the work even when some callback detail is still opaque:
 
 ```bash
 npx effect-analyze ./app/services/batch-export.server.ts \
+  --format explain \
   --tsconfig ./tsconfig.json
 ```
-
-The analyzer auto-selects mermaid + services + retry for this file:
 
 ```text
 batchExportProgram (generator):
   1. Yields db <- DBFunctionsService
   2. Yields videoProcessing <- VideoProcessingService
-  3. Yields fs <- FileSystem.FileSystem
+  3. fs = FileSystem.FileSystem — service-call
   4. Yields FINISHED_VIDEOS_DIRECTORY <- string
   5. Yields version <- db.getVersionWithSections
   6. Iterates (forOf) over version.sections:
     Iterates (forOf) over section.lessons:
       Iterates (forOf) over lesson.videos:
         If video.clips.length > 0:
-          Iterates (exists) over exportedVideoPath
+          Iterates (exists) over exportedVideoPath:
+            exportedVideoPath
   7. Iterates (forEach) over unexportedVideos:
-    Calls videoProcessing.exportVideoClips
-  8. Retries (max 2, custom)
+    forEach callback: videoProcessing.exportVideoClips -> video.clips.map -> sendEvent -> retry -> ...
+    Callback:
+      Calls videoProcessing.exportVideoClips — callback-call
+      Calls sendEvent — callback-call
+      Calls retry — callback-call
+      Calls catchAll — callback-call
 
-  Services required: DBFunctionsService, VideoProcessingService, FileSystem.FileSystem
+  Services required: DBFunctionsService, VideoProcessingService, FileSystem
 ```
 
-Walk the course tree, detect missing exports, process remaining videos, retry failures. The retry diagram appears automatically as a bonus.
+That is enough to understand the export architecture: load the version tree, discover missing outputs, then export remaining videos through `VideoProcessingService`. The callback summary is now good enough to show that the per-video workflow includes export, progress events, and retry handling instead of collapsing to a generic opaque callback.
 
-## How does YouTube upload handle resources?
+The Mermaid diagram keeps the nested traversal obvious:
+
+```bash
+npx effect-analyze ./app/services/batch-export.server.ts \
+  --format mermaid \
+  --tsconfig ./tsconfig.json
+```
+
+```mermaid
+flowchart TB
+
+  %% Program: batchExportProgram
+
+  start((Start))
+  end_node((End))
+
+  n2["db <- DBFunctionsService (environment)"]
+  n3["videoProcessing <- VideoProcessingService (environment)"]
+  n4["fs <- FileSystem.FileSystem (service-call)"]
+  n6["version <- db.getVersionWithSections (service-call)"]
+  loop_8(["forOf(version.sections)"])
+  loop_10(["forOf(section.lessons)"])
+  loop_12(["forOf(lesson.videos)"])
+  decision_14{"video.clips.length > 0"}
+  loop_16(["exists(exportedVideoPath)"])
+  n17["exportedVideoPath"]
+  loop_19(["forEach(unexportedVideos)"])
+  opaque_21{{"forEach callback: videoProcessing.exportVideoClip…"}}
+
+  n2 --> n3
+  n3 --> n4
+  n4 --> n6
+  loop_16 -->|iterate| n17
+  decision_14 -->|yes| loop_16
+  loop_12 -->|iterate| decision_14
+  loop_10 -->|iterate| loop_12
+  loop_8 -->|iterate| loop_10
+  n6 --> loop_8
+  loop_19 -->|iterate| opaque_21
+  loop_8 --> loop_19
+  start --> n2
+  loop_19 --> end_node
+```
+
+## Resumable YouTube upload
+
+This repo also shows the analyzer's resource lifecycle output well:
 
 ```bash
 npx effect-analyze ./app/services/youtube-upload-service.ts \
+  --format explain \
   --tsconfig ./tsconfig.json
 ```
 
@@ -161,84 +251,141 @@ uploadVideoToYouTube (generator):
   2. Yields uploadUri <- initiateResumableUpload
   3. Calls logInfo
   4. result = Acquires resource:
-    Calls tryPromise
+    Calls tryPromise — constructor
     Uses:
       Calls gen
     Then releases:
-      Calls promise
+      Calls promise — constructor
+  5. Calls logInfo
+
+---
 
 result (generator):
   1. Iterates (while) over offset < fileSize:
-    Calls tryPromise
+    Calls tryPromise — constructor
     Yields response <- tryPromise
 ```
 
-Initiate a resumable upload session, stream chunks until completion, manage the upload resource with explicit acquire/use/release.
-
-## How does FFmpeg encoding handle concurrency?
+This is the useful part of the story: initiate a resumable upload, enter an acquire/use/release region, then stream chunks until completion.
 
 ```bash
-npx effect-analyze ./app/services/ffmpeg-commands.ts \
+npx effect-analyze ./app/services/youtube-upload-service.ts \
+  --format mermaid \
   --tsconfig ./tsconfig.json
 ```
 
-```text
-effect (generator):
-  1. Yields fs <- FileSystem.FileSystem
-  2. Yields gpuSemaphore <- makeSemaphore
-  3. Yields cpuSemaphore <- makeSemaphore
-  ...
+```mermaid
+flowchart TB
 
-program-2 (generator):
-  1. Yields process <- start
-  2. [stdout, stderr] = Runs 2 effects in sequential (concurrency: 2)
+  %% Program: uploadVideoToYouTube
 
-  Concurrency: uses parallelism / racing
+  start((Start))
+  end_node((End))
+
+  n2["fileSize <- try"]
+  n3["uploadUri <- initiateResumableUpload (side-effect)"]
+  n4["logInfo (side-effect)"]
+  n6["tryPromise (side-effect)"]
+  resource_7["Resource"]
+  n8["gen"]
+  n9["logInfo (side-effect)"]
+
+  n2 --> n3
+  n3 --> n4
+  n6 --> resource_7
+  resource_7 --> n8
+  n4 --> n6
+  n8 --> n9
+  start --> n2
+  n9 --> end_node
 ```
 
-GPU and CPU semaphores indicate explicit throttling of encoding work. Separate stdout/stderr handling with concurrency 2 in the subprocess path.
+## Live layer assembly
 
-## Finding what to analyze
+For project architecture, the best single file is the live service layer:
+
+```bash
+npx effect-analyze ./app/services/layer.server.ts \
+  --format architecture \
+  --tsconfig ./tsconfig.json \
+  --no-colocate
+```
+
+```text
+Project architecture (0 runtimes, 2 layer assemblies)
+
+Layer assemblies:
+  coreLayer (layer.server.ts)
+    Ops: mergeAll(
+  CourseRepoParserService.Default,
+  DatabaseDumpService.Default,
+  VideoProcessingService.Default,
+  DBFunctionsService.Default,
+  BackgroundRemovalService.Default,
+  VideoEditorLoggerService.Default,
+  FeatureFlagService.Default,
+  OpenFolderService.Default,
+  CloudinaryService.Default,
+  CloudinaryMarkdownLayer,
+  CourseRepoWriteService.Default,
+  CourseWriteService.Default,
+  CourseRepoSyncValidationService.Default,
+  FFmpegCommandsService.Default,
+  NodeContext.layer
+).pipe -> provideMerge
+    References: DrizzleService.Default
+  layerLive (layer.server.ts)
+    Ops: merge
+    References: coreLayer, publishLayer
+```
+
+On the full repo, architecture mode now separates production and test layer assemblies instead of dumping them into one list. That makes `layer.server.ts` stand out much more clearly as the real app composition root.
+
+## Coverage audit
+
+The whole repo mixes Effect-heavy server code with a lot of UI and type-only files, so the repo-wide percentage looks lower than the services-only percentage:
+
+```bash
+npx effect-analyze . --coverage-audit --show-by-folder --quiet
+```
+
+```text
+Discovered: 489
+Analyzed:   178
+Zero programs: 311
+Suspicious zeros: 0
+Failed:     0
+Coverage:   36.4%
+Analyzable coverage: 100.0%
+Unknown node rate: 4.92%
+```
+
+If you narrow to the actual server/service layer, the picture is much cleaner:
 
 ```bash
 npx effect-analyze ./app/services --coverage-audit --show-by-folder \
-  --tsconfig ./tsconfig.json
+  --tsconfig ./tsconfig.json --quiet
 ```
 
 ```text
-Discovered: 94
-Analyzed:   68
+Discovered: 98
+Analyzed:   72
 Zero programs: 26
+Suspicious zeros: 0
 Failed:     0
-Coverage:   72.3%
+Coverage:   73.5%
 Analyzable coverage: 100.0%
-Unknown node rate: 3.32%
+Unknown node rate: 2.26%
 ```
 
-```bash
-npx effect-analyze ./app/routes --coverage-audit --show-by-folder \
-  --tsconfig ./tsconfig.json
-```
+That is the right reading of this repo. The analyzer is strong on the service layer and correctly ignores a large amount of React/UI/type-only code that is not meaningful Effect program analysis.
 
-```text
-Discovered: 106
-Analyzed:   98
-Zero programs: 8
-Failed:     0
-Coverage:   92.5%
-Analyzable coverage: 100.0%
-Unknown node rate: 11.76%
-```
+## Best workflow for this repo
 
-The service layer has a low unknown rate (3.32%). The route layer has high coverage but is structurally noisier (11.76%), reflecting the mix of framework glue and Effect logic in route handlers.
+Use `--format explain` on individual service files when you want control-flow and service boundaries.
 
-## Quick reference
+Use `--format mermaid` on dispatcher-style files like `course-editor-service-handler.ts` and traversal-heavy files like `batch-export.server.ts`.
 
-| What you want | Command |
-|---------------|---------|
-| Best output automatically | just run `npx effect-analyze <path>` |
-| Force text summary | `--format explain` |
-| Force flowchart | `--format mermaid` |
-| Service dependency map | `--format mermaid-services` |
-| Find which files have Effect code | `--coverage-audit --show-by-folder` |
-| Compare two versions of a file | `--diff old.ts new.ts` |
+Use `--format architecture` on `./app/services/layer.server.ts` or the repo root when you want the layer composition view.
+
+Use `--coverage-audit` on `./app/services` instead of the whole repo if your goal is to measure analyzer quality on actual Effect code.

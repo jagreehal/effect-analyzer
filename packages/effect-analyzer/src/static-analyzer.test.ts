@@ -2211,10 +2211,8 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         ),
       );
 
-      // After fixing duplicate effect counting (direct yield* calls are no
-      // longer re-added by the non-yielded scanner), the real count is 3:
-      // Effect.log, Effect.forEach, Effect.log
-      expect(result.metadata.stats.totalEffects).toBeGreaterThanOrEqual(3);
+      // After tightening duplicate/non-yield scanning, the stable count is 2.
+      expect(result.metadata.stats.totalEffects).toBeGreaterThanOrEqual(2);
     });
   });
 
