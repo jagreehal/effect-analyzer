@@ -94,6 +94,10 @@ export default defineConfig({
           label: 'Case Studies',
           items: [
             {
+              label: 'What a text diff misses',
+              slug: 'case-studies/review-scenarios',
+            },
+            {
               label: 'course-video-manager',
               slug: 'case-studies/course-video-manager',
             },

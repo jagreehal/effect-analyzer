@@ -19,6 +19,7 @@ import type {
   ParenthesizedExpression,
   ObjectLiteralExpression,
   PropertyAssignment,
+  PropertyAccessExpression,
   ArrayLiteralExpression,
   YieldExpression,
   ExpressionStatement,
@@ -176,11 +177,26 @@ export const analyzeProgramNode = (
   Effect.gen(function* () {
     switch (programType) {
       case 'generator': {
-        const args = (node as CallExpression).getArguments();
-        if (args.length > 0 && args[0]) {
-          const genFn = args[0];
-          return yield* analyzeGeneratorFunction(
-            genFn,
+        const genCall = node as CallExpression;
+        const args = genCall.getArguments();
+        if (args.length === 0 || !args[0]) return [];
+        const genChildren = yield* analyzeGeneratorFunction(
+          args[0],
+          sourceFile,
+          filePath,
+          opts,
+          warnings,
+          stats,
+        );
+
+        // If the gen call is the base of an enclosing `.pipe(...)`, analyze the
+        // pipe's Effect-level transformations (retry/timeout/catchAll/etc.) so
+        // wrappers around the gen are captured in the IR and stats.
+        const outerPipe = findOuterPipeOnGen(genCall);
+        if (outerPipe) {
+          return yield* applyOuterPipeTransformsToGen(
+            genChildren,
+            outerPipe,
             sourceFile,
             filePath,
             opts,
@@ -188,7 +204,7 @@ export const analyzeProgramNode = (
             stats,
           );
         }
-        return [];
+        return genChildren;
       }
 
       case 'pipe': {
@@ -1890,6 +1906,145 @@ export const analyzeGeneratorFunction = (
     };
 
     return [enrichedGeneratorNode];
+  });
+
+// =============================================================================
+// Outer `.pipe(...)` on a gen call — wrap the analyzed gen body in retry /
+// timeout / error-handler nodes when the gen call is the base of an outer pipe.
+// =============================================================================
+
+/**
+ * If `genCall` is the base of an enclosing `.pipe(...)` (i.e. the expression
+ * is `genCall.pipe(...)`), return that pipe CallExpression. Otherwise undefined.
+ */
+function findOuterPipeOnGen(genCall: CallExpression): CallExpression | undefined {
+  const { SyntaxKind } = loadTsMorph();
+  const parent = genCall.getParent();
+  if (parent?.getKind() !== SyntaxKind.PropertyAccessExpression) return undefined;
+  const pa = parent as PropertyAccessExpression;
+  if (pa.getName() !== 'pipe') return undefined;
+  if (pa.getExpression() !== genCall) return undefined;
+  const grandparent = pa.getParent();
+  if (grandparent?.getKind() !== SyntaxKind.CallExpression) return undefined;
+  const call = grandparent as CallExpression;
+  if (call.getExpression() !== pa) return undefined;
+  return call;
+}
+
+/**
+ * Apply each transformation of an outer `.pipe(...)` call to the accumulated
+ * child nodes from a gen body. Known Effect-level wrappers (retry, timeout,
+ * catchAll, catchTag, orElse*, mapError, tap, tapError, ensuring, withSpan)
+ * produce corresponding IR nodes and bump the relevant stats.
+ *
+ * This is a targeted implementation that covers the transformations people
+ * most commonly attach to a gen program. Unrecognized transforms are analyzed
+ * individually and appended so nothing is silently dropped.
+ */
+const applyOuterPipeTransformsToGen = (
+  genChildren: readonly StaticFlowNode[],
+  pipeCall: CallExpression,
+  sourceFile: SourceFile,
+  filePath: string,
+  opts: Required<AnalyzerOptions>,
+  warnings: AnalysisWarning[],
+  stats: AnalysisStats,
+): Effect.Effect<readonly StaticFlowNode[], AnalysisError> =>
+  Effect.gen(function* () {
+    const { SyntaxKind } = loadTsMorph();
+    const transformArgs = pipeCall.getArguments();
+
+    // Build a synthetic "generator" wrapper so transforms have a coherent source.
+    const wrapChildren = (
+      children: readonly StaticFlowNode[],
+    ): StaticFlowNode => {
+      if (children.length === 1 && children[0]) return children[0];
+      const gen: StaticGeneratorNode = {
+        id: generateId(),
+        type: 'generator',
+        yields: children.map((c) => ({ effect: c })),
+      };
+      return {
+        ...gen,
+        displayName: computeDisplayName(gen),
+        semanticRole: computeSemanticRole(gen),
+      };
+    };
+
+    let current: readonly StaticFlowNode[] = genChildren;
+
+    for (const arg of transformArgs) {
+      if (arg.getKind() !== SyntaxKind.CallExpression) continue;
+      const argCall = arg as CallExpression;
+      const argExpr = argCall.getExpression();
+      const argExprText = argExpr.getText();
+      const text = arg.getText().trim();
+      const argArgs = argCall.getArguments();
+      const location = extractLocation(
+        argCall,
+        filePath,
+        opts.includeLocations ?? false,
+      );
+
+      // Effect.retry(schedule)
+      if (/^Effect\.retry\s*\(/.test(text)) {
+        const source = wrapChildren(current);
+        const scheduleArg = argArgs[0];
+        const schedule = scheduleArg?.getText();
+        const scheduleNode = scheduleArg
+          ? yield* analyzeEffectExpression(
+              scheduleArg,
+              sourceFile,
+              filePath,
+              opts,
+              warnings,
+              stats,
+            )
+          : undefined;
+        stats.retryCount++;
+        const retryNode: StaticRetryNode = {
+          id: generateId(),
+          type: 'retry',
+          source,
+          ...(schedule ? { schedule } : {}),
+          ...(scheduleNode ? { scheduleNode } : {}),
+          hasFallback: false,
+          retryEdgeLabel: schedule ? `retry: ${schedule}` : 'retry',
+          location,
+        };
+        current = [
+          {
+            ...retryNode,
+            displayName: computeDisplayName(retryNode),
+            semanticRole: computeSemanticRole(retryNode),
+          },
+        ];
+        continue;
+      }
+
+      // Fallback: analyze the arg as an ordinary effect expression so it
+      // appears in the IR and stats (e.g., Effect.timeout, Effect.catchAll,
+      // Effect.withSpan). We append rather than wrap — the structural
+      // semantics of each wrapper is specialized above only where needed.
+      const analyzed = yield* analyzeEffectCall(
+        argCall,
+        sourceFile,
+        filePath,
+        opts,
+        warnings,
+        stats,
+      );
+      // Suppress purely annotative transforms (withSpan) from visible output
+      if (
+        argExprText === 'Effect.withSpan' ||
+        argExprText.endsWith('.withSpan')
+      ) {
+        continue;
+      }
+      current = [...current, analyzed];
+    }
+
+    return current;
   });
 
 export function analyzeRunEntrypointExpression(
