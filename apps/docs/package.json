@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "generate:transfer-observability": "pnpm --dir ../../packages/effect-analyzer build && node ./scripts/generate-transfer-observability.mjs",
+    "generate:review-scenarios": "pnpm --dir ../../packages/effect-analyzer build && node ./scripts/generate-review-scenarios.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
@@ -14,7 +15,7 @@
     "@astrojs/starlight": "^0.38.3",
     "@fontsource-variable/inter": "^5.0.0",
     "@fontsource/jetbrains-mono": "^5.0.0",
-    "astro": "^5.10.0",
+    "astro": "^6.1.8",
     "astro-mermaid": "^2.0.1",
     "effect": "^3.21.0",
     "mermaid": "^11.14.0",
