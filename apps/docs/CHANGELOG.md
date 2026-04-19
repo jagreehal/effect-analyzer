@@ -1,5 +1,11 @@
 # effect-analyzer-docs
 
+## 0.0.8
+
+### Patch Changes
+
+- 69ae884: Added effect.retry
+
 ## 0.0.7
 
 ### Patch Changes
