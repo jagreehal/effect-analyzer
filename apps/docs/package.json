@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "generate:transfer-observability": "pnpm --dir ../../packages/effect-analyzer build && node ./scripts/generate-transfer-observability.mjs",
+    "generate:review-scenarios": "pnpm --dir ../../packages/effect-analyzer build && node ./scripts/generate-review-scenarios.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",

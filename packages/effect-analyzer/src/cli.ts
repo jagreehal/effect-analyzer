@@ -37,6 +37,7 @@ import { renderDataflowMermaid } from './output/mermaid-dataflow';
 import { selectFormats } from './output/auto-format';
 import { diffPrograms, renderDiffMarkdown, renderDiffJSON, renderDiffMermaid, parseSourceArg, resolveGitSource, resolveGitHubPR } from './diff';
 import { generatePaths } from './path-generator';
+import { generateTestMatrix, formatTestMatrixAsCode } from './output/test-matrix';
 import { renderJSON, renderMultipleJSON } from './output/json';
 import { generateMultipleShowcase } from './output/showcase';
 import {
@@ -66,6 +67,7 @@ import {
 import { loadDiagramQualityHintsFromEslintJson } from './diagram-quality-eslint';
 
 type MermaidDirection = 'TB' | 'LR' | 'BT' | 'RL';
+type TestRunner = 'vitest' | 'jest' | 'mocha';
 
 /** ANSI colors for gold-tier verbose output (disabled when --no-color or not TTY). */
 function createStyle(useColor: boolean) {
@@ -116,6 +118,9 @@ interface CLIOptions {
   readonly diffSources: readonly string[];
   readonly regression: boolean;
   readonly includeTrivial: boolean;
+  readonly test: boolean;
+  readonly testRunner: TestRunner;
+  readonly testOverwrite: boolean;
 }
 
 function parseArgs(args: readonly string[]): { pathArg: string | undefined; options: CLIOptions } {
@@ -157,6 +162,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let diff = false;
   let regression = false;
   let includeTrivial = false;
+  let test = false;
+  let testRunner: TestRunner = 'vitest';
+  let testOverwrite = false;
   const positionalArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -312,6 +320,28 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       regression = true;
     } else if (arg === '--include-trivial') {
       includeTrivial = true;
+    } else if (arg === '--test') {
+      test = true;
+    } else if (arg === '--no-test') {
+      test = false;
+    } else if (arg === '--test-overwrite') {
+      testOverwrite = true;
+    } else if (arg === '--test-runner') {
+      const value = args[++i];
+      if (value === 'vitest' || value === 'jest' || value === 'mocha') {
+        testRunner = value;
+      } else if (value !== undefined) {
+        process.stderr.write(`Unknown test runner: ${value}. Use vitest, jest, or mocha.\n`);
+        process.exit(1);
+      }
+    } else if (arg.startsWith('--test-runner=')) {
+      const value = arg.slice('--test-runner='.length).trim();
+      if (value === 'vitest' || value === 'jest' || value === 'mocha') {
+        testRunner = value;
+      } else {
+        process.stderr.write(`Unknown test runner: ${value}. Use vitest, jest, or mocha.\n`);
+        process.exit(1);
+      }
     }
   }
 
@@ -367,6 +397,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     diffSources,
     regression,
     includeTrivial,
+    test,
+    testRunner,
+    testOverwrite,
   };
   return { pathArg, options };
 }
@@ -419,6 +452,9 @@ Options:
   --no-style-guide         Disable style-guide (e.g. for plain mermaid-paths output)
   --service-map            Build deduplicated service map (default: on)
   --no-service-map         Disable service map
+  --test                   Write a {programName}.test.ts stub next to each source file (skips existing files unless --test-overwrite)
+  --test-runner <runner>   Test runner for --test: vitest (default) | jest | mocha
+  --test-overwrite         With --test: overwrite existing test files instead of skipping
   --cache                  Use cache for watch (future: persist IR)
   -h, --help               Show this help message
 
@@ -619,6 +655,55 @@ const runDiffMode = (
     }
   });
 
+/** Sanitize a program name into a safe filename. */
+const sanitizeProgramName = (name: string): string =>
+  name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+
+/**
+ * Write a `{programName}.test.ts` stub next to `sourcePath` for each IR.
+ * Skips files that already exist unless `overwrite` is true.
+ */
+const writeTestStubsForFile = (
+  sourcePath: string,
+  irs: readonly StaticEffectIR[],
+  testRunner: TestRunner,
+  overwrite: boolean,
+): Effect.Effect<readonly { path: string; skipped: boolean }[], unknown> =>
+  Effect.gen(function* () {
+    const results: { path: string; skipped: boolean }[] = [];
+    const dir = dirname(sourcePath);
+    const seen = new Set<string>();
+    for (const ir of irs) {
+      const name = sanitizeProgramName(ir.root.programName || 'program');
+      let target = join(dir, `${name}.test.ts`);
+      // Disambiguate if multiple programs share a name after sanitization
+      let suffix = 2;
+      while (seen.has(target)) {
+        target = join(dir, `${name}.${String(suffix++)}.test.ts`);
+      }
+      seen.add(target);
+
+      const exists = yield* Effect.tryPromise(() => fs.access(target)).pipe(
+        Effect.map(() => true),
+        Effect.catchAll(() => Effect.succeed(false)),
+      );
+      if (exists && !overwrite) {
+        results.push({ path: target, skipped: true });
+        continue;
+      }
+
+      const paths = generatePaths(ir);
+      const matrix = generateTestMatrix(paths);
+      const code = formatTestMatrixAsCode(matrix, {
+        testRunner,
+        programName: ir.root.programName,
+      });
+      yield* Effect.tryPromise(() => fs.writeFile(target, code, 'utf-8'));
+      results.push({ path: target, skipped: false });
+    }
+    return results;
+  });
+
 const runAnalysis = (
   resolvedPath: string,
   options: CLIOptions,
@@ -703,6 +788,22 @@ const runAnalysis = (
     const programQualities = options.quality
       ? buildProgramQualities(filteredIrs, qualityHintsByFile, options.styleGuide)
       : new Map<string, DiagramQuality>();
+
+    if (options.test && filteredIrs.length > 0) {
+      const results = yield* writeTestStubsForFile(
+        resolvedPath,
+        filteredIrs,
+        options.testRunner,
+        options.testOverwrite,
+      );
+      for (const r of results) {
+        if (r.skipped) {
+          yield* Console.log(style.dim(`  Test (skipped, exists): ${r.path}`));
+        } else {
+          yield* Console.log(style.green('  Test: ') + style.cyan(r.path));
+        }
+      }
+    }
 
     if (options.colocate) {
       const outputFile = yield* writeColocatedOutputForFile(
@@ -1173,6 +1274,26 @@ const runProjectMode = (
           yield* Console.log(
             style.green('  Written: ') + style.cyan(outputPath),
           );
+        }
+      }
+    }
+
+    if (options.test) {
+      for (const [filePath, programs] of byFile) {
+        const results = yield* writeTestStubsForFile(
+          filePath,
+          programs,
+          options.testRunner,
+          options.testOverwrite,
+        );
+        if (!options.quiet) {
+          for (const r of results) {
+            if (r.skipped) {
+              yield* Console.log(style.dim(`  Test (skipped, exists): ${r.path}`));
+            } else {
+              yield* Console.log(style.green('  Test: ') + style.cyan(r.path));
+            }
+          }
         }
       }
     }

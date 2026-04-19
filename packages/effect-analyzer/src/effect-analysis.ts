@@ -603,6 +603,24 @@ const buildPureCallbackSummaryNodes = (
   return summaries.length > 0 ? summaries : undefined;
 };
 
+/**
+ * Heuristic: does this `.pipe(...)` call apply Effect-level operations?
+ *
+ * Used to route pipe calls whose base is not literally `Effect.*` but whose
+ * transformations are (e.g. `service.doThing().pipe(Effect.retry(...))`).
+ * Matches the textual prefix of each arg against the Effect module's common
+ * combinators — cheap, no type-checker needed.
+ */
+const EFFECT_PIPE_OP_REGEX =
+  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catchAll|catchAllCause|catchTag|catchTags|catchSome|catchSomeCause|catchSomeDefect|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*\(/;
+
+const pipeArgsIncludeEffectOp = (call: CallExpression): boolean => {
+  for (const arg of call.getArguments()) {
+    if (EFFECT_PIPE_OP_REGEX.test(arg.getText())) return true;
+  }
+  return false;
+};
+
 export const analyzePipeChain = (
   node: CallExpression,
   sourceFile: SourceFile,
@@ -1098,12 +1116,14 @@ export const analyzeEffectCall = (
       opts.includeLocations ?? false,
     );
 
-    // pipe(base, ...fns) or Effect.*.pipe(...fns) inside generator → analyze as pipe chain so transformations (e.g. RcRef.update) are classified
-    // For method-style .pipe(), only route Effect-based pipes (not Schedule, Stream, etc.)
+    // pipe(base, ...fns) or <base>.pipe(...fns) inside generator → analyze as pipe chain so transformations (e.g. RcRef.update) are classified
+    // For method-style .pipe(), route Effect-based pipes, plus any pipe whose
+    // transformations include explicit Effect.* operations (e.g. retry, timeout, catchAll)
+    // on a non-Effect-prefixed base like `serviceCall().pipe(Effect.retry(...))`.
     const isEffectMethodPipe =
       callee.endsWith('.pipe') &&
       callee !== 'pipe' &&
-      callee.startsWith('Effect.');
+      (callee.startsWith('Effect.') || pipeArgsIncludeEffectOp(call));
     if (
       (callee === 'pipe' || isEffectMethodPipe) &&
       call.getArguments().length >= 1
