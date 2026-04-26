@@ -33,8 +33,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1(astro@6.1.8(@types/node@25.6.0)(lightningcss@1.32.0)(rollup@4.60.2)(typescript@5.9.3))(mermaid@11.14.0)
       effect:
-        specifier: ^3.21.0
-        version: 3.21.0
+        specifier: ^3.21.2
+        version: 3.21.2
       mermaid:
         specifier: ^11.14.0
         version: 11.14.0
@@ -49,10 +49,10 @@ importers:
     dependencies:
       '@effect/platform':
         specifier: '>=0.70.0'
-        version: 0.96.0(effect@3.21.0)
+        version: 0.96.0(effect@3.21.2)
       effect:
-        specifier: ^3.21.0
-        version: 3.21.0
+        specifier: ^3.21.2
+        version: 3.21.2
       ts-morph:
         specifier: ^27.0.2
         version: 27.0.2
@@ -2208,8 +2208,8 @@ packages:
     resolution: {integrity: sha512-2QF/g9/zTaPDc3BjNcVTGoBbXBgYfMTTceLaYcFJ/W9kggFUkhxD/hMEeuLKbugyef9SqAx8cpgwlIP/jinUTA==}
     engines: {node: '>=4'}
 
-  effect@3.21.0:
-    resolution: {integrity: sha512-PPN80qRokCd1f015IANNhrwOnLO7GrrMQfk4/lnZRE/8j7UPWrNNjPV0uBrZutI/nHzernbW+J0hdqQysHiSnQ==}
+  effect@3.21.2:
+    resolution: {integrity: sha512-rXd2FGDM8KdjSIrc+mqEELo7ScW7xTVxEf1iInmPSpIde9/nyGuFM710cjTo7/EreGXiUX2MOonPpprbz2XHCg==}
 
   enquirer@2.4.1:
     resolution: {integrity: sha512-rRqJg/6gd538VHvR3PSrdRBb/1Vy2YfzHqzvbhGIQpDRKIa4FgV/54b5Q1xYSxOOwKvjXweS26E0Q+nAMwp2pQ==}
@@ -4276,9 +4276,9 @@ snapshots:
       '@dprint/typescript': 0.91.8
       prettier-linter-helpers: 1.0.1
 
-  '@effect/platform@0.96.0(effect@3.21.0)':
+  '@effect/platform@0.96.0(effect@3.21.2)':
     dependencies:
-      effect: 3.21.0
+      effect: 3.21.2
       find-my-way-ts: 0.1.6
       msgpackr: 1.11.9
       multipasta: 0.2.7
@@ -6039,7 +6039,7 @@ snapshots:
 
   dset@3.1.4: {}
 
-  effect@3.21.0:
+  effect@3.21.2:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 3.23.2
