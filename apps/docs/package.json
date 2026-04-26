@@ -17,7 +17,7 @@
     "@fontsource/jetbrains-mono": "^5.0.0",
     "astro": "^6.1.8",
     "astro-mermaid": "^2.0.1",
-    "effect": "^3.21.0",
+    "effect": "^3.21.2",
     "mermaid": "^11.14.0",
     "sharp": "^0.33.0",
     "ts-morph": "^27.0.2"
