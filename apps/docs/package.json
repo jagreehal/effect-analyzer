@@ -18,7 +18,7 @@
     "astro": "^6.3.1",
     "astro-mermaid": "^2.0.1",
     "effect": "^3.21.2",
-    "mermaid": "^11.14.0",
+    "mermaid": "^11.15.0",
     "sharp": "^0.33.0",
     "ts-morph": "^27.0.2"
   }
