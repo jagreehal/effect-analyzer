@@ -228,7 +228,7 @@ function collectEndpointsFromGroup(groupMakeNode: CallExpression, sf: SourceFile
       if (isChained) {
         const receiver = c.getExpression();
         if (receiver.getKind() === SyntaxKind.CallExpression) {
-          current = receiver as CallExpression;
+          current = receiver;
         } else {
           current = (receiver as PropertyAccessExpression).getExpression();
         }
@@ -386,13 +386,13 @@ function collectAddArgsFromChain(makeNode: CallExpression): Node[] {
         }
         const receiver = call.getExpression();
         if (receiver.getKind() === SyntaxKind.CallExpression) {
-          current = receiver as CallExpression;
+          current = receiver;
           continue;
         }
         if (receiver.getKind() === SyntaxKind.PropertyAccessExpression) {
           const inner = (receiver as PropertyAccessExpression).getExpression();
           if (inner.getKind() === SyntaxKind.CallExpression) {
-            current = inner as CallExpression;
+            current = inner;
             continue;
           }
         }
@@ -425,13 +425,13 @@ function collectGroupsFromApiRoot(
       if (chainMethods.some((m) => expr.endsWith(m))) {
         const receiver = c.getExpression();
         if (receiver.getKind() === SyntaxKind.CallExpression) {
-          current = receiver as CallExpression;
+          current = receiver;
           continue;
         }
         if (receiver.getKind() === SyntaxKind.PropertyAccessExpression) {
           const inner = (receiver as PropertyAccessExpression).getExpression();
           if (inner.getKind() === SyntaxKind.CallExpression) {
-            current = inner as CallExpression;
+            current = inner;
             continue;
           }
         }

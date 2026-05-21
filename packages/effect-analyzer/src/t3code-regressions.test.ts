@@ -67,7 +67,7 @@ describe('t3code-inspired regressions', () => {
 
     const generator = ir.root.children.find((child) => child.type === 'generator');
     expect(generator?.type).toBe('generator');
-    if (!generator || generator.type !== 'generator') return;
+    if (generator?.type !== 'generator') return;
 
     expect(generator.yields).toHaveLength(2);
     const callbackNodes = collectEffectNodes(ir.root.children).filter(

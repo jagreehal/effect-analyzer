@@ -10,7 +10,6 @@ import type {
   PropertyAccessExpression,
   Identifier,
   AwaitExpression,
-  Block,
   ArrowFunction,
   FunctionExpression,
   PropertyDeclaration,
@@ -497,7 +496,7 @@ export const findEffectPrograms = (
         | FunctionExpression;
       const body = fn.getBody();
       if (body.getKind() === SyntaxKind.Block) {
-        const nested = inferFromNestedEffectAliasUsage(body as Block);
+        const nested = inferFromNestedEffectAliasUsage(body);
         if (nested) return nested;
       } else {
         const nested = inferFromNestedEffectAliasUsage(body);
