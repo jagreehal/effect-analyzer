@@ -8,7 +8,9 @@ import type {
   SourceFile,
   Node,
   CallExpression,
+  ArrowFunction,
   FunctionDeclaration,
+  FunctionExpression,
   VariableDeclaration,
   ClassDeclaration,
   PropertyDeclaration,
@@ -39,6 +41,7 @@ import type {
   Block,
   ConditionalExpression,
   BinaryExpression,
+  Identifier,
 } from 'ts-morph';
 import { loadTsMorph } from './ts-morph-loader';
 import type {
@@ -57,6 +60,7 @@ import type {
   StaticParallelNode,
   StaticRaceNode,
   StaticRetryNode,
+  StaticLayerNode,
   AnalysisError,
   AnalyzerOptions,
   AnalysisWarning,
@@ -203,6 +207,27 @@ export const analyzeProgramNode = (
             warnings,
             stats,
           );
+        }
+        const outerLayerUnwrap = findOuterLayerUnwrapOnGen(genCall);
+        if (outerLayerUnwrap) {
+          const unwrapNode: StaticLayerNode = {
+            id: generateId(),
+            type: 'layer',
+            name: 'Layer.unwrapEffect(gen)',
+            operations: [...genChildren],
+            isMerged: false,
+            lifecycle: 'default',
+            location: extractLocation(
+              outerLayerUnwrap,
+              filePath,
+              opts.includeLocations ?? false,
+            ),
+          };
+          return [{
+            ...unwrapNode,
+            displayName: computeDisplayName(unwrapNode),
+            semanticRole: computeSemanticRole(unwrapNode),
+          }];
         }
         return genChildren;
       }
@@ -792,7 +817,7 @@ function analyzeStepCall(
         const stepId = extractStringLiteral(args[0]);
         const iterSource = args[1]?.getText();
         const fn = args[2];
-        let body: StaticFlowNode = { id: generateId(), type: 'effect', callee: 'unknown' } as StaticEffectNode;
+        let body: StaticFlowNode = { id: generateId(), type: 'effect', callee: 'unknown' };
         if (fn) {
           const analyzed = yield* analyzeEffectExpression(
             fn,
@@ -925,6 +950,8 @@ interface WalkerContext {
   readonly warnings: AnalysisWarning[];
   readonly stats: AnalysisStats;
   readonly serviceScope: Map<string, string>;
+  /** Parameter names accepted by Effect.gen callback adapters, e.g. `_` in `Effect.gen(function*(_) {})`. */
+  readonly generatorAdapterParams: ReadonlySet<string>;
   /** Tracks const declarations with literal initializers for condition simplification */
   readonly constValues: Map<string, string>;
 }
@@ -938,6 +965,7 @@ function analyzeYieldNode(
   ctx: WalkerContext,
 ): Effect.Effect<{ variableName: string | undefined; effect: StaticFlowNode }, AnalysisError> {
   return Effect.gen(function* () {
+    const { SyntaxKind } = loadTsMorph();
     const yieldExpr = yieldNode as YieldExpression;
     const isDelegated = yieldExpr.getText().startsWith('yield*');
     const expr = yieldExpr.getExpression();
@@ -970,8 +998,24 @@ function analyzeYieldNode(
       return { variableName: undefined, effect: opaqueNode };
     }
 
+    // Effect.gen adapter form: yield* _(effect)
+    // Widely used in Effect ecosystem examples and wrappers.
+    let effectExpr: Node = expr;
+    const unwrappedCall = unwrapExpression(expr);
+    if (unwrappedCall.getKind() === SyntaxKind.CallExpression) {
+      const call = unwrappedCall as CallExpression;
+      const calleeExpr = call.getExpression();
+      if (
+        calleeExpr.getKind() === SyntaxKind.Identifier &&
+        ctx.generatorAdapterParams.has((calleeExpr as Identifier).getText()) &&
+        call.getArguments().length >= 1
+      ) {
+        effectExpr = (call.getArguments()[0]) ?? expr;
+      }
+    }
+
     // effect-flow: intercept Step.* calls when enableEffectFlow is active
-    const unwrappedExpr = unwrapExpression(expr);
+    const unwrappedExpr = unwrapExpression(effectExpr);
     if (ctx.opts.enableEffectFlow && isStepCall(unwrappedExpr)) {
       const stepResult = yield* analyzeStepCall(unwrappedExpr as CallExpression, ctx);
       const variableName = extractYieldVariableName(yieldNode);
@@ -984,7 +1028,7 @@ function analyzeYieldNode(
     }
 
     const analyzed = yield* analyzeEffectExpression(
-      expr,
+      effectExpr,
       ctx.sourceFile,
       ctx.filePath,
       ctx.opts,
@@ -1832,6 +1876,17 @@ export const analyzeGeneratorFunction = (
 
     const serviceScope = new Map<string, string>();
     const constValues = new Map<string, string>();
+    const generatorAdapterParams = new Set<string>();
+    if (
+      node.getKind() === SyntaxKind.ArrowFunction ||
+      node.getKind() === SyntaxKind.FunctionExpression ||
+      node.getKind() === SyntaxKind.FunctionDeclaration
+    ) {
+      const fnLike = node as ArrowFunction | FunctionExpression | FunctionDeclaration;
+      for (const param of fnLike.getParameters()) {
+        generatorAdapterParams.add(param.getName());
+      }
+    }
     const ctx: WalkerContext = {
       sourceFile,
       filePath,
@@ -1839,6 +1894,7 @@ export const analyzeGeneratorFunction = (
       warnings,
       stats,
       serviceScope,
+      generatorAdapterParams,
       constValues,
     };
 
@@ -1929,6 +1985,21 @@ function findOuterPipeOnGen(genCall: CallExpression): CallExpression | undefined
   const call = grandparent as CallExpression;
   if (call.getExpression() !== pa) return undefined;
   return call;
+}
+
+/**
+ * If `genCall` is the first argument to `Layer.unwrapEffect(...)`, return
+ * that enclosing call so generator analysis can preserve explicit layer semantics.
+ */
+function findOuterLayerUnwrapOnGen(genCall: CallExpression): CallExpression | undefined {
+  const { SyntaxKind } = loadTsMorph();
+  const parent = genCall.getParent();
+  if (parent?.getKind() !== SyntaxKind.CallExpression) return undefined;
+  const outer = parent as CallExpression;
+  if ((outer.getArguments()[0] ?? undefined) !== genCall) return undefined;
+  const callee = outer.getExpression().getText();
+  if (callee === 'Layer.unwrapEffect') return outer;
+  return undefined;
 }
 
 /**

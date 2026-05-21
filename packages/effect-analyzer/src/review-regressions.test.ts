@@ -3,8 +3,35 @@ import { fileURLToPath } from 'url';
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { analyze } from './analyze';
+import { getStaticChildren, type StaticFlowNode } from './types';
 
 describe('review regressions', () => {
+  const findFirstByType = <T extends StaticFlowNode['type']>(
+    nodes: readonly StaticFlowNode[],
+    type: T,
+  ): Extract<StaticFlowNode, { type: T }> | undefined => {
+    const directChildren = (node: StaticFlowNode): readonly StaticFlowNode[] => {
+      if (node.type === 'pipe') return [node.initial, ...node.transformations];
+      if (node.type === 'parallel' || node.type === 'race') return node.children;
+      if (node.type === 'generator') return node.yields.map((y) => y.effect);
+      if (node.type === 'layer') return node.operations;
+      return getStaticChildren(node) ?? [];
+    };
+
+    const stack = [...nodes];
+    const seen = new Set<string>();
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (!node) continue;
+      if (seen.has(node.id)) continue;
+      seen.add(node.id);
+      if (node.type === type) return node as Extract<StaticFlowNode, { type: T }>;
+      const children = directChildren(node);
+      for (const child of children) stack.push(child);
+    }
+    return undefined;
+  };
+
   const readFixture = (name: string): string =>
     readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)), 'utf-8');
 
@@ -104,6 +131,144 @@ const service = {
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
       expect(exit.cause.error).toMatchObject({ code: 'NO_EFFECTS_FOUND' });
+    }
+  });
+
+  it('analyzes Effect.gen adapter yields (yield* _(effect)) as normal effects', async () => {
+    const source = `
+import { Effect, Console } from "effect";
+
+export const program = Effect.gen(function* (_) {
+  const n = yield* _(Effect.succeed(1));
+  yield* _(Console.log(String(n)));
+  return n;
+});
+`;
+
+    const results = await Effect.runPromise(analyze.source(source).all());
+    const program = results.find((ir) => ir.root.programName === 'program');
+    expect(program).toBeDefined();
+    const gen = program?.root.children.find((child) => child.type === 'generator');
+    expect(gen?.type).toBe('generator');
+    if (gen?.type === 'generator') {
+      expect(gen.yields.length).toBeGreaterThanOrEqual(2);
+      expect(gen.yields[0]?.effect.type).toBe('effect');
+      if (gen.yields[0]?.effect.type === 'effect') {
+        expect(gen.yields[0].effect.callee).toBe('Effect.succeed');
+      }
+      expect(gen.yields[1]?.effect.type).toBe('effect');
+    }
+  });
+
+  it('classifies yielded TaggedError instances as Effect.fail steps', async () => {
+    const source = `
+import { Effect, Schema } from "effect";
+
+class ShortenError extends Schema.TaggedError<ShortenError>()("ShortenError", {
+  reason: Schema.String
+}) {}
+
+export const program = Effect.gen(function* () {
+  yield* new ShortenError({ reason: "TooLarge" });
+});
+`;
+
+    const results = await Effect.runPromise(analyze.source(source).all());
+    const program = results.find((ir) => ir.root.programName === 'program');
+    expect(program).toBeDefined();
+    const gen = program?.root.children.find((child) => child.type === 'generator');
+    expect(gen?.type).toBe('generator');
+    if (gen?.type === 'generator') {
+      expect(gen.yields.length).toBeGreaterThanOrEqual(1);
+      const first = gen.yields[0]?.effect;
+      expect(first?.type).toBe('effect');
+      if (first?.type === 'effect') {
+        expect(first.callee).toBe('Effect.fail');
+        expect(first.errorType).toBe('ShortenError');
+      }
+    }
+  });
+
+  it('collects all dependencies from Layer.provide array arguments', async () => {
+    const source = `
+import { Layer, Context } from "effect";
+
+class FetchHttpClient extends Context.Tag("FetchHttpClient")<FetchHttpClient, { readonly get: () => void }>() {}
+class RpcSerialization extends Context.Tag("RpcSerialization")<RpcSerialization, { readonly json: () => void }>() {}
+class RpcClient extends Context.Tag("RpcClient")<RpcClient, { readonly call: () => void }>() {}
+
+const clientLayer = Layer.succeed(RpcClient, { call: () => {} }).pipe(
+  Layer.provide([
+    Layer.succeed(FetchHttpClient, { get: () => {} }),
+    Layer.succeed(RpcSerialization, { json: () => {} })
+  ])
+);
+`;
+
+    const results = await Effect.runPromise(analyze.source(source).all());
+    const ir = results.find((x) => x.root.programName === 'clientLayer');
+    expect(ir).toBeDefined();
+    const layer = ir ? findFirstByType(ir.root.children, 'layer') : undefined;
+    expect(layer?.type).toBe('layer');
+    if (layer?.type === 'layer') {
+      const req = new Set(layer.requires ?? []);
+      expect(req.has('FetchHttpClient')).toBe(true);
+      expect(req.has('RpcSerialization')).toBe(true);
+    }
+  });
+
+  it('classifies Layer.unwrapEffect(Effect.gen(...)) with explicit unwrapEffect layer semantics', async () => {
+    const source = `
+import { Layer, Effect } from "effect";
+
+export const TracingLayer = Layer.unwrapEffect(
+  Effect.gen(function*() {
+    return Layer.empty;
+  })
+);
+`;
+    const results = await Effect.runPromise(analyze.source(source).all());
+    const ir = results.find((x) => x.root.programName === 'TracingLayer');
+    expect(ir).toBeDefined();
+    const layer = ir ? findFirstByType(ir.root.children, 'layer') : undefined;
+    expect(layer?.type).toBe('layer');
+    if (layer?.type === 'layer') {
+      expect(layer.name).toBe('Layer.unwrapEffect(gen)');
+    }
+  });
+
+  it('models RpcClient.layerProtocolHttp(...).pipe(Layer.provide([...])) as a pipe with layer dependencies', async () => {
+    const source = `
+import { Layer, Context } from "effect";
+
+class FetchHttpClient extends Context.Tag("FetchHttpClient")<FetchHttpClient, { readonly get: () => void }>() {}
+class RpcSerialization extends Context.Tag("RpcSerialization")<RpcSerialization, { readonly json: () => void }>() {}
+
+const RpcClient = {
+  layerProtocolHttp: (_: { url: string }) => Layer.empty
+};
+
+export const clientLayer = RpcClient.layerProtocolHttp({ url: "/api/rpc/" }).pipe(
+  Layer.provide([
+    Layer.succeed(FetchHttpClient, { get: () => {} }),
+    Layer.succeed(RpcSerialization, { json: () => {} })
+  ])
+);
+`;
+    const results = await Effect.runPromise(analyze.source(source).all());
+    const ir = results.find((x) => x.root.programName === 'clientLayer');
+    expect(ir).toBeDefined();
+    const pipe = ir?.root.children.find((n) => n.type === 'pipe');
+    expect(pipe?.type).toBe('pipe');
+    if (pipe?.type === 'pipe') {
+      expect(pipe.initial.type).toBe('layer');
+      const provided = pipe.transformations.find((t) => t.type === 'layer');
+      expect(provided?.type).toBe('layer');
+      if (provided?.type === 'layer') {
+        const req = new Set(provided.requires ?? []);
+        expect(req.has('FetchHttpClient')).toBe(true);
+        expect(req.has('RpcSerialization')).toBe(true);
+      }
     }
   });
 

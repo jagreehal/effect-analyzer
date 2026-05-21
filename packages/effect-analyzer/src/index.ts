@@ -636,5 +636,97 @@ export {
   deadCodeRule,
   complexLayerRule,
   catchAllVsCatchTagRule,
+  swallowedErrorRule,
+  largeGenBlockRule,
+  flatMapChainRule,
+  provideMergeChainRule,
+  sequentialFailRule,
+  deferredNoResolveRule,
+  createLargeGenBlockRule,
+  createFlatMapChainRule,
+  createProvideMergeChainRule,
+  createSequentialFailRule,
 } from './effect-linter';
 export type { LintRule, LintIssue, LintResult } from './effect-linter';
+
+export {
+  lintSourceFile,
+  lintSourceCode,
+} from './source-linter';
+export type { SourceLintResult } from './source-linter';
+export {
+  listAllRuleDocs,
+  findRuleDoc,
+  explainRule,
+  searchRuleDocs,
+  buildRuleIndex,
+  renderRuleIndexJson,
+  getRuleCodesForProfile,
+  renderRuleDocsJson,
+  renderRuleDocsText,
+} from './rule-registry';
+export type {
+  RuleDoc,
+  RuleConfidence,
+  RuleDomain,
+  RuleProfile,
+  RuleSearchResult,
+  RuleSeverity,
+  RuleIndexEntry,
+} from './rule-registry';
+export {
+  runSourceLintScan,
+  compareAgainstBaseline,
+  toSarif,
+} from './lint-session';
+export type {
+  LintFinding,
+  Suppression,
+  LintScanResult,
+  BaselineComparison,
+} from './lint-session';
+export {
+  detectServiceCycles,
+} from './service-cycles';
+export type {
+  ServiceCycle,
+} from './service-cycles';
+
+// =============================================================================
+// Entry points / Config sensitivity / CLI commands
+// =============================================================================
+
+export {
+  findEntryPoints,
+  analyzeEntryPointsFile,
+  analyzeEntryPointsSource,
+} from './entry-points';
+export type {
+  EntryPoint,
+  EntryPointKind,
+  EntryPointReport,
+} from './entry-points';
+
+export {
+  findConfigSensitivity,
+  analyzeConfigSensitivityFile,
+  analyzeConfigSensitivitySource,
+} from './config-sensitivity';
+export type {
+  ConfigSource,
+  ConfigLeak,
+  ConfigSensitivityReport,
+} from './config-sensitivity';
+
+export {
+  findCliCommands,
+  analyzeCliCommandsFile,
+  analyzeCliCommandsSource,
+} from './cli-command-analyzer';
+export type {
+  CliArgInfo,
+  CliPromptInfo,
+  CliCommandInfo,
+  CliRunInfo,
+  CliCommandReport,
+} from './cli-command-analyzer';

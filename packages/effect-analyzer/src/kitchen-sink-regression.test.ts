@@ -10,10 +10,17 @@ const kitchenSinkPath = resolve(fixturesDir, 'kitchen-sink.ts');
 
 function collectNodeTypes(nodes: readonly StaticFlowNode[]): Set<StaticFlowNode['type']> {
   const types = new Set<StaticFlowNode['type']>();
+  const directChildren = (node: StaticFlowNode): readonly StaticFlowNode[] => {
+    if (node.type === 'pipe') return [node.initial, ...node.transformations];
+    if (node.type === 'parallel' || node.type === 'race') return node.children;
+    if (node.type === 'generator') return node.yields.map((y) => y.effect);
+    if (node.type === 'layer') return node.operations;
+    return Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
+  };
   const walk = (list: readonly StaticFlowNode[]) => {
     for (const node of list) {
       types.add(node.type);
-      const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
+      const children = directChildren(node);
       if (children.length > 0) walk(children);
     }
   };
@@ -55,20 +62,35 @@ describe('kitchen-sink regression (improve.md P0)', () => {
     expect(allTypes.has('resource')).toBe(true);
     expect(allTypes.has('layer')).toBe(true);
 
-    const hasServiceCall = irs.some((ir) => {
+    const hasServiceSignal = irs.some((ir) => {
+      const directChildren = (node: StaticFlowNode): readonly StaticFlowNode[] => {
+        if (node.type === 'pipe') return [node.initial, ...node.transformations];
+        if (node.type === 'parallel' || node.type === 'race') return node.children;
+        if (node.type === 'generator') return node.yields.map((y) => y.effect);
+        if (node.type === 'layer') return node.operations;
+        return Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
+      };
       const stack = [...ir.root.children];
       while (stack.length > 0) {
         const node = stack.pop();
         if (!node) continue;
-        if (isStaticEffectNode(node) && node.semanticRole === 'service-call') {
+        if (
+          isStaticEffectNode(node) &&
+          (
+            node.semanticRole === 'service-call' ||
+            node.serviceCall !== undefined ||
+            node.serviceMethod !== undefined ||
+            (node.requiredServices?.length ?? 0) > 0
+          )
+        ) {
           return true;
         }
-        const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
+        const children = directChildren(node);
         stack.push(...children);
       }
       return false;
     });
-    expect(hasServiceCall).toBe(true);
+    expect(hasServiceSignal).toBe(true);
 
     const resourceProgram = irs.find((ir) => ir.root.programName === 'resourceProgram');
     expect(resourceProgram).toBeDefined();

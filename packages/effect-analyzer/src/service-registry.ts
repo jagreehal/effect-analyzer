@@ -198,7 +198,7 @@ function extractLayerImplementationsFromFile(
     let providesServiceId: string | undefined;
 
     // Walk call expression to find first argument
-    if (initializer.getKind() === (SyntaxKind.CallExpression as number)) {
+    if ((initializer.getKind()) === (SyntaxKind.CallExpression)) {
       const args = initializer.getArguments?.();
       if (args && args.length > 0) {
         const firstArg = args[0];

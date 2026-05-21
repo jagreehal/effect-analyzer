@@ -205,7 +205,7 @@ function walkSchema(
     if (call) {
       const args = call.getArguments();
       const items = args.map((a) => walkSchema(a, sf, project, defs)).filter(Boolean);
-      return { type: 'array', items: items as JsonSchemaObject[] };
+      return { type: 'array', items: items };
     }
   }
 
