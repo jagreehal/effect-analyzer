@@ -7,7 +7,7 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-The `effect-analyze` CLI analyzes Effect TypeScript files and produces diagrams, metrics, and reports.
+The `effect-analyze` CLI analyzes Effect TypeScript files and produces diagrams, metrics, lint findings, health reports, and prioritized improvement plans.
 
 ## Usage
 
@@ -30,7 +30,7 @@ When `path` is a file, the analyzer processes that file. When it is a directory,
 | `--tsconfig <path>` | Path to a custom `tsconfig.json` | auto-detected |
 | `--include-trivial` | Include trivial programs (schemas, thin wrappers) that are excluded by default | off |
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
-| `-h, --help` | Print help and exit | - |
+| `-h, --help` | Print help and exit | — |
 
 ## Diagram Options
 
@@ -38,7 +38,7 @@ When `path` is a file, the analyzer processes that file. When it is a directory,
 |---|---|---|
 | `--direction <dir>` | Mermaid flow direction: `TB`, `LR`, `BT`, `RL` | `TB` |
 | `--style-guide` | Apply style-guide heuristics for cleaner, more readable diagrams | off |
-| `--no-style-guide` | Explicitly disable style-guide mode | - |
+| `--no-style-guide` | Explicitly disable style-guide mode | — |
 
 ## Analysis Modes
 
@@ -51,16 +51,88 @@ When `path` is a file, the analyzer processes that file. When it is a directory,
 | `--coverage-audit` | Run a project-wide coverage audit (see [Coverage Audit](/effect-analyzer/project/coverage-audit/)) |
 | `--migration` | Alias for `--format migration` |
 
+## Source Linting
+
+Run deterministic source-level lints. See [Source Linter](/effect-analyzer/project/source-linter/) for the full rule list and workflow.
+
+| Flag | Description |
+|---|---|
+| `--lint-source` | Run deterministic source lints on a file or directory |
+| `--sarif` | Emit SARIF 2.1.0 output |
+| `--scorecard` | Emit a per-file lint scorecard |
+| `--baseline <file>` | Compare findings against a baseline session/JSON file |
+| `--fail-on-new` | Exit non-zero when new findings exist vs baseline |
+| `--require-suppression-reason` | Require a reason after `effect-lint-disable-next-line` comments |
+| `--fail-on-stale-suppressions` | Exit non-zero when suppression comments are stale |
+| `--bundle-output <dir>` | Write deterministic artifact bundle (diagnostics, SARIF, summary, rules, session) |
+| `--profile <name>` | Rule profile: `strict`, `ci`, `migration`, `docs` |
+
+## Health Analyzers
+
+Project-wide analyzers that surface structural issues. See [Health Analyzers](/effect-analyzer/project/health/).
+
+| Flag | Description |
+|---|---|
+| `--error-channel` | Generic errors, unhandled types, missing `catchTag` handlers |
+| `--service-health` | Unsatisfied services, dead services, layer inefficiencies |
+| `--performance` | Sequential-could-parallel, unbounded concurrency, N+1, large gen blocks, missing batching, unbounded retries, `forEach` without concurrency |
+
+## App-Shape Analyzers
+
+Inspect the surface and dependency shape of an Effect app. See [App-Shape Analyzers](/effect-analyzer/project/app-shape/).
+
+| Flag | Description |
+|---|---|
+| `--entry-points` | Detect `NodeRuntime` / `BunRuntime` / `Layer.launch` / `runFork` entry points (single file) |
+| `--config-leaks` | Flag `Config.redacted` / `Config.secret` values that flow into logs or console sinks (single file) |
+| `--cli-commands` | Extract `@effect/cli` Command/Args/Options/Prompt structure (single file) |
+| `--service-cycles` | Detect cycles in the project-wide service dependency graph (directory) |
+
+## Improvement Workflow
+
+Prioritized, agent-ready improvement plans with optional auto-fixing. See [Improve Mode](/effect-analyzer/project/improve/).
+
+| Flag | Description |
+|---|---|
+| `--agent-report` | Generate a prioritized improvement backlog (JSON + Markdown) optimized for coding agents |
+| `--improve` | Apply automated fixes for fixable lint issues |
+| `--improve-dry-run` | Preview fixes without applying (default for `--improve`) |
+| `--improve-max-fixes <n>` | Limit number of fixes to apply |
+| `--improve-rule <rule>` | Only apply fixes for this rule (repeatable) |
+| `--improve-exclude-rule <rule>` | Exclude fixes for this rule (repeatable) |
+| `--improve-min-priority <P>` | Minimum priority level to include: `P0`, `P1`, `P2`, `P3` |
+
+## Rule Registry
+
+Inspect and search the deterministic rule registry (source lints, effect-lints, strict diagnostics).
+
+| Flag | Description |
+|---|---|
+| `--list-rules` | Print the full rule registry as a docs table |
+| `--index-rules` | Print searchable rule index entries |
+| `--search-rules <query>` | Search rules by code, title, description, or example |
+| `--explain-rule <code>` | Show one rule in detail (description, docs URL, Bad/Good examples) |
+
+## Test Stub Generation
+
+| Flag | Description |
+|---|---|
+| `--test` | Write a `{programName}.test.ts` stub next to each source file |
+| `--test-runner <runner>` | Test runner: `vitest` (default), `jest`, `mocha` |
+| `--test-overwrite` | Overwrite existing test files instead of skipping |
+
 ## Directory Mode Options
 
 | Flag | Description | Default |
 |---|---|---|
 | `--colocate` | Write `.effect-analysis.md` next to each source file | off |
-| `--no-colocate` | Print a summary to stdout instead of writing files | - |
+| `--no-colocate` | Print a summary to stdout instead of writing files | — |
 | `--colocate-suffix <suffix>` | Custom suffix for colocated files | `effect-analysis` |
 | `--service-map` | Show a deduplicated service registry across the project | on |
-| `--no-service-map` | Disable the project-wide service map | - |
-| `--no-colocate-enhanced` | Use standard Mermaid instead of enhanced format for colocated files | - |
+| `--no-service-map` | Disable the project-wide service map | — |
+| `--no-colocate-enhanced` | Use standard Mermaid instead of enhanced format for colocated files | — |
+| `--max-files <n>` | Analyze at most n files (cursor-window mode for huge repos) | unlimited |
+| `--cursor <n>` | Start from nth file in sorted file list (resumable window) | 0 |
 
 ## Coverage Audit Options
 
@@ -82,14 +154,23 @@ These flags are used with `--coverage-audit`:
 
 | Flag | Description |
 |---|---|
-| `--quality` | Compute diagram quality metrics for each program |
-| `--quality-eslint <path>` | Load diagram quality hints from an ESLint JSON file |
+| `--quality` | Compute heuristic diagram readability metrics for each program |
+| `--quality-eslint <path>` | Ingest ESLint JSON for optional quality hints |
 
 ## OpenAPI Options
 
 | Flag | Description |
 |---|---|
 | `--export <name>` | Export name of the HttpApi (with `--format openapi-runtime`) |
+
+## Session Envelope
+
+For reproducible CI runs, the analyzer can export and re-import a full session envelope (inputs, options, results metadata).
+
+| Flag | Description |
+|---|---|
+| `--export-session <file>` | Export CLI session envelope |
+| `--import-session <file>` | Import and print a previously exported envelope |
 
 ## Output Formats
 
@@ -135,10 +216,54 @@ effect-analyze src/ --colocate
 effect-analyze src/ --coverage-audit --json-summary
 ```
 
-### Compare with the last commit
+### Source lints with SARIF output for code-scanning
 
 ```bash
-effect-analyze src/transfer.ts --diff
+effect-analyze src/ --lint-source --sarif -o findings.sarif
+```
+
+### Gate CI on new lint findings only
+
+```bash
+effect-analyze src/ --lint-source --baseline ./.cache/effect-lint-baseline.json --fail-on-new
+```
+
+### Inspect a single rule
+
+```bash
+effect-analyze --explain-rule runSync-on-async
+```
+
+### Agent-ready improvement backlog
+
+```bash
+effect-analyze src/ --agent-report -o backlog.md
+```
+
+### Apply safe auto-fixes (dry run first)
+
+```bash
+effect-analyze src/ --improve --improve-dry-run
+effect-analyze src/ --improve --improve-min-priority P1 --improve-max-fixes 20
+```
+
+### Project health snapshot
+
+```bash
+effect-analyze src/ --error-channel --service-health --performance --format json
+```
+
+### Detect entry points and config leaks in an app
+
+```bash
+effect-analyze src/main.ts --entry-points
+effect-analyze src/main.ts --config-leaks
+```
+
+### Service dependency cycles
+
+```bash
+effect-analyze src/ --service-cycles --format json
 ```
 
 ### Compare two branches
@@ -147,28 +272,10 @@ effect-analyze src/transfer.ts --diff
 effect-analyze main:src/transfer.ts feature:src/transfer.ts --diff
 ```
 
-### Diff with regression detection
-
-```bash
-effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff --regression
-```
-
 ### Watch mode with caching
 
 ```bash
 effect-analyze src/transfer.ts --watch --cache
-```
-
-### Find migration opportunities
-
-```bash
-effect-analyze src/ --format migration
-```
-
-### Generate complexity stats
-
-```bash
-effect-analyze src/transfer.ts --format stats
 ```
 
 ### Plain-English explanation
@@ -177,16 +284,10 @@ effect-analyze src/transfer.ts --format stats
 effect-analyze src/transfer.ts --format explain
 ```
 
-### Left-to-right flowchart with style guide
+### Generate test stubs alongside source
 
 ```bash
-effect-analyze src/transfer.ts --format mermaid --direction LR --style-guide
-```
-
-### Project-wide service map
-
-```bash
-effect-analyze src/ --service-map
+effect-analyze src/ --test --test-runner vitest
 ```
 
 ### OpenAPI spec generation

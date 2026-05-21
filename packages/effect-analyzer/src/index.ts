@@ -730,3 +730,110 @@ export type {
   CliRunInfo,
   CliCommandReport,
 } from './cli-command-analyzer';
+
+// =============================================================================
+// Agent Report (for coding agents)
+// =============================================================================
+
+export {
+  buildAgentReport,
+  renderAgentReportJson,
+  renderAgentReportMarkdown,
+  renderAgentReportSummary,
+} from './agent-report';
+export type {
+  AgentPriority,
+  AgentImprovement,
+  AgentFileRef,
+  AgentErrorChannelIssue,
+  AgentServiceHealthIssue,
+  AgentPerformanceIssue,
+  AgentReportSummary,
+  AgentReport,
+  BuildAgentReportOptions,
+} from './agent-report';
+
+// =============================================================================
+// Fix Generators
+// =============================================================================
+
+export {
+  generateFix,
+  generateAllFixes,
+  renderFixesAsDiff,
+  renderFixesAsJson,
+  generateEffectFailUntaggedFix,
+  generateRawSideEffectFix,
+  generateArrayPushSpreadFix,
+  generateScheduleUnboundedFix,
+  generateConsoleLogFix,
+  generatePromiseApiFix,
+  generateIdentityCatchFix,
+  generateConfigSecretFix,
+  generateForEachConcurrencyFix,
+  generateCatchTagFix,
+} from './fix-generators';
+export type { CodeFix } from './fix-generators';
+
+// =============================================================================
+// Error Channel Analysis
+// =============================================================================
+
+export {
+  analyzeErrorChannels,
+  renderErrorChannelReport,
+  renderErrorChannelJson,
+} from './error-channel';
+export type {
+  ErrorChannelIssue,
+  ErrorChannelAnalysis,
+  ErrorChannelSummary,
+} from './error-channel';
+
+// =============================================================================
+// Service Health Analysis
+// =============================================================================
+
+export {
+  analyzeServiceHealth,
+  buildServiceRegistry,
+  renderServiceHealthReport,
+  renderServiceHealthJson,
+} from './service-health';
+export type {
+  ServiceHealthIssue,
+  ServiceHealthAnalysis,
+  ServiceHealthSummary,
+  ServiceRegistry,
+} from './service-health';
+
+// =============================================================================
+// Performance Anti-Patterns
+// =============================================================================
+
+export {
+  analyzePerformance,
+  renderPerformanceReport,
+  renderPerformanceJson,
+} from './performance-antipatterns';
+export type {
+  PerformanceIssue,
+  PerformanceAnalysis,
+  PerformanceSummary,
+} from './performance-antipatterns';
+
+// =============================================================================
+// Improve Mode
+// =============================================================================
+
+export {
+  generateImprovePlan,
+  applyFixes,
+  renderImprovePlan,
+  renderImproveResult,
+} from './improve-mode';
+export type {
+  ImprovePlan,
+  ImproveOptions,
+  ImproveResult,
+} from './improve-mode';

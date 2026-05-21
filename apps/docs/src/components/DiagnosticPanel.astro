@@ -1,0 +1,25 @@
+---
+// Diagnostic terminal panel for the splash hero.
+// Static content; styles live in custom.css under .ea-diag.
+---
+
+<div class="ea-diag">
+  <div class="ea-diag__head">
+    <span class="ea-diag__dots"><span></span><span></span><span></span></span>
+    <span>~/effect-analyzer  ·  npx effect-analyze transfer-workflow.ts --format explain</span>
+  </div>
+  <pre class="ea-diag__body"><code><span class="ea-prompt">$</span> npx <span class="ea-tok">effect-analyze</span> ./src/transfer-workflow.ts <span class="ea-dim">--format explain</span>
+<span class="ea-tok">transferWorkflow</span> <span class="ea-dim">(generator):</span>
+  <span class="ea-dim">1.</span> Yields <span class="ea-svc">accounts</span> <span class="ea-dim">&lt;-</span> AccountService
+  <span class="ea-dim">2.</span> Yields <span class="ea-svc">audit</span>    <span class="ea-dim">&lt;-</span> AuditLog
+  <span class="ea-dim">3.</span> Yields <span class="ea-svc">balance</span>  <span class="ea-dim">&lt;-</span> accounts.getBalance
+  <span class="ea-dim">4.</span> If balance &lt; amount:
+       Returns <span class="ea-err">InsufficientFundsError</span>
+  <span class="ea-dim">5.</span> Calls accounts.debit
+  <span class="ea-dim">6.</span> Calls accounts.credit
+  <span class="ea-dim">7.</span> Calls audit.record
+  Services required:  <span class="ea-svc">AccountService</span>, <span class="ea-svc">AuditLog</span>
+  Error paths:        <span class="ea-err">AccountNotFoundError</span>, <span class="ea-err">InsufficientFundsError</span>
+  Concurrency:        <span class="ea-dim">sequential (no parallelism)</span>
+<span class="ea-ok">✓</span> analyzed in <span class="ea-tok">42ms</span> <span class="ea-dim">·  0 issues  ·  4 services  ·  2 error paths</span></code></pre>
+</div>
