@@ -81,6 +81,31 @@ import {
   type LintFinding,
 } from './lint-session';
 import { detectServiceCycles } from './service-cycles';
+import {
+  buildAgentReport,
+  renderAgentReportJson,
+  renderAgentReportMarkdown,
+  renderAgentReportSummary,
+} from './agent-report';
+import {
+  analyzeErrorChannels,
+  renderErrorChannelReport,
+} from './error-channel';
+import {
+  analyzeServiceHealth,
+  buildServiceRegistry,
+  renderServiceHealthReport,
+} from './service-health';
+import {
+  analyzePerformance,
+  renderPerformanceReport,
+} from './performance-antipatterns';
+import {
+  generateImprovePlan,
+  applyFixes,
+  renderImprovePlan,
+  renderImproveResult,
+} from './improve-mode';
 
 type MermaidDirection = 'TB' | 'LR' | 'BT' | 'RL';
 type TestRunner = 'vitest' | 'jest' | 'mocha';
@@ -177,6 +202,16 @@ interface CLIOptions {
   readonly serviceCycles: boolean;
   readonly bundleOutput: string | undefined;
   readonly scorecard: boolean;
+  readonly agentReport: boolean;
+  readonly errorChannel: boolean;
+  readonly serviceHealth: boolean;
+  readonly performance: boolean;
+  readonly improve: boolean;
+  readonly improveDryRun: boolean;
+  readonly improveMaxFixes: number | undefined;
+  readonly improveRules: string[] | undefined;
+  readonly improveExcludeRules: string[] | undefined;
+  readonly improveMinPriority: 'P0' | 'P1' | 'P2' | 'P3' | undefined;
 }
 
 function parseArgs(args: readonly string[]): { pathArg: string | undefined; options: CLIOptions } {
@@ -242,6 +277,16 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let serviceCycles = false;
   let bundleOutput: string | undefined;
   let scorecard = false;
+  let agentReport = false;
+  let errorChannel = false;
+  let serviceHealth = false;
+  let performance = false;
+  let improve = false;
+  let improveDryRun = true;
+  let improveMaxFixes: number | undefined;
+  const improveRules: string[] = [];
+  const improveExcludeRules: string[] = [];
+  let improveMinPriority: 'P0' | 'P1' | 'P2' | 'P3' | undefined;
   const positionalArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -475,6 +520,37 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       bundleOutput = arg.slice('--bundle-output='.length);
     } else if (arg === '--scorecard') {
       scorecard = true;
+    } else if (arg === '--agent-report') {
+      agentReport = true;
+    } else if (arg === '--error-channel') {
+      errorChannel = true;
+    } else if (arg === '--service-health') {
+      serviceHealth = true;
+    } else if (arg === '--performance') {
+      performance = true;
+    } else if (arg === '--improve') {
+      improve = true;
+      improveDryRun = false;
+    } else if (arg === '--improve-dry-run') {
+      improveDryRun = true;
+      improve = true;
+    } else if (arg === '--improve-max-fixes') {
+      const value = args[++i];
+      if (value !== undefined) {
+        const parsed = Number.parseInt(value, 10);
+        if (Number.isFinite(parsed) && parsed > 0) improveMaxFixes = parsed;
+      }
+    } else if (arg === '--improve-rule') {
+      const value = args[++i];
+      if (value) improveRules.push(value);
+    } else if (arg === '--improve-exclude-rule') {
+      const value = args[++i];
+      if (value) improveExcludeRules.push(value);
+    } else if (arg === '--improve-min-priority') {
+      const value = args[++i];
+      if (value === 'P0' || value === 'P1' || value === 'P2' || value === 'P3') {
+        improveMinPriority = value;
+      }
     } else if (arg === '--test') {
       test = true;
     } else if (arg === '--no-test') {
@@ -576,6 +652,16 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     serviceCycles,
     bundleOutput,
     scorecard,
+    agentReport,
+    errorChannel,
+    serviceHealth,
+    performance,
+    improve,
+    improveDryRun,
+    improveMaxFixes,
+    improveRules: improveRules.length > 0 ? improveRules : undefined,
+    improveExcludeRules: improveExcludeRules.length > 0 ? improveExcludeRules : undefined,
+    improveMinPriority,
   };
   return { pathArg, options };
 }
@@ -650,6 +736,16 @@ Options:
   --service-cycles         Analyze project service map and output detected dependency cycles
   --bundle-output <dir>    Write deterministic artifact bundle (diagnostics, sarif, summary, rules, session)
   --scorecard              Emit deterministic per-file lint scorecard (for --lint-source)
+  --agent-report           Generate prioritized improvement backlog for coding agents (JSON + markdown)
+  --error-channel          Analyze error channels across project (generic errors, unhandled types, missing catchTag)
+  --service-health         Analyze service dependency health (unsatisfied, dead services, layer inefficiencies)
+  --performance            Detect performance anti-patterns (sequential could be parallel, unbounded concurrency, etc.)
+  --improve                Apply automated fixes for fixable lint issues (use --improve-dry-run to preview)
+  --improve-dry-run        Preview fixes without applying (default for --improve)
+  --improve-max-fixes <n>  Limit number of fixes to apply
+  --improve-rule <rule>    Only apply fixes for this rule (repeatable)
+  --improve-exclude-rule <rule>  Exclude fixes for this rule (repeatable)
+  --improve-min-priority <P0|P1|P2|P3>  Minimum priority level to include
   -h, --help               Show this help message
 
 Examples:
@@ -1999,6 +2095,118 @@ const main = Effect.gen(function* () {
         ),
       );
     }
+    return Exit.succeed(undefined);
+  }
+
+  // Agent report, error channel, service health, performance, improve modes
+  if (options.agentReport || options.errorChannel || options.serviceHealth || options.performance || options.improve) {
+    const targetPath = resolve(pathArg ?? '.');
+    const style = createStyle(options.color);
+
+    if (!options.quiet) {
+      yield* Console.log(`\n${style.bold(style.cyan('Analyzing'))} ${targetPath} for agent report...\n`);
+    }
+
+    // Run lint scan
+    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath));
+
+    // Analyze project to get IRs
+    const projectResult = yield* analyzeProject(targetPath, {
+      tsconfig: options.tsconfig,
+      knownEffectInternalsRoot: options.knownEffectInternalsRoot,
+    });
+
+    const irs = projectResult.allPrograms;
+
+    // Build source lines map for fix generation
+    const sourceLinesMap = new Map<string, readonly string[]>();
+    for (const [filePath] of projectResult.byFile) {
+      try {
+        const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'));
+        sourceLinesMap.set(filePath, content.split('\n'));
+      } catch {
+        // Skip files we can't read
+      }
+    }
+
+    const coverageAudit = {
+      discovered: projectResult.fileCount,
+      analyzed: projectResult.byFile.size,
+      unknownNodeRate: 0, // Would need deeper analysis to compute
+    };
+
+    // Run specialized analyses
+    const errorChannelAnalysis = options.errorChannel ? analyzeErrorChannels(irs) : undefined;
+    const serviceRegistry = options.serviceHealth || options.agentReport ? buildServiceRegistry(irs, new Map()) : undefined;
+    const serviceHealthAnalysis = serviceRegistry ? analyzeServiceHealth(serviceRegistry, irs) : undefined;
+    const performanceAnalysis = options.performance ? analyzePerformance(irs) : undefined;
+
+    const report = buildAgentReport({
+      findings: scan.findings,
+      irs,
+      coverageAudit,
+      errorChannelIssues: errorChannelAnalysis?.issues,
+      serviceHealthIssues: serviceHealthAnalysis?.issues,
+      performanceIssues: performanceAnalysis?.issues,
+    });
+
+    if (options.improve) {
+      const plan = generateImprovePlan(report, scan.findings, sourceLinesMap, {
+        dryRun: options.improveDryRun,
+        maxFixes: options.improveMaxFixes,
+        rules: options.improveRules,
+        excludeRules: options.improveExcludeRules,
+        minPriority: options.improveMinPriority,
+      });
+
+      if (options.output) {
+        yield* Effect.tryPromise(() =>
+          fs.writeFile(resolve(options.output!), renderImprovePlan(plan), 'utf-8'),
+        );
+      } else {
+        yield* Console.log(renderImprovePlan(plan));
+      }
+
+      if (!options.improveDryRun) {
+        const result = yield* Effect.tryPromise(() => applyFixes(plan.fixes, { dryRun: false }));
+        yield* Console.log('\n' + renderImproveResult(result));
+      }
+    } else if (options.agentReport) {
+      if (options.output) {
+        const output = options.output.endsWith('.json')
+          ? renderAgentReportJson(report)
+          : renderAgentReportMarkdown(report);
+        yield* Effect.tryPromise(() => fs.writeFile(resolve(options.output!), output, 'utf-8'));
+      } else {
+        yield* Console.log(renderAgentReportSummary(report));
+        yield* Console.log('\n' + renderAgentReportMarkdown(report));
+      }
+    } else if (options.errorChannel && errorChannelAnalysis) {
+      if (options.output) {
+        yield* Effect.tryPromise(() =>
+          fs.writeFile(resolve(options.output!), renderErrorChannelReport(errorChannelAnalysis), 'utf-8'),
+        );
+      } else {
+        yield* Console.log(renderErrorChannelReport(errorChannelAnalysis));
+      }
+    } else if (options.serviceHealth && serviceHealthAnalysis) {
+      if (options.output) {
+        yield* Effect.tryPromise(() =>
+          fs.writeFile(resolve(options.output!), renderServiceHealthReport(serviceHealthAnalysis), 'utf-8'),
+        );
+      } else {
+        yield* Console.log(renderServiceHealthReport(serviceHealthAnalysis));
+      }
+    } else if (options.performance && performanceAnalysis) {
+      if (options.output) {
+        yield* Effect.tryPromise(() =>
+          fs.writeFile(resolve(options.output!), renderPerformanceReport(performanceAnalysis), 'utf-8'),
+        );
+      } else {
+        yield* Console.log(renderPerformanceReport(performanceAnalysis));
+      }
+    }
+
     return Exit.succeed(undefined);
   }
 

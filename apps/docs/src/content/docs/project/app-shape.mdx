@@ -1,0 +1,98 @@
+---
+title: App-Shape Analyzers
+description: Inspect the surface of an Effect app — entry points, config-secret leaks, @effect/cli command structure, and service dependency cycles.
+sidebar:
+  order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+These analyzers describe **the shape of your application**: how it starts, where secrets flow, what its CLI surface looks like, and whether its service graph contains cycles. They answer questions you'd otherwise need a whiteboard and a senior engineer for.
+
+## Entry points
+
+```bash
+effect-analyze ./src/main.ts --entry-points
+```
+
+Detects how an Effect app actually starts. Recognises:
+
+- `NodeRuntime.runMain(…)` — Node entry
+- `BunRuntime.runMain(…)` — Bun entry
+- `Layer.launch(…)` — long-lived service launcher
+- `Effect.runFork`, `Effect.runPromise`, `Effect.runSync` at module top-level
+
+For each entry it reports the program being launched, the layers being provided at the boundary, the runtime, and the file:line where the launch happens. Crucial for:
+
+- **PR review** — "this change added a second `NodeRuntime.runMain` call, that's almost certainly wrong"
+- **Audits** — what processes does this service actually spawn?
+- **Map of an unfamiliar repo** — start here, then walk the IR
+
+Single-file scope only.
+
+## Config leaks
+
+```bash
+effect-analyze ./src/main.ts --config-leaks
+```
+
+Tracks `Config.redacted` and `Config.secret` values through the program and flags any path that ends in a logging or console sink — `Effect.log*`, `Logger.log*`, `console.*`. The classic "I `console.log`d a secret in a debug commit and it got committed" problem, caught statically.
+
+Reports each leak with:
+
+- The redacted/secret config key
+- The full path from `Config.redacted("FOO")` → `console.log(value)`
+- The sink type
+- File / line / column
+
+Single-file scope only.
+
+## CLI commands
+
+```bash
+effect-analyze ./src/cli.ts --cli-commands
+```
+
+Extracts the structure of a `@effect/cli` app: every `Command`, the `Args` and `Options` it accepts, the `Prompt`s it uses, subcommand trees, default handlers. Output is a tree representation suitable for:
+
+- Generating CLI documentation from the source of truth
+- Diffing CLI surface changes across PRs (`--diff` mode applies)
+- Spotting orphan commands that aren't wired into the root tree
+
+Single-file scope only.
+
+## Service cycles
+
+```bash
+effect-analyze ./src --service-cycles
+```
+
+Builds the project-wide service map (every `Context.Tag` and the services each one requires) and reports any cycles. Service cycles are usually fine to declare but **always** fail at runtime — catch them statically instead.
+
+Output includes:
+
+- The full cycle (`A → B → C → A`)
+- Each service's defining file
+- A suggested cut-point (the edge with the loosest semantic coupling)
+
+Directory scope (cycles only exist across multiple files).
+
+```bash
+effect-analyze ./src --service-cycles --format json -o cycles.json
+```
+
+## Use cases
+
+| Question | Command |
+|---|---|
+| What does this app launch? | `effect-analyze main.ts --entry-points` |
+| Are we logging any secrets? | `effect-analyze main.ts --config-leaks` |
+| What CLI commands does this expose? | `effect-analyze cli.ts --cli-commands` |
+| Will the service container compile? | `effect-analyze ./src --service-cycles` |
+| One-shot project audit | combine all four in `--agent-report` |
+
+## Related
+
+- [Health Analyzers](/effect-analyzer/project/health/) — error channel, service health, performance (complement these structural checks)
+- [Improve Mode & Agent Report](/effect-analyzer/project/improve/) — aggregate into a prioritized backlog
+- [CLI Reference](/effect-analyzer/reference/cli/#app-shape-analyzers) — flags

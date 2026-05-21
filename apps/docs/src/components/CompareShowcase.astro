@@ -1,0 +1,249 @@
+---
+// Side-by-side: raw Effect source <- analyzer -> structured view + stats.
+// The "your code, made legible" proof on the splash hero.
+// Styles live in custom.css under .ea-compare.
+
+const code = `<span class="t-kw">export const</span> <span class="t-fn">transferWorkflow</span> = (
+  <span class="t-arg">fromAccountId</span>: <span class="t-typ">string</span>,
+  <span class="t-arg">toAccountId</span>: <span class="t-typ">string</span>,
+  <span class="t-arg">amount</span>: <span class="t-typ">number</span>,
+) =&gt;
+  <span class="t-typ">Effect</span>.<span class="t-fn">gen</span>(<span class="t-kw">function*</span> () &#123;
+    <span class="t-kw">const</span> accounts = <span class="t-kw">yield*</span> <span class="t-svc">AccountService</span>
+    <span class="t-kw">const</span> audit    = <span class="t-kw">yield*</span> <span class="t-svc">AuditLog</span>
+
+    <span class="t-kw">const</span> balance = <span class="t-kw">yield*</span> accounts.<span class="t-fn">getBalance</span>(fromAccountId)
+    <span class="t-kw">if</span> (balance &lt; amount) &#123;
+      <span class="t-kw">return yield*</span> <span class="t-typ">Effect</span>.<span class="t-fn">fail</span>(
+        <span class="t-kw">new</span> <span class="t-err">InsufficientFundsError</span>(balance, amount)
+      )
+    &#125;
+
+    <span class="t-kw">yield*</span> accounts.<span class="t-fn">debit</span>(fromAccountId, amount)
+    <span class="t-kw">yield*</span> accounts.<span class="t-fn">credit</span>(toAccountId, amount)
+    <span class="t-kw">yield*</span> audit.<span class="t-fn">record</span>(<span class="t-str">\`Transferred &#36;&#123;amount&#125;\`</span>)
+  &#125;)`;
+---
+
+<section class="ea-compare">
+  <div class="ea-compare__col ea-compare__col--raw">
+    <div class="ea-compare__head">
+      <span class="ea-compare__label">// Your code</span>
+      <span class="ea-compare__meta">transfer-workflow.ts · 18 lines</span>
+    </div>
+    <pre class="ea-compare__code"><code set:html={code} /></pre>
+    <div class="ea-compare__hints">
+      <span>which services?</span>
+      <span>which errors?</span>
+      <span>how many paths?</span>
+    </div>
+  </div>
+
+  <div class="ea-compare__bridge" aria-hidden="true">
+    <div class="ea-compare__bridge-chip">
+      <span class="ea-compare__bridge-dot"></span>
+      <span class="ea-compare__bridge-text">analyze</span>
+      <svg
+        class="ea-compare__bridge-arrow"
+        width="14"
+        height="10"
+        viewBox="0 0 14 10"
+        fill="none"
+      >
+        <path
+          d="M1 5h11m0 0L8 1m4 4L8 9"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"></path>
+      </svg>
+    </div>
+  </div>
+
+  <div class="ea-compare__col ea-compare__col--analyzed">
+    <div class="ea-compare__head">
+      <span class="ea-compare__label">// analyzed</span>
+      <span class="ea-compare__meta is-ok">✓ 42ms · ast · no runtime</span>
+    </div>
+
+    <div class="ea-compare__diagram">
+      <svg
+        viewBox="0 0 280 360"
+        xmlns="http://www.w3.org/2000/svg"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          <marker
+            id="arr"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M0 0 L10 5 L0 10 z" fill="#555a64"></path>
+          </marker>
+          <linearGradient id="okEdge" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#7c6ff0"></stop>
+            <stop offset="100%" stop-color="#a78bfa"></stop>
+          </linearGradient>
+        </defs>
+        <style>
+          .n-rect {
+            fill: #15171c;
+            stroke: rgba(124, 111, 240, 0.55);
+            stroke-width: 1;
+            rx: 4;
+          }
+          .n-svc {
+            fill: #15171c;
+            stroke: rgba(77, 212, 255, 0.55);
+            stroke-width: 1;
+            rx: 14;
+          }
+          .n-err {
+            fill: #15171c;
+            stroke: rgba(255, 123, 123, 0.55);
+            stroke-width: 1;
+            rx: 4;
+          }
+          .n-ok {
+            fill: rgba(200, 255, 58, 0.1);
+            stroke: rgba(200, 255, 58, 0.55);
+            stroke-width: 1;
+            rx: 4;
+          }
+          .n-dia {
+            fill: #15171c;
+            stroke: rgba(255, 255, 255, 0.18);
+            stroke-width: 1;
+          }
+          .lbl {
+            font:
+              500 10.5px 'JetBrains Mono',
+              monospace;
+            fill: #e6e8ed;
+          }
+          .lbl-sm {
+            font:
+              500 9px 'JetBrains Mono',
+              monospace;
+            fill: #8b919c;
+          }
+          .lbl-svc {
+            fill: #4dd4ff;
+          }
+          .lbl-err {
+            fill: #ff7b7b;
+          }
+          .lbl-ok {
+            fill: #c8ff3a;
+          }
+          .edge {
+            stroke: #555a64;
+            stroke-width: 1;
+            fill: none;
+          }
+          .edge-ok {
+            stroke: url(#okEdge);
+            stroke-width: 1.5;
+            fill: none;
+          }
+        </style>
+
+        <rect class="n-rect" x="68" y="4" width="144" height="26"></rect>
+        <text class="lbl" x="140" y="22" text-anchor="middle"
+          >transferWorkflow</text
+        >
+
+        <rect class="n-svc" x="14" y="56" width="118" height="22"></rect>
+        <text class="lbl lbl-svc" x="73" y="71" text-anchor="middle"
+          >AccountService</text
+        >
+
+        <rect class="n-svc" x="148" y="56" width="118" height="22"></rect>
+        <text class="lbl lbl-svc" x="207" y="71" text-anchor="middle"
+          >AuditLog</text
+        >
+
+        <path class="edge" d="M140 28 L73 56" marker-end="url(#arr)"></path>
+        <path class="edge" d="M140 28 L207 56" marker-end="url(#arr)"></path>
+
+        <rect class="n-rect" x="86" y="104" width="108" height="22"></rect>
+        <text class="lbl" x="140" y="119" text-anchor="middle">getBalance</text>
+        <path class="edge" d="M140 78 L140 104" marker-end="url(#arr)"></path>
+
+        <polygon class="n-dia" points="140,148 200,178 140,208 80,178"
+        ></polygon>
+        <text class="lbl-sm" x="140" y="175" text-anchor="middle">balance</text>
+        <text class="lbl-sm" x="140" y="186" text-anchor="middle"
+          >&lt; amount?</text
+        >
+        <path class="edge" d="M140 126 L140 148" marker-end="url(#arr)"></path>
+
+        <rect class="n-err" x="12" y="232" width="120" height="22"></rect>
+        <text class="lbl lbl-err" x="72" y="247" text-anchor="middle"
+          >InsufficientFunds</text
+        >
+        <path class="edge" d="M80 178 L40 232" marker-end="url(#arr)"></path>
+        <text class="lbl-sm" x="60" y="218" text-anchor="middle">yes</text>
+
+        <rect class="n-rect" x="160" y="232" width="108" height="22"></rect>
+        <text class="lbl" x="214" y="247" text-anchor="middle">debit</text>
+        <path class="edge-ok" d="M200 178 L214 232" marker-end="url(#arr)"
+        ></path>
+        <text class="lbl-sm" x="218" y="218" text-anchor="middle">no</text>
+
+        <rect class="n-rect" x="160" y="266" width="108" height="22"></rect>
+        <text class="lbl" x="214" y="281" text-anchor="middle">credit</text>
+        <path class="edge-ok" d="M214 254 L214 266" marker-end="url(#arr)"
+        ></path>
+
+        <rect class="n-rect" x="160" y="300" width="108" height="22"></rect>
+        <text class="lbl" x="214" y="315" text-anchor="middle"
+          >audit.record</text
+        >
+        <path class="edge-ok" d="M214 288 L214 300" marker-end="url(#arr)"
+        ></path>
+
+        <rect class="n-ok" x="170" y="334" width="88" height="22"></rect>
+        <text class="lbl lbl-ok" x="214" y="349" text-anchor="middle"
+          >✓ success</text
+        >
+        <path class="edge-ok" d="M214 322 L214 334" marker-end="url(#arr)"
+        ></path>
+      </svg>
+    </div>
+
+    <div class="ea-compare__stats">
+      <div class="ea-stat">
+        <span class="ea-stat__key">services</span>
+        <span class="ea-stat__val">2</span>
+        <span class="ea-stat__note">AccountService, AuditLog</span>
+      </div>
+      <div class="ea-stat">
+        <span class="ea-stat__key">error paths</span>
+        <span class="ea-stat__val is-err">1</span>
+        <span class="ea-stat__note">InsufficientFundsError</span>
+      </div>
+      <div class="ea-stat">
+        <span class="ea-stat__key">decision points</span>
+        <span class="ea-stat__val">1</span>
+        <span class="ea-stat__note">cyclomatic 2 · cognitive 1</span>
+      </div>
+      <div class="ea-stat">
+        <span class="ea-stat__key">concurrency</span>
+        <span class="ea-stat__val is-dim">seq</span>
+        <span class="ea-stat__note">no parallelism</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<p class="ea-compare__caption">
+  Same function. <strong>5 seconds to grok</strong>, not 5 minutes and your CI
+  catches it the moment someone removes <code>AuditLog</code> or swaps <code
+    >sequential</code
+  > for <code>parallel</code>.
+</p>

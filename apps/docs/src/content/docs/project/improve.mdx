@@ -1,0 +1,107 @@
+---
+title: Improve Mode & Agent Report
+description: Generate a prioritized improvement backlog for coding agents, then apply safe auto-fixes for fixable lint findings.
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Two related capabilities make the analyzer useful to humans **and** to coding agents (Claude Code, Cursor, Aider, custom tools):
+
+1. **`--agent-report`** — a prioritized improvement backlog combining lint findings, coverage gaps, error-channel issues, service health, and performance anti-patterns into a structured plan with `P0`–`P3` severities.
+2. **`--improve`** — apply safe automated fixes for fixable lint rules. Designed to be run as a dry-run first, then committed in reviewable batches.
+
+## Agent report
+
+```bash
+effect-analyze ./src --agent-report -o backlog.md
+```
+
+The report is emitted in two views in one document:
+
+- **Markdown** — human-readable backlog ordered by priority, ready to paste into an agent prompt or a tracking issue
+- **JSON envelope** at the top (in code-fenced block) — machine-readable for agents that want structured input
+
+Each improvement carries:
+
+| Field | Meaning |
+|---|---|
+| `priority` | `P0` (correctness) → `P3` (cosmetic) |
+| `category` | `correctness`, `error-handling`, `performance`, `services`, `complexity`, `coverage` |
+| `rule` | The triggering rule code (e.g. `error-channel:unhandled-error`) |
+| `title` | Short imperative title |
+| `description` | What was found and why it matters |
+| `count` | Number of occurrences |
+| `files` | `{ filePath, line, column }` of each occurrence |
+| `suggestion` | Concrete remediation step |
+| `estimatedEffort` | `small` / `medium` / `large` |
+
+### Inputs combined
+
+The agent report aggregates findings from:
+
+- **Source lints** ([18 rules](/effect-analyzer/project/source-linter/))
+- **Coverage audit** ([analyzable-coverage gaps](/effect-analyzer/project/coverage-audit/))
+- **Error-channel analysis** ([generic errors, unhandled types](/effect-analyzer/project/health/#error-channel))
+- **Service health** ([unsatisfied / dead services, layer waste](/effect-analyzer/project/health/#service-health))
+- **Performance anti-patterns** ([sequential-could-parallel, N+1, etc.](/effect-analyzer/project/health/#performance))
+
+Run all inputs in one pass:
+
+```bash
+effect-analyze ./src \
+  --agent-report \
+  --error-channel \
+  --service-health \
+  --performance \
+  -o backlog.md
+```
+
+### Use with an agent
+
+```bash
+# 1. Generate the backlog
+effect-analyze ./src --agent-report -o backlog.md
+
+# 2. Hand to an agent (example)
+claude "$(cat backlog.md)\n\nWork through P0 and P1 items, opening one PR per category."
+```
+
+## Auto-fix
+
+```bash
+effect-analyze ./src --improve              # dry-run by default; preview the patch
+effect-analyze ./src --improve --improve-max-fixes 20   # apply, capped at 20 fixes
+```
+
+`--improve` only operates on rules with **registered fix generators**. The rest are reported but left for human review. Fixable rules today include `effect-fail-untagged` (replaces `new Error(...)` with a tagged error class) and `raw-side-effect-in-gen` for the `process.env` case (replaces with `yield* Config.string("…")`).
+
+### Control which fixes run
+
+| Flag | Purpose |
+|---|---|
+| `--improve-dry-run` | Preview the patch without modifying files (default for `--improve`) |
+| `--improve-max-fixes <n>` | Stop after `n` fixes — keeps PRs reviewable |
+| `--improve-rule <code>` | Whitelist a rule (repeatable). Only apply fixes for these rules |
+| `--improve-exclude-rule <code>` | Blacklist a rule (repeatable) |
+| `--improve-min-priority <P>` | Only fix improvements at or above `P0` / `P1` / `P2` / `P3` |
+
+### Recommended workflow
+
+1. **Dry-run** to see what would change:
+   ```bash
+   effect-analyze ./src --improve --improve-dry-run > improve-plan.diff
+   ```
+2. **Review the diff** — agents and humans should both eyeball this before applying.
+3. **Apply a bounded batch** so the PR stays reviewable:
+   ```bash
+   effect-analyze ./src --improve --improve-max-fixes 25 --improve-rule effect-fail-untagged
+   ```
+4. **Commit and run tests**. Repeat per category until the backlog is drained.
+
+## Related
+
+- [Source Linter](/effect-analyzer/project/source-linter/) — the source of fixable findings
+- [Health Analyzers](/effect-analyzer/project/health/) — error channel, service health, performance
+- [CLI Reference](/effect-analyzer/reference/cli/#improvement-workflow) — all flags
