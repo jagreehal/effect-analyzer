@@ -486,8 +486,7 @@ export function explainNode(
       const sinkPart = node.sink ? ` -> ${node.sink}` : '';
       const serviceStreamSource =
         node.source.type === 'effect' &&
-        node.source.serviceCall &&
-        node.source.serviceCall.methodName.startsWith('stream')
+        node.source.serviceCall?.methodName.startsWith('stream')
           ? `${node.source.serviceCall.serviceType}.${node.source.serviceCall.methodName}`
           : undefined;
       const isReactor =

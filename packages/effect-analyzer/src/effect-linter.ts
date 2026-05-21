@@ -458,6 +458,32 @@ export const orDieWarningRule: LintRule = {
 // Lint Runner
 // =============================================================================
 
+import {
+  swallowedErrorRule,
+  largeGenBlockRule,
+  flatMapChainRule,
+  provideMergeChainRule,
+  sequentialFailRule,
+  deferredNoResolveRule,
+} from './lint-rules-extra';
+
+export {
+  swallowedErrorRule,
+  largeGenBlockRule,
+  flatMapChainRule,
+  provideMergeChainRule,
+  sequentialFailRule,
+  deferredNoResolveRule,
+  createLargeGenBlockRule,
+  createFlatMapChainRule,
+  createProvideMergeChainRule,
+  createSequentialFailRule,
+  LARGE_GEN_DEFAULT_THRESHOLD,
+  FLATMAP_CHAIN_DEFAULT_THRESHOLD,
+  PROVIDE_MERGE_DEFAULT_THRESHOLD,
+  SEQUENTIAL_FAIL_DEFAULT_THRESHOLD,
+} from './lint-rules-extra';
+
 export const DEFAULT_LINT_RULES: readonly LintRule[] = [
   untaggedYieldRule,
   missingErrorHandlerRule,
@@ -468,6 +494,12 @@ export const DEFAULT_LINT_RULES: readonly LintRule[] = [
   unboundedParallelismRule,
   redundantPipeRule,
   orDieWarningRule,
+  swallowedErrorRule,
+  largeGenBlockRule,
+  flatMapChainRule,
+  provideMergeChainRule,
+  sequentialFailRule,
+  deferredNoResolveRule,
 ];
 
 export interface LintResult {

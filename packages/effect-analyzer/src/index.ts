@@ -636,5 +636,60 @@ export {
   deadCodeRule,
   complexLayerRule,
   catchAllVsCatchTagRule,
+  swallowedErrorRule,
+  largeGenBlockRule,
+  flatMapChainRule,
+  provideMergeChainRule,
+  sequentialFailRule,
+  deferredNoResolveRule,
+  createLargeGenBlockRule,
+  createFlatMapChainRule,
+  createProvideMergeChainRule,
+  createSequentialFailRule,
 } from './effect-linter';
 export type { LintRule, LintIssue, LintResult } from './effect-linter';
+
+export {
+  lintSourceFile,
+  lintSourceCode,
+} from './source-linter';
+export type { SourceLintResult } from './source-linter';
+
+// =============================================================================
+// Entry points / Config sensitivity / CLI commands
+// =============================================================================
+
+export {
+  findEntryPoints,
+  analyzeEntryPointsFile,
+  analyzeEntryPointsSource,
+} from './entry-points';
+export type {
+  EntryPoint,
+  EntryPointKind,
+  EntryPointReport,
+} from './entry-points';
+
+export {
+  findConfigSensitivity,
+  analyzeConfigSensitivityFile,
+  analyzeConfigSensitivitySource,
+} from './config-sensitivity';
+export type {
+  ConfigSource,
+  ConfigLeak,
+  ConfigSensitivityReport,
+} from './config-sensitivity';
+
+export {
+  findCliCommands,
+  analyzeCliCommandsFile,
+  analyzeCliCommandsSource,
+} from './cli-command-analyzer';
+export type {
+  CliArgInfo,
+  CliPromptInfo,
+  CliCommandInfo,
+  CliRunInfo,
+  CliCommandReport,
+} from './cli-command-analyzer';

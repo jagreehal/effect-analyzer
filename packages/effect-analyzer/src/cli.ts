@@ -121,6 +121,9 @@ interface CLIOptions {
   readonly test: boolean;
   readonly testRunner: TestRunner;
   readonly testOverwrite: boolean;
+  readonly entryPoints: boolean;
+  readonly configLeaks: boolean;
+  readonly cliCommands: boolean;
 }
 
 function parseArgs(args: readonly string[]): { pathArg: string | undefined; options: CLIOptions } {
@@ -165,6 +168,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let test = false;
   let testRunner: TestRunner = 'vitest';
   let testOverwrite = false;
+  let entryPoints = false;
+  let configLeaks = false;
+  let cliCommands = false;
   const positionalArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -320,6 +326,12 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       regression = true;
     } else if (arg === '--include-trivial') {
       includeTrivial = true;
+    } else if (arg === '--entry-points') {
+      entryPoints = true;
+    } else if (arg === '--config-leaks') {
+      configLeaks = true;
+    } else if (arg === '--cli-commands') {
+      cliCommands = true;
     } else if (arg === '--test') {
       test = true;
     } else if (arg === '--no-test') {
@@ -400,6 +412,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     test,
     testRunner,
     testOverwrite,
+    entryPoints,
+    configLeaks,
+    cliCommands,
   };
   return { pathArg, options };
 }
@@ -1575,6 +1590,54 @@ const runMigration = (resolvedPath: string): Effect.Effect<void> =>
     ),
   );
 
+import { analyzeEntryPointsFile } from './entry-points';
+import { analyzeConfigSensitivityFile } from './config-sensitivity';
+import { analyzeCliCommandsFile } from './cli-command-analyzer';
+
+const runExtraAnalyzers = (
+  filePath: string,
+  options: CLIOptions,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const out: Record<string, unknown> = {};
+
+    if (options.entryPoints) {
+      const r = yield* analyzeEntryPointsFile(filePath).pipe(
+        Effect.catchAll((e) => Effect.sync(() => ({ filePath, entryPoints: [], error: String(e) }))),
+      );
+      out.entryPoints = r;
+    }
+    if (options.configLeaks) {
+      const r = yield* analyzeConfigSensitivityFile(filePath).pipe(
+        Effect.catchAll((e) =>
+          Effect.sync(() => ({ filePath, sources: [], leaks: [], error: String(e) })),
+        ),
+      );
+      out.configSensitivity = r;
+    }
+    if (options.cliCommands) {
+      const r = yield* analyzeCliCommandsFile(filePath).pipe(
+        Effect.catchAll((e) =>
+          Effect.sync(() => ({ filePath, commands: [], runs: [], error: String(e) })),
+        ),
+      );
+      out.cliCommands = r;
+    }
+
+    const text = options.pretty ? JSON.stringify(out, null, 2) : JSON.stringify(out);
+    if (options.output) {
+      yield* Effect.tryPromise(() => fs.writeFile(options.output!, text, 'utf-8')).pipe(
+        Effect.catchAll((e) =>
+          Effect.sync(() => {
+            console.error('Write failed:', e instanceof Error ? e.message : e);
+          }),
+        ),
+      );
+    } else {
+      yield* Console.log(text);
+    }
+  });
+
 const main = Effect.gen(function* () {
   const args = process.argv.slice(2);
   const { pathArg, options } = parseArgs(args);
@@ -1604,6 +1667,17 @@ const main = Effect.gen(function* () {
       return yield* Effect.fail(Exit.fail('Coverage audit requires directory'));
     }
     yield* runCoverageAuditCli(resolvedPath, options);
+    return Exit.succeed(undefined);
+  }
+
+  if (options.entryPoints || options.configLeaks || options.cliCommands) {
+    if (isDir) {
+      yield* Console.error(
+        'Error: --entry-points / --config-leaks / --cli-commands operate on single files, not directories.',
+      );
+      return yield* Effect.fail(Exit.fail('Specific analyzer flag requires a file path'));
+    }
+    yield* runExtraAnalyzers(resolvedPath, options);
     return Exit.succeed(undefined);
   }
 
