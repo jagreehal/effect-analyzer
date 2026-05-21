@@ -654,6 +654,43 @@ export {
   lintSourceCode,
 } from './source-linter';
 export type { SourceLintResult } from './source-linter';
+export {
+  listAllRuleDocs,
+  findRuleDoc,
+  explainRule,
+  searchRuleDocs,
+  buildRuleIndex,
+  renderRuleIndexJson,
+  getRuleCodesForProfile,
+  renderRuleDocsJson,
+  renderRuleDocsText,
+} from './rule-registry';
+export type {
+  RuleDoc,
+  RuleConfidence,
+  RuleDomain,
+  RuleProfile,
+  RuleSearchResult,
+  RuleSeverity,
+  RuleIndexEntry,
+} from './rule-registry';
+export {
+  runSourceLintScan,
+  compareAgainstBaseline,
+  toSarif,
+} from './lint-session';
+export type {
+  LintFinding,
+  Suppression,
+  LintScanResult,
+  BaselineComparison,
+} from './lint-session';
+export {
+  detectServiceCycles,
+} from './service-cycles';
+export type {
+  ServiceCycle,
+} from './service-cycles';
 
 // =============================================================================
 // Entry points / Config sensitivity / CLI commands

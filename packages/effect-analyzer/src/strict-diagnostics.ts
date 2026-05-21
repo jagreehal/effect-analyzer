@@ -89,18 +89,64 @@ export function validateStrict(
   validateDeadCodePaths(ir.root.children, diagnostics);
   validateUnusedServices(ir, diagnostics);
 
-  const errors = diagnostics.filter(
+  const normalizeText = (text: string | undefined): string | undefined => {
+    if (text === undefined) return undefined;
+    const trimmed = text.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+  const normalizedDiagnostics = diagnostics.map((diagnostic): StrictDiagnostic => ({
+    ...diagnostic,
+    message: diagnostic.message.trim(),
+    fix: normalizeText(diagnostic.fix),
+  }));
+
+  const severityRank = (severity: StrictDiagnostic['severity']): number =>
+    severity === 'error' ? 0 : 1;
+  const canonicalDiagnostics = [...normalizedDiagnostics].sort((a, b) => {
+    const aPath = a.location?.filePath ?? '';
+    const bPath = b.location?.filePath ?? '';
+    if (aPath !== bPath) return aPath.localeCompare(bPath);
+    const aLine = a.location?.line ?? Number.MAX_SAFE_INTEGER;
+    const bLine = b.location?.line ?? Number.MAX_SAFE_INTEGER;
+    if (aLine !== bLine) return aLine - bLine;
+    const aCol = a.location?.column ?? Number.MAX_SAFE_INTEGER;
+    const bCol = b.location?.column ?? Number.MAX_SAFE_INTEGER;
+    if (aCol !== bCol) return aCol - bCol;
+    if (a.rule !== b.rule) return a.rule.localeCompare(b.rule);
+    const sevCmp = severityRank(a.severity) - severityRank(b.severity);
+    if (sevCmp !== 0) return sevCmp;
+    if ((a.fix ?? '') !== (b.fix ?? '')) return (a.fix ?? '').localeCompare(b.fix ?? '');
+    return a.message.localeCompare(b.message);
+  });
+  const dedupedDiagnostics: StrictDiagnostic[] = [];
+  const seen = new Set<string>();
+  for (const diagnostic of canonicalDiagnostics) {
+    const key = [
+      diagnostic.rule,
+      diagnostic.severity,
+      diagnostic.location?.filePath ?? '',
+      String(diagnostic.location?.line ?? ''),
+      String(diagnostic.location?.column ?? ''),
+      diagnostic.message,
+      diagnostic.fix ?? '',
+    ].join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    dedupedDiagnostics.push(diagnostic);
+  }
+
+  const errors = dedupedDiagnostics.filter(
     (d) =>
       d.severity === 'error' ||
       (opts.warningsAsErrors && d.severity === 'warning'),
   );
-  const warnings = diagnostics.filter(
+  const warnings = dedupedDiagnostics.filter(
     (d) => d.severity === 'warning' && !opts.warningsAsErrors,
   );
 
   return {
     valid: errors.length === 0,
-    diagnostics,
+    diagnostics: dedupedDiagnostics,
     errors,
     warnings,
   };

@@ -41,6 +41,15 @@ export interface LintIssue {
   readonly suggestion?: string | undefined;
   /** Optional code replacement for quick-fix (must be valid replacement text) */
   readonly fix?: string | undefined;
+  /** Link to the most relevant section of the Effect docs (effect.website). */
+  readonly docsUrl?: string | undefined;
+  /** Copy-pasteable Bad → Good code example illustrating the fix. */
+  readonly example?:
+    | {
+        readonly bad: string;
+        readonly good: string;
+      }
+    | undefined;
 }
 
 // =============================================================================
@@ -525,18 +534,70 @@ export const lintEffectProgram = (
     const issues = rule.check(ir);
     allIssues.push(...issues);
   }
+
+  const normalizeText = (text: string | undefined): string | undefined => {
+    if (text === undefined) return undefined;
+    const trimmed = text.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+  const normalizedIssues = allIssues.map((issue): LintIssue => ({
+    ...issue,
+    message: issue.message.trim(),
+    suggestion: normalizeText(issue.suggestion),
+    fix: normalizeText(issue.fix),
+  }));
+
+  const severityRank = (severity: LintIssue['severity']): number => {
+    if (severity === 'error') return 0;
+    if (severity === 'warning') return 1;
+    return 2;
+  };
+  const canonicalIssues = [...normalizedIssues].sort((a, b) => {
+    const aPath = a.location?.filePath ?? '';
+    const bPath = b.location?.filePath ?? '';
+    if (aPath !== bPath) return aPath.localeCompare(bPath);
+    const aLine = a.location?.line ?? Number.MAX_SAFE_INTEGER;
+    const bLine = b.location?.line ?? Number.MAX_SAFE_INTEGER;
+    if (aLine !== bLine) return aLine - bLine;
+    const aCol = a.location?.column ?? Number.MAX_SAFE_INTEGER;
+    const bCol = b.location?.column ?? Number.MAX_SAFE_INTEGER;
+    if (aCol !== bCol) return aCol - bCol;
+    if (a.rule !== b.rule) return a.rule.localeCompare(b.rule);
+    const sevCmp = severityRank(a.severity) - severityRank(b.severity);
+    if (sevCmp !== 0) return sevCmp;
+    if (a.message !== b.message) return a.message.localeCompare(b.message);
+    if ((a.fix ?? '') !== (b.fix ?? '')) return (a.fix ?? '').localeCompare(b.fix ?? '');
+    return (a.suggestion ?? '').localeCompare(b.suggestion ?? '');
+  });
+  const dedupedIssues: LintIssue[] = [];
+  const seen = new Set<string>();
+  for (const issue of canonicalIssues) {
+    const key = [
+      issue.rule,
+      issue.severity,
+      issue.location?.filePath ?? '',
+      String(issue.location?.line ?? ''),
+      String(issue.location?.column ?? ''),
+      issue.message,
+      issue.fix ?? '',
+      issue.suggestion ?? '',
+    ].join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    dedupedIssues.push(issue);
+  }
   
-  const errors = allIssues.filter(i => i.severity === 'error').length;
-  const warnings = allIssues.filter(i => i.severity === 'warning').length;
-  const infos = allIssues.filter(i => i.severity === 'info').length;
+  const errors = dedupedIssues.filter(i => i.severity === 'error').length;
+  const warnings = dedupedIssues.filter(i => i.severity === 'warning').length;
+  const infos = dedupedIssues.filter(i => i.severity === 'info').length;
   
   return {
-    issues: allIssues,
+    issues: dedupedIssues,
     summary: {
       errors,
       warnings,
       infos,
-      total: allIssues.length,
+      total: dedupedIssues.length,
     },
   };
 };

@@ -28,7 +28,9 @@ try {
 import { Effect } from 'effect';
 import { analyzeEffectSource } from '../static-analyzer';
 import { lintEffectProgram } from '../effect-linter';
+import { lintSourceCode } from '../source-linter';
 import { calculateComplexity } from '../complexity';
+import { findRuleDoc } from '../rule-registry';
 import { buildLayerDependencyGraph } from '../layer-graph';
 import { getStaticChildren } from '../types';
 import { Option } from 'effect';
@@ -1340,18 +1342,30 @@ async function publishDiagnostics(
 ): Promise<void> {
   try {
     const programs = await getPrograms(doc.uri, doc.getText(), doc.version);
-    const result =
+    const irLintResult =
       programs.length > 0
         ? lintEffectProgram(programs[0]!)
         : { issues: [] as const, summary: { errors: 0, warnings: 0, infos: 0, total: 0 } };
-    const diagnostics = result.issues.map((i) => ({
+    const sourceLintResult = (() => {
+      try {
+        return lintSourceCode(doc.getText(), doc.uri);
+      } catch {
+        return { filePath: doc.uri, issues: [] as const };
+      }
+    })();
+    const allIssues = [...irLintResult.issues, ...sourceLintResult.issues];
+    const diagnostics = allIssues.map((i) => {
+      const ruleDoc = findRuleDoc(i.rule);
+      const titlePrefix = ruleDoc ? `[${ruleDoc.code}] ${ruleDoc.title}: ` : '';
+      const suggestion = i.suggestion ? `\nSuggestion: ${i.suggestion}` : '';
+      const diagnostic = {
       range: i.location
         ? {
             start: { line: i.location.line - 1, character: i.location.column },
             end: { line: (i.location.endLine ?? i.location.line) - 1, character: i.location.column + 20 },
           }
         : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-      message: i.message,
+      message: `${titlePrefix}${i.message}${suggestion}`,
       severity:
         i.severity === 'error'
           ? DIAGNOSTIC_ERROR
@@ -1359,7 +1373,13 @@ async function publishDiagnostics(
             ? DIAGNOSTIC_WARNING
             : DIAGNOSTIC_INFO,
       source: 'effect-analyzer',
-    }));
+      code: i.rule,
+    };
+      if (ruleDoc?.docUrl) {
+        Object.assign(diagnostic, { codeDescription: { href: ruleDoc.docUrl } });
+      }
+      return diagnostic;
+    });
     await connection.sendDiagnostics({ uri: doc.uri, diagnostics });
   } catch {
     // ignore

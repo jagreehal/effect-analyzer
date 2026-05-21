@@ -198,7 +198,7 @@ export const analyzeErrorHandlerCall = (
       const objArg = [...args].find(
         (a) => a?.getKind() === loadTsMorph().SyntaxKind.ObjectLiteralExpression,
       );
-      if (objArg) {
+      if (objArg !== undefined) {
         const props = (objArg as ObjectLiteralExpression).getProperties();
         errorTags = props
           .filter(

@@ -3,7 +3,7 @@
  */
 
 import './register-node-ts-morph';
-import { resolve, sep, join, dirname, extname } from 'path';
+import { resolve, sep, join, dirname, extname, isAbsolute } from 'path';
 import { watch, existsSync } from 'fs';
 import * as fs from 'node:fs/promises';
 import { Project } from 'ts-morph';
@@ -65,6 +65,22 @@ import {
   type DiagramQualityHintInput,
 } from './diagram-quality';
 import { loadDiagramQualityHintsFromEslintJson } from './diagram-quality-eslint';
+import {
+  buildRuleIndex,
+  explainRule,
+  getRuleCodesForProfile,
+  renderRuleDocsJson,
+  renderRuleDocsText,
+  searchRuleDocs,
+} from './rule-registry';
+import {
+  buildLintScorecard,
+  compareAgainstBaseline,
+  runSourceLintScan,
+  toSarif,
+  type LintFinding,
+} from './lint-session';
+import { detectServiceCycles } from './service-cycles';
 
 type MermaidDirection = 'TB' | 'LR' | 'BT' | 'RL';
 type TestRunner = 'vitest' | 'jest' | 'mocha';
@@ -81,6 +97,25 @@ function createStyle(useColor: boolean) {
     bold: c(1),
   };
 }
+
+const MAX_FAILED_OR_ZERO_ROWS = 120;
+
+const resolveCliPath = (inputPath: string | undefined): string => {
+  const candidate = inputPath ?? '.';
+  if (isAbsolute(candidate)) return candidate;
+
+  const fromCurrent = resolve(candidate);
+  if (existsSync(fromCurrent)) return fromCurrent;
+
+  const fallbackBases = [process.env.INIT_CWD, process.env.PWD, process.env.OLDPWD];
+  for (const base of fallbackBases) {
+    if (!base || base.trim().length === 0) continue;
+    const fromBase = resolve(base, candidate);
+    if (existsSync(fromBase)) return fromBase;
+  }
+
+  return fromCurrent;
+};
 
 interface CLIOptions {
   readonly format: 'auto' | 'json' | 'mermaid' | 'mermaid-paths' | 'mermaid-enhanced' | 'mermaid-railway' | 'mermaid-services' | 'mermaid-errors' | 'mermaid-decisions' | 'mermaid-causes' | 'mermaid-concurrency' | 'mermaid-timeline' | 'mermaid-layers' | 'mermaid-retry' | 'mermaid-testability' | 'mermaid-dataflow' | 'stats' | 'migration' | 'showcase' | 'explain' | 'summary' | 'matrix' | 'architecture' | 'api-docs' | 'openapi-paths' | 'openapi-runtime';
@@ -124,6 +159,24 @@ interface CLIOptions {
   readonly entryPoints: boolean;
   readonly configLeaks: boolean;
   readonly cliCommands: boolean;
+  readonly listRules: boolean;
+  readonly indexRules: boolean;
+  readonly searchRules: string | undefined;
+  readonly explainRule: string | undefined;
+  readonly profile: 'strict' | 'ci' | 'migration' | 'docs' | undefined;
+  readonly exportSession: string | undefined;
+  readonly importSession: string | undefined;
+  readonly maxFiles: number | undefined;
+  readonly cursor: number;
+  readonly lintSource: boolean;
+  readonly sarif: boolean;
+  readonly baseline: string | undefined;
+  readonly failOnNew: boolean;
+  readonly requireSuppressionReason: boolean;
+  readonly failOnStaleSuppressions: boolean;
+  readonly serviceCycles: boolean;
+  readonly bundleOutput: string | undefined;
+  readonly scorecard: boolean;
 }
 
 function parseArgs(args: readonly string[]): { pathArg: string | undefined; options: CLIOptions } {
@@ -171,6 +224,24 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let entryPoints = false;
   let configLeaks = false;
   let cliCommands = false;
+  let listRules = false;
+  let indexRules = false;
+  let searchRules: string | undefined;
+  let explainRuleCode: string | undefined;
+  let profile: CLIOptions['profile'] = undefined;
+  let exportSession: string | undefined;
+  let importSession: string | undefined;
+  let maxFiles: number | undefined;
+  let cursor = 0;
+  let lintSource = false;
+  let sarif = false;
+  let baseline: string | undefined;
+  let failOnNew = false;
+  let requireSuppressionReason = false;
+  let failOnStaleSuppressions = false;
+  let serviceCycles = false;
+  let bundleOutput: string | undefined;
+  let scorecard = false;
   const positionalArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -332,6 +403,78 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       configLeaks = true;
     } else if (arg === '--cli-commands') {
       cliCommands = true;
+    } else if (arg === '--list-rules') {
+      listRules = true;
+    } else if (arg === '--index-rules') {
+      indexRules = true;
+    } else if (arg === '--search-rules') {
+      searchRules = args[++i];
+    } else if (arg.startsWith('--search-rules=')) {
+      searchRules = arg.slice('--search-rules='.length);
+    } else if (arg === '--explain-rule') {
+      explainRuleCode = args[++i];
+    } else if (arg.startsWith('--explain-rule=')) {
+      explainRuleCode = arg.slice('--explain-rule='.length);
+    } else if (arg === '--profile') {
+      const value = args[++i];
+      if (value === 'strict' || value === 'ci' || value === 'migration' || value === 'docs') {
+        profile = value;
+      }
+    } else if (arg.startsWith('--profile=')) {
+      const value = arg.slice('--profile='.length);
+      if (value === 'strict' || value === 'ci' || value === 'migration' || value === 'docs') {
+        profile = value;
+      }
+    } else if (arg === '--export-session') {
+      exportSession = args[++i];
+    } else if (arg.startsWith('--export-session=')) {
+      exportSession = arg.slice('--export-session='.length);
+    } else if (arg === '--import-session') {
+      importSession = args[++i];
+    } else if (arg.startsWith('--import-session=')) {
+      importSession = arg.slice('--import-session='.length);
+    } else if (arg === '--max-files') {
+      const value = args[++i];
+      if (value !== undefined) {
+        const parsed = Number.parseInt(value, 10);
+        if (Number.isFinite(parsed) && parsed > 0) maxFiles = parsed;
+      }
+    } else if (arg.startsWith('--max-files=')) {
+      const value = arg.slice('--max-files='.length);
+      const parsed = Number.parseInt(value, 10);
+      if (Number.isFinite(parsed) && parsed > 0) maxFiles = parsed;
+    } else if (arg === '--cursor') {
+      const value = args[++i];
+      if (value !== undefined) {
+        const parsed = Number.parseInt(value, 10);
+        if (Number.isFinite(parsed) && parsed >= 0) cursor = parsed;
+      }
+    } else if (arg.startsWith('--cursor=')) {
+      const value = arg.slice('--cursor='.length);
+      const parsed = Number.parseInt(value, 10);
+      if (Number.isFinite(parsed) && parsed >= 0) cursor = parsed;
+    } else if (arg === '--lint-source') {
+      lintSource = true;
+    } else if (arg === '--sarif') {
+      sarif = true;
+    } else if (arg === '--baseline') {
+      baseline = args[++i];
+    } else if (arg.startsWith('--baseline=')) {
+      baseline = arg.slice('--baseline='.length);
+    } else if (arg === '--fail-on-new') {
+      failOnNew = true;
+    } else if (arg === '--require-suppression-reason') {
+      requireSuppressionReason = true;
+    } else if (arg === '--fail-on-stale-suppressions') {
+      failOnStaleSuppressions = true;
+    } else if (arg === '--service-cycles') {
+      serviceCycles = true;
+    } else if (arg === '--bundle-output') {
+      bundleOutput = args[++i];
+    } else if (arg.startsWith('--bundle-output=')) {
+      bundleOutput = arg.slice('--bundle-output='.length);
+    } else if (arg === '--scorecard') {
+      scorecard = true;
     } else if (arg === '--test') {
       test = true;
     } else if (arg === '--no-test') {
@@ -415,6 +558,24 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     entryPoints,
     configLeaks,
     cliCommands,
+    listRules,
+    indexRules,
+    searchRules,
+    explainRule: explainRuleCode,
+    profile,
+    exportSession,
+    importSession,
+    maxFiles,
+    cursor,
+    lintSource,
+    sarif,
+    baseline,
+    failOnNew,
+    requireSuppressionReason,
+    failOnStaleSuppressions,
+    serviceCycles,
+    bundleOutput,
+    scorecard,
   };
   return { pathArg, options };
 }
@@ -471,6 +632,24 @@ Options:
   --test-runner <runner>   Test runner for --test: vitest (default) | jest | mocha
   --test-overwrite         With --test: overwrite existing test files instead of skipping
   --cache                  Use cache for watch (future: persist IR)
+  --list-rules             Print deterministic rule registry docs (source/effect-lint/strict)
+  --index-rules            Print deterministic searchable rule index entries
+  --search-rules <query>   Search rules by code/title/description/example
+  --explain-rule <code>    Show one rule in detail
+  --profile <name>         Rule profile: strict | ci | migration | docs
+  --export-session <file>  Export CLI session envelope (inputs/options/results metadata)
+  --import-session <file>  Import and print previously exported session envelope
+  --max-files <n>          Analyze at most n files (cursor-window mode)
+  --cursor <n>             Start from nth file in sorted file list (resumable window)
+  --lint-source            Run deterministic source lints on a file or directory
+  --sarif                  Emit SARIF 2.1.0 output (for --lint-source)
+  --baseline <file>        Compare findings against a baseline session/json file
+  --fail-on-new            Exit non-zero when new findings exist vs baseline
+  --require-suppression-reason  Require a reason after disable-next-line suppression comments
+  --fail-on-stale-suppressions  Exit non-zero when disable-next-line suppressions are stale
+  --service-cycles         Analyze project service map and output detected dependency cycles
+  --bundle-output <dir>    Write deterministic artifact bundle (diagnostics, sarif, summary, rules, session)
+  --scorecard              Emit deterministic per-file lint scorecard (for --lint-source)
   -h, --help               Show this help message
 
 Examples:
@@ -484,6 +663,11 @@ Examples:
   effect-analyze ./program.ts --format mermaid-paths --style-guide
   effect-analyze ./program.ts --format json --output result.json
   effect-analyze ./program.ts --colocate   # Single file + write foo.effect-analysis.md
+  effect-analyze ./src --lint-source --sarif -o findings.sarif
+  effect-analyze ./src --lint-source --baseline ./.cache/effect-lint-baseline.json --fail-on-new
+  effect-analyze ./src --lint-source --scorecard
+  effect-analyze ./src --service-cycles --format json
+  effect-analyze ./src --lint-source --bundle-output ./.artifacts/effect-lint
   effect-analyze ./src --format api-docs   # Extract HttpApi structure, emit API docs markdown
   effect-analyze ./src --format openapi-paths -o paths.json  # Emit OpenAPI paths JSON
   effect-analyze ./src/api.ts --format openapi-runtime --export TodoApi -o openapi.json  # Runtime OpenApi.fromApi
@@ -1170,10 +1354,16 @@ const runCoverageAuditCli = (
     );
     if (failedOrZero.length > 0) {
       yield* Console.log('\nFailed or zero programs:');
-      for (const o of failedOrZero) {
+      const visible = failedOrZero.slice(0, MAX_FAILED_OR_ZERO_ROWS);
+      for (const o of visible) {
         const reason =
           o.status === 'fail' ? ` error: ${o.error ?? ''}` : ' (0 programs)';
         yield* Console.log(`  ${o.file}${reason}`);
+      }
+      if (failedOrZero.length > visible.length) {
+        yield* Console.log(
+          `  ... and ${failedOrZero.length - visible.length} more (use --json-summary or -o to inspect full results)`,
+        );
       }
     }
     const jsonPayload = {
@@ -1213,7 +1403,11 @@ const runProjectMode = (
       buildArchitecture: true,
     });
 
-    const byFile = projectResult.byFile;
+    const sortedEntries = [...projectResult.byFile.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    const start = Math.max(0, options.cursor);
+    const end = options.maxFiles ? start + options.maxFiles : sortedEntries.length;
+    const windowedEntries = sortedEntries.slice(start, Math.min(end, sortedEntries.length));
+    const byFile = new Map(windowedEntries);
     const qualityHintsByFile = yield* loadQualityHintsByFile(options, style);
     const fileQualities = options.quality
       ? [...byFile.entries()].map(([filePath, programs]) =>
@@ -1236,6 +1430,7 @@ const runProjectMode = (
       }
     }
     const fileCount = byFile.size;
+    const nextCursor = start + fileCount < sortedEntries.length ? start + fileCount : null;
     const doColocate = !options.noColocate;
     const architecture = projectResult.architecture;
     const hasArchitecture = (architecture?.runtimes.length ?? 0) > 0;
@@ -1270,6 +1465,14 @@ const runProjectMode = (
         );
       }
       return;
+    }
+
+    if (!options.quiet && (options.cursor > 0 || options.maxFiles !== undefined)) {
+      yield* Console.log(
+        style.dim(
+          `Window mode: cursor=${options.cursor}, maxFiles=${options.maxFiles ?? 'all'}, filesInWindow=${fileCount}, nextCursor=${nextCursor ?? 'none'}`,
+        ),
+      );
     }
 
     let written = 0;
@@ -1638,9 +1841,221 @@ const runExtraAnalyzers = (
     }
   });
 
+const extractBaselineFindings = (raw: unknown): readonly LintFinding[] => {
+  if (!raw || typeof raw !== 'object') return [];
+  const obj = raw as Record<string, unknown>;
+  const direct = obj.findings;
+  const data = obj.data;
+  const candidates = Array.isArray(direct)
+    ? direct
+    : Array.isArray(data)
+      ? data
+      : [];
+  return candidates.filter((item): item is LintFinding => {
+    if (!item || typeof item !== 'object') return false;
+    const rec = item as Record<string, unknown>;
+    return (
+      typeof rec.filePath === 'string' &&
+      typeof rec.rule === 'string' &&
+      typeof rec.severity === 'string' &&
+      typeof rec.message === 'string' &&
+      typeof rec.line === 'number' &&
+      typeof rec.column === 'number' &&
+      typeof rec.fingerprint === 'string'
+    );
+  });
+};
+
 const main = Effect.gen(function* () {
   const args = process.argv.slice(2);
   const { pathArg, options } = parseArgs(args);
+
+  if (options.importSession) {
+    const imported = yield* Effect.tryPromise(() => fs.readFile(resolve(options.importSession!), 'utf-8'));
+    const parsed = JSON.parse(imported);
+    yield* Console.log(options.format === 'json' ? JSON.stringify(parsed, null, options.pretty ? 2 : 0) : imported);
+    return Exit.succeed(undefined);
+  }
+
+  if (options.lintSource) {
+    const targetPath = resolve(pathArg ?? '.');
+    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath));
+    const scorecard = options.scorecard ? buildLintScorecard(scan.findings) : undefined;
+    const timestamp = new Date().toISOString();
+    let baselineSummary:
+      | {
+          readonly new: number;
+          readonly resolved: number;
+          readonly unchanged: number;
+        }
+      | undefined;
+    let newFindings: readonly LintFinding[] = [];
+
+    if (options.baseline) {
+      const baselinePath = resolve(options.baseline);
+      const baselineRaw = yield* Effect.tryPromise(() => fs.readFile(baselinePath, 'utf-8')).pipe(
+        Effect.catchAll(() =>
+          Effect.fail(new Error(`Failed to read baseline file: ${baselinePath}`)),
+        ),
+      );
+      const baselineJson = yield* Effect.try({
+        try: () => JSON.parse(baselineRaw) as unknown,
+        catch: () => new Error(`Baseline is not valid JSON: ${baselinePath}`),
+      });
+      const baselineFindings = extractBaselineFindings(baselineJson);
+      const delta = compareAgainstBaseline(scan.findings, baselineFindings);
+      baselineSummary = {
+        new: delta.newFindings.length,
+        resolved: delta.resolvedFindings.length,
+        unchanged: delta.unchangedFindings.length,
+      };
+      newFindings = delta.newFindings;
+    }
+
+    const dataPayload = options.sarif ? toSarif(scan.findings) : scan.findings;
+    const envelope = {
+      meta: {
+        generatedAt: timestamp,
+        command: options.sarif ? 'lint-source-sarif' : 'lint-source',
+      },
+      options: {
+        path: targetPath,
+        sarif: options.sarif,
+        scorecard: options.scorecard,
+        baseline: options.baseline,
+        failOnNew: options.failOnNew,
+      },
+      summary: {
+        filesScanned: scan.filesScanned,
+        findings: scan.findings.length,
+        staleSuppressions: scan.staleSuppressions.length,
+        suppressionsMissingReason: scan.suppressionsMissingReason.length,
+        baseline: baselineSummary,
+      },
+      data: dataPayload,
+      findings: scan.findings,
+      scorecard,
+      staleSuppressions: scan.staleSuppressions,
+      suppressionsMissingReason: scan.suppressionsMissingReason,
+      newFindings,
+    };
+
+    if (options.bundleOutput) {
+      const outDir = resolve(options.bundleOutput);
+      const sarifPayload = toSarif(scan.findings);
+      const summaryLines = [
+        '# effect-analyzer lint bundle',
+        '',
+        `- generatedAt: ${timestamp}`,
+        `- path: ${targetPath}`,
+        `- filesScanned: ${String(scan.filesScanned)}`,
+        `- findings: ${String(scan.findings.length)}`,
+        scorecard ? `- scorecardRows: ${String(scorecard.length)}` : '- scorecardRows: none',
+        `- staleSuppressions: ${String(scan.staleSuppressions.length)}`,
+        `- suppressionsMissingReason: ${String(scan.suppressionsMissingReason.length)}`,
+        baselineSummary
+          ? `- baseline: new=${String(baselineSummary.new)} resolved=${String(baselineSummary.resolved)} unchanged=${String(baselineSummary.unchanged)}`
+          : '- baseline: none',
+        '',
+      ];
+      yield* Effect.tryPromise(() => fs.mkdir(outDir, { recursive: true }));
+      yield* Effect.tryPromise(() =>
+        Promise.all([
+          fs.writeFile(join(outDir, 'diagnostics.json'), JSON.stringify(scan.findings, null, 2), 'utf-8'),
+          fs.writeFile(join(outDir, 'diagnostics.sarif'), JSON.stringify(sarifPayload, null, 2), 'utf-8'),
+          fs.writeFile(join(outDir, 'summary.md'), summaryLines.join('\n'), 'utf-8'),
+          fs.writeFile(join(outDir, 'rule-index.json'), JSON.stringify(buildRuleIndex(), null, 2), 'utf-8'),
+          fs.writeFile(join(outDir, 'session.json'), JSON.stringify(envelope, null, 2), 'utf-8'),
+        ]),
+      );
+    }
+
+    if (options.output) {
+      yield* Effect.tryPromise(() =>
+        fs.writeFile(resolve(options.output!), JSON.stringify(options.sarif ? dataPayload : envelope, null, options.pretty ? 2 : 0), 'utf-8'),
+      );
+    } else {
+      yield* Console.log(JSON.stringify(options.sarif ? dataPayload : envelope, null, options.pretty ? 2 : 0));
+    }
+
+    if (options.exportSession) {
+      yield* Effect.tryPromise(() =>
+        fs.writeFile(resolve(options.exportSession!), JSON.stringify(envelope, null, 2), 'utf-8'),
+      );
+    }
+
+    if (options.failOnNew && baselineSummary && baselineSummary.new > 0) {
+      return yield* Effect.fail(new Error(`New findings detected: ${String(baselineSummary.new)}`));
+    }
+    if (options.failOnStaleSuppressions && scan.staleSuppressions.length > 0) {
+      return yield* Effect.fail(
+        new Error(`Stale suppressions detected: ${String(scan.staleSuppressions.length)}`),
+      );
+    }
+    if (options.requireSuppressionReason && scan.suppressionsMissingReason.length > 0) {
+      return yield* Effect.fail(
+        new Error(
+          `Suppressions missing reason: ${String(scan.suppressionsMissingReason.length)} (use: effect-analyzer-disable-next-line <rule> <reason>)`,
+        ),
+      );
+    }
+    return Exit.succeed(undefined);
+  }
+
+  const profileCodes = options.profile ? new Set(getRuleCodesForProfile(options.profile)) : undefined;
+  const profileFilter = <T extends { code: string }>(entries: readonly T[]): readonly T[] =>
+    profileCodes ? entries.filter((x) => profileCodes.has(x.code)) : entries;
+
+  if (options.listRules || options.indexRules || options.searchRules || options.explainRule) {
+    let payload: unknown;
+    if (options.listRules) {
+      const docsJson = JSON.parse(renderRuleDocsJson(true)) as { code: string }[];
+      payload = profileFilter(docsJson);
+    } else if (options.indexRules) {
+      payload = profileFilter(buildRuleIndex());
+    } else if (options.searchRules) {
+      payload = profileFilter(searchRuleDocs(options.searchRules).map((x) => x.doc));
+    } else {
+      const explained = options.explainRule ? explainRule(options.explainRule) : undefined;
+      payload = explained ? [explained] : [];
+    }
+    const envelope = {
+      meta: {
+        generatedAt: new Date().toISOString(),
+        command: options.listRules
+          ? 'list-rules'
+          : options.indexRules
+            ? 'index-rules'
+            : options.searchRules
+              ? 'search-rules'
+              : 'explain-rule',
+      },
+      options: {
+        format: options.format,
+        pretty: options.pretty,
+        profile: options.profile,
+        query: options.searchRules,
+        rule: options.explainRule,
+      },
+      data: payload,
+      summary: {
+        count: Array.isArray(payload) ? payload.length : payload ? 1 : 0,
+      },
+    };
+    if (options.exportSession) {
+      yield* Effect.tryPromise(() =>
+        fs.writeFile(resolve(options.exportSession!), JSON.stringify(envelope, null, 2), 'utf-8'),
+      );
+    }
+    if (options.format === 'json') {
+      yield* Console.log(JSON.stringify(envelope, null, options.pretty ? 2 : 0));
+    } else if (options.listRules && !options.profile && !options.searchRules && !options.explainRule && !options.indexRules) {
+      yield* Console.log(renderRuleDocsText());
+    } else {
+      yield* Console.log(JSON.stringify(envelope, null, 2));
+    }
+    return Exit.succeed(undefined);
+  }
 
   // Diff mode: compare two versions of an Effect program
   // Must run before path resolution since diff sources use ref:path syntax (e.g. HEAD:file.ts)
@@ -1649,7 +2064,7 @@ const main = Effect.gen(function* () {
     return Exit.succeed(undefined);
   }
 
-  const resolvedPath = resolve(pathArg ?? '.');
+  const resolvedPath = resolveCliPath(pathArg);
 
   const s = yield* Effect.tryPromise(() => fs.stat(resolvedPath)).pipe(
     Effect.option,
@@ -1667,6 +2082,42 @@ const main = Effect.gen(function* () {
       return yield* Effect.fail(Exit.fail('Coverage audit requires directory'));
     }
     yield* runCoverageAuditCli(resolvedPath, options);
+    return Exit.succeed(undefined);
+  }
+
+  if (options.serviceCycles) {
+    if (!isDir) {
+      yield* Console.error('Error: --service-cycles requires a directory path');
+      return yield* Effect.fail(Exit.fail('Service cycles requires directory'));
+    }
+    const project = yield* analyzeProject(resolvedPath, {
+      tsconfig: options.tsconfig,
+      knownEffectInternalsRoot: options.knownEffectInternalsRoot,
+      buildServiceMap: true,
+      buildArchitecture: false,
+    });
+    const cycles = project.serviceMap ? detectServiceCycles(project.serviceMap) : [];
+    const payload = {
+      path: resolvedPath,
+      serviceCount: project.serviceMap?.services.size ?? 0,
+      unresolvedServices: project.serviceMap?.unresolvedServices.length ?? 0,
+      cycleCount: cycles.length,
+      cycles,
+    };
+    const text =
+      options.format === 'json'
+        ? JSON.stringify(payload, null, options.pretty ? 2 : 0)
+        : cycles.length === 0
+          ? 'No service dependency cycles detected.'
+          : [
+              `Detected ${String(cycles.length)} service cycle(s):`,
+              ...cycles.map((cycle, idx) => `${String(idx + 1)}. ${cycle.services.join(' -> ')} -> ${cycle.services[0]}`),
+            ].join('\n');
+    if (options.output) {
+      yield* Effect.tryPromise(() => fs.writeFile(resolve(options.output!), text, 'utf-8'));
+    } else {
+      yield* Console.log(text);
+    }
     return Exit.succeed(undefined);
   }
 
@@ -1767,7 +2218,16 @@ const main = Effect.gen(function* () {
 
 // Run the program
 Effect.runPromise(main).then(
-  () => {
+  (exit) => {
+    if (Exit.isFailure(exit)) {
+      const cause = exit.cause;
+      const rendered = JSON.stringify(cause);
+      if (rendered) {
+        console.error(`Error: ${rendered}`);
+      }
+      process.exit(1);
+      return;
+    }
     process.exit(0);
   },
   (err: unknown) => {
