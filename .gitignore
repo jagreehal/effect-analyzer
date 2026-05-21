@@ -30,3 +30,4 @@ apps/docs/**/.DS_Store
 !apps/docs/src/content/docs/
 !apps/docs/src/content/docs/case-studies/
 !apps/docs/src/content/docs/case-studies/transfer-observability.mdx
+___temp

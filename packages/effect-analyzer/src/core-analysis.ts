@@ -925,6 +925,8 @@ interface WalkerContext {
   readonly warnings: AnalysisWarning[];
   readonly stats: AnalysisStats;
   readonly serviceScope: Map<string, string>;
+  /** Parameter names accepted by Effect.gen callback adapters, e.g. `_` in `Effect.gen(function*(_) {})`. */
+  readonly generatorAdapterParams: ReadonlySet<string>;
   /** Tracks const declarations with literal initializers for condition simplification */
   readonly constValues: Map<string, string>;
 }
@@ -938,6 +940,7 @@ function analyzeYieldNode(
   ctx: WalkerContext,
 ): Effect.Effect<{ variableName: string | undefined; effect: StaticFlowNode }, AnalysisError> {
   return Effect.gen(function* () {
+    const { SyntaxKind } = loadTsMorph();
     const yieldExpr = yieldNode as YieldExpression;
     const isDelegated = yieldExpr.getText().startsWith('yield*');
     const expr = yieldExpr.getExpression();
@@ -970,8 +973,24 @@ function analyzeYieldNode(
       return { variableName: undefined, effect: opaqueNode };
     }
 
+    // Effect.gen adapter form: yield* _(effect)
+    // Widely used in Effect ecosystem examples and wrappers.
+    let effectExpr = expr;
+    const unwrappedCall = unwrapExpression(expr);
+    if (unwrappedCall.getKind() === SyntaxKind.CallExpression) {
+      const call = unwrappedCall as CallExpression;
+      const calleeExpr = call.getExpression();
+      if (
+        calleeExpr.getKind() === SyntaxKind.Identifier &&
+        ctx.generatorAdapterParams.has((calleeExpr as Identifier).getText()) &&
+        call.getArguments().length >= 1
+      ) {
+        effectExpr = call.getArguments()[0] ?? expr;
+      }
+    }
+
     // effect-flow: intercept Step.* calls when enableEffectFlow is active
-    const unwrappedExpr = unwrapExpression(expr);
+    const unwrappedExpr = unwrapExpression(effectExpr);
     if (ctx.opts.enableEffectFlow && isStepCall(unwrappedExpr)) {
       const stepResult = yield* analyzeStepCall(unwrappedExpr as CallExpression, ctx);
       const variableName = extractYieldVariableName(yieldNode);
@@ -984,7 +1003,7 @@ function analyzeYieldNode(
     }
 
     const analyzed = yield* analyzeEffectExpression(
-      expr,
+      effectExpr,
       ctx.sourceFile,
       ctx.filePath,
       ctx.opts,
@@ -1832,6 +1851,17 @@ export const analyzeGeneratorFunction = (
 
     const serviceScope = new Map<string, string>();
     const constValues = new Map<string, string>();
+    const generatorAdapterParams = new Set<string>();
+    if (
+      node.getKind() === SyntaxKind.ArrowFunction ||
+      node.getKind() === SyntaxKind.FunctionExpression ||
+      node.getKind() === SyntaxKind.FunctionDeclaration
+    ) {
+      const fnLike = node as import('ts-morph').ArrowFunction | import('ts-morph').FunctionExpression | FunctionDeclaration;
+      for (const param of fnLike.getParameters()) {
+        generatorAdapterParams.add(param.getName());
+      }
+    }
     const ctx: WalkerContext = {
       sourceFile,
       filePath,
@@ -1839,6 +1869,7 @@ export const analyzeGeneratorFunction = (
       warnings,
       stats,
       serviceScope,
+      generatorAdapterParams,
       constValues,
     };
 
