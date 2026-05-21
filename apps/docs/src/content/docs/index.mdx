@@ -1,124 +1,67 @@
 ---
 title: effect-analyzer
-description: Static analysis for Effect-TS code - extract structure, calculate complexity, and generate visualizations without executing your code.
+description: See what your Effect-TS programs actually do. Turn yields, layers, and pipes into diagrams your team can read in seconds, and catch what text diffs miss in PR review — without ever running your code.
 template: splash
 hero:
-  tagline: Paste Effect code into a live browser playground, export interactive analysis pages, and generate diagrams without running your program.
+  tagline: Turn yields, layers, and pipes into diagrams your team can read in seconds. Catch what text diffs miss when retry policies change, services move, or error paths drift. Without ever running your code.
   actions:
-    - text: Docs
-      link: /effect-analyzer/introduction/
-      icon: right-arrow
-      variant: primary
-    - text: Try Live Playground
+    - text: See it work
       link: /effect-analyzer/playground/
       icon: right-arrow
+      variant: primary
+    - text: Read the docs
+      link: /effect-analyzer/introduction/
+      icon: right-arrow
       variant: secondary
-    - text: Open HTML Demo
+    - text: Interactive HTML demo
       link: /effect-analyzer/reference/html-viewer/
       icon: right-arrow
       variant: secondary
 
-    - text: View on GitHub
+    - text: GitHub
       link: https://github.com/jagreehal/effect-analyzer
       icon: external
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+import CompareShowcase from '../../components/CompareShowcase.astro';
+import DiagnosticPanel from '../../components/DiagnosticPanel.astro';
 
-## The Standout Features
+<CompareShowcase />
+
+## What it changes for you
 
 <CardGrid>
-  <Card title="Live Browser Playground" icon="document">
-    Paste Effect code into a static in-browser playground and get a rendered railway diagram immediately.
-
-    [Open the playground](/effect-analyzer/playground/)
+  <Card title="PR reviews catch real changes" icon="approve-check">
+    Text diffs say *"3 lines changed"*. The semantic diff says *"retry removed, `DbService` added,
+    error path now uncaught"*. Stop merging behaviour drift on autopilot.
   </Card>
-  <Card title="Interactive HTML Export" icon="pencil">
-    Generate a shareable analysis page with search, filters, path explorer, themes, and embedded IR.
-
-    [Open the HTML demo](/effect-analyzer/reference/html-viewer/)
+  <Card title="Onboard without reading every yield" icon="seti:plan">
+    New teammates open the interactive HTML viewer for a function and see services, layers, error
+    paths and concurrency at a glance — instead of tracing generators line-by-line.
+  </Card>
+  <Card title="Docs that can't lie" icon="puzzle">
+    Service maps and railway diagrams generated straight from the AST. Refactor freely; the
+    diagrams move with the code, not with a stale Notion page.
+  </Card>
+  <Card title="Catch hidden complexity in CI" icon="warning">
+    Cyclomatic, cognitive, path count, nesting depth, parallel breadth — fail the build when a
+    function quietly crosses your team's thresholds.
   </Card>
 </CardGrid>
 
-These two features are what make the library easy to share: one lets people try it instantly, the other turns analysis into a linkable artifact.
+## The same workflow, from the terminal
 
-## See It in Action
+Prefer the CLI for CI pipelines and local sanity checks? Same analyzer, same IR.
 
-Example fixture: `packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts`
+<DiagnosticPanel />
 
-```ts
-export const transferWorkflow = (
-  fromAccountId: string,
-  toAccountId: string,
-  amount: number,
-) =>
-  Effect.gen(function* () {
-    const accounts = yield* AccountService
-    const audit = yield* AuditLog
+## Try it in three ways
 
-    const balance = yield* accounts.getBalance(fromAccountId)
-    if (balance < amount) {
-      return yield* Effect.fail(new InsufficientFundsError(balance, amount))
-    }
-
-    yield* accounts.debit(fromAccountId, amount)
-    yield* accounts.credit(toAccountId, amount)
-    yield* audit.record(`Transferred ${amount} from ${fromAccountId} to ${toAccountId}`)
-  })
-```
-
-```text
-$ npx effect-analyze ./src/__fixtures__/docs/transfer-workflow.ts --format explain
-
-transferWorkflow (generator):
-  1. Yields accounts <- AccountService
-  2. Yields audit <- AuditLog
-  3. Yields balance <- accounts.getBalance
-  4. If balance < amount:
-    Returns:
-      Calls fail - constructor
-  5. Calls accounts.debit
-  6. Calls accounts.credit
-  7. Calls audit.record
-
-  Services required: AccountService, AuditLog
-  Error paths: AccountNotFoundError, InsufficientFundsError
-  Concurrency: sequential (no parallelism)
-```
-
-```mermaid
-flowchart LR
-  prog["transferWorkflow"]
-
-  svc_AccountService{{"AccountService"}}
-  prog -->|requires| svc_AccountService
-  svc_AuditLog{{"AuditLog"}}
-  prog -->|requires| svc_AuditLog
-```
-
-## Features
-
-<CardGrid>
-  <Card title="Static Analysis" icon="magnifier">
-    Analyze Effect programs without execution. Extracts generators, pipes, services, layers, error handlers, and control flow.
-  </Card>
-  <Card title="Mermaid Diagrams" icon="document">
-    Auto-generate flowcharts, railway diagrams, service maps, error flows, concurrency views, and more.
-  </Card>
-  <Card title="Complexity Metrics" icon="warning">
-    Calculate cyclomatic complexity, cognitive complexity, path counts, nesting depth, and parallel breadth.
-  </Card>
-  <Card title="Semantic Diff" icon="pencil">
-    Compare two versions of an Effect program to see what changed - steps added, removed, or modified.
-  </Card>
-</CardGrid>
-
-## Start With The Visuals
-
-- [Try the live playground](/effect-analyzer/playground/) to paste code and see the railway diagram in the browser.
-- [Open the interactive HTML demo](/effect-analyzer/reference/html-viewer/) to see the exported viewer embedded directly in the docs.
-- [Read the `t3code` case study](/effect-analyzer/case-studies/t3code/) to see Mermaid diff output used on a real codebase.
+- **[Live playground](/effect-analyzer/playground/)** — paste any Effect function, see the railway diagram in the browser. No install.
+- **[Interactive HTML viewer](/effect-analyzer/reference/html-viewer/)** — the exported, shareable artifact embedded directly in the docs.
+- **[`t3code` case study](/effect-analyzer/case-studies/t3code/)** — Mermaid diff output on a real codebase under refactor.
 
 ## Quick Start
 

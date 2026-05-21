@@ -88,6 +88,10 @@ export default defineConfig({
             { label: 'Semantic Diff', slug: 'project/diff' },
             { label: 'Migration Assistant', slug: 'project/migration' },
             { label: 'Strict Diagnostics', slug: 'project/diagnostics' },
+            { label: 'Source Linter', slug: 'project/source-linter' },
+            { label: 'Improve Mode & Agent Report', slug: 'project/improve' },
+            { label: 'Health Analyzers', slug: 'project/health' },
+            { label: 'App-Shape Analyzers', slug: 'project/app-shape' },
           ],
         },
         {

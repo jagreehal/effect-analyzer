@@ -1,0 +1,151 @@
+---
+title: Source Linter
+description: 18 deterministic source-level lint rules with docs links and Bad → Good examples, plus SARIF output, baselines, and CI gating.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The source linter runs deterministic AST-based checks against your Effect code and emits findings with rule codes, severities, source spans, docs URLs, and copy-pasteable Bad → Good examples. It is **independent of IR analysis** — it operates on the TypeScript AST directly so it is fast enough to run on every commit.
+
+```bash
+effect-analyze ./src --lint-source
+```
+
+## What it catches
+
+Eighteen rules covering the most common Effect anti-patterns surfaced in [`EffectPatterns`](https://github.com/Effect-TS/examples), [`effect-ts/examples`](https://github.com/Effect-TS/examples), and real-world reviews:
+
+| Code | Severity | Catches |
+|---|---|---|
+| `detached-fiber-in-test` | warning | `Effect.runFork(Effect.never)` in tests — fiber outlives test scope |
+| `effect-fail-untagged` | warning | `Effect.fail(new Error("…"))` — degrades the typed error channel |
+| `empty-effect-all` | info | `Effect.all([])` — dead or placeholder code |
+| `forEach-without-concurrency` | info | `Effect.forEach(items, f)` without an explicit `concurrency` option |
+| `identity-catch` | warning | `Effect.catchAll(e, (e) => Effect.fail(e))` — no-op handler |
+| `live-layer-in-test` | warning | `Live` layer references in test files where test layers are expected |
+| `mutable-in-concurrent` | warning | `let`/`var` mutation inside parallel / fork / race contexts |
+| `nondeterministic-test-api` | warning | `Date.now()` / `new Date()` / `Math.random()` in test code |
+| `promise-api-in-gen` | warning | `Promise.all` / `Promise.race` inside `Effect.gen` |
+| `raw-side-effect-in-gen` | warning | `fetch` / `process.env` / `setTimeout` / `new Promise` in generator bodies |
+| `run-effect-in-gen` | warning | `Effect.runPromise` / `runSync` inside `Effect.gen` — should be `yield*` |
+| `runPromise-then-chain` | info | `.then` / `.catch` after `Effect.runPromise` |
+| `runSync-on-async` | **error** | `Effect.runSync` on an async-tainted effect — throws at runtime |
+| `runSyncExit-on-async` | **error** | `Effect.runSyncExit` on an async-tainted effect |
+| `schedule-unbounded` | warning | `Schedule.forever` and friends without visible bounds |
+| `sleep-without-testclock` | info | Real-time `Effect.sleep` in tests without `TestClock` |
+| `unsafe-api-usage` | warning | `Effect.unsafe*` APIs bypassing runtime safety |
+| `untagged-throw` | warning | `throw new Error(...)` inside an Effect context |
+
+Every finding carries:
+
+- **rule code** + severity
+- **source span** (file, line, column, end line, end column)
+- **`docs.effect.website` link** for the rule
+- **Bad → Good example** snippet pulled from the rule registry
+
+## Inspect a single rule
+
+```bash
+effect-analyze --explain-rule runSync-on-async
+```
+
+## List or search the registry
+
+```bash
+effect-analyze --list-rules                       # full table
+effect-analyze --search-rules concurrency          # text search across codes/titles/descriptions
+effect-analyze --index-rules                       # searchable index entries (one per line)
+```
+
+## SARIF output
+
+Emit [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) — the standard format consumed by GitHub Code Scanning, Azure DevOps, SonarQube, and most static analysis tools.
+
+```bash
+effect-analyze ./src --lint-source --sarif -o findings.sarif
+```
+
+Upload to GitHub Code Scanning in a workflow:
+
+```yaml
+- name: Lint Effect source
+  run: pnpm exec effect-analyze ./src --lint-source --sarif -o findings.sarif
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: findings.sarif
+```
+
+## Baselines (CI gating)
+
+To adopt the linter on a non-greenfield codebase, snapshot current findings as a **baseline** and fail CI only on **new** findings.
+
+```bash
+# 1. Snapshot once
+effect-analyze ./src --lint-source -o .cache/effect-lint-baseline.json
+
+# 2. In CI, fail only on findings not in the baseline
+effect-analyze ./src --lint-source \
+  --baseline .cache/effect-lint-baseline.json \
+  --fail-on-new
+```
+
+This is the recommended adoption path: get the workflow into CI today, then drive the baseline to zero over time.
+
+## Per-file scorecard
+
+A compact `{file → counts by severity}` report for tracking lint debt by area:
+
+```bash
+effect-analyze ./src --lint-source --scorecard
+```
+
+## Suppression comments
+
+Suppress a single line with an `effect-lint-disable-next-line` comment:
+
+```ts
+// effect-lint-disable-next-line runSync-on-async — initial bootstrap only
+Effect.runSync(initEffect)
+```
+
+Tighten the policy in CI:
+
+| Flag | Effect |
+|---|---|
+| `--require-suppression-reason` | Suppressions must include a `— reason` after the rule code |
+| `--fail-on-stale-suppressions` | Suppressions that no longer suppress anything fail the build |
+
+## Bundle output for artifacts
+
+Produce a deterministic artifact directory that contains diagnostics, SARIF, summary, the rule registry snapshot, and the session envelope:
+
+```bash
+effect-analyze ./src --lint-source --bundle-output ./.artifacts/effect-lint
+```
+
+Useful for build attestation, debugging CI regressions, or feeding the bundle into a downstream agent.
+
+## Rule profiles
+
+Switch the active rule set with `--profile`:
+
+| Profile | Use |
+|---|---|
+| `strict` | All rules, including info-level |
+| `ci` | Errors + warnings only |
+| `migration` | Rules tuned for codebases being migrated to Effect |
+| `docs` | Rules surfaced in published documentation |
+
+```bash
+effect-analyze ./src --lint-source --profile ci --fail-on-new --baseline .cache/baseline.json
+```
+
+## Related
+
+- [Strict Diagnostics](/effect-analyzer/project/diagnostics/) — IR-level diagnostics (separate from source lints)
+- [Improve Mode](/effect-analyzer/project/improve/) — auto-fix fixable lint findings
+- [CLI Reference](/effect-analyzer/reference/cli/#source-linting) — all source-linter flags in one table

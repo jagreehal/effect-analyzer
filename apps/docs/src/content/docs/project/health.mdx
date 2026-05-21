@@ -1,0 +1,113 @@
+---
+title: Health Analyzers
+description: Project-wide checks for error-channel quality, service dependency health, and performance anti-patterns in Effect code.
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Three project-wide analyzers surface structural problems that single-file lints can't see: errors that drift across program boundaries, services that are required but never provided, and performance patterns that look fine locally but cost you under load.
+
+All three feed into the [agent report](/effect-analyzer/project/improve/) — you can run them standalone for a quick health check, or together for a complete project snapshot.
+
+## Error channel
+
+```bash
+effect-analyze ./src --error-channel
+```
+
+Cross-file analysis of how errors flow through your typed channels. Detects:
+
+| Type | What it catches |
+|---|---|
+| `generic-error` | Program signature has unspecific `E` type instead of a concrete tagged error |
+| `unhandled-error` | A tagged error is produced somewhere in the project but never handled |
+| `missing-catch-tag` | A program calls another that fails with `FooError` without a matching `catchTag('Foo', …)` |
+| `error-type-widening` | An error gets re-thrown as a broader supertype, losing typing |
+| `no-error-handlers` | A program is reachable from an entry point but has no error handlers anywhere on the path |
+
+Each issue carries program name, file path, error type, severity (`error` / `warning` / `info`), and a concrete remediation suggestion.
+
+### Example output
+
+```text
+$ effect-analyze ./src --error-channel
+
+unhandled-error: PaymentFailedError
+  produced in: src/payments/charge.ts:42 (chargeCard)
+  reachable from entry point: src/server.ts (httpServer)
+  never handled by Effect.catchTag or matched in Cause/Exit
+  → add Effect.catchTag('PaymentFailed', handle) in the server boundary
+
+generic-error: src/notify/sendEmail.ts (sendEmail)
+  signature: Effect<…, E, R>
+  → narrow E to a tagged error union (SmtpError | InvalidRecipientError)
+```
+
+## Service health
+
+```bash
+effect-analyze ./src --service-health
+```
+
+Project-wide audit of `Context.Tag` services and their `Layer` providers. Detects:
+
+| Type | What it catches |
+|---|---|
+| `unsatisfied` | A service is required (`yield* SomeService`) but no `Layer` provides it anywhere reachable |
+| `dead-service` | A `Layer` provides a service that no program ever consumes |
+| `layer-inefficiency` | Multiple separate `Layer.provide` calls that could be merged into one |
+| `duplicate-provide` | Same service provided twice in a `Layer.merge` chain — the second silently wins |
+
+Useful for finding "this service is defined but nothing uses it anymore" rot, and for catching missing wiring before the runtime tells you.
+
+## Performance
+
+```bash
+effect-analyze ./src --performance
+```
+
+Performance anti-pattern detector. Catches things that fail load tests, not unit tests:
+
+| Type | Impact | What it catches |
+|---|---|---|
+| `sequential-could-parallel` | medium / high | Multiple independent `yield*` in a row where `Effect.all([…], { concurrency })` would be faster |
+| `unbounded-concurrency` | high | `Effect.all([…], { concurrency: "unbounded" })` on large collections — DoS your own DB |
+| `n-plus-one` | high | Looping over a collection and calling a service inside — classic ORM-style N+1 |
+| `missing-batching` | medium | Sequential service calls that could go through a `RequestResolver` batch |
+| `large-gen-block` | low | A single `Effect.gen` with > 50 yields — readability / refactor signal |
+| `unbounded-retry` | high | `Effect.retry(p, Schedule.forever)` with no upper bound |
+| `forEach-sequential` | medium | `Effect.forEach` with no concurrency option on a meaningful collection |
+
+Each issue carries program name, file, line, severity, suggestion, and an `estimatedImpact` field (`low` / `medium` / `high`).
+
+## Use them together
+
+For a single-command project health snapshot:
+
+```bash
+effect-analyze ./src \
+  --error-channel \
+  --service-health \
+  --performance \
+  --format json \
+  -o health.json
+```
+
+Or feed the same flags into `--agent-report` to produce a prioritized backlog with concrete remediation steps:
+
+```bash
+effect-analyze ./src \
+  --agent-report \
+  --error-channel \
+  --service-health \
+  --performance \
+  -o backlog.md
+```
+
+## Related
+
+- [Improve Mode & Agent Report](/effect-analyzer/project/improve/) — consume health output into a prioritized plan
+- [Strict Diagnostics](/effect-analyzer/project/diagnostics/) — IR-level structural diagnostics (complementary)
+- [CLI Reference](/effect-analyzer/reference/cli/#health-analyzers) — flags

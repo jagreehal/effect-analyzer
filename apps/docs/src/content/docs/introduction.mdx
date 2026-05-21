@@ -53,11 +53,15 @@ Because the IR is a plain data structure, you can also consume it directly in yo
 
 effect-analyzer ships with over 25 output formats:
 
-- **15 Mermaid diagram types** - railway, flowchart, service maps, error flows, concurrency views, layer graphs, retry timelines, and more
-- **Structured data** - JSON IR, complexity stats, plain-English explanations, dependency matrices
-- **Analysis reports** - execution paths, test coverage matrices, data-flow graphs, error propagation analysis
-- **Project tools** - coverage audits, semantic diffs, migration assistant, strict diagnostics
-- **Interactive HTML** - a self-contained viewer with search, filtering, path explorer, and 6 color themes
+- **15 Mermaid diagram types** — railway, flowchart, service maps, error flows, concurrency views, layer graphs, retry timelines, and more
+- **Structured data** — JSON IR, complexity stats, plain-English explanations, dependency matrices
+- **Analysis reports** — execution paths, test coverage matrices, data-flow graphs, error propagation analysis
+- **Source linting** — 18 deterministic rules with [docs links and Bad → Good examples](/effect-analyzer/project/source-linter/), SARIF 2.1 output, baseline + `--fail-on-new` CI gating
+- **Health analyzers** — [error channel](/effect-analyzer/project/health/#error-channel), [service dependency health](/effect-analyzer/project/health/#service-health), and [performance anti-patterns](/effect-analyzer/project/health/#performance) across an entire project
+- **App-shape analyzers** — [entry points](/effect-analyzer/project/app-shape/#entry-points), [config-secret leak detection](/effect-analyzer/project/app-shape/#config-leaks), [`@effect/cli` command structure](/effect-analyzer/project/app-shape/#cli-commands), [service cycles](/effect-analyzer/project/app-shape/#service-cycles)
+- **Improvement workflow** — [`--agent-report`](/effect-analyzer/project/improve/) emits a prioritized backlog optimized for coding agents; [`--improve`](/effect-analyzer/project/improve/#auto-fix) applies safe auto-fixes for fixable lint findings
+- **Project tools** — [coverage audits](/effect-analyzer/project/coverage-audit/), [semantic diffs](/effect-analyzer/project/diff/), [migration assistant](/effect-analyzer/project/migration/), [strict diagnostics](/effect-analyzer/project/diagnostics/)
+- **Interactive HTML** — a self-contained viewer with search, filtering, path explorer, and 6 color themes
 
 ## Real-World Example
 
