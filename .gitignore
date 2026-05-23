@@ -3,6 +3,10 @@ dist
 .turbo
 .effect-analyzer-cache
 .analysis-output
+# effect-analyzer self-analysis output; legitimate fixtures live under __fixtures__/
+packages/effect-analyzer/src/*.effect-analysis.md
+packages/effect-analyzer/src/**/*.effect-analysis.md
+!packages/effect-analyzer/src/__fixtures__/**/*.effect-analysis.md
 .env*
 coverage
 .worktrees

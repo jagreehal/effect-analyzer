@@ -5,6 +5,8 @@ sidebar:
   order: 1
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 `course-video-manager` is a desktop app for editing course structure, exporting lessons, uploading media, and coordinating a fairly large set of Effect services. This repo does not look like `foldkit`: there is no central runtime loop. The useful output is in service handlers, write pipelines, resource lifecycles, and layer composition.
 
 Current repo-wide output:
@@ -389,3 +391,65 @@ Use `--format mermaid` on dispatcher-style files like `course-editor-service-han
 Use `--format architecture` on `./app/services/layer.server.ts` or the repo root when you want the layer composition view.
 
 Use `--coverage-audit` on `./app/services` instead of the whole repo if your goal is to measure analyzer quality on actual Effect code.
+
+## Health analyzers find real, specific issues
+
+Running the full set of health analyzers against the `app/` source produces a single prioritized backlog:
+
+```bash
+effect-analyze ./app \
+  --agent-report \
+  --error-channel \
+  --service-health \
+  --performance \
+  --coupling \
+  -o backlog.md
+```
+
+On 205 analyzed files, 949 programs, 0.0% unknown node rate, the analyzer surfaced **34 prioritized improvements** in the snapshot below. The top P1 findings are concrete and actionable:
+
+<Aside type="note">
+The exact numbers were captured during analyzer development before tsconfig path-alias resolution and transitive coupling were available — see the [foldkit case study](/effect-analyzer/case-studies/foldkit/) for examples with both features wired in. The categories of finding and the workflow shown here are unchanged; re-running today produces a fuller picture because `@/...` aliases now resolve to their targets.
+</Aside>
+
+| Rule | Count | Example |
+|---|---|---|
+| `nondeterministic-test-api` | 14 | `new Date()` inside test code — flakes waiting to happen |
+| `raw-side-effect-in-gen` (Date.now) | 6 | Bare `Date.now()` in `Effect.gen` body — bypasses `Clock` service |
+| `raw-side-effect-in-gen` (process.env) | 5 | `process.env.X` in `Effect.gen` — should use `Config.string(...)` |
+| `promise-api-in-gen` | 2 | `Promise.resolve(...)` inside Effect.gen — bypasses interruption |
+| `config-secret-without-redacted` | 2 | `Config.string("GOOGLE_CLIENT_SECRET")` reads a secret as plain text |
+| `array-push-spread` | 1 | `arr.push(...xs)` — V8 stack-overflow on large arrays |
+
+The two `config-secret-without-redacted` findings are particularly worth highlighting: they're real, named env variables (`GOOGLE_CLIENT_SECRET`, etc.) that should be reading through `Config.redacted` to avoid leaking through logs. That's the kind of issue you'd only catch in security review otherwise.
+
+Each finding comes with `file:line` citations and a concrete suggestion. The full report is structured so a coding agent can work through P1 → P2 → P3 linearly.
+
+## Coupling with path alias resolution
+
+This repo uses TypeScript path aliases (`tsconfig.json` defines `"paths": { "@/*": ["./app/*"] }`), so the many imports like `import { X } from "@/services/foo"` require tsconfig-aware resolution. Pass `--tsconfig` to enable it:
+
+```bash
+effect-analyze ./app --coupling --tsconfig ./tsconfig.json
+```
+
+The analyzer reads `compilerOptions.paths` and `compilerOptions.baseUrl` from the tsconfig, matches the longest prefix first (supporting `*` wildcards), then resolves the resulting path with standard extension detection. Imports that were previously silently skipped are now resolved and counted.
+
+You can also combine this with `--coupling-transitive` to account for imports through barrel files:
+
+```bash
+effect-analyze ./app \
+  --coupling --coupling-transitive \
+  --tsconfig ./tsconfig.json
+```
+
+For pnpm/yarn workspace monorepos where sibling packages import each other by name (e.g. `@org/foo`), the API accepts an optional `workspacePackages` map. See the [coupling analyzer reference](/effect-analyzer/reference/coupling/) for details.
+
+## Not every finding is a bug
+
+The biggest caveat in reading the agent report: **not every finding should become a refactor**. In an Effect-heavy codebase, four categories worth separating:
+
+- **Intentional hubs worth documenting with `@known-hub`** — if `db-service.server.ts` is genuinely shared infrastructure, annotate it so it stops generating warnings while staying on the monitoring radar.
+- **Accidental god modules worth splitting** — files with both high fan-in and high fan-out may be doing too much. The now-complete import graph makes this signal reliable.
+- **Real issues worth fixing** — the 14 `nondeterministic-test-api` findings and 2 `config-secret-without-redacted` findings are unambiguous. Fix those.
+- **Analyzer noise worth ignoring** — and feeding back as bug reports. A small number of findings will be artefacts of the current analysis depth.
