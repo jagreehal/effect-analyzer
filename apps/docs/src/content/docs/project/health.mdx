@@ -7,9 +7,9 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-Three project-wide analyzers surface structural problems that single-file lints can't see: errors that drift across program boundaries, services that are required but never provided, and performance patterns that look fine locally but cost you under load.
+Four project-wide analyzers surface structural problems that single-file lints can't see: errors that drift across program boundaries, services that are required but never provided, performance patterns that look fine locally but cost you under load, and modules that have quietly turned into god objects everything imports.
 
-All three feed into the [agent report](/effect-analyzer/project/improve/) — you can run them standalone for a quick health check, or together for a complete project snapshot.
+All four feed into the [agent report](/effect-analyzer/project/improve/) — you can run them standalone for a quick health check, or together for a complete project snapshot. Each supports `--format json` for scripting and `--output <path>` to write to a file.
 
 ## Error channel
 
@@ -82,6 +82,60 @@ Performance anti-pattern detector. Catches things that fail load tests, not unit
 
 Each issue carries program name, file, line, severity, suggestion, and an `estimatedImpact` field (`low` / `medium` / `high`).
 
+## Coupling
+
+```bash
+effect-analyze ./src --coupling
+```
+
+Per-file dependency-graph metrics. Computes fan-in (how many files import this one) and fan-out (how many internal files this one imports) across the project, then surfaces files that are quietly becoming god modules.
+
+| Type | What it catches |
+|---|---|
+| `high-fanin` | A file with fan-in ≥ 15 — changes to it ripple to many dependents |
+| `critical-fanin` | A file with fan-in ≥ 30 — a true hub; refactoring is expensive |
+| `high-fanout` | A file importing ≥ 20 internal modules — broad scope, hard to test in isolation |
+
+Imports are parsed via the TypeScript AST, so `import X`, `import type X`, `export { x } from`, `import('…')` dynamic imports, and side-effect `import './foo'` are all counted; node_modules and `node:` imports are skipped.
+
+### Annotating intentional hubs
+
+Some files are hubs *on purpose* — central type definitions, a public API entry point, a service registry. Annotate them in-source to suppress the warning while keeping them on the radar:
+
+```typescript
+/**
+ * Central IR type definitions imported by every analyzer.
+ *
+ * @known-hub central type registry
+ */
+```
+
+Or as a single-line marker if you don't have a JSDoc:
+
+```typescript
+// effect-analyzer-known-hub central type registry
+```
+
+The annotation is grep-able, lives next to the code, and carries a written reason. Annotated hubs stop generating `high-fanin` issues but still appear in the report as monitored hubs — so if one quietly doubles in fan-in, you'll see it.
+
+### Example output
+
+```text
+$ effect-analyze ./src --coupling
+
+# Module Coupling Analysis
+
+## Summary
+- High fan-in files: 1
+- Critical fan-in files: 0
+- Known hubs (annotated): 2
+
+## Issues
+🟡 [high-fanin] `notifications/index.ts`
+   File "notifications/index.ts" has fan-in 18 (high) — changes affect 18 dependents
+   💡 Consider reducing the import surface. Add a `@known-hub <reason>` JSDoc tag if this is intentional.
+```
+
 ## Use them together
 
 For a single-command project health snapshot:
@@ -91,6 +145,7 @@ effect-analyze ./src \
   --error-channel \
   --service-health \
   --performance \
+  --coupling \
   --format json \
   -o health.json
 ```
@@ -103,6 +158,7 @@ effect-analyze ./src \
   --error-channel \
   --service-health \
   --performance \
+  --coupling \
   -o backlog.md
 ```
 

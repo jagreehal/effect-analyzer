@@ -1,0 +1,199 @@
+---
+title: Coupling Analyzer
+description: Per-file fan-in and fan-out metrics with in-source hub annotations, tsconfig path resolution, and transitive coupling through barrels.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The coupling analyzer reports per-file fan-in (incoming imports) and fan-out (outgoing imports) across a TypeScript project. It uses the TypeScript AST to resolve imports, supports `@known-hub` annotations to mark intentional hubs in-source, and can resolve `tsconfig.json` path aliases, workspace package boundaries, and transitive re-exports through barrel files.
+
+```bash
+effect-analyze ./src --coupling
+```
+
+## Flags
+
+| Flag | Description | Default |
+|---|---|---|
+| `--coupling` | Run coupling analysis on the target path | off |
+| `--coupling-transitive` | Walk through `export ... from` re-exports and credit fan-in to the original module rather than the barrel | off |
+| `--coupling-priority <map>` | Override agent-report priority per coupling issue type (e.g. `critical-fanin=P0,high-fanout=P2`) | defaults below |
+| `--tsconfig <path>` | Read `compilerOptions.paths` and `baseUrl` from the given `tsconfig.json` to resolve TypeScript path aliases (`@/*`, `~/*`, etc.) | none |
+| `--format json` | Emit machine-readable JSON instead of markdown | markdown |
+| `--output <path>` | Write to a file instead of stdout | stdout |
+
+The same `--tsconfig` flag is honored by `--coverage-audit`, `--format architecture`, and other project-mode commands.
+
+## Issue types
+
+| Type | Threshold | Meaning |
+|---|---|---|
+| `high-fanin` | fan-in ≥ 15 (default) | Changes to this file ripple to many dependents |
+| `critical-fanin` | fan-in ≥ 30 (default) | True hub; refactor is expensive and may not be desirable |
+| `high-fanout` | fan-out ≥ 20 (default) | File imports many internal modules — broad scope, hard to test in isolation |
+
+When a file with `critical-fanin` is annotated as a known hub, it is still surfaced under "Known Hubs (at scale)" as low-impact monitoring info. Growth past the annotated baseline is visible in subsequent reports.
+
+## Annotation forms
+
+Mark intentional hubs in-source. The first match in the leading comment block wins.
+
+### JSDoc tag (preferred)
+
+```typescript
+/**
+ * Central type definitions imported by every analyzer.
+ *
+ * @known-hub central type registry
+ */
+```
+
+### Line comment
+
+```typescript
+// effect-analyzer-known-hub central type registry
+```
+
+Both forms accept an optional `<reason>` after the marker. The reason is displayed in the report.
+
+The leading comment block is scanned until the first non-comment, non-blank line — so the marker is detected even after long license headers or extended JSDoc preambles.
+
+## Import resolution
+
+The analyzer parses every import declaration via the TypeScript AST and resolves them through the following chain:
+
+1. **Direct path** with extension (`./foo.ts`, `./foo.tsx`, etc.) — resolved relative to the source file
+2. **Node ESM `.js`-of-`.ts`** (`./foo.js` → `./foo.ts`) — handles the bundler-style convention where TypeScript imports the compiled output extension
+3. **Bare extension** (`./foo`) — tries `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs` in order
+4. **Directory + index** (`./foo` → `./foo/index.ts`) — same extension order
+5. **`tsconfig.json` path aliases** (when `--tsconfig` is set) — longest-prefix-wins, `*` wildcards supported
+6. **Workspace packages** (when `workspacePackages` is provided programmatically) — sibling-package imports by name
+7. **External imports** — anything starting with a bare module specifier and not matching an alias or workspace entry is skipped
+
+Dynamic `import('...')`, `export ... from '...'`, type-only imports, and side-effect imports (`import './foo'`) are all counted.
+
+## Programmatic API
+
+```typescript
+import { analyzeCoupling, renderCouplingReport } from 'effect-analyzer';
+
+const analysis = analyzeCoupling(files, projectRoot, {
+  highFanInThreshold: 15,
+  criticalFanInThreshold: 30,
+  highFanOutThreshold: 20,
+  knownHubPaths: ['/abs/path/to/known/hub.ts'],
+  excludePatterns: ['.test.ts'],
+  tsconfig: './tsconfig.json',
+  transitive: true,
+  workspacePackages: { '@org/foo': '/abs/path/to/packages/foo/src' },
+  project: undefined, // optional prebuilt ts-morph Project (e.g. in-memory)
+});
+
+console.log(renderCouplingReport(analysis));
+```
+
+### `AnalyzeCouplingOptions`
+
+| Field | Type | Description |
+|---|---|---|
+| `highFanInThreshold` | `number` | Files at or above this fan-in are reported as `high-fanin` (default: 15) |
+| `criticalFanInThreshold` | `number` | Files at or above this fan-in are reported as `critical-fanin` (default: 30) |
+| `highFanOutThreshold` | `number` | Files at or above this fan-out are reported as `high-fanout` (default: 20) |
+| `knownHubPaths` | `readonly string[]` | Absolute paths to treat as known hubs without requiring an in-source annotation |
+| `excludePatterns` | `readonly string[]` | Substring patterns; matching paths are excluded from analysis |
+| `tsconfig` | `string` | Path to `tsconfig.json` for path-alias resolution |
+| `transitive` | `boolean` | Walk through `export ... from` re-exports |
+| `workspacePackages` | `Record<string, string>` | Workspace package name → source root mapping for monorepo sibling imports |
+| `project` | `Project` | Prebuilt ts-morph Project (for in-memory analysis; bypasses disk reads) |
+
+### `CouplingAnalysis`
+
+The returned object exposes:
+
+- `metrics: FileCouplingMetrics[]` — per-file fan-in, fan-out, importedBy, importSources, knownHub status
+- `issues: CouplingIssue[]` — findings sorted by severity then value
+- `summary: CouplingSummary` — totals (analyzedFiles, highFanInFiles, criticalFanInFiles, etc.)
+- `knownHubs: FileCouplingMetrics[]` — files marked as intentional hubs
+
+Use `renderCouplingReport(analysis)` for markdown or `renderCouplingJson(analysis, pretty?)` for JSON.
+
+## Configurable priorities in the agent report
+
+Coupling issues fold into `--agent-report` under `category: 'architecture'`. By default:
+
+| Issue type | Priority |
+|---|---|
+| `critical-fanin` (unannotated) | P1 |
+| `high-fanin` (unannotated) | P2 |
+| `high-fanout` | P3 |
+| `hub-without-annotation` | P3 |
+
+### Overriding from the CLI
+
+Pass `--coupling-priority` with a comma-separated map of `issue-type=priority` pairs:
+
+```bash
+effect-analyze ./src \
+  --agent-report --coupling \
+  --coupling-priority critical-fanin=P0,high-fanout=P1
+```
+
+Unspecified types keep their defaults. Invalid types or priorities exit with code 2 and an explanatory error.
+
+### Overriding programmatically
+
+```typescript
+buildAgentReport({
+  findings,
+  irs,
+  couplingIssues,
+  couplingPriorityMap: {
+    'critical-fanin': 'P0',
+    'high-fanout': 'P2',
+  },
+});
+```
+
+## Examples
+
+### Quick scan
+
+```bash
+effect-analyze ./src --coupling
+```
+
+### With path aliases
+
+```bash
+effect-analyze ./src --coupling --tsconfig ./tsconfig.json
+```
+
+### Full health snapshot, machine-readable
+
+```bash
+effect-analyze ./src \
+  --agent-report \
+  --error-channel \
+  --service-health \
+  --performance \
+  --coupling \
+  --tsconfig ./tsconfig.json \
+  --format json \
+  -o health.json
+```
+
+### Transitive coupling through barrel files
+
+```bash
+effect-analyze ./src \
+  --coupling --coupling-transitive \
+  --tsconfig ./tsconfig.json
+```
+
+## Related
+
+- [Health Analyzers](/effect-analyzer/project/health/) — error channel, service health, performance, and coupling together
+- [CLI Reference](/effect-analyzer/reference/cli/#health-analyzers) — full flag list
+- Case studies: [alchemy-effect](/effect-analyzer/case-studies/alchemy-effect/), [foldkit](/effect-analyzer/case-studies/foldkit/), [t3code](/effect-analyzer/case-studies/t3code/), [course-video-manager](/effect-analyzer/case-studies/course-video-manager/)

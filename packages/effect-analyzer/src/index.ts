@@ -748,9 +748,12 @@ export type {
   AgentErrorChannelIssue,
   AgentServiceHealthIssue,
   AgentPerformanceIssue,
+  AgentCouplingIssue,
   AgentReportSummary,
   AgentReport,
   BuildAgentReportOptions,
+  CouplingPriorityMap,
+  CouplingIssueType,
 } from './agent-report';
 
 // =============================================================================
@@ -821,6 +824,23 @@ export type {
   PerformanceAnalysis,
   PerformanceSummary,
 } from './performance-antipatterns';
+
+// =============================================================================
+// Coupling Analysis
+// =============================================================================
+
+export {
+  analyzeCoupling,
+  renderCouplingReport,
+  renderCouplingJson,
+} from './coupling-analysis';
+export type {
+  FileCouplingMetrics,
+  CouplingIssue,
+  CouplingAnalysis,
+  CouplingSummary,
+  AnalyzeCouplingOptions,
+} from './coupling-analysis';
 
 // =============================================================================
 // Improve Mode

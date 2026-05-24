@@ -3,6 +3,8 @@
  *
  * These types represent Effect code structure extracted through static analysis
  * (AST walking) rather than runtime execution.
+ *
+ * @known-hub Central IR type definitions imported by every analyzer
  */
 
 import { Effect, Option } from 'effect';

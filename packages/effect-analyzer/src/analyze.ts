@@ -4,6 +4,8 @@
  * Provides an ergonomic API for analyzing Effect files with explicit intent.
  * Built entirely with Effect for composability.
  *
+ * @known-hub Library API entry point — imported by all consumers
+ *
  * @example
  * ```typescript
  * import { Effect } from "effect";

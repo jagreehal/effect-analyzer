@@ -1,0 +1,205 @@
+---
+title: alchemy-effect
+description: Coupling, transitive imports, and workspace boundaries on a large Effect-based Infrastructure-as-Code monorepo.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`alchemy-effect` is an Infrastructure-as-Code framework built on Effect. The core `packages/alchemy` library models cloud providers (AWS, Cloudflare, etc.) as Effect services and resources. It is a pnpm workspace monorepo with sibling packages (`alchemy`, `better-auth`, `pr-package`), uses TypeScript path aliases (`"@/*": ["./src/*"]`), and uses modern `.ts` extension imports throughout.
+
+That combination makes it the strongest available exercise for three coupling-analyzer features at once: tsconfig path resolution, workspace package boundaries, and transitive coupling through re-exports.
+
+## The setup
+
+The core package layout:
+
+```text
+alchemy-effect/
+├── packages/
+│   ├── alchemy/         ← the framework core, 510 TS files
+│   ├── better-auth/
+│   └── pr-package/
+└── tsconfig.json        ← project references; per-package tsconfigs extend a base
+```
+
+Each package has its own `tsconfig.json` with `compilerOptions.paths`. To get accurate coupling output we pass the relevant per-package tsconfig:
+
+```bash
+effect-analyze ./packages/alchemy/src \
+  --coupling \
+  --tsconfig ./packages/alchemy/tsconfig.json
+```
+
+## The numbers
+
+Running against the framework core surfaces something unusually striking — many true hubs:
+
+```text
+# Module Coupling Analysis
+
+## Summary
+- Analyzed files: 510
+- Critical fan-in files: 14
+- High fan-in files: 9
+- High fan-out files: 7
+- Unannotated hubs: 23
+
+## Issues
+🔴 [critical-fanin] `Resource.ts`              fan-in 189
+🔴 [critical-fanin] `Provider.ts`              fan-in 181
+🔴 [critical-fanin] `Diff.ts`                  fan-in 152
+🔴 [critical-fanin] `Binding.ts`               fan-in 142
+🔴 [critical-fanin] `AWS/Lambda/Function.ts`   fan-in 126
+🔴 [critical-fanin] `AWS/Providers.ts`         fan-in 124
+🔴 [critical-fanin] `PhysicalName.ts`          fan-in  79
+🔴 [critical-fanin] `Tags.ts`                  fan-in  74
+... 6 more critical, 9 high
+```
+
+`Resource.ts` at fan-in 189 in a 510-file codebase is roughly *37% of the codebase depends on it*. For most codebases that would be a fire. For an Infrastructure-as-Code framework where `Resource` is the named central abstraction, it is exactly what the public surface should look like.
+
+This is the case where the analyzer's job is **not** to demand a refactor. Its job is to make the shape of the framework obvious enough to discuss.
+
+## Annotating intentional hubs
+
+For a framework like `alchemy`, the right action on every one of those critical-fan-in findings is documentation, not splitting. Annotate them with `@known-hub`:
+
+```typescript
+/**
+ * Resource — the central abstraction of the alchemy framework.
+ *
+ * Every cloud resource (Lambda, Bucket, Queue, ...) is modelled as a
+ * Resource instance. High fan-in is intentional and expected.
+ *
+ * @known-hub framework central abstraction
+ */
+export interface Resource<T> { ... }
+```
+
+After annotating the 14 critical hubs, the report's "Unannotated hubs" count drops to zero. Any *new* critical-fan-in file going forward is then immediate signal — it means a non-`Resource`-class module has quietly grown into hub scope, which is the case worth investigating.
+
+The analyzer still reports each annotated hub under "Known Hubs (at scale)" with its current fan-in count. If `Resource.ts` jumps from 189 to 280 next quarter, that growth is visible on the report.
+
+## Transitive coupling: when it changes the answer, and when it doesn't
+
+The `--coupling-transitive` flag walks through `export ... from` re-exports and credits importers to the original module rather than the barrel. On `alchemy`, this flag produces *identical* numbers:
+
+```bash
+effect-analyze ./packages/alchemy/src \
+  --coupling --coupling-transitive \
+  --tsconfig ./packages/alchemy/tsconfig.json
+```
+
+Same `Resource.ts` fan-in 189, same `Provider.ts` fan-in 181. That isn't a bug — it's an architectural choice that the analyzer surfaces honestly. `alchemy` imports its modules directly (`import { Resource } from "./Resource.ts"`) rather than via barrel files. There is nothing for the transitive resolver to redirect.
+
+The flag matters for codebases like UI frameworks that use barrel `index.ts` files, where direct fan-in on the source modules looks artificially low. On a directly-imported codebase like `alchemy`, the default fan-in is already the right answer.
+
+This is itself useful information: the absence of barrel patterns is visible in the metric stability across flags.
+
+## Workspace boundaries: invisible imports become visible
+
+`alchemy-effect` is a pnpm workspace. The `better-auth` package imports `alchemy` modules by package name:
+
+```typescript
+// packages/better-auth/src/index.ts
+import { BunHttpServer } from "alchemy/Http";
+import { CredentialsStoreLive } from "alchemy/Auth/Credentials";
+import { makeDurableObjectBridge, makeWorkerBridge } from "alchemy/Cloudflare";
+```
+
+Without workspace-aware resolution, these are bare specifiers — indistinguishable from npm imports — and the analyzer treats them as external. Cross-package fan-in is silently lost.
+
+Building the workspace map from each package's `package.json` and passing it to `analyzeCoupling`:
+
+```typescript
+import { analyzeCoupling } from 'effect-analyzer';
+
+const workspacePackages = {
+  'alchemy':                  resolve(repo, 'packages/alchemy/src'),
+  '@alchemy.run/better-auth': resolve(repo, 'packages/better-auth/src'),
+  '@alchemy.run/pr-package':  resolve(repo, 'packages/pr-package/src'),
+};
+
+const analysis = analyzeCoupling(allWorkspaceFiles, repo, { workspacePackages });
+```
+
+The result is *materially different* from a single-package run. Running across all 851 files in `packages/*` and comparing fan-in deltas:
+
+| File | fan-in before | fan-in after | Δ |
+|---|---:|---:|---:|
+| `packages/alchemy/src/Cloudflare/index.ts` | 1 | 23 | **+22** |
+| `packages/alchemy/src/index.ts` | 0 | 8 | +8 |
+| `packages/alchemy/src/Util/PlatformServices.ts` | 4 | 7 | +3 |
+| `packages/alchemy/src/Cli/index.ts` | 0 | 2 | +2 |
+| `packages/alchemy/src/Http.ts` | 9 | 11 | +2 |
+| `packages/alchemy/src/Auth/Profile.ts` | 29 | 30 | +1 |
+
+`Cloudflare/index.ts` going from 1 to 23 is the headline finding: `better-auth` imports `alchemy/Cloudflare` 22 times and those edges were completely invisible to the single-package run. Without workspace resolution, you would conclude that `Cloudflare/index.ts` is essentially unused; with workspace resolution, you see it is one of the framework's key surfaces for downstream packages.
+
+This is the strongest argument for running coupling at the monorepo root with the workspace map populated, not per-package in isolation.
+
+## Health analyzers on alchemy
+
+The full project health snapshot:
+
+```bash
+effect-analyze ./packages/alchemy/src \
+  --agent-report \
+  --error-channel \
+  --service-health \
+  --performance \
+  --coupling \
+  --tsconfig ./packages/alchemy/tsconfig.json \
+  -o backlog.md
+```
+
+| Metric | Value |
+|---|---|
+| Files analyzed | 510 |
+| Programs found | 1,534 |
+| Unknown node rate | 0.0% |
+| Lint errors | 0 |
+| Lint warnings / infos | 233 / 84 |
+| Error channel issues | 4 |
+| Service health issues | 17 |
+| Performance issues | 17 |
+| Coupling issues | 30 |
+| **Total improvements** | **87** |
+
+Notable P1 findings include:
+
+- `config-secret-without-redacted` — `Config.string("AWS_ACCESS_KEY_ID")` in `AWS/Environment.ts:22` reads a credential as plain text instead of `Config.redacted`. This is the kind of finding security review would catch — except the analyzer caught it first, with the file:line attached.
+- `untagged-throw` — `throw new Error(...)` inside `Effect.sync` blocks, escaping the typed error channel.
+- `effect-fail-untagged` — `Effect.fail(new Error(...))` instead of tagged errors.
+- `raw-side-effect-in-gen` — `process.env` or `Date.now()` access inside `Effect.gen` bodies; should go through `Config` or `Clock`.
+- 17 `service-health` findings — likely a mix of optional dependency wiring and legitimate "this service is now only used in one branch" cleanups.
+
+## Not every finding is a bug
+
+The same four-category triage that applies everywhere, applied to this specific report:
+
+- **Intentional hubs worth documenting with `@known-hub`** — every one of the 14 critical-fan-in files in `alchemy`. The framework's central abstractions deserve annotations, not splits.
+- **Accidental god modules worth splitting** — the high-fan-out side is more interesting here. A file importing >20 internal modules in a library is unusual; the 7 high-fan-out files in the report are the legitimate refactor candidates.
+- **Real issues worth fixing** — the single `config-secret-without-redacted` finding in `AWS/Environment.ts:22` is unambiguous. Same for the `untagged-throw` and `effect-fail-untagged` lints.
+- **Analyzer noise worth ignoring** — and feeding back as bug reports. The 17 service-health findings deserve manual review; some will be real, some will be analyzer artefacts on a codebase this large.
+
+The point is to make that triage explicit. The agent report does not assume every line in it is a bug; it assumes the reader is going to decide.
+
+## What this case study exercises
+
+| Feature | How it shows up here |
+|---|---|
+| `--tsconfig` | `alchemy/src` uses `@/*` aliases; without `--tsconfig` they're silently dropped |
+| `--coupling-transitive` | Idempotent here (no barrels); the absence of change is itself a finding |
+| Workspace-aware resolution | `packages/alchemy` imports from `packages/better-auth` via package name in some entry points; `workspacePackages` resolves those cross-package edges |
+| `@known-hub` at scale | 14 critical-fan-in files in a single library; the annotation pattern was specifically designed for this scenario |
+| 510-file scale | Validates that the analyzer stays responsive and accurate on real production codebases |
+
+<Aside type="note" title="Recommended workflow for an Effect framework codebase">
+1. Run `--coupling --tsconfig` once to identify the framework's intentional hubs.
+2. Annotate them with `@known-hub <reason>` — write the reason for the annotation in-source.
+3. Add the combined `--agent-report --error-channel --service-health --performance --coupling` command to CI, gated to fail on new P1 findings.
+4. Re-run periodically; the report flags any *new* hub the framework grows or any annotated hub that has doubled in fan-in.
+</Aside>

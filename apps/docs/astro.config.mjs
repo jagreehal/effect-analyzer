@@ -107,6 +107,7 @@ export default defineConfig({
             },
             { label: 't3code', slug: 'case-studies/t3code' },
             { label: 'foldkit', slug: 'case-studies/foldkit' },
+            { label: 'alchemy-effect', slug: 'case-studies/alchemy-effect' },
           ],
         },
         {
@@ -114,6 +115,7 @@ export default defineConfig({
           items: [
             { label: 'CLI', slug: 'reference/cli' },
             { label: 'Library API', slug: 'reference/api' },
+            { label: 'Coupling Analyzer', slug: 'reference/coupling' },
             { label: 'Browser Playground', link: '/playground/' },
             { label: 'Interactive HTML', slug: 'reference/html-viewer' },
           ],
