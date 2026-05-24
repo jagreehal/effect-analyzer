@@ -365,6 +365,73 @@ flowchart TB
   class n12 effectStyle
 ```
 
+## Coupling surfaces the real hubs
+
+Running `--coupling` against the server source reports per-file fan-in and fan-out across all 319 files. On t3code it surfaces exactly the modules an experienced reviewer would point at first:
+
+```bash
+effect-analyze ./apps/server/src --coupling
+```
+
+```text
+# Module Coupling Analysis
+
+## Summary
+- Analyzed files: 319
+- Critical fan-in files: 2
+- High fan-in files: 7
+- High fan-out files: 6
+- Unannotated hubs: 9
+
+## Issues
+🔴 [critical-fanin] `config.ts` — fan-in 80
+🔴 [critical-fanin] `persistence/Errors.ts` — fan-in 37
+🟡 [high-fanin] `vcs/VcsProcess.ts` — fan-in 23
+🟡 [high-fanin] `persistence/Layers/Sqlite.ts` — fan-in 21
+🟡 [high-fanin] `provider/Errors.ts` — fan-in 19
+🟢 [high-fanout] `server.ts` — imports 63 internal modules
+🟢 [high-fanout] `ws.ts` — imports 41 internal modules
+```
+
+Annotate the intentional hubs in-source and they stop generating warnings while still being monitored:
+
+```typescript
+/**
+ * Central config types — shared by every server module.
+ *
+ * @known-hub central config registry
+ */
+```
+
+The annotation lives next to the code, is grep-able, carries a written reason, and shows up explicitly in the report as a "known hub" so future growth past expected size is still flagged.
+
+## A complete project health snapshot
+
+The four health analyzers can run together with `--agent-report` to produce a single prioritized backlog:
+
+```bash
+effect-analyze ./apps/server/src \
+  --agent-report \
+  --error-channel \
+  --service-health \
+  --performance \
+  --coupling \
+  -o backlog.md
+```
+
+On t3code's server (`319 files`, `2,401 programs`, `0.0%` unknown node rate) this produces **156 prioritized improvements** spanning lint, error channels, service health, performance anti-patterns, and module coupling — each with file:line citations and a concrete suggestion. The output is structured so a coding agent can work through it linearly, P1 → P2 → P3, opening PRs as it goes.
+
+All four analyzers also support `--format json` for scripting, with `--output <path>` to write to a file.
+
+## Not every finding is a bug
+
+The biggest caveat in reading this output: **not every finding should become a refactor**. In an Effect-heavy codebase, high fan-in files, central config modules, and large layer composition files can be legitimate. The value of the report is in separating four categories:
+
+- **Intentional hubs worth documenting with `@known-hub`** — `config.ts` at fan-in 80 is the shared type surface of the entire server. The right action is annotation, not a split. Likewise `persistence/Errors.ts` is the shared tagged-error union, used (correctly) wherever persistence errors are caught.
+- **Accidental god modules worth splitting** — `server.ts` importing 63 internal modules is more suspect. It's the top-level wiring file, so some breadth is unavoidable, but if it's growing every sprint it deserves a look. `ws.ts` with fan-out 41 is in the same category.
+- **Real error-channel or service-health issues worth fixing** — the 15 error-channel and 54 service-health findings in the report are the ones worth acting on directly. `live-layer-in-test` (8 occurrences) is a clear "fix this" signal.
+- **Analyzer noise worth ignoring** — a small number of findings will be artefacts of the analyzer's current depth on this codebase. Use these to *improve the analyzer*, not the codebase. See "What still needs more work" below.
+
 ## What the analyzer is good at on t3code
 
 - recovering large-scale layer composition across the backend
@@ -373,6 +440,7 @@ flowchart TB
 - recognizing service-backed property effects such as `provider.refresh`
 - recognizing background stream reactors such as `runForEach(...).pipe(Effect.forkScoped)`
 - producing repo-level coverage metrics that are low-noise enough to guide further work
+- surfacing god-modules and broad-scope files through fan-in/fan-out coupling metrics
 
 ## What still needs more work
 
@@ -392,9 +460,11 @@ That means the next wins are mostly semantic depth, not broad discovery:
 
 For this repository, the best workflow is:
 
-1. run `--coverage-audit --show-by-folder` on the server source
-2. run `--format architecture` on the server source or on layer-heavy directories
-3. drill into individual files like `bootstrap.ts` or `ProviderRegistry.ts` with `--format explain`
+1. run `--coverage-audit --show-by-folder` on the server source for a top-level discovery picture
+2. run `--coupling` to find the hubs and broad-scope files; annotate intentional hubs with `@known-hub`
+3. run `--format architecture` on the server source or on layer-heavy directories
+4. for a single prioritized backlog, combine `--agent-report --error-channel --service-health --performance --coupling`
+5. drill into individual files like `bootstrap.ts` or `ProviderRegistry.ts` with `--format explain`
 
 That matches the current analyzer well. `t3code` is not primarily a “show me one pretty flowchart” codebase. It is a “help me understand the architecture, then zoom in” codebase.
 

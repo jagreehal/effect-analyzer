@@ -76,6 +76,12 @@ Project-wide analyzers that surface structural issues. See [Health Analyzers](/e
 | `--error-channel` | Generic errors, unhandled types, missing `catchTag` handlers |
 | `--service-health` | Unsatisfied services, dead services, layer inefficiencies |
 | `--performance` | Sequential-could-parallel, unbounded concurrency, N+1, large gen blocks, missing batching, unbounded retries, `forEach` without concurrency |
+| `--coupling` | Per-file fan-in / fan-out metrics, hub detection, annotation-aware suppression |
+| `--coupling-transitive` | With `--coupling`: walk re-exports so importers of a barrel also count toward the barrel's source modules |
+| `--coupling-priority <map>` | Override agent-report priorities per coupling issue type (e.g. `critical-fanin=P0`) |
+| `--tsconfig <path>` | Read `compilerOptions.paths` / `baseUrl` for path-alias resolution (used by `--coupling` and project-mode commands) |
+
+All four health analyzers support `--format json` for scripting and `--output <path>` to write to a file. See the [Coupling Analyzer reference](/effect-analyzer/reference/coupling/) for the full coupling option surface.
 
 ## App-Shape Analyzers
 

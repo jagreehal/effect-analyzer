@@ -1,9 +1,9 @@
-# Effect Analysis: internalAliasProgram
+# Effect Analysis: otherModuleProgram
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/internal/alias.ts`
-- **Analyzed**: 2026-05-22T16:10:32.571Z
+- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/effect-kitchen-sink-other.ts`
+- **Analyzed**: 2026-05-22T16:10:32.039Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
 
@@ -13,7 +13,7 @@
 ```mermaid
 flowchart TB
 
-  %% Program: internalAliasProgram
+  %% Program: otherModuleProgram
 
   start((Start))
   end_node((End))
@@ -42,7 +42,7 @@ flowchart TB
 ## Explanation
 
 ```
-internalAliasProgram (direct):
+otherModuleProgram (direct):
   1. Calls succeed — constructor
 
   Concurrency: sequential (no parallelism)

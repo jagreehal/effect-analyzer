@@ -290,6 +290,67 @@ Analyzed 284 file(s), 1399 program(s).
 
 The analyzer is recovering the structure of the framework and its example applications at repository scale.
 
+## Coupling: barrel files are the real hubs
+
+Running `--coupling` on the `foldkit` core package highlights which modules sit at the centre of the framework:
+
+```bash
+effect-analyze ./packages/foldkit/src --coupling
+```
+
+```text
+# Module Coupling Analysis
+
+## Summary
+- Analyzed files: 126
+- Critical fan-in files: 2
+- High fan-in files: 1
+
+## Issues
+🔴 [critical-fanin] `html/index.ts` — fan-in 50
+🔴 [critical-fanin] `command/index.ts` — fan-in 33
+🟡 [high-fanin] `struct/index.ts` — fan-in 27
+```
+
+These are not architectural problems — they are barrel files for the framework's primary modules. The right answer is to annotate them with `@known-hub` so they stop generating warnings while staying on the radar:
+
+```typescript
+/**
+ * HTML element constructors — the framework's primary public surface.
+ *
+ * @known-hub framework public surface
+ */
+```
+
+The coupling analyzer was specifically validated against `foldkit`'s Node-ESM-style imports (`import '../foo.js'` resolving to `../foo.ts`) — a real edge case discovered during this case study.
+
+## Full project health snapshot
+
+The four health analyzers run together produce a single prioritized backlog:
+
+```bash
+effect-analyze ./packages/foldkit/src \
+  --agent-report \
+  --error-channel \
+  --service-health \
+  --performance \
+  --coupling \
+  -o backlog.md
+```
+
+On the foldkit core (`126 files`, `1,086 programs`, `0.0%` unknown node rate) this produces **51 prioritized improvements**: 1 error-channel issue, 0 service-health issues, 1 performance issue, 3 coupling issues, and the rest deterministic style lints.
+
+## Not every finding is a bug
+
+Before acting on the output, separate the categories:
+
+- **Intentional hubs** worth documenting with `@known-hub` — `html/index.ts`, `command/index.ts`, and `struct/index.ts` are the framework's public surface. Annotating them is the answer; splitting them would damage ergonomics.
+- **Accidental god modules** worth splitting — none in foldkit's core. The barrel-file pattern is deliberate here.
+- **Real error-channel or service-health issues** worth fixing — 1 error-channel issue in this run, worth a look but not a fire.
+- **Analyzer noise** worth ignoring (or using as input to improve the analyzer) — see "What still compresses poorly" above. Those misses are bug-tracker material for the analyzer itself, not the framework.
+
+The point of the report is to make this triage explicit, not to demand a refactor for every issue.
+
 <Aside type="note" title="Recommended workflow">
-For `foldkit`, start with `--format architecture` at the project or app level, then drill into individual files with `--format explain` only when you need implementation detail.
+For `foldkit`, start with `--format architecture` at the project or app level. Run `--coupling` once to identify the framework's intentional hubs and annotate them with `@known-hub`. Then drill into individual files with `--format explain` only when you need implementation detail.
 </Aside>

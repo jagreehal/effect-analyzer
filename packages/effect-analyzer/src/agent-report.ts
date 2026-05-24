@@ -2,8 +2,8 @@
  * Agent Report — prioritized, actionable improvement backlog for coding agents.
  *
  * Combines lint findings, coverage audit, error channel analysis, service health,
- * and performance anti-patterns into a single structured report optimized for
- * agent consumption and automated fix application.
+ * performance anti-patterns, and coupling analysis into a single structured
+ * report optimized for agent consumption and automated fix application.
  */
 
 import type { LintFinding } from './lint-session';
@@ -63,6 +63,20 @@ export interface AgentPerformanceIssue {
   readonly estimatedImpact: 'low' | 'medium' | 'high';
 }
 
+export interface AgentCouplingIssue {
+  readonly type: 'high-fanin' | 'critical-fanin' | 'high-fanout' | 'hub-without-annotation';
+  readonly filePath: string;
+  readonly projectFilePath: string;
+  readonly metric: string;
+  readonly value: number;
+  readonly threshold: number;
+  readonly description: string;
+  readonly suggestion: string;
+  readonly estimatedImpact: 'low' | 'medium' | 'high';
+  readonly knownHub: boolean;
+  readonly knownHubReason: string;
+}
+
 export interface AgentReportSummary {
   readonly filesAnalyzed: number;
   readonly programsFound: number;
@@ -73,6 +87,7 @@ export interface AgentReportSummary {
   readonly errorChannelIssues: number;
   readonly serviceHealthIssues: number;
   readonly performanceIssues: number;
+  readonly couplingIssues: number;
   readonly totalImprovements: number;
 }
 
@@ -82,6 +97,7 @@ export interface AgentReport {
   readonly errorChannelIssues: readonly AgentErrorChannelIssue[];
   readonly serviceHealthIssues: readonly AgentServiceHealthIssue[];
   readonly performanceIssues: readonly AgentPerformanceIssue[];
+  readonly couplingIssues: readonly AgentCouplingIssue[];
 }
 
 // =============================================================================
@@ -279,6 +295,22 @@ const groupFindingsByRule = (findings: readonly LintFinding[]): readonly Grouped
 // Main report builder
 // =============================================================================
 
+export type CouplingIssueType = AgentCouplingIssue['type'];
+
+export interface CouplingPriorityMap {
+  readonly 'critical-fanin'?: AgentImprovement['priority'];
+  readonly 'high-fanin'?: AgentImprovement['priority'];
+  readonly 'high-fanout'?: AgentImprovement['priority'];
+  readonly 'hub-without-annotation'?: AgentImprovement['priority'];
+}
+
+const DEFAULT_COUPLING_PRIORITY: Required<CouplingPriorityMap> = {
+  'critical-fanin': 'P1',
+  'high-fanin': 'P2',
+  'high-fanout': 'P3',
+  'hub-without-annotation': 'P3',
+};
+
 export interface BuildAgentReportOptions {
   readonly findings: readonly LintFinding[];
   readonly irs?: readonly StaticEffectIR[] | undefined;
@@ -290,6 +322,9 @@ export interface BuildAgentReportOptions {
   readonly errorChannelIssues?: readonly AgentErrorChannelIssue[] | undefined;
   readonly serviceHealthIssues?: readonly AgentServiceHealthIssue[] | undefined;
   readonly performanceIssues?: readonly AgentPerformanceIssue[] | undefined;
+  readonly couplingIssues?: readonly AgentCouplingIssue[] | undefined;
+  /** Override priority for each coupling issue type. Unspecified types use the default. */
+  readonly couplingPriorityMap?: CouplingPriorityMap | undefined;
 }
 
 export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport => {
@@ -300,7 +335,14 @@ export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport 
     errorChannelIssues = [],
     serviceHealthIssues = [],
     performanceIssues = [],
+    couplingIssues = [],
+    couplingPriorityMap,
   } = options;
+
+  const couplingPriority: Required<CouplingPriorityMap> = {
+    ...DEFAULT_COUPLING_PRIORITY,
+    ...(couplingPriorityMap ?? {}),
+  };
 
   const grouped = groupFindingsByRule(findings);
 
@@ -361,6 +403,28 @@ export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport 
     });
   }
 
+  // Add coupling issues as improvements
+  const couplingTitles: Record<CouplingIssueType, string> = {
+    'critical-fanin': 'Critical fan-in',
+    'high-fanin': 'High fan-in',
+    'high-fanout': 'High fan-out',
+    'hub-without-annotation': 'Hub without annotation',
+  };
+  for (const cp of couplingIssues) {
+    if (cp.knownHub && cp.type !== 'critical-fanin') continue;
+    improvements.push({
+      priority: couplingPriority[cp.type],
+      category: 'architecture',
+      rule: `coupling:${cp.type}`,
+      title: `Coupling: ${couplingTitles[cp.type]}`,
+      description: cp.description,
+      count: 1,
+      files: [{ filePath: cp.filePath, line: 1, column: 1 }],
+      suggestion: cp.suggestion + (cp.knownHub ? ` (annotated as known hub: ${cp.knownHubReason})` : ''),
+      estimatedEffort: cp.type === 'high-fanout' ? 'medium' : 'low',
+    });
+  }
+
   // Sort by priority, then count (most impactful first)
   improvements.sort((a, b) => {
     const pCmp = priorityRank(a.priority) - priorityRank(b.priority);
@@ -371,6 +435,7 @@ export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport 
   const lintErrors = findings.filter((f) => f.severity === 'error').length;
   const lintWarnings = findings.filter((f) => f.severity === 'warning').length;
   const lintInfos = findings.filter((f) => f.severity === 'info').length;
+  const couplingNonHubIssues = couplingIssues.filter((c) => !c.knownHub || c.type === 'critical-fanin').length;
 
   const summary: AgentReportSummary = {
     filesAnalyzed: coverageAudit?.analyzed ?? irs.length,
@@ -382,10 +447,11 @@ export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport 
     errorChannelIssues: errorChannelIssues.length,
     serviceHealthIssues: serviceHealthIssues.length,
     performanceIssues: performanceIssues.length,
+    couplingIssues: couplingNonHubIssues,
     totalImprovements: improvements.length,
   };
 
-  return { summary, improvements, errorChannelIssues, serviceHealthIssues, performanceIssues };
+  return { summary, improvements, errorChannelIssues, serviceHealthIssues, performanceIssues, couplingIssues };
 };
 
 // =============================================================================
@@ -414,6 +480,7 @@ export const renderAgentReportMarkdown = (report: AgentReport): string => {
   lines.push(`| Error channel issues | ${s.errorChannelIssues} |`);
   lines.push(`| Service health issues | ${s.serviceHealthIssues} |`);
   lines.push(`| Performance issues | ${s.performanceIssues} |`);
+  lines.push(`| Coupling issues | ${s.couplingIssues} |`);
   lines.push(`| **Total improvements** | **${s.totalImprovements}** |`);
   lines.push('');
 
@@ -479,7 +546,7 @@ export const renderAgentReportSummary = (report: AgentReport): string => {
   lines.push(`====================`);
   lines.push(`Files: ${s.filesAnalyzed} | Programs: ${s.programsFound} | Unknown: ${(s.unknownNodeRate * 100).toFixed(1)}%`);
   lines.push(`Lint: ${s.lintErrors} errors, ${s.lintWarnings} warnings, ${s.lintInfos} infos`);
-  lines.push(`Error channel: ${s.errorChannelIssues} | Service health: ${s.serviceHealthIssues} | Performance: ${s.performanceIssues}`);
+  lines.push(`Error channel: ${s.errorChannelIssues} | Service health: ${s.serviceHealthIssues} | Performance: ${s.performanceIssues} | Coupling: ${s.couplingIssues}`);
   lines.push(`Total improvements: ${s.totalImprovements}`);
   lines.push('');
 

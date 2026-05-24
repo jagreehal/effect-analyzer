@@ -86,20 +86,30 @@ import {
   renderAgentReportJson,
   renderAgentReportMarkdown,
   renderAgentReportSummary,
+  type CouplingPriorityMap,
+  type CouplingIssueType,
 } from './agent-report';
 import {
   analyzeErrorChannels,
   renderErrorChannelReport,
+  renderErrorChannelJson,
 } from './error-channel';
 import {
   analyzeServiceHealth,
   buildServiceRegistry,
   renderServiceHealthReport,
+  renderServiceHealthJson,
 } from './service-health';
 import {
   analyzePerformance,
   renderPerformanceReport,
+  renderPerformanceJson,
 } from './performance-antipatterns';
+import {
+  analyzeCoupling,
+  renderCouplingReport,
+  renderCouplingJson,
+} from './coupling-analysis';
 import {
   generateImprovePlan,
   applyFixes,
@@ -212,6 +222,31 @@ interface CLIOptions {
   readonly improveRules: string[] | undefined;
   readonly improveExcludeRules: string[] | undefined;
   readonly improveMinPriority: 'P0' | 'P1' | 'P2' | 'P3' | undefined;
+  readonly coupling: boolean;
+  readonly couplingTransitive: boolean;
+  readonly couplingPriority: CouplingPriorityMap | undefined;
+}
+
+const VALID_COUPLING_TYPES: ReadonlySet<CouplingIssueType> = new Set([
+  'critical-fanin',
+  'high-fanin',
+  'high-fanout',
+  'hub-without-annotation',
+]);
+const VALID_PRIORITIES = new Set(['P0', 'P1', 'P2', 'P3'] as const);
+
+function parseCouplingPriority(raw: string): CouplingPriorityMap | null {
+  const map: Record<string, 'P0' | 'P1' | 'P2' | 'P3'> = {};
+  for (const pair of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
+    const eq = pair.indexOf('=');
+    if (eq < 0) return null;
+    const key = pair.slice(0, eq).trim() as CouplingIssueType;
+    const val = pair.slice(eq + 1).trim() as 'P0' | 'P1' | 'P2' | 'P3';
+    if (!VALID_COUPLING_TYPES.has(key)) return null;
+    if (!VALID_PRIORITIES.has(val)) return null;
+    map[key] = val;
+  }
+  return Object.keys(map).length > 0 ? (map as CouplingPriorityMap) : null;
 }
 
 function parseArgs(args: readonly string[]): { pathArg: string | undefined; options: CLIOptions } {
@@ -281,6 +316,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let errorChannel = false;
   let serviceHealth = false;
   let performance = false;
+  let coupling = false;
+  let couplingTransitive = false;
+  let couplingPriority: CouplingPriorityMap | undefined;
   let improve = false;
   let improveDryRun = true;
   let improveMaxFixes: number | undefined;
@@ -528,6 +566,22 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       serviceHealth = true;
     } else if (arg === '--performance') {
       performance = true;
+    } else if (arg === '--coupling') {
+      coupling = true;
+    } else if (arg === '--coupling-transitive') {
+      couplingTransitive = true;
+    } else if (arg === '--coupling-priority' || arg.startsWith('--coupling-priority=')) {
+      const raw = arg === '--coupling-priority' ? args[++i] : arg.slice('--coupling-priority='.length);
+      if (!raw) {
+        console.error('--coupling-priority requires a value, e.g. "critical-fanin=P0,high-fanin=P1"');
+        process.exit(2);
+      }
+      const parsed = parseCouplingPriority(raw);
+      if (!parsed) {
+        console.error(`--coupling-priority: invalid value "${raw}". Expected pairs like "critical-fanin=P0,high-fanin=P1". Valid types: critical-fanin, high-fanin, high-fanout, hub-without-annotation. Valid priorities: P0, P1, P2, P3.`);
+        process.exit(2);
+      }
+      couplingPriority = parsed;
     } else if (arg === '--improve') {
       improve = true;
       improveDryRun = false;
@@ -656,6 +710,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     errorChannel,
     serviceHealth,
     performance,
+    coupling,
+    couplingTransitive,
+    couplingPriority,
     improve,
     improveDryRun,
     improveMaxFixes,
@@ -737,9 +794,12 @@ Options:
   --bundle-output <dir>    Write deterministic artifact bundle (diagnostics, sarif, summary, rules, session)
   --scorecard              Emit deterministic per-file lint scorecard (for --lint-source)
   --agent-report           Generate prioritized improvement backlog for coding agents (JSON + markdown)
-  --error-channel          Analyze error channels across project (generic errors, unhandled types, missing catchTag)
-  --service-health         Analyze service dependency health (unsatisfied, dead services, layer inefficiencies)
-  --performance            Detect performance anti-patterns (sequential could be parallel, unbounded concurrency, etc.)
+  --error-channel          Analyze error channels across project (generic errors, unhandled types, missing catchTag) — supports --format json
+  --service-health         Analyze service dependency health (unsatisfied, dead services, layer inefficiencies) — supports --format json
+  --performance            Detect performance anti-patterns (sequential could be parallel, unbounded concurrency, etc.) — supports --format json
+  --coupling               Analyze module coupling (fan-in/fan-out; annotate intentional hubs with // effect-analyzer-known-hub or @known-hub JSDoc tag; supports --format json)
+  --coupling-transitive    With --coupling: compute fan-in transitively through re-exports (consumer of barrel also counted as consumer of barrel's internal modules)
+  --coupling-priority <map>  Override agent-report priority for coupling issue types (comma-separated). Example: --coupling-priority critical-fanin=P0,high-fanout=P2. Valid types: critical-fanin, high-fanin, high-fanout, hub-without-annotation. Valid priorities: P0-P3.
   --improve                Apply automated fixes for fixable lint issues (use --improve-dry-run to preview)
   --improve-dry-run        Preview fixes without applying (default for --improve)
   --improve-max-fixes <n>  Limit number of fixes to apply
@@ -1962,6 +2022,29 @@ const extractBaselineFindings = (raw: unknown): readonly LintFinding[] => {
   });
 };
 
+/**
+ * Render a per-analyzer report and either write it to `options.output` or log
+ * it to stdout. Picks between the JSON and markdown renderer based on
+ * `options.format`. Shared by all single-analyzer modes (--error-channel,
+ * --service-health, --performance, --coupling) so they stay in lockstep.
+ */
+const writeAnalyzerOutput = <A>(
+  analysis: A,
+  options: { readonly format: string; readonly pretty: boolean; readonly output: string | undefined },
+  renderers: { readonly json: (a: A, pretty: boolean) => string; readonly markdown: (a: A) => string },
+): Effect.Effect<void, unknown> =>
+  Effect.gen(function* () {
+    const text =
+      options.format === 'json'
+        ? renderers.json(analysis, options.pretty)
+        : renderers.markdown(analysis);
+    if (options.output) {
+      yield* Effect.tryPromise(() => fs.writeFile(resolve(options.output!), text, 'utf-8'));
+    } else {
+      yield* Console.log(text);
+    }
+  });
+
 const main = Effect.gen(function* () {
   const args = process.argv.slice(2);
   const { pathArg, options } = parseArgs(args);
@@ -2098,8 +2181,8 @@ const main = Effect.gen(function* () {
     return Exit.succeed(undefined);
   }
 
-  // Agent report, error channel, service health, performance, improve modes
-  if (options.agentReport || options.errorChannel || options.serviceHealth || options.performance || options.improve) {
+  // Agent report, error channel, service health, performance, coupling, improve modes
+  if (options.agentReport || options.errorChannel || options.serviceHealth || options.performance || options.coupling || options.improve) {
     const targetPath = resolve(pathArg ?? '.');
     const style = createStyle(options.color);
 
@@ -2140,6 +2223,12 @@ const main = Effect.gen(function* () {
     const serviceRegistry = options.serviceHealth || options.agentReport ? buildServiceRegistry(irs, new Map()) : undefined;
     const serviceHealthAnalysis = serviceRegistry ? analyzeServiceHealth(serviceRegistry, irs) : undefined;
     const performanceAnalysis = options.performance ? analyzePerformance(irs) : undefined;
+    const couplingAnalysis = (options.coupling || options.agentReport)
+      ? analyzeCoupling([...projectResult.byFile.keys()], targetPath, {
+          tsconfig: options.tsconfig,
+          transitive: options.couplingTransitive,
+        })
+      : undefined;
 
     const report = buildAgentReport({
       findings: scan.findings,
@@ -2148,6 +2237,8 @@ const main = Effect.gen(function* () {
       errorChannelIssues: errorChannelAnalysis?.issues,
       serviceHealthIssues: serviceHealthAnalysis?.issues,
       performanceIssues: performanceAnalysis?.issues,
+      couplingIssues: couplingAnalysis?.issues,
+      couplingPriorityMap: options.couplingPriority,
     });
 
     if (options.improve) {
@@ -2182,29 +2273,25 @@ const main = Effect.gen(function* () {
         yield* Console.log('\n' + renderAgentReportMarkdown(report));
       }
     } else if (options.errorChannel && errorChannelAnalysis) {
-      if (options.output) {
-        yield* Effect.tryPromise(() =>
-          fs.writeFile(resolve(options.output!), renderErrorChannelReport(errorChannelAnalysis), 'utf-8'),
-        );
-      } else {
-        yield* Console.log(renderErrorChannelReport(errorChannelAnalysis));
-      }
+      yield* writeAnalyzerOutput(errorChannelAnalysis, options, {
+        json: renderErrorChannelJson,
+        markdown: renderErrorChannelReport,
+      });
     } else if (options.serviceHealth && serviceHealthAnalysis) {
-      if (options.output) {
-        yield* Effect.tryPromise(() =>
-          fs.writeFile(resolve(options.output!), renderServiceHealthReport(serviceHealthAnalysis), 'utf-8'),
-        );
-      } else {
-        yield* Console.log(renderServiceHealthReport(serviceHealthAnalysis));
-      }
+      yield* writeAnalyzerOutput(serviceHealthAnalysis, options, {
+        json: renderServiceHealthJson,
+        markdown: renderServiceHealthReport,
+      });
     } else if (options.performance && performanceAnalysis) {
-      if (options.output) {
-        yield* Effect.tryPromise(() =>
-          fs.writeFile(resolve(options.output!), renderPerformanceReport(performanceAnalysis), 'utf-8'),
-        );
-      } else {
-        yield* Console.log(renderPerformanceReport(performanceAnalysis));
-      }
+      yield* writeAnalyzerOutput(performanceAnalysis, options, {
+        json: renderPerformanceJson,
+        markdown: renderPerformanceReport,
+      });
+    } else if (options.coupling && couplingAnalysis) {
+      yield* writeAnalyzerOutput(couplingAnalysis, options, {
+        json: renderCouplingJson,
+        markdown: renderCouplingReport,
+      });
     }
 
     return Exit.succeed(undefined);
