@@ -9,6 +9,42 @@ import type { StaticEffectIR, AnalysisStats, DiagramQuality, ServiceArtifact, Pr
 import { renderMermaid, renderEnhancedMermaid, renderPathsMermaid } from './mermaid';
 import { generatePaths } from '../path-generator';
 import { renderExplanation } from './explain';
+import { analyzeStateMachines } from '../state-machine';
+import { computeStateMachineCoverage } from '../state-machine-coverage';
+import { renderStatechartMermaid } from './mermaid-statechart';
+
+/**
+ * Render a "State Machines" section for a file: a coverage-annotated statechart
+ * plus a completeness summary for each detected machine. Empty when none found.
+ */
+const renderStateMachineDocSection = (filePath: string): string => {
+  let machines;
+  try {
+    ({ machines } = analyzeStateMachines(filePath));
+  } catch {
+    return '';
+  }
+  if (machines.length === 0) return '';
+
+  const out: string[] = ['', '---', '', '# State Machines', ''];
+  for (const m of machines) {
+    const cov = computeStateMachineCoverage(m);
+    const alphabet = m.alphabetSource ? ` · alphabet: ${m.alphabetSource}` : '';
+    out.push(`## ${m.name}`, '');
+    out.push(`- **Kind**: ${m.source}${alphabet}`);
+    out.push(
+      `- **Coverage**: ${Math.round(cov.coverageRatio * 100)}% (${cov.handledPairs}/${cov.totalPairs} reachable state×event pairs)`,
+    );
+    const warnings = cov.findings.filter((f) => f.severity === 'warning');
+    if (warnings.length === 0) {
+      out.push('- ✓ No completeness warnings');
+    } else {
+      for (const w of warnings) out.push(`- ⚠ ${w.message}`);
+    }
+    out.push('', '```mermaid', renderStatechartMermaid(m, cov).trim(), '```', '');
+  }
+  return out.join('\n');
+};
 
 /**
  * Derive the output path for a colocated analysis file.
@@ -138,6 +174,7 @@ export const renderColocatedMarkdownForFile = (
   useEnhanced = true,
   qualityByProgram?: ReadonlyMap<string, DiagramQuality>,
   styleGuide = false,
+  filePath?: string,
 ): Effect.Effect<string> =>
   Effect.gen(function* () {
     const sections: string[] = [];
@@ -236,6 +273,20 @@ export const renderColocatedMarkdownForFile = (
         sections.push('', '');
       }
     }
+
+    // File-level state machines (independent of Effect programs).
+    const smFilePath = filePath ?? irs[0]?.metadata.filePath;
+    if (smFilePath) {
+      const stateMachineSection = renderStateMachineDocSection(smFilePath);
+      if (stateMachineSection) {
+        // Give the section a top-level heading when there were no programs.
+        if (irs.length === 0) {
+          sections.push(`# Effect Analysis: ${path.basename(smFilePath)}`, '');
+        }
+        sections.push(stateMachineSection);
+      }
+    }
+
     return sections.join('\n');
   });
 
@@ -259,6 +310,7 @@ export const writeColocatedOutputForFile = (
       useEnhanced,
       qualityByProgram,
       styleGuide,
+      filePath,
     );
 
     yield* Effect.tryPromise({

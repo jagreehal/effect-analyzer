@@ -75,6 +75,11 @@ PATH defaults to `.` (current directory). When PATH is a directory, analyzes all
 | `mermaid-retry` | Retry/resilience patterns |
 | `mermaid-testability` | Testing readiness diagram |
 | `mermaid-dataflow` | Variable flow |
+| `mermaid-statechart` | State machine as `stateDiagram-v2` (coverage-annotated) |
+| `svg-statechart` | Self-contained XState-styled statechart SVG (coverage-annotated) |
+| `statechart-html` | Local visualizer page: SVG, coverage, XState export |
+| `xstate-config` | `createMachine()` config for stately.ai/viz |
+| `statechart-coverage` | Completeness report; exits non-zero on warnings (CI gate) |
 | `explain` | Plain-English narrative |
 | `summary` | One-liner |
 | `stats` | Complexity metrics |
@@ -225,6 +230,8 @@ All exported from `src/index.ts`:
 - **DI completeness:** `checkDICompleteness()` — Service satisfaction
 - **Strict diagnostics:** `validateStrict()` — Strict mode validation
 - **Match analysis:** `analyzeMatch()` — Match statement patterns
+- **State machines:** `analyzeStateMachines(filePath)` — extracts FSMs (transition tables + `Match.when` functions + nested `Match.tags` state/event dispatch), declared alphabet from types/Schema/Schema.TaggedClass/Schema.TaggedRequest; `computeStateMachineCoverage()` flags unhandled events / unreachable states / undeclared symbols. Renderers: `renderStatechartMermaid`, `renderStatechartSVG`, `renderStatechartVisualizerHTML`, `renderXStateConfig`, `renderCoverageReport`, `hasCoverageWarnings`. CLI handled by `runStatechartMode` (early dispatch, not the IR pipeline).
+  - Convention guide: `packages/effect-analyzer/state-machine-conventions.md`
 - **Platform:** `analyzePlatformUsage()` — Platform detection
 - **Testing:** `analyzeTestingPatterns()` — Test pattern detection
 - **Version:** `getEffectVersion()`, `checkVersionCompat()`
