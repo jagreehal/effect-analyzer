@@ -36,3 +36,7 @@ apps/docs/**/.DS_Store
 !apps/docs/src/content/docs/case-studies/transfer-observability.mdx
 ___temp
 apps/docs/.design-screens
+
+# Generated statechart visualizers (effect-analyze --format statechart-html / svg-statechart)
+*.statechart.html
+effect-statecharts.html
