@@ -32,7 +32,8 @@
   "files": [
     "dist",
     "scripts",
-    "README.md"
+    "README.md",
+    "state-machine-conventions.md"
   ],
   "scripts": {
     "build": "tsup",

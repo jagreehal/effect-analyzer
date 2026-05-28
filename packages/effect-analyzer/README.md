@@ -111,8 +111,127 @@ Auto-mode picks the most relevant views for your program, or choose explicitly:
 | `mermaid-layers` | Layer composition graph |
 | `mermaid-retry` | Retry and timeout strategies |
 | `mermaid-timeline` | Step sequence over time |
+| `mermaid-statechart` | State machine as a `stateDiagram-v2` |
+| `svg-statechart` | Self-contained, XState-styled statechart SVG |
+| `statechart-html` | Local visualizer page with SVG, coverage, and XState export |
+| `xstate-config` | `createMachine()` config for the [Stately visualizer](https://stately.ai/viz) |
 
 [See all formats →](https://jagreehal.github.io/effect-analyzer/diagrams/all-formats/)
+
+### State Machines Without XState
+
+Write deterministic state machines in plain Effect — a declarative transition
+table, a `Match.when` transition function, or nested `Match.tags` state/event
+dispatch — and render them as XState-style statecharts. No XState dependency
+required. See the full convention guide in
+[`state-machine-conventions.md`](./state-machine-conventions.md).
+
+```bash
+# No flags: the default view surfaces any state machine in the file
+npx effect-analyze ./workflow.ts
+
+# A local visualizer page (diagram + coverage + paste-ready config).
+# With no -o it writes workflow.statechart.html next to the input
+npx effect-analyze ./workflow.ts --format statechart-html
+
+# A stateDiagram-v2 for markdown / GitHub
+npx effect-analyze ./workflow.ts --format mermaid-statechart
+
+# An XState createMachine() config — paste into stately.ai/viz for the real
+# interactive visualizer, generated straight from your Effect code
+npx effect-analyze ./workflow.ts --format xstate-config
+```
+
+These shapes are recognized:
+
+```ts
+// A) declarative transition table
+const transitions = {
+  Triage: {
+    RefundRequested: { target: 'Refund', guard: 'canRefund' },
+    AnswerRequested: 'Answered',
+  },
+  Refund: { Resolved: 'Answered' },
+  Answered: {},
+} as const;
+
+// B) Match.when transition function
+const transition = (state: State, event: Event): State =>
+  Match.value([state._tag, event._tag] as const).pipe(
+    Match.when(['Draft', 'Submit'], () => ({ _tag: 'Review' as const })),
+    Match.orElse(() => state),
+  );
+
+// C) nested Match.tags with state tags outside and event tags inside
+const transitionWithTags = (state: State, event: Event): State =>
+  Match.value(state).pipe(
+    Match.tags({
+      Draft: () =>
+        Match.value(event).pipe(
+          Match.tags({
+            Submit: () => ({ _tag: 'Review' as const }),
+          }),
+        ),
+      Review: () => state,
+    }),
+  );
+```
+
+Initial state is read from an `@initial <State>` annotation or an
+`initial`/`initialState` declaration. Table leaves can be strings,
+`{ target, guard }`, `{ to }`, or arrays of guarded targets. A handler that can
+return more than one state becomes a guarded (multi-target) transition.
+
+#### Completeness checking (Schema-aware)
+
+When the State/Event types are a tagged union or a `Schema`-derived type, the
+analyzer reads the **declared alphabet** and checks the machine against it —
+turning the statechart from a drawing into a verified machine:
+
+```bash
+npx effect-analyze ./workflow.ts --format statechart-coverage
+```
+
+```
+# State machine coverage
+
+1 machine, 2 warnings.
+
+## checkoutTransition (alphabet: schema)
+Coverage: 33% (2/6 reachable state×event pairs handled)
+- ⚠ Unhandled events: `Cancel`        # declared, but no state handles it
+- ⚠ Unreachable states: `Cancelled`   # declared, but nothing transitions to it
+```
+
+It reports **unhandled events**, **unreachable states**, and **undeclared
+symbols** (transitions that drifted from the types). The command **exits
+non-zero when any warning is found**, so it works as a CI gate. The
+`mermaid-statechart` and `svg-statechart` outputs are annotated with the same
+findings (orphaned states highlighted, unhandled events noted).
+
+Run it over a whole directory for a summary table, set a coverage floor, or emit
+JSON for dashboards:
+
+```bash
+npx effect-analyze ./src --format statechart-coverage              # all machines, summary table
+npx effect-analyze ./src --format statechart-coverage --min-coverage 60   # fail under 60%
+npx effect-analyze ./src --format statechart-coverage --coverage-json     # { machines, summary }
+```
+
+Guarded (conditional) transitions are captured with their condition and shown
+on every renderer (`Event [guard]` in diagrams, `{ target, guard }` in the
+XState config). State/Event alphabets may be tagged unions, `Schema`-derived
+types, `Schema.TaggedClass`/`Schema.TaggedRequest` unions, or plain
+string-literal unions (`'a' | 'b'`).
+
+Plain single-level `Match.tags` dispatch is intentionally ignored unless there
+is a nested state/event shape, because ordinary variant handling does not have
+the source-state dimension required for a statechart.
+
+> **Not yet supported:** hierarchical (nested) and parallel states. There is no
+> standard Effect encoding for them, so detection is deferred until a convention
+> is settled (dotted tags like `'Active.Running'` are the likely path and render
+> safely as flat states today).
 
 ### Complexity Metrics
 

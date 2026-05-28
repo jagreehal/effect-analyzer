@@ -3,7 +3,7 @@
  */
 
 import './register-node-ts-morph';
-import { resolve, sep, join, dirname, extname, isAbsolute } from 'path';
+import { resolve, sep, join, dirname, extname, isAbsolute, basename } from 'path';
 import { watch, existsSync } from 'fs';
 import * as fs from 'node:fs/promises';
 import { Project } from 'ts-morph';
@@ -34,6 +34,20 @@ import { renderLayersMermaid } from './output/mermaid-layers';
 import { renderRetryMermaid } from './output/mermaid-retry';
 import { renderTestabilityMermaid } from './output/mermaid-testability';
 import { renderDataflowMermaid } from './output/mermaid-dataflow';
+import { analyzeStateMachines, type StateMachine } from './state-machine';
+import { diagnoseStateMachines } from './state-machine-diagnostics';
+import {
+  computeStateMachineCoverage,
+  type StateMachineCoverage,
+} from './state-machine-coverage';
+import { renderStatechartsMermaid } from './output/mermaid-statechart';
+import { renderStatechartSVG, renderStatechartHTML } from './output/svg-statechart';
+import { renderStatechartVisualizerHTML } from './output/statechart-html';
+import { renderXStateConfig } from './output/xstate-config';
+import {
+  renderCoverageReport,
+  summarizeCoverage,
+} from './output/statechart-coverage';
 import { selectFormats } from './output/auto-format';
 import { diffPrograms, renderDiffMarkdown, renderDiffJSON, renderDiffMermaid, parseSourceArg, resolveGitSource, resolveGitHubPR } from './diff';
 import { generatePaths } from './path-generator';
@@ -153,7 +167,7 @@ const resolveCliPath = (inputPath: string | undefined): string => {
 };
 
 interface CLIOptions {
-  readonly format: 'auto' | 'json' | 'mermaid' | 'mermaid-paths' | 'mermaid-enhanced' | 'mermaid-railway' | 'mermaid-services' | 'mermaid-errors' | 'mermaid-decisions' | 'mermaid-causes' | 'mermaid-concurrency' | 'mermaid-timeline' | 'mermaid-layers' | 'mermaid-retry' | 'mermaid-testability' | 'mermaid-dataflow' | 'stats' | 'migration' | 'showcase' | 'explain' | 'summary' | 'matrix' | 'architecture' | 'api-docs' | 'openapi-paths' | 'openapi-runtime';
+  readonly format: 'auto' | 'json' | 'mermaid' | 'mermaid-paths' | 'mermaid-enhanced' | 'mermaid-railway' | 'mermaid-services' | 'mermaid-errors' | 'mermaid-decisions' | 'mermaid-causes' | 'mermaid-concurrency' | 'mermaid-timeline' | 'mermaid-layers' | 'mermaid-retry' | 'mermaid-testability' | 'mermaid-dataflow' | 'mermaid-statechart' | 'svg-statechart' | 'statechart-html' | 'xstate-config' | 'statechart-coverage' | 'stats' | 'migration' | 'showcase' | 'explain' | 'summary' | 'matrix' | 'architecture' | 'api-docs' | 'openapi-paths' | 'openapi-runtime';
   readonly openapiExport: string | undefined;
   readonly output: string | undefined;
   readonly pretty: boolean;
@@ -176,6 +190,9 @@ interface CLIOptions {
   readonly jsonSummary: boolean;
   readonly perFileTiming: boolean;
   readonly minMeaningfulNodes: number | undefined;
+  readonly minCoverage: number | undefined;
+  readonly coverageJson: boolean;
+  readonly open: boolean;
   readonly excludeFromSuspiciousZeros: string[];
   readonly knownEffectInternalsRoot: string | undefined;
   readonly quiet: boolean;
@@ -275,6 +292,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let jsonSummary = false;
   let perFileTiming = false;
   let minMeaningfulNodes: number | undefined;
+  let minCoverage: number | undefined;
+  let coverageJson = false;
+  let open = false;
   const excludeFromSuspiciousZeros: string[] = [];
   let knownEffectInternalsRoot: string | undefined;
   let quiet = false;
@@ -361,6 +381,11 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
         value === 'mermaid-retry' ||
         value === 'mermaid-testability' ||
         value === 'mermaid-dataflow' ||
+        value === 'mermaid-statechart' ||
+        value === 'svg-statechart' ||
+        value === 'statechart-html' ||
+        value === 'xstate-config' ||
+        value === 'statechart-coverage' ||
         value === 'stats' ||
         value === 'migration' ||
         value === 'showcase' ||
@@ -448,6 +473,18 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
           minMeaningfulNodes = parsed;
         }
       }
+    } else if (arg === '--min-coverage') {
+      const value = args[++i];
+      if (value !== undefined) {
+        const parsed = Number.parseFloat(value);
+        if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
+          minCoverage = parsed;
+        }
+      }
+    } else if (arg === '--coverage-json') {
+      coverageJson = true;
+    } else if (arg === '--open') {
+      open = true;
     } else if (arg === '--exclude-from-suspicious-zero') {
       const value = args[++i];
       if (value !== undefined) excludeFromSuspiciousZeros.push(value);
@@ -669,6 +706,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     jsonSummary,
     perFileTiming,
     minMeaningfulNodes,
+    minCoverage,
+    coverageJson,
+    open,
     excludeFromSuspiciousZeros,
     knownEffectInternalsRoot,
     quiet,
@@ -735,7 +775,7 @@ Usage: effect-analyze [PATH] [options]
   verbose output, enhanced Mermaid, colors). Use --no-colocate to skip writing files.
 
 Options:
-  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | stats | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime (default: auto)
+  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | mermaid-statechart | svg-statechart | statechart-html | xstate-config | statechart-coverage | stats | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime (default: auto)
   --export <name>          For openapi-runtime: export name of HttpApi (default: first/default)
   -o, --output <file>      Output file (default: stdout)
   -d, --direction <dir>    Mermaid diagram direction: TB | LR | BT | RL (default: TB)
@@ -762,6 +802,9 @@ Options:
   --show-by-folder         With --coverage-audit: show ok/zero/fail counts by top-level folder
   --per-file-timing        With --coverage-audit: include per-file durationMs in audit (optional timing)
   --min-meaningful-nodes <n>  Filter analyzed programs with fewer than n non-unknown nodes (public-output mode)
+  --min-coverage <n>       With --format statechart-coverage: fail (exit 1) if any machine is below n%% coverage
+  --coverage-json          With --format statechart-coverage: emit JSON ({ machines, summary }) for dashboards
+  --open                   With --format statechart-html/svg-statechart: open the written HTML in your browser
   --exclude-from-suspicious-zero <pattern>  With --coverage-audit: exclude paths matching pattern from suspicious zeros (repeatable)
   --known-effect-internals-root <path>      With --coverage-audit: treat local imports under path as Effect (improve.md §1)
   --json-summary           With --coverage-audit: print only audit JSON to stdout (CI mode)
@@ -824,6 +867,11 @@ Examples:
   effect-analyze ./src --lint-source --scorecard
   effect-analyze ./src --service-cycles --format json
   effect-analyze ./src --lint-source --bundle-output ./.artifacts/effect-lint
+  effect-analyze ./workflow.ts --format mermaid-statechart   # State machine → mermaid stateDiagram-v2
+  effect-analyze ./workflow.ts --format svg-statechart -o sc.html  # Self-contained XState-styled SVG
+  effect-analyze ./workflow.ts --format statechart-html -o sc.html  # Local visualizer page
+  effect-analyze ./workflow.ts --format xstate-config   # Emit createMachine() config for stately.ai/viz
+  effect-analyze ./workflow.ts --format statechart-coverage   # Completeness report (exit 1 on warnings — CI gate)
   effect-analyze ./src --format api-docs   # Extract HttpApi structure, emit API docs markdown
   effect-analyze ./src --format openapi-paths -o paths.json  # Emit OpenAPI paths JSON
   effect-analyze ./src/api.ts --format openapi-runtime --export TodoApi -o openapi.json  # Runtime OpenApi.fromApi
@@ -1913,6 +1961,169 @@ const runApiDocsMode = (
     }
   });
 
+/** Best-effort open of a file in the OS default application. */
+const openInBrowser = (file: string): Effect.Effect<void> =>
+  Effect.sync(() => {
+    let cmd: string;
+    let args: string[];
+    if (process.platform === 'darwin') {
+      cmd = 'open';
+      args = [file];
+    } else if (process.platform === 'win32') {
+      cmd = 'cmd';
+      args = ['/c', 'start', '', file];
+    } else {
+      cmd = 'xdg-open';
+      args = [file];
+    }
+    try {
+      spawn(cmd, args, { stdio: 'ignore', detached: true }).unref();
+    } catch {
+      // best-effort; a failed open should not fail the command
+    }
+  });
+
+/**
+ * Run a statechart format (mermaid-statechart | svg-statechart | statechart-html | xstate-config).
+ * These analyze plain-Effect state machines directly from source (transition
+ * tables and Match.when transition functions) — no Effect IR required.
+ */
+const runStatechartMode = (
+  resolvedPath: string,
+  options: CLIOptions,
+): Effect.Effect<void, unknown> =>
+  Effect.gen(function* () {
+    let files: string[];
+    const stat = yield* Effect.tryPromise(() => fs.stat(resolvedPath)).pipe(
+      Effect.option,
+    );
+    if (Option.isSome(stat) && stat.value.isDirectory()) {
+      const exts = ['.ts', '.tsx'];
+      const walk = async (dir: string, depth: number): Promise<string[]> => {
+        if (depth > 10) return [];
+        const result: string[] = [];
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        for (const e of entries) {
+          const full = join(dir, e.name);
+          if (e.isDirectory() && e.name !== 'node_modules' && e.name !== '.git') {
+            result.push(...(await walk(full, depth + 1)));
+          } else if (e.isFile() && exts.includes(extname(e.name))) {
+            result.push(full);
+          }
+        }
+        return result;
+      };
+      files = yield* Effect.tryPromise(() => walk(resolvedPath, 0));
+    } else {
+      files = [resolvedPath];
+    }
+
+    const machines: StateMachine[] = [];
+    for (const file of files) {
+      try {
+        machines.push(...analyzeStateMachines(file).machines);
+      } catch {
+        // skip parse errors
+      }
+    }
+
+    if (machines.length === 0) {
+      const rejections = files.flatMap((file) => {
+        try {
+          return [...diagnoseStateMachines(file).rejected];
+        } catch {
+          return [];
+        }
+      });
+      if (rejections.length === 0) {
+        yield* Console.error(
+          'No state machines found. See docs/effect-state-machine-conventions.md for the transition-table and Match.when shapes.',
+        );
+      } else {
+        yield* Console.error(
+          `No state machines found, but ${rejections.length} declaration${rejections.length === 1 ? '' : 's'} came close:`,
+        );
+        for (const r of rejections) {
+          const loc = r.location
+            ? ` ${basename(r.location.filePath)}:${r.location.line}`
+            : '';
+          yield* Console.error(`  • ${r.name} (${r.kind})${loc}`);
+          yield* Console.error(`      ${r.reason}`);
+          yield* Console.error(`      fix: ${r.hint}`);
+        }
+      }
+      return;
+    }
+
+    const coverages: StateMachineCoverage[] = machines.map(
+      computeStateMachineCoverage,
+    );
+
+    // Summary header to stderr so stdout (config/diagram) stays pipe-clean.
+    if (!options.quiet) {
+      yield* Console.error(
+        `Found ${machines.length} state machine${machines.length === 1 ? '' : 's'}:`,
+      );
+      for (const m of machines) {
+        const stateCount = m.states.length;
+        const eventCount = new Set(m.transitions.map((t) => t.event)).size;
+        yield* Console.error(
+          `  • ${m.name}: ${stateCount} state${stateCount === 1 ? '' : 's'}, ${eventCount} event${eventCount === 1 ? '' : 's'}` +
+            (m.alphabetSource ? ` (${m.alphabetSource})` : ''),
+        );
+      }
+    }
+
+    let output: string;
+    if (options.format === 'xstate-config') {
+      output = machines.map(renderXStateConfig).join('\n\n');
+    } else if (options.format === 'statechart-html') {
+      output = renderStatechartVisualizerHTML(machines, coverages);
+    } else if (options.format === 'svg-statechart') {
+      output = renderStatechartHTML(
+        machines.map((m, i) => renderStatechartSVG(m, coverages[i])),
+      );
+    } else if (options.format === 'statechart-coverage') {
+      const summary = summarizeCoverage(coverages, options.minCoverage);
+      output = options.coverageJson
+        ? JSON.stringify({ machines: coverages, summary }, null, options.pretty ? 2 : undefined)
+        : renderCoverageReport(coverages, { minCoverage: options.minCoverage });
+      // Non-zero exit for CI on any warning or sub-threshold machine.
+      if (!summary.passed) {
+        yield* Effect.sync(() => {
+          process.exitCode = 1;
+        });
+      }
+    } else {
+      output = renderStatechartsMermaid({ machines }, coverages);
+    }
+
+    // HTML formats are documents, not pipeable text: when no -o is given, write
+    // a file next to the input and print its path rather than dumping markup.
+    const isHtml =
+      options.format === 'statechart-html' ||
+      options.format === 'svg-statechart';
+    const firstFile = files[0];
+    const defaultHtmlPath =
+      files.length === 1 && firstFile
+        ? `${basename(firstFile).replace(/\.[^.]+$/, '')}.statechart.html`
+        : 'effect-statecharts.html';
+    const outputPath = options.output ?? (isHtml ? defaultHtmlPath : undefined);
+
+    if (outputPath) {
+      yield* Effect.tryPromise(() => fs.writeFile(outputPath, output, 'utf-8'));
+      yield* Console.log(
+        isHtml ? `Statechart written to ${outputPath}` : `Output written to ${outputPath}`,
+      );
+      if (options.open && isHtml) {
+        yield* Console.log(`Opening ${outputPath}…`);
+        yield* openInBrowser(outputPath);
+      }
+    } else {
+      yield* Console.log(output);
+    }
+  });
+
 const runMigration = (resolvedPath: string): Effect.Effect<void> =>
   Effect.gen(function* () {
     const s = yield* Effect.tryPromise(() => fs.stat(resolvedPath)).pipe(
@@ -2438,6 +2649,17 @@ const main = Effect.gen(function* () {
     return Exit.succeed(undefined);
   }
 
+  if (
+    options.format === 'mermaid-statechart' ||
+    options.format === 'svg-statechart' ||
+    options.format === 'statechart-html' ||
+    options.format === 'xstate-config' ||
+    options.format === 'statechart-coverage'
+  ) {
+    yield* runStatechartMode(resolvedPath, options);
+    return Exit.succeed(undefined);
+  }
+
   if (options.format === 'openapi-runtime') {
     if (isDir) {
       yield* Console.error('openapi-runtime requires a file path (entrypoint), not a directory.');
@@ -2456,6 +2678,30 @@ const main = Effect.gen(function* () {
     yield* Console.log(`Analyzing ${resolvedPath}...`);
   }
   yield* runAnalysis(resolvedPath, options);
+
+  // Discoverability: in the default (auto) view, surface any state machines in
+  // the file so users find the feature without knowing the --format flag.
+  if (options.format === 'auto' && !options.output && !options.colocate) {
+    const machines = yield* Effect.sync(() => {
+      try {
+        return analyzeStateMachines(resolvedPath).machines;
+      } catch {
+        return [];
+      }
+    });
+    if (machines.length > 0) {
+      const coverages = machines.map(computeStateMachineCoverage);
+      yield* Console.log(
+        `\n%% statechart\n${renderStatechartsMermaid({ machines }, coverages)}`,
+      );
+      if (!options.quiet) {
+        yield* Console.error(
+          `\n${machines.length} state machine${machines.length === 1 ? '' : 's'} detected. ` +
+            `For diagram + coverage + XState config: effect-analyze ${basename(resolvedPath)} --format statechart-html`,
+        );
+      }
+    }
+  }
 
   if (options.watch) {
     const watchOpts = { ...options, quiet: true };
@@ -2523,7 +2769,8 @@ Effect.runPromise(main).then(
       process.exit(1);
       return;
     }
-    process.exit(0);
+    // Respect an exit code set during the run (e.g. coverage CI gate).
+    process.exit(process.exitCode ?? 0);
   },
   (err: unknown) => {
     const message =

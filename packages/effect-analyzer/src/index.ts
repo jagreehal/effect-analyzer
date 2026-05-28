@@ -365,6 +365,38 @@ export type { ConfigItem, ConfigAnalysis } from './config-analyzer';
 export { analyzeMatch } from './match-analyzer';
 export type { MatchAnalysis, MatchSiteInfo, MatchArmInfo } from './match-analyzer';
 
+// State machine analysis + statechart renderers
+export { analyzeStateMachines } from './state-machine';
+export type {
+  StateMachine,
+  StateMachineAnalysis,
+  StateTransition,
+} from './state-machine';
+export { diagnoseStateMachines } from './state-machine-diagnostics';
+export type {
+  StateMachineDiagnostics,
+  StateMachineRejection,
+} from './state-machine-diagnostics';
+export { renderStatechartMermaid, renderStatechartsMermaid } from './output/mermaid-statechart';
+export { renderStatechartSVG, renderStatechartHTML } from './output/svg-statechart';
+export { renderStatechartVisualizerHTML } from './output/statechart-html';
+export { renderXStateConfig } from './output/xstate-config';
+export { computeStateMachineCoverage } from './state-machine-coverage';
+export type {
+  StateMachineCoverage,
+  CoverageFinding,
+  CoverageKind,
+} from './state-machine-coverage';
+export {
+  renderCoverageReport,
+  hasCoverageWarnings,
+  summarizeCoverage,
+} from './output/statechart-coverage';
+export type {
+  CoverageReportOptions,
+  CoverageSummary,
+} from './output/statechart-coverage';
+
 // =============================================================================
 // Platform Detection (GAP 14)
 // =============================================================================
