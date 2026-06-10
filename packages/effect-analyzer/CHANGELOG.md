@@ -1,5 +1,13 @@
 # effect-analyzer
 
+## 0.3.3
+
+### Patch Changes
+
+- 1eb389c: chore: update dependencies
+
+  Minor/patch dependency refresh via npm-check-updates (--target minor, 3-day publish cooldown) — no major version bumps.
+
 ## 0.3.0
 
 ### Minor Changes
