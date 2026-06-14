@@ -21,6 +21,6 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "turbo": "^2.9.16"
+    "turbo": "^2.9.18"
   }
 }
