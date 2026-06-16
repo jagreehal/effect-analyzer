@@ -63,6 +63,14 @@ export type {
   MigrationReport,
 } from './migration-assistant';
 
+export {
+  deriveOpportunityKey,
+  diffMigrationSnapshots,
+  formatMigrationDelta,
+  snapshotFile,
+} from './migration-progress';
+export type { MigrationDelta, MigrationSnapshot } from './migration-progress';
+
 // =============================================================================
 // Static Analysis - Core API
 // =============================================================================
@@ -98,7 +106,10 @@ export type {
 
 // Specialized Mermaid renderers
 export { renderRailwayMermaid } from './output/mermaid-railway';
-export { renderServicesMermaid, renderServicesMermaidFromMap } from './output/mermaid-services';
+export {
+  renderServicesMermaid,
+  renderServicesMermaidFromMap,
+} from './output/mermaid-services';
 export { renderErrorsMermaid } from './output/mermaid-errors';
 export { renderDecisionsMermaid } from './output/mermaid-decisions';
 export { renderCausesMermaid } from './output/mermaid-causes';
@@ -121,13 +132,19 @@ export {
 export { loadDiagramQualityHintsFromEslintJson } from './diagram-quality-eslint';
 
 // Explain output (plain-English narrative)
-export { renderExplanation, renderMultipleExplanations } from './output/explain';
+export {
+  renderExplanation,
+  renderMultipleExplanations,
+} from './output/explain';
 
 // Summary output (one-liner per program)
 export { renderSummary, renderMultipleSummaries } from './output/summary';
 
 // Dependency matrix
-export { renderDependencyMatrix, renderDependencyMatrixFromServiceMap } from './output/matrix';
+export {
+  renderDependencyMatrix,
+  renderDependencyMatrixFromServiceMap,
+} from './output/matrix';
 
 // JSON output
 export { renderJSON, renderMultipleJSON } from './output/json';
@@ -286,7 +303,10 @@ export type {
 // DI completeness (GAP 27)
 // =============================================================================
 
-export { checkDICompleteness, formatDICompletenessReport } from './di-completeness';
+export {
+  checkDICompleteness,
+  formatDICompletenessReport,
+} from './di-completeness';
 export type {
   ServiceCompletenessEntry,
   DICompletenessReport,
@@ -336,10 +356,7 @@ export {
   formatComplexitySummary,
   DEFAULT_THRESHOLDS,
 } from './complexity';
-export type {
-  ComplexityAssessment,
-  ComplexityWarning,
-} from './complexity';
+export type { ComplexityAssessment, ComplexityWarning } from './complexity';
 
 // =============================================================================
 // Test Matrix
@@ -363,7 +380,11 @@ export type { ConfigItem, ConfigAnalysis } from './config-analyzer';
 // Match Analysis (GAP 12)
 // =============================================================================
 export { analyzeMatch } from './match-analyzer';
-export type { MatchAnalysis, MatchSiteInfo, MatchArmInfo } from './match-analyzer';
+export type {
+  MatchAnalysis,
+  MatchSiteInfo,
+  MatchArmInfo,
+} from './match-analyzer';
 
 // State machine analysis + statechart renderers
 export { analyzeStateMachines } from './state-machine';
@@ -377,8 +398,14 @@ export type {
   StateMachineDiagnostics,
   StateMachineRejection,
 } from './state-machine-diagnostics';
-export { renderStatechartMermaid, renderStatechartsMermaid } from './output/mermaid-statechart';
-export { renderStatechartSVG, renderStatechartHTML } from './output/svg-statechart';
+export {
+  renderStatechartMermaid,
+  renderStatechartsMermaid,
+} from './output/mermaid-statechart';
+export {
+  renderStatechartSVG,
+  renderStatechartHTML,
+} from './output/svg-statechart';
 export { renderStatechartVisualizerHTML } from './output/statechart-html';
 export { renderXStateConfig } from './output/xstate-config';
 export { computeStateMachineCoverage } from './state-machine-coverage';
@@ -497,7 +524,14 @@ export {
 // Diff
 // =============================================================================
 
-export { diffPrograms, renderDiffMarkdown, renderDiffJSON, renderDiffMermaid, parseSourceArg, resolveGitSource } from './diff';
+export {
+  diffPrograms,
+  renderDiffMarkdown,
+  renderDiffJSON,
+  renderDiffMermaid,
+  parseSourceArg,
+  resolveGitSource,
+} from './diff';
 
 // =============================================================================
 // Auto-format
@@ -681,10 +715,7 @@ export {
 } from './effect-linter';
 export type { LintRule, LintIssue, LintResult } from './effect-linter';
 
-export {
-  lintSourceFile,
-  lintSourceCode,
-} from './source-linter';
+export { lintSourceFile, lintSourceCode } from './source-linter';
 export type { SourceLintResult } from './source-linter';
 export {
   listAllRuleDocs,
@@ -717,12 +748,8 @@ export type {
   LintScanResult,
   BaselineComparison,
 } from './lint-session';
-export {
-  detectServiceCycles,
-} from './service-cycles';
-export type {
-  ServiceCycle,
-} from './service-cycles';
+export { detectServiceCycles } from './service-cycles';
+export type { ServiceCycle } from './service-cycles';
 
 // =============================================================================
 // Entry points / Config sensitivity / CLI commands

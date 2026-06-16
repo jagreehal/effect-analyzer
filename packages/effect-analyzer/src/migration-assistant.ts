@@ -33,20 +33,31 @@ export interface MigrationReport {
 function addOpportunity(
   list: MigrationOpportunity[],
   filePath: string,
-  node: { getStart: () => number },
-  sourceFile: { getLineAndColumnAtPos: (pos: number) => { line: number; column: number }; getText: () => string },
+  node: {
+    getStart: () => number;
+    getStartLineNumber: () => number;
+    getStartLinePos: () => number;
+    getText: () => string;
+  },
+  _sourceFile: unknown,
   pattern: string,
   suggestion: string,
   snippet?: string,
 ): void {
-  const { line, column } = sourceFile.getLineAndColumnAtPos(node.getStart());
+  // Use node-relative ts-morph APIs rather than offset math against
+  // sourceFile.getText(). The raw character offset from node.getStart() is not
+  // consistent with sourceFile.getText() slicing (it produced misattributed
+  // snippets and off-by-one lines), so derive everything from the node itself.
+  const line = node.getStartLineNumber();
+  const column = node.getStart() - node.getStartLinePos() + 1;
+  const defaultSnippet = node.getText().slice(0, 80).replace(/\s+/g, ' ').trim();
   list.push({
     filePath,
-    line: line + 1,
+    line,
     column,
     pattern,
     suggestion,
-    codeSnippet: snippet ?? sourceFile.getText().slice(node.getStart(), node.getStart() + 80).replace(/\n/g, ' '),
+    codeSnippet: snippet ?? defaultSnippet,
   });
 }
 

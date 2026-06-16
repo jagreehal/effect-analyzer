@@ -40,3 +40,4 @@ apps/docs/.design-screens
 # Generated statechart visualizers (effect-analyze --format statechart-html / svg-statechart)
 *.statechart.html
 effect-statecharts.html
+.pnpm-store

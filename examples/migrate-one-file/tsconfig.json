@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "baseUrl": ".",
+    "typeRoots": ["../../packages/effect-analyzer/node_modules/@types"],
+    "types": ["node"],
+    // This example is not a workspace package (keeps the lockfile untouched), so
+    // resolve effect + @effect/platform from the analyzer package's install.
+    "paths": {
+      "effect": ["../../packages/effect-analyzer/node_modules/effect"],
+      "effect/*": ["../../packages/effect-analyzer/node_modules/effect/*"],
+      "@effect/platform": ["../../packages/effect-analyzer/node_modules/@effect/platform"],
+      "@effect/platform/*": ["../../packages/effect-analyzer/node_modules/@effect/platform/*"]
+    },
+    "noEmit": true
+  },
+  "include": ["before.ts", "after.ts"]
+}
