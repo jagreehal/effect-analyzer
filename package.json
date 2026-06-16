@@ -13,8 +13,9 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "type-check": "turbo type-check",
+    "tc:examples": "pnpm --dir packages/effect-analyzer exec tsc -p ../../examples/migrate-one-file/tsconfig.json",
     "clean": "turbo clean",
-    "quality": "turbo run build --concurrency=1 && turbo run lint && turbo run type-check && turbo run test",
+    "quality": "turbo run build --concurrency=1 && turbo run lint && turbo run type-check && turbo run test && pnpm run tc:examples",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish"

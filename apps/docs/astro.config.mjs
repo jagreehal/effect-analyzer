@@ -87,6 +87,7 @@ export default defineConfig({
             { label: 'Coverage Audit', slug: 'project/coverage-audit' },
             { label: 'Semantic Diff', slug: 'project/diff' },
             { label: 'Migration Assistant', slug: 'project/migration' },
+            { label: 'Tutorial: Migrate One File', slug: 'project/migrate-one-file' },
             { label: 'Strict Diagnostics', slug: 'project/diagnostics' },
             { label: 'Source Linter', slug: 'project/source-linter' },
             { label: 'Improve Mode & Agent Report', slug: 'project/improve' },

@@ -1,0 +1,194 @@
+---
+title: 'Tutorial: Migrate One File to Effect'
+description: A concrete, end-to-end walkthrough of migrating a single legacy TypeScript file to Effect, using the analyzer to find the work and verify it's done.
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Most "how to adopt Effect" advice is abstract. This tutorial is the opposite: we take **one real file** of legacy TypeScript, use the analyzer to tell us _exactly_ what to change, migrate it pattern by pattern, and then use the analyzer again to **prove** the migration is complete.
+
+You don't have to rewrite your whole codebase to start. You can migrate one file, measure the progress, and repeat.
+
+The full example lives in [`examples/migrate-one-file`](https://github.com/jagreehal/effect-analyzer/tree/main/examples/migrate-one-file) — `before.ts`, `after.ts`, and the commands to reproduce every output on this page.
+
+## The starting point
+
+Here's `before.ts` — a `UserService` and `ReportService` of the kind you'd find in any existing codebase. Nothing here imports Effect:
+
+```ts
+// before.ts
+export class UserService {
+  private readonly baseUrl = process.env.API_URL ?? 'https://api.example.com';
+
+  async getUser(id: string): Promise<User> {
+    try {
+      const response = await fetch(`${this.baseUrl}/users/${id}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user ${id}: ${response.status}`);
+      }
+      return (await response.json()) as User;
+    } catch (error) {
+      console.error('getUser failed', error);
+      throw error;
+    }
+  }
+  // ...getOrders, ReportService.buildSummary with Promise.all + setTimeout
+}
+```
+
+## Step 1 — Find the work
+
+Point the migration assistant at the file:
+
+```bash
+npx effect-analyze examples/migrate-one-file/before.ts --format migration
+```
+
+It reports every pattern that has an idiomatic Effect equivalent, with the **exact line, column, and code snippet**:
+
+```
+Migration Opportunities Found:
+
+  before.ts:24:5  try/catch
+    →  Effect.try or Effect.tryPromise with catch handler
+    Snippet: try { const response = await fetch(`${this.baseUrl}/users/${...
+
+  before.ts:47:34  Promise.all
+    →  Effect.all([...], { concurrency: "unbounded" })
+    Snippet: Promise.all([ this.users.getUser(userId), this.users.getOrde...
+
+  before.ts:55:5  setTimeout
+    →  Effect.sleep(Duration.millis(n))
+    Snippet: setTimeout(() => { console.log(`flushed analytics for ${user...
+
+  before.ts:25:30  fetch()
+    →  HttpClient.request or @effect/platform HttpClient
+    Snippet: fetch(`${this.baseUrl}/users/${id}`)...
+
+  before.ts:20:1  class UserService (manual DI)
+    →  Context.Tag<UserService>() + Layer.effect or Layer.succeed
+    Snippet: export class UserService { private readonly baseUrl = proces...
+
+  before.ts:27:9  throw
+    →  Effect.fail(error) for typed error channel
+    Snippet: throw new Error(`Failed to fetch user ${id}: ${response.stat...
+
+  before.ts:21:30  process.env
+    →  Config.string or Config.forEffect for typed config
+    Snippet: process.env...
+
+Total: 10 opportunities in 1 files
+```
+
+This is your migration checklist for the file — ten concrete, located edits instead of a vague "rewrite it in Effect."
+
+<Aside type="caution" title="Assisted, not automatic">
+The migration assistant uses AST pattern matching, not full type-flow analysis. It tells you _where_ to look and _what_ the idiomatic target is — it does not guarantee a mechanical rewrite is correct. Treat each opportunity as a reviewed suggestion, not a blind find-and-replace.
+</Aside>
+
+## Step 2 — Migrate, pattern by pattern
+
+Work down the list. Each reported pattern maps to a well-known Effect idiom:
+
+<Steps>
+
+1. **Class-based DI → `Context.Tag` + `Layer`.** The two `*Service` classes become services with explicit, type-checked dependencies.
+
+2. **`process.env` → `Config`.** The base URL becomes declared, typed configuration: `Config.string('API_URL')`.
+
+3. **`try/catch` + `throw` → typed error channel.** `throw new Error(...)` becomes a `Data.TaggedError`, and the error flows in the `Effect<A, E>` error channel instead of as an exception.
+
+4. **`fetch()` → `HttpClient`.** The platform `HttpClient` is itself a service, so requests become composable and testable.
+
+5. **`Promise.all` → `Effect.all` with bounded concurrency.** Concurrency becomes explicit (`{ concurrency: 2 }`) rather than implicitly unbounded.
+
+6. **`setTimeout` → `Effect.sleep` on a forked fiber.** A structured, interruptible delay instead of a dangling timer.
+
+</Steps>
+
+The result is `after.ts` — see the [full file](https://github.com/jagreehal/effect-analyzer/blob/main/examples/migrate-one-file/after.ts). The shape of the migrated service:
+
+```ts
+// after.ts (excerpt)
+export class UserService extends Context.Tag('UserService')<
+  UserService,
+  {
+    readonly getUser: (id: string) => Effect.Effect<User, UserFetchError>;
+    readonly getOrders: (userId: string) => Effect.Effect<readonly Order[], UserFetchError>;
+  }
+>() {}
+
+const baseUrl = Config.string('API_URL').pipe(
+  Config.withDefault('https://api.example.com'),
+);
+
+export const UserServiceLive = Layer.effect(
+  UserService,
+  Effect.gen(function* () {
+    const http = yield* HttpClient.HttpClient;
+    const url = yield* baseUrl;
+
+    const getUser = (id: string) =>
+      http.get(`${url}/users/${id}`).pipe(
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(User)),
+        Effect.mapError(() => new UserFetchError({ userId: id })),
+      );
+    // ...
+  }),
+);
+```
+
+## Step 3 — Verify the loop is closed
+
+Don't take it on faith. Run the assistant against the migrated file:
+
+```bash
+npx effect-analyze examples/migrate-one-file/after.ts --format migration
+```
+
+```
+Migration Opportunities Found:
+
+Total: 0 opportunities in 1 files
+```
+
+Zero opportunities — every legacy pattern the analyzer flagged is gone. That's the difference between "I think I migrated it" and "the analyzer confirms there's nothing left to migrate."
+
+## Step 4 — Measure adoption across the codebase
+
+One file is a start. To track migration across a directory, use the [coverage audit](/effect-analyzer/project/coverage-audit/):
+
+```bash
+npx effect-analyze examples/migrate-one-file --coverage-audit
+```
+
+```
+Discovered: 2
+Analyzed:   1
+Zero programs: 1
+Coverage:   50.0%
+...
+Failed or zero programs:
+  before.ts (0 programs)
+```
+
+Two files, one migrated: **50% Effect coverage**. Run this in CI and the number climbs as you migrate. The `before.ts` file shows up under "zero programs" — that's your to-do list at the project scale, the same way the migration report was your to-do list at the file scale.
+
+## The migration loop
+
+These four steps are a loop you can run on every file you touch:
+
+1. **Find** — `--format migration` lists what to change and where.
+2. **Migrate** — translate each pattern to its Effect idiom.
+3. **Verify** — re-run `--format migration`; aim for zero.
+4. **Measure** — `--coverage-audit` tracks adoption across the project.
+
+You never have to do a big-bang rewrite. Migrate one file, watch the coverage number go up, repeat.
+
+## Related
+
+- [Migration Assistant](/effect-analyzer/project/migration/) — the full pattern catalogue and programmatic API.
+- [Coverage Audit](/effect-analyzer/project/coverage-audit/) — measuring Effect adoption.
+- [Improve Mode & Agent Report](/effect-analyzer/project/improve/) — automated fixes and an agent-driven backlog.
