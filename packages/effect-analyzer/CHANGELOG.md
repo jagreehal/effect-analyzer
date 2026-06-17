@@ -1,5 +1,13 @@
 # effect-analyzer
 
+## 0.3.4
+
+### Patch Changes
+
+- 3d272b9: chore: update dependencies
+
+  Minor/patch dependency refresh via npm-check-updates (--target minor, 3-day publish cooldown) — no major version bumps.
+
 ## 0.3.3
 
 ### Patch Changes
