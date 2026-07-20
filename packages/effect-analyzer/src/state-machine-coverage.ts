@@ -29,7 +29,7 @@ export interface StateMachineCoverage {
   readonly file: string | undefined;
   /** True when both declared alphabets were resolvable from the types. */
   readonly alphabetKnown: boolean;
-  readonly alphabetSource: 'schema' | 'tagged-union' | undefined;
+  readonly alphabetSource: 'schema' | 'tagged-union' | 'config' | undefined;
   readonly declaredStates: readonly string[];
   readonly declaredEvents: readonly string[];
   readonly usedStates: readonly string[];
@@ -89,7 +89,12 @@ export function computeStateMachineCoverage(
   machine: StateMachine,
 ): StateMachineCoverage {
   const usedStates = machine.states;
-  const usedEvents = unique(machine.transitions.map((t) => t.event));
+  // Event-coverage is about transitions a user event triggers; automatic
+  // (`initial`/`always`/`after`) transitions are reachability edges only.
+  const eventTransitions = machine.transitions.filter(
+    (t) => t.trigger === undefined,
+  );
+  const usedEvents = unique(eventTransitions.map((t) => t.event));
 
   const alphabetKnown =
     machine.declaredStates !== undefined && machine.declaredEvents !== undefined;
@@ -99,11 +104,16 @@ export function computeStateMachineCoverage(
   const stateSet = new Set(declaredStates);
   const eventSet = new Set(declaredEvents);
 
-  // Build adjacency for reachability + outgoing/incoming bookkeeping.
+  // Reachability follows every edge (event + automatic). Outgoing bookkeeping
+  // is split: `hasAnyOutgoing` for dead-end detection (a state that
+  // auto-advances is not a dead end); `hasEventOutgoing` for coverage (only
+  // states that handle events contribute (state,event) pairs).
   const adjacency = new Map<string, Set<string>>();
-  const hasOutgoing = new Set<string>();
+  const hasAnyOutgoing = new Set<string>();
+  const hasEventOutgoing = new Set<string>();
   for (const t of machine.transitions) {
-    hasOutgoing.add(t.from);
+    hasAnyOutgoing.add(t.from);
+    if (t.trigger === undefined) hasEventOutgoing.add(t.from);
     const set = adjacency.get(t.from) ?? new Set<string>();
     set.add(t.to);
     adjacency.set(t.from, set);
@@ -125,12 +135,14 @@ export function computeStateMachineCoverage(
   const undeclaredEvents = alphabetKnown
     ? usedEvents.filter((e) => !eventSet.has(e))
     : [];
-  const deadEndStates = [...reachable].filter((s) => !hasOutgoing.has(s));
+  // A dead end has no outgoing edge of any kind (no event, no auto-advance).
+  const deadEndStates = [...reachable].filter((s) => !hasAnyOutgoing.has(s));
 
-  // Coverage = handled (state,event) pairs over reachable, non-final states.
-  const activeStates = [...reachable].filter((s) => hasOutgoing.has(s));
+  // Coverage = handled (state,event) pairs over reachable states that actually
+  // handle events. States whose only exit is automatic expect no events.
+  const activeStates = [...reachable].filter((s) => hasEventOutgoing.has(s));
   const handledPerState = new Map<string, Set<string>>();
-  for (const t of machine.transitions) {
+  for (const t of eventTransitions) {
     const set = handledPerState.get(t.from) ?? new Set<string>();
     set.add(t.event);
     handledPerState.set(t.from, set);

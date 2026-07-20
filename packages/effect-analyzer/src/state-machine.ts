@@ -34,11 +34,18 @@ export interface StateTransition {
   readonly to: string;
   /** Guard condition text when the transition is conditional (best-effort). */
   readonly guard?: string;
+  /**
+   * Present when the transition fires automatically rather than on a user
+   * event: `initial`, `always` (eventless), or `after` (delayed).
+   * Automatic transitions are reachability edges but are excluded from
+   * event-coverage accounting. Absent for ordinary event transitions.
+   */
+  readonly trigger?: 'initial' | 'always' | 'after';
 }
 
 export interface StateMachine {
   readonly name: string;
-  readonly source: 'transition-table' | 'match';
+  readonly source: 'transition-table' | 'match' | 'machine-json';
   readonly initial: string | undefined;
   /** States that appear in the extracted transitions. */
   readonly states: readonly string[];
@@ -51,7 +58,7 @@ export interface StateMachine {
    */
   readonly declaredStates: readonly string[] | undefined;
   readonly declaredEvents: readonly string[] | undefined;
-  readonly alphabetSource: 'schema' | 'tagged-union' | undefined;
+  readonly alphabetSource: 'schema' | 'tagged-union' | 'config' | undefined;
 }
 
 export interface StateMachineAnalysis {
