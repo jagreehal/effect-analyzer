@@ -1,5 +1,12 @@
 # effect-analyzer
 
+## 1.0.0
+
+### Major Changes
+
+- 2ceccde: Support Effect v4 exclusively and deepen analysis setup, IR traversal, diagram
+  fidelity, runtime span overlays, and the public package interface.
+
 ## 0.3.4
 
 ### Patch Changes
