@@ -67,7 +67,7 @@ Single-file scope only.
 effect-analyze ./src --service-cycles
 ```
 
-Builds the project-wide service map (every `Context.Tag` and the services each one requires) and reports any cycles. Service cycles are usually fine to declare but **always** fail at runtime — catch them statically instead.
+Builds the project-wide service map (every `Context.Service` and the services each one requires) and reports any cycles. Service cycles are usually fine to declare but **always** fail at runtime — catch them statically instead.
 
 Output includes:
 

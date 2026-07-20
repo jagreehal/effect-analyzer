@@ -36,15 +36,15 @@ The migration assistant detects the following patterns and suggests their Effect
 | `Promise.race` | `Effect.race(first, second)` |
 | `setTimeout` | `Effect.sleep(Duration.millis(n))` |
 | `setInterval` | `Schedule.spaced(Duration.millis(n))` |
-| `setImmediate` | `Effect.sync` + `queueMicrotask` or `Effect.async` |
-| `fetch()` | `HttpClient.request` or `@effect/platform` HttpClient |
-| `http.request` / `https.request` | `HttpClient.request` or `@effect/platform` HttpClient |
-| `new XMLHttpRequest()` | `HttpClient.request` or `@effect/platform` HttpClient |
+| `setImmediate` | `Effect.sync` + `queueMicrotask` or `Effect.callback` |
+| `fetch()` | `effect/unstable/http` HttpClient |
+| `http.request` / `https.request` | `effect/unstable/http` HttpClient |
+| `new XMLHttpRequest()` | `effect/unstable/http` HttpClient |
 | `dns.lookup` / `dns.resolve` | `Effect.promise` or `dns.promises` |
 | `fs.exists` (callback) | `Effect.promise` or `fs.promises.access` |
 | `new EventEmitter()` | `PubSub.bounded<T>()` or `PubSub.unbounded<T>()` |
-| `new Worker()` | `Worker.make` or `@effect/platform` Worker |
-| Class-based DI (`*Service`, `*Repository`, `*Client`) | `Context.Tag<T>()` + `Layer.effect` or `Layer.succeed` |
+| `new Worker()` | `effect/unstable/workers` Worker |
+| Class-based DI (`*Service`, `*Repository`, `*Client`) | `Context.Service<Self, Shape>()('Key')` + `Layer.effect` or `Layer.succeed` |
 
 <Aside type="note">
 The migration assistant uses heuristic pattern matching, not type analysis. It may produce false positives for patterns that look similar but serve a different purpose. Review each suggestion before applying.
@@ -72,7 +72,7 @@ Found 7 opportunities across 3 files.
 |------|---------|------------|
 | 12 | try/catch | Effect.try or Effect.tryPromise with catch handler |
 | 28 | Promise.all | Effect.all([...], { concurrency: "unbounded" }) |
-| 45 | fetch() | HttpClient.request or @effect/platform HttpClient |
+| 45 | fetch() | effect/unstable/http HttpClient |
 
 ### src/utils/timer.ts
 
@@ -87,7 +87,7 @@ Found 7 opportunities across 3 files.
 ### Single File
 
 ```ts
-import { findMigrationOpportunities } from "effect-analyzer"
+import { findMigrationOpportunities } from "effect-analyzer/migration"
 
 const opportunities = findMigrationOpportunities("./src/legacy-service.ts")
 
@@ -99,7 +99,7 @@ for (const opp of opportunities) {
 ### Entire Project
 
 ```ts
-import { findMigrationOpportunitiesInProject, formatMigrationReport } from "effect-analyzer"
+import { findMigrationOpportunitiesInProject, formatMigrationReport } from "effect-analyzer/migration"
 
 const report = findMigrationOpportunitiesInProject("./src")
 
@@ -114,7 +114,7 @@ console.log(markdown)
 Pass a source string directly for testing or integration:
 
 ```ts
-import { findMigrationOpportunities } from "effect-analyzer"
+import { findMigrationOpportunities } from "effect-analyzer/migration"
 
 const opportunities = findMigrationOpportunities("virtual.ts", `
   async function fetchUser(id: string) {

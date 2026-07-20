@@ -1,6 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, join, resolve } from 'path';
-import { Effect } from 'effect';
+import { Cause, Effect, Result } from 'effect';
+import '../src/register-node-ts-morph';
 import { analyze } from '../src/analyze';
 
 export interface ScanRow {
@@ -176,15 +177,10 @@ export async function analyzeFileToRow(
     );
 
     if (res._tag === 'Failure') {
-      const cause = res.cause as unknown as {
-        _tag?: string;
-        error?: { code?: string };
-        failure?: { code?: string };
-      };
-      const code =
-        cause?._tag === 'Fail'
-          ? (cause.error?.code ?? cause.failure?.code ?? 'unknown')
-          : (cause?._tag ?? 'unknown');
+      const error = Cause.findError(res.cause);
+      const code = Result.isSuccess(error)
+        ? error.success.code
+        : 'unknown';
       const tag = `FAIL:${String(code)}`;
       if (tag === 'FAIL:NO_EFFECTS_FOUND') {
         return {

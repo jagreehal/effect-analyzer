@@ -39,6 +39,7 @@ When `path` is a file, the analyzer processes that file. When it is a directory,
 | `--direction <dir>` | Mermaid flow direction: `TB`, `LR`, `BT`, `RL` | `TB` |
 | `--style-guide` | Apply style-guide heuristics for cleaner, more readable diagrams | off |
 | `--no-style-guide` | Explicitly disable style-guide mode | — |
+| `--assert-diagram-fidelity` | Exit with code 1 when a diagram contains unresolved or ambiguous nodes | off |
 
 ## Analysis Modes
 
@@ -209,6 +210,14 @@ effect-analyze src/transfer.ts
 ```bash
 effect-analyze src/transfer.ts -f mermaid-railway -o transfer.md
 ```
+
+### Reject an inexact diagram in CI
+
+```bash
+effect-analyze src/transfer.ts --assert-diagram-fidelity
+```
+
+The command prints each fidelity issue before it exits. See [Diagram Fidelity](/effect-analyzer/reference/diagram-fidelity/) for the checks.
 
 ### Analyze a directory with colocated output
 

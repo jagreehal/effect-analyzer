@@ -15,7 +15,7 @@ export const pipeHeavyProgram = pipe(
     x.value > 5 ? Effect.succeed(x) : Effect.fail(new Error('TooSmall')),
   ),
   Effect.tap(() => Effect.log('after flatMap')),
-  Effect.catchAll(() => Effect.succeed({ value: 0 })),
+  Effect.catch(() => Effect.succeed({ value: 0 })),
   Effect.map((x) => x.value),
 );
 

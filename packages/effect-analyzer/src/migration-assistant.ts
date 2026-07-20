@@ -133,7 +133,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'setImmediate',
-        'Effect.sync + queueMicrotask or Effect.async',
+        'Effect.sync + queueMicrotask or Effect.callback',
       );
     }
   }
@@ -149,7 +149,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new XMLHttpRequest()',
-        'HttpClient.request or @effect/platform HttpClient',
+        'effect/unstable/http HttpClient',
       );
     }
   }
@@ -165,7 +165,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new Worker()',
-        'Worker.make or @effect/platform Worker',
+        'effect/unstable/workers Worker',
       );
     }
   }
@@ -203,7 +203,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'http.request / https.request',
-        'HttpClient.request or @effect/platform HttpClient',
+        'effect/unstable/http HttpClient',
       );
     }
   }
@@ -238,7 +238,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'fetch()',
-        'HttpClient.request or @effect/platform HttpClient',
+        'effect/unstable/http HttpClient',
       );
     }
   }
@@ -286,7 +286,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // class-based DI -> Context.Tag + Layer
+  // class-based DI -> Context.Service + Layer
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.ClassDeclaration)) {
     const name = node.getName();
     const text = node.getText();
@@ -301,7 +301,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         `class ${name} (manual DI)`,
-        `Context.Tag<${name}>() + Layer.effect or Layer.succeed`,
+        `Context.Service<${name}, Shape>()('${name}') + Layer.effect or Layer.succeed`,
       );
     }
   }
@@ -319,7 +319,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         `new ${text}()`,
-        `Context.Tag + Layer.effect for dependency injection`,
+        `Context.Service + Layer.effect for dependency injection`,
       );
     }
   }
@@ -381,7 +381,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'Promise.catch',
-        'Effect.catchAll or Effect.catchTag for typed error handling',
+        'Effect.catch or Effect.catchTag for typed error handling',
       );
     }
     if (text.endsWith('.finally') && (text.includes('Promise') || text.includes('.then'))) {
@@ -396,7 +396,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // addEventListener -> Effect.async
+  // addEventListener -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -407,7 +407,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'addEventListener',
-        'Effect.async or EventTarget + Effect.asyncInterrupt',
+        'Effect.callback or EventTarget + Effect.asyncInterrupt',
       );
     }
   }
@@ -455,12 +455,12 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'util.promisify',
-        'Effect.tryPromise or Effect.async for callback-style APIs',
+        'Effect.tryPromise or Effect.callback for callback-style APIs',
       );
     }
   }
 
-  // new Promise -> Effect.async or Effect.promise
+  // new Promise -> Effect.callback or Effect.promise
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -471,7 +471,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new Promise(...)',
-        'Effect.async or Effect.promise for callback-style',
+        'Effect.callback or Effect.promise for callback-style',
       );
     }
   }
@@ -513,7 +513,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // process.nextTick -> Effect.sync + queueMicrotask or Effect.async
+  // process.nextTick -> Effect.sync + queueMicrotask or Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -524,7 +524,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'process.nextTick',
-        'Effect.sync + queueMicrotask or Effect.async',
+        'Effect.sync + queueMicrotask or Effect.callback',
       );
     }
   }
@@ -545,7 +545,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // WebSocket -> Effect.async / @effect/platform
+  // WebSocket -> effect/unstable/socket
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -556,12 +556,12 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new WebSocket()',
-        'Effect.async or @effect/platform WebSocket',
+        'effect/unstable/socket WebSocket',
       );
     }
   }
 
-  // MessageChannel -> Effect.async
+  // MessageChannel -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -572,7 +572,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new MessageChannel()',
-        'Effect.async or Queue for cross-context messaging',
+        'Effect.callback or Queue for cross-context messaging',
       );
     }
   }
@@ -619,7 +619,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // MutationObserver -> Effect.async
+  // MutationObserver -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -630,12 +630,12 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new MutationObserver()',
-        'Effect.async or Effect.asyncInterrupt for DOM observation',
+        'Effect.callback or Effect.asyncInterrupt for DOM observation',
       );
     }
   }
 
-  // requestIdleCallback -> Effect.async
+  // requestIdleCallback -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -646,7 +646,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'requestIdleCallback',
-        'Effect.async or Effect.sync for idle-time work',
+        'Effect.callback or Effect.sync for idle-time work',
       );
     }
   }
@@ -662,7 +662,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new BroadcastChannel()',
-        'PubSub or Effect.async for cross-tab messaging',
+        'PubSub or Effect.callback for cross-tab messaging',
       );
     }
   }
@@ -721,7 +721,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // FileReader (browser) -> Effect.async
+  // FileReader (browser) -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -732,7 +732,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'new FileReader()',
-        'Effect.async or FileReader + Effect.asyncInterrupt',
+        'Effect.callback or FileReader + Effect.asyncInterrupt',
       );
     }
   }
@@ -769,7 +769,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // ResizeObserver / IntersectionObserver -> Effect.async
+  // ResizeObserver / IntersectionObserver -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -785,7 +785,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         `new ${text}()`,
-        'Effect.async or Effect.asyncInterrupt for DOM observation',
+        'Effect.callback or Effect.asyncInterrupt for DOM observation',
       );
     }
   }
@@ -805,7 +805,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'child_process.fork',
-        'Worker.make or @effect/platform Worker',
+        'effect/unstable/workers Worker',
       );
     }
   }
@@ -844,7 +844,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'child_process.exec/spawn',
-        '@effect/platform CommandExecutor or Effect.promise',
+        'effect/unstable/process Command or Effect.promise',
       );
     }
   }
@@ -877,7 +877,7 @@ export function findMigrationOpportunities(
           node,
           sourceFile,
           'RxJS Observable',
-          'Stream from @effect/platform or Effect Stream',
+          'effect/Stream',
         );
       }
     }
@@ -908,7 +908,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'requestAnimationFrame',
-        'Effect.async or Effect.sync + queueMicrotask for scheduling',
+        'Effect.callback or Effect.sync + queueMicrotask for scheduling',
       );
     }
   }
@@ -943,7 +943,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         text,
-        'Stream.fromReadable or @effect/platform FileSystem/Stream',
+        'effect/Stream with the v4 platform adapter',
       );
     }
   }
@@ -959,7 +959,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'cluster.fork',
-        'Worker.make or @effect/platform Worker pool',
+        'effect/unstable/workers worker pool',
       );
     }
   }
@@ -977,7 +977,7 @@ export function findMigrationOpportunities(
           node,
           sourceFile,
           full,
-          'Effect.async or @effect/platform Socket/Server',
+          'effect/unstable/socket Server',
         );
       }
     }
@@ -999,7 +999,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // readline.createInterface -> Effect.async / Stream
+  // readline.createInterface -> Effect.callback / Stream
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -1011,7 +1011,7 @@ export function findMigrationOpportunities(
           node,
           sourceFile,
           'readline.createInterface',
-          'Effect.async or Stream for line-by-line reading',
+          'Effect.callback or Stream for line-by-line reading',
         );
       }
     }
@@ -1036,7 +1036,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // events.once -> Effect.async
+  // events.once -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -1048,13 +1048,13 @@ export function findMigrationOpportunities(
           node,
           sourceFile,
           'events.once',
-          'Effect.async for one-shot event',
+          'Effect.callback for one-shot event',
         );
       }
     }
   }
 
-  // fs.watch / fs.watchFile (callback) -> Effect.async
+  // fs.watch / fs.watchFile (callback) -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -1066,7 +1066,7 @@ export function findMigrationOpportunities(
           node,
           sourceFile,
           'fs.watch / fs.watchFile',
-          'Effect.async or fs.watch with EventEmitter',
+          'Effect.callback or fs.watch with EventEmitter',
         );
       }
     }
@@ -1121,7 +1121,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'child_process.spawnSync',
-        '@effect/platform CommandExecutor or Effect.promise',
+        'effect/unstable/process Command or Effect.promise',
       );
     }
   }
@@ -1163,7 +1163,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  // tls.connect / tls.createServer -> Effect.async
+  // tls.connect / tls.createServer -> Effect.callback
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = node.getExpression();
     const text = expr.getText();
@@ -1174,7 +1174,7 @@ export function findMigrationOpportunities(
         node,
         sourceFile,
         'tls.connect / tls.createServer',
-        'Effect.async or @effect/platform Socket/TLS',
+        'effect/unstable/socket TLS',
       );
     }
   }

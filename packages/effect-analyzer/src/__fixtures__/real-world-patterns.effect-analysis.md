@@ -334,9 +334,9 @@ flowchart TB
   n7["log (side-effect)"]
   n8["Pipe (1 steps)"]
   n9["makeRequest"]
-  n10["catchAll (error-handler)"]
+  n10["catch (error-handler)"]
   n11["Effect"]
-  err_handler_12["catchAll"]
+  err_handler_12["catch"]
   n13["Unknown: Could not determine effect type"]
 
   %% Edges
@@ -436,9 +436,9 @@ flowchart TB
   n3["Pipe (2 steps)"]
   n4["operations"]
   n5["tap (transform)"]
-  n6["catchAll (error-handler)"]
+  n6["catch (error-handler)"]
   n7["Effect"]
-  err_handler_8["catchAll"]
+  err_handler_8["catch"]
   n9["gen"]
 
   %% Edges
@@ -761,9 +761,9 @@ flowchart TB
   n8["Pipe (2 steps)"]
   n9["operation"]
   n10["tap (transform)"]
-  n11["catchAll (error-handler)"]
+  n11["catch (error-handler)"]
   n12["Effect"]
-  err_handler_13["catchAll"]
+  err_handler_13["catch"]
   n14["gen"]
 
   %% Edges

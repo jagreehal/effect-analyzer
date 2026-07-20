@@ -22,7 +22,7 @@ npx effect-analyze ./src/transfer.ts --format mermaid-paths
 ### Library API
 
 ```ts
-import { analyze, generatePaths } from "effect-analyzer"
+import { analyze, generatePaths } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
@@ -78,7 +78,7 @@ When `maxPaths` is reached, the generator stops and sets `limitHit: true` on the
 Use `generatePathsWithMetadata` for additional information:
 
 ```ts
-import { generatePathsWithMetadata } from "effect-analyzer"
+import { generatePathsWithMetadata } from "effect-analyzer/analysis"
 
 const result = generatePathsWithMetadata(ir, { maxPaths: 50 })
 
@@ -91,7 +91,7 @@ console.log(result.limitHit)     // true if maxPaths was reached
 Use `calculatePathStatistics` to get aggregate statistics across all paths:
 
 ```ts
-import { generatePaths, calculatePathStatistics } from "effect-analyzer"
+import { generatePaths, calculatePathStatistics } from "effect-analyzer/analysis"
 
 const paths = generatePaths(ir)
 const stats = calculatePathStatistics(paths)
@@ -108,7 +108,7 @@ console.log(stats.uniqueConditions) // Distinct branching conditions
 Use `filterPaths` to narrow down to specific paths of interest:
 
 ```ts
-import { generatePaths, filterPaths } from "effect-analyzer"
+import { generatePaths, filterPaths } from "effect-analyzer/analysis"
 
 const paths = generatePaths(ir)
 
@@ -128,7 +128,7 @@ const errorPaths = filterPaths(paths, {
 Paths are the input to the [Test Coverage Matrix](/effect-analyzer/analysis/test-matrix/). Each path becomes a test case describing what conditions to set up and what steps to verify.
 
 ```ts
-import { generatePaths, generateTestMatrix } from "effect-analyzer"
+import { generatePaths, generateTestMatrix } from "effect-analyzer/analysis"
 
 const paths = generatePaths(ir)
 const matrix = generateTestMatrix(paths)

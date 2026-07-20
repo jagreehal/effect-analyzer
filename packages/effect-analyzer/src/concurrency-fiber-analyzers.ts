@@ -36,7 +36,7 @@ import {
   computeSemanticRole,
 } from './analysis-utils';
 import { getNumericLiteralFromNode } from './analysis-patterns';
-import type { AnalyzerDeps } from './stream-channel-sink-analyzers';
+import type { AnalysisContext } from './analysis-context';
 
 /** Parse concurrency primitive (Queue, PubSub, Deferred, etc.) - GAP 6 */
 export function analyzeConcurrencyPrimitiveCall(
@@ -239,7 +239,7 @@ export function analyzeConcurrencyPrimitiveCall(
 
 /** Parse fiber operations (Effect.fork, Fiber.join, etc.) - GAP 1 */
 export function analyzeFiberCall(
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -364,7 +364,7 @@ export function analyzeFiberCall(
 
 /** Parse interruption operations (interruptible, uninterruptible, onInterrupt, etc.) */
 export function analyzeInterruptionCall(
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,

@@ -16,7 +16,7 @@ Use it for **code review**, **onboarding**, **architecture docs**, and **CI** to
 npm install -D effect-analyzer
 ```
 
-`effect` (>=3.0.0) is a required peer dependency. `ts-morph` is bundled automatically.
+Effect v4 is the only supported Effect release. `ts-morph` is bundled automatically.
 
 ## Quick Start
 
@@ -268,7 +268,7 @@ npx effect-analyze ./src --coverage-audit
 Generate a self-contained HTML page with search, filtering, path explorer, complexity heatmap, and 6 color themes:
 
 ```ts
-import { renderInteractiveHTML } from "effect-analyzer"
+import { renderInteractiveHTML } from "effect-analyzer/diagram"
 
 const html = renderInteractiveHTML(ir, { theme: "midnight" })
 ```
@@ -280,7 +280,7 @@ const html = renderInteractiveHTML(ir, { theme: "midnight" })
 Use the programmatic API to integrate analysis into your own tools:
 
 ```ts
-import { analyze } from "effect-analyzer"
+import { analyze } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
@@ -290,16 +290,47 @@ console.log(ir.root.dependencies)    // [{ name: "AccountRepo", ... }, ...]
 console.log(ir.root.errorTypes)      // ["InsufficientFundsError", "AccountNotFoundError"]
 ```
 
+The root package intentionally exposes only the canonical workflow:
+`analysis`, diagram fidelity, Effect/OpenTelemetry trace adapters, and the
+runtime-overlay renderer. Expert functionality is grouped under
+`effect-analyzer/analysis`, `effect-analyzer/diagram`,
+`effect-analyzer/rules`, and `effect-analyzer/migration`.
+
+### Diagram fidelity and runtime traces
+
+```ts
+import {
+  analysis,
+  computeDiagramFidelity,
+  renderMermaidWithRuntimeTrace,
+  traceFromOpenTelemetry,
+} from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analysis.file("./src/transfer.ts").single())
+const fidelity = computeDiagramFidelity(ir)
+
+if (!fidelity.exact) {
+  throw new Error("The static diagram is not exact")
+}
+
+const trace = traceFromOpenTelemetry(exportedSpans)
+const overlay = renderMermaidWithRuntimeTrace(ir, trace)
+```
+
+Use `--assert-diagram-fidelity` in CI to reject unresolved, opaque, dynamic-span,
+or ambiguous-span nodes.
+
 [Full API reference →](https://jagreehal.github.io/effect-analyzer/reference/api/)
 
 ## What It Detects
 
 | Area | Patterns |
 |------|----------|
-| **Programs** | `Effect.gen`, pipe chains, `Effect.sync`, `Effect.async`, `Effect.promise` |
-| **Services** | `Context.Tag` via `yield*`, service method calls |
+| **Programs** | `Effect.gen`, pipe chains, `Effect.sync`, `Effect.callback`, `Effect.promise` |
+| **Services** | `Context.Service` via `yield*`, service method calls |
 | **Layers** | `Layer.mergeAll`, `Layer.effect`, `Layer.provide`, `Layer.succeed` |
-| **Errors** | `catchTag`, `catchAll`, `tapError`, `retry`, `timeout` |
+| **Errors** | `catchTag`, `catch`, `tapError`, `retry`, `timeout` |
 | **Concurrency** | `Effect.all`, `Effect.race`, `Effect.fork`, `Fiber.join` |
 | **Resources** | `acquireRelease`, `ensuring`, `Effect.scoped` |
 | **Streams** | `Stream.fromIterable`, `Stream.mapEffect`, `Stream.runCollect` |
@@ -310,7 +341,7 @@ console.log(ir.root.errorTypes)      // ["InsufficientFundsError", "AccountNotFo
 ## Requirements
 
 - Node.js 22+
-- TypeScript project with `effect` (>=3.0.0)
+- TypeScript project with Effect v4
 
 ## Documentation
 

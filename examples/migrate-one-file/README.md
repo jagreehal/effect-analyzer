@@ -27,7 +27,7 @@ node packages/effect-analyzer/dist/cli.js examples/migrate-one-file --coverage-a
 ## Type-checking
 
 `before.ts` and `after.ts` are type-checked against the **real** `effect` and
-`@effect/platform` types (resolved from the `effect-analyzer` package's install
+Effect v4 HTTP types (resolved from the `effect-analyzer` package's install
 via `tsconfig.json` `paths`) — so the migration target is guaranteed to compile,
 not just illustrative. This runs as part of `pnpm quality`, or on its own from
 the repo root:

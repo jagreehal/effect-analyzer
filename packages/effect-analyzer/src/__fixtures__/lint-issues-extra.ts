@@ -9,7 +9,7 @@
 import { Effect, Layer } from 'effect';
 
 // ---------------------------------------------------------------------------
-// swallowed-error: catchAll handler returns Effect.void with no logging
+// swallowed-error: catch handler returns Effect.void with no logging
 // ---------------------------------------------------------------------------
 export const swallowedErrorProgram = Effect.gen(function* () {
   const v = yield* Effect.tryPromise({
@@ -18,8 +18,8 @@ export const swallowedErrorProgram = Effect.gen(function* () {
   });
   return v;
 }).pipe(
-  // LINT: catchAll swallows the error without logging or rethrowing
-  Effect.catchAll(() => Effect.void),
+  // LINT: catch swallows the error without logging or rethrowing
+  Effect.catch(() => Effect.void),
 );
 
 export const swallowedErrorWithLog = Effect.gen(function* () {
@@ -30,7 +30,7 @@ export const swallowedErrorWithLog = Effect.gen(function* () {
   return v;
 }).pipe(
   // OK: logs the error before recovering
-  Effect.catchAll((err) =>
+  Effect.catch((err) =>
     Effect.gen(function* () {
       yield* Effect.logError('request failed', err);
       return null;

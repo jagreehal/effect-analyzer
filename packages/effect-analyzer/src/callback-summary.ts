@@ -1,7 +1,7 @@
 /**
  * Callback body summarisation helpers.
  *
- * The static analyzer captures `Effect.async`/`Effect.gen`/loop callbacks as
+ * The static analyzer captures `Effect.callback`/`Effect.gen`/loop callbacks as
  * IR nodes, but their bodies are arbitrary JS. These helpers walk a callback
  * body and produce a compact, deduplicated summary of the calls /
  * conditionals inside it — used to render meaningful labels in diagrams and

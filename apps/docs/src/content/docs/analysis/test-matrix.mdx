@@ -22,7 +22,7 @@ This outputs a markdown table of programs and their service dependencies. For th
 ### Library API
 
 ```ts
-import { analyze, generatePaths, generateTestMatrix } from "effect-analyzer"
+import { analyze, generatePaths, generateTestMatrix } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
@@ -69,7 +69,7 @@ Test cases are prioritized based on the path they cover:
 Render the test matrix as a readable markdown document:
 
 ```ts
-import { formatTestMatrixMarkdown } from "effect-analyzer"
+import { formatTestMatrixMarkdown } from "effect-analyzer/analysis"
 
 const markdown = formatTestMatrixMarkdown(matrix)
 console.log(markdown)
@@ -91,7 +91,7 @@ Output:
 Generate runnable test skeletons for your preferred test framework:
 
 ```ts
-import { formatTestMatrixAsCode } from "effect-analyzer"
+import { formatTestMatrixAsCode } from "effect-analyzer/analysis"
 
 // Vitest (default)
 const vitest = formatTestMatrixAsCode(matrix, { framework: "vitest" })
@@ -126,7 +126,7 @@ describe("transfer", () => {
 For code review or manual testing, generate a markdown checklist:
 
 ```ts
-import { formatTestChecklist } from "effect-analyzer"
+import { formatTestChecklist } from "effect-analyzer/analysis"
 
 const checklist = formatTestChecklist(matrix)
 console.log(checklist)

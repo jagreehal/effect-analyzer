@@ -574,13 +574,13 @@ flowchart TB
 
   n2["Stream → runCollect → runCollect (stream)"]
   n3["stream"]
-  n4["Stream → fromIterable → mapEffect → fromIterable → catchAll (stream)"]
+  n4["Stream → fromIterable → mapEffect → fromIterable → catch (stream)"]
   n5["Unknown: Could not determine effect type"]
   n6["Stream → fromIterable (stream)"]
   n7["Unknown: Could not determine effect type"]
   n8["Stream → mapEffect (stream)"]
   n9["Unknown: Could not determine effect type"]
-  n10["Stream → fromIterable → catchAll (stream)"]
+  n10["Stream → fromIterable → catch (stream)"]
   n11["Unknown: Could not determine effect type"]
 
   %% Edges
@@ -629,17 +629,17 @@ flowchart TB
 errorHandledStreamProgram (generator):
   1. result = Stream: runCollect -> runCollect
     Calls stream
-  2. Stream: fromIterable -> mapEffect -> fromIterable -> catchAll
+  2. Stream: fromIterable -> mapEffect -> fromIterable -> catch
     (unknown: Could not determine effect type)
-    catchAll callback:
+    catch callback:
       Calls fromIterable — callback-call
   3. Stream: fromIterable
     (unknown: Could not determine effect type)
   4. Stream: mapEffect
     (unknown: Could not determine effect type)
-  5. Stream: fromIterable -> catchAll
+  5. Stream: fromIterable -> catch
     (unknown: Could not determine effect type)
-    catchAll callback:
+    catch callback:
       Calls fromIterable — callback-call
 
   Concurrency: sequential (no parallelism)

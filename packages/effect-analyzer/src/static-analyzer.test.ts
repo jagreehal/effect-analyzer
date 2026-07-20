@@ -198,10 +198,10 @@ describe('effect-analyzer', () => {
   });
 
   describe('Error Handling Programs', () => {
-    it('should detect error handlers (catchAll)', async () => {
+    it('should detect error handlers (catch)', async () => {
       const result = await Effect.runPromise(
         analyze(resolve(fixturesDir, 'error-handling.ts')).named(
-          'catchAllProgram',
+          'catchProgram',
         ),
       );
 
@@ -389,10 +389,10 @@ describe('effect-analyzer', () => {
   describe('Error Handling', () => {
     it('should fail for non-existent files', async () => {
       const result = await Effect.runPromise(
-        analyze('./non-existent-file.ts').single().pipe(Effect.either),
+        analyze('./non-existent-file.ts').single().pipe(Effect.result),
       );
 
-      expect(result._tag).toBe('Left');
+      expect(result._tag).toBe('Failure');
     });
 
     it('should fail for files without Effect programs', async () => {
@@ -403,10 +403,10 @@ describe('effect-analyzer', () => {
       `;
 
       const result = await Effect.runPromise(
-        analyze.source(source).single().pipe(Effect.either),
+        analyze.source(source).single().pipe(Effect.result),
       );
 
-      expect(result._tag).toBe('Left');
+      expect(result._tag).toBe('Failure');
     });
 
     it('should return None for singleOption when multiple programs exist', async () => {
@@ -767,9 +767,9 @@ describe('effect-analyzer', () => {
         const x = 1;
       `;
       const result = await Effect.runPromise(
-        analyze.source(source).first().pipe(Effect.either),
+        analyze.source(source).first().pipe(Effect.result),
       );
-      expect(result._tag).toBe('Left');
+      expect(result._tag).toBe('Failure');
     });
 
     it('returns Some(first) from firstOption when programs exist', async () => {
@@ -803,12 +803,12 @@ describe('effect-analyzer', () => {
       const result = await Effect.runPromise(
         analyze(resolve(fixturesDir, 'simple-effect.ts'))
           .named('NonExistentProgram')
-          .pipe(Effect.either),
+          .pipe(Effect.result),
       );
-      expect(result._tag).toBe('Left');
-      if (result._tag === 'Left') {
-        expect(result.left.message).toContain('not found');
-        expect(result.left.message).toContain('NonExistentProgram');
+      expect(result._tag).toBe('Failure');
+      if (result._tag === 'Failure') {
+        expect(result.failure.message).toContain('not found');
+        expect(result.failure.message).toContain('NonExistentProgram');
       }
     });
 
@@ -830,9 +830,9 @@ describe('effect-analyzer', () => {
     it('should fail all() when source has no programs', async () => {
       const source = '';
       const result = await Effect.runPromise(
-        analyze.source(source).all().pipe(Effect.either),
+        analyze.source(source).all().pipe(Effect.result),
       );
-      expect(result._tag).toBe('Left');
+      expect(result._tag).toBe('Failure');
     });
 
     it('should fail all() when source has no Effect programs', async () => {
@@ -842,17 +842,17 @@ describe('effect-analyzer', () => {
         console.log(x + y);
       `;
       const result = await Effect.runPromise(
-        analyze.source(source).all().pipe(Effect.either),
+        analyze.source(source).all().pipe(Effect.result),
       );
-      expect(result._tag).toBe('Left');
+      expect(result._tag).toBe('Failure');
     });
 
     it('should fail single() when no programs in source', async () => {
       const source = `const a = 1;`;
       const result = await Effect.runPromise(
-        analyze.source(source).single().pipe(Effect.either),
+        analyze.source(source).single().pipe(Effect.result),
       );
-      expect(result._tag).toBe('Left');
+      expect(result._tag).toBe('Failure');
     });
 
     it('should fail single() when multiple programs in source', async () => {
@@ -862,9 +862,9 @@ describe('effect-analyzer', () => {
         const p2 = Effect.succeed(2);
       `;
       const result = await Effect.runPromise(
-        analyze.source(source).single().pipe(Effect.either),
+        analyze.source(source).single().pipe(Effect.result),
       );
-      expect(result._tag).toBe('Left');
+      expect(result._tag).toBe('Failure');
     });
   });
 
@@ -878,12 +878,12 @@ describe('effect-analyzer', () => {
         return; // skip when sibling project not present
       }
       const result = await Effect.runPromise(
-        analyze(externalEffectFile).all().pipe(Effect.either),
+        analyze(externalEffectFile).all().pipe(Effect.result),
       );
-      expect(result._tag).toBe('Right');
-      if (result._tag === 'Right') {
-        expect(result.right.length).toBeGreaterThan(0);
-        const first = result.right[0];
+      expect(result._tag).toBe('Success');
+      if (result._tag === 'Success') {
+        expect(result.success.length).toBeGreaterThan(0);
+        const first = result.success[0];
         expect(first?.root.programName).toBeDefined();
         expect(first?.metadata.filePath).toContain('effect-version.test.ts');
       }
@@ -894,12 +894,12 @@ describe('effect-analyzer', () => {
         return;
       }
       const ir = await Effect.runPromise(
-        analyze(externalEffectFile).first().pipe(Effect.either),
+        analyze(externalEffectFile).first().pipe(Effect.result),
       );
-      expect(ir._tag).toBe('Right');
-      if (ir._tag !== 'Right') return;
-      const paths = generatePaths(ir.right);
-      const metrics = calculateComplexity(ir.right);
+      expect(ir._tag).toBe('Success');
+      if (ir._tag !== 'Success') return;
+      const paths = generatePaths(ir.success);
+      const metrics = calculateComplexity(ir.success);
       const matrix = generateTestMatrix(paths);
       expect(paths.length).toBeGreaterThanOrEqual(0);
       expect(metrics.cyclomaticComplexity).toBeGreaterThanOrEqual(0);
@@ -911,11 +911,11 @@ describe('effect-analyzer', () => {
         return;
       }
       const result = await Effect.runPromise(
-        analyze(externalApiComparisonFile).all().pipe(Effect.either),
+        analyze(externalApiComparisonFile).all().pipe(Effect.result),
       );
-      expect(result._tag).toBe('Right');
-      if (result._tag === 'Right') {
-        expect(result.right.length).toBeGreaterThan(0);
+      expect(result._tag).toBe('Success');
+      if (result._tag === 'Success') {
+        expect(result.success.length).toBeGreaterThan(0);
       }
     });
   });
@@ -1698,7 +1698,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
     it('should extract type signatures for effects with errors', async () => {
       const ir = await Effect.runPromise(
         analyze(resolve(fixturesDir, 'error-handling.ts')).named(
-          'catchAllProgram',
+          'catchProgram',
         ),
       );
 
@@ -2049,7 +2049,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
       expect(result.length).toBeGreaterThan(0);
       const names = result.map((r) => r.root.programName);
-      expect(names).toContain('catchAllProgram');
+      expect(names).toContain('catchProgram');
       expect(names).toContain('catchTagProgram');
     });
   });
@@ -2066,19 +2066,19 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
       expect(result.metadata.stats.totalEffects).toBeGreaterThan(0);
     });
 
-    it('extracts Effect.async resume/canceller patterns (asyncCallback)', async () => {
+    it('extracts Effect.callback resume/canceller patterns (asyncCallback)', async () => {
       const tmp = mkdtempSync(join(tmpdir(), 'async-cb-'));
       const filePath = join(tmp, 'async.ts');
       writeFileSync(filePath, `
         import { Effect } from "effect";
-        const withResume = Effect.async((resume) => {
+        const withResume = Effect.callback((resume) => {
           resume(Effect.succeed(1));
         });
-        const withCanceller = Effect.async((resume) => {
+        const withCanceller = Effect.callback((resume) => {
           resume(Effect.succeed(2));
           return () => { /* cleanup */ };
         });
-        const twoResumes = Effect.async((cb) => {
+        const twoResumes = Effect.callback((cb) => {
           cb(Effect.succeed(3));
           cb(Effect.fail(new Error("second")));
         });
@@ -2359,7 +2359,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         import { Effect } from "effect";
         export const program = Effect.gen(function* () {
           const response = yield* Effect.succeed(1).pipe(
-            Effect.catchAll(() => Effect.succeed(0))
+            Effect.catch(() => Effect.succeed(0))
           );
           return response;
         });
@@ -2397,9 +2397,9 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
         for (const fixtureFile of fixtureFiles) {
           const result = await Effect.runPromise(
-            analyze(fixtureFile).all().pipe(Effect.either),
+            analyze(fixtureFile).all().pipe(Effect.result),
           );
-          expect(result._tag).toBe('Right');
+          expect(result._tag).toBe('Success');
         }
       },
       30_000,

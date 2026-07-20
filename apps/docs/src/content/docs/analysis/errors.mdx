@@ -14,7 +14,7 @@ The **error analysis** module provides deep inspection of how errors flow throug
 The `analyzeErrorFlow` function extracts all error types, maps them to the steps that produce them, and identifies steps without declared error types:
 
 ```ts
-import { analyze, analyzeErrorFlow } from "effect-analyzer"
+import { analyze, analyzeErrorFlow } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
@@ -52,7 +52,7 @@ Each `StepErrorInfo` includes:
 Use `analyzeErrorPropagation` to track how errors flow through the program and how handlers narrow the error set:
 
 ```ts
-import { analyzeErrorPropagation } from "effect-analyzer"
+import { analyzeErrorPropagation } from "effect-analyzer/analysis"
 
 const propagation = analyzeErrorPropagation(ir)
 
@@ -84,7 +84,7 @@ Each `ErrorPropagation` entry records:
 Look up the error state at a particular node:
 
 ```ts
-import { analyzeErrorPropagation, getErrorsAtPoint } from "effect-analyzer"
+import { analyzeErrorPropagation, getErrorsAtPoint } from "effect-analyzer/analysis"
 
 const propagation = analyzeErrorPropagation(ir)
 const errorsAtDebit = getErrorsAtPoint(propagation, "step-3")
@@ -96,7 +96,7 @@ const errorsAtDebit = getErrorsAtPoint(propagation, "step-3")
 Get all steps that can produce a specific error type:
 
 ```ts
-import { analyzeErrorFlow, getErrorProducers } from "effect-analyzer"
+import { analyzeErrorFlow, getErrorProducers } from "effect-analyzer/analysis"
 
 const flow = analyzeErrorFlow(ir)
 const producers = getErrorProducers(flow, "AccountNotFound")
@@ -108,7 +108,7 @@ const producers = getErrorProducers(flow, "AccountNotFound")
 Use `validateWorkflowErrors` to check whether all errors are properly handled:
 
 ```ts
-import { validateWorkflowErrors } from "effect-analyzer"
+import { validateWorkflowErrors } from "effect-analyzer/analysis"
 
 const validation = validateWorkflowErrors(ir)
 
@@ -127,7 +127,7 @@ console.log(validation.computedErrors)   // The computed error union
 Generate a human-readable error summary:
 
 ```ts
-import { analyzeErrorFlow, formatErrorSummary } from "effect-analyzer"
+import { analyzeErrorFlow, formatErrorSummary } from "effect-analyzer/analysis"
 
 const flow = analyzeErrorFlow(ir)
 const summary = formatErrorSummary(flow)
@@ -139,7 +139,7 @@ console.log(summary)
 Render the error flow as a Mermaid diagram:
 
 ```ts
-import { analyzeErrorFlow, renderErrorFlowMermaid } from "effect-analyzer"
+import { analyzeErrorFlow, renderErrorFlowMermaid } from "effect-analyzer/diagram"
 
 const flow = analyzeErrorFlow(ir)
 const diagram = renderErrorFlowMermaid(flow)

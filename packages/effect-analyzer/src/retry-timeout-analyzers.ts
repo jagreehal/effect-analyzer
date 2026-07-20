@@ -36,10 +36,10 @@ import {
 } from './analysis-utils';
 import { SCHEDULE_OP_MAP } from './analysis-patterns';
 import { parseScheduleInfo } from './analysis-classifiers';
-import type { AnalyzerDeps } from './stream-channel-sink-analyzers';
+import type { AnalysisContext } from './analysis-context';
 
 export const analyzeRetryCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   sourceFile: SourceFile,
   filePath: string,
@@ -136,7 +136,7 @@ export const analyzeRetryCall = (
   });
 
 export const analyzeTimeoutCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   sourceFile: SourceFile,
   filePath: string,

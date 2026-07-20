@@ -34,7 +34,7 @@ function fail() {
 import { promisify } from 'util';
 const readFile = promisify(require('fs').readFile);
 
-// new Promise -> Effect.async
+// new Promise -> Effect.callback
 const p = new Promise<number>((resolve) => resolve(1));
 
 // for await -> Stream
@@ -145,10 +145,10 @@ glob('*.ts', (err, files) => {});
 import * as tls from 'tls';
 tls.connect(443, 'host', () => {});
 
-// Promise.catch -> Effect.catchAll
+// Promise.catch -> Effect.catch
 Promise.resolve(1).then((x) => x + 1).catch((e) => console.error(e));
 
-// addEventListener -> Effect.async
+// addEventListener -> Effect.callback
 declare const el: HTMLElement;
 el.addEventListener('click', () => {});
 
@@ -158,10 +158,10 @@ fs.readFile('file.txt', (err, data) => {});
 // queueMicrotask -> Effect.sync
 queueMicrotask(() => console.log('micro'));
 
-// WebSocket -> Effect.async
+// WebSocket -> Effect.callback
 const ws = new WebSocket('ws://localhost');
 
-// MessageChannel -> Effect.async
+// MessageChannel -> Effect.callback
 const channel = new MessageChannel();
 
 // fs.appendFile (callback)
@@ -175,11 +175,11 @@ fs.mkdir('/tmp/foo', (err) => {});
 fs.stat('file.txt', (err, stats) => {});
 fs.unlink('file.txt', (err) => {});
 
-// MutationObserver -> Effect.async
+// MutationObserver -> Effect.callback
 declare const MutationObserver: new (cb: () => void) => { observe: (el: HTMLElement) => void };
 new MutationObserver(() => {});
 
-// requestIdleCallback -> Effect.async
+// requestIdleCallback -> Effect.callback
 declare const requestIdleCallback: (cb: () => void) => number;
 requestIdleCallback(() => {});
 

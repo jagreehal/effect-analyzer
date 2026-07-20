@@ -236,7 +236,7 @@ export const generateIdentityCatchFix = (
   finding: LintFinding,
   sourceLine: string,
 ): CodeFix | undefined => {
-  // Match .catchAll((e) => Effect.fail(e)) or .catchTag("X", (e) => Effect.fail(e))
+  // Match .catch((e) => Effect.fail(e)) or .catchTag("X", (e) => Effect.fail(e))
   const match = /\.catch(All|Tag|AllCause|AllDefect)\(([^)]+)\)/.exec(sourceLine);
   if (!match) return undefined;
 
@@ -320,8 +320,8 @@ export const generateForEachConcurrencyFix = (
 };
 
 /**
- * Generate a fix for catchAll-vs-catchTag.
- * Transforms: .catchAll((e) => ...)
+ * Generate a fix for catch-vs-catchTag.
+ * Transforms: .catch((e) => ...)
  * Into: .catchTag("ErrorTag", (e) => ...)
  * (Requires knowing the error tag — uses heuristic from message)
  */
@@ -335,10 +335,10 @@ export const generateCatchTagFix = (
     filePath: finding.filePath,
     line: finding.line,
     column: finding.column,
-    description: 'Consider using catchTag instead of catchAll for tagged errors',
+    description: 'Consider using catchTag instead of catch for tagged errors',
     before: sourceLine.trim(),
     after: sourceLine.replace(
-      /\.catchAll\(/,
+      /\.catch\(/,
       '.catchTag("ErrorTag", ',
     ),
     confidence: 'low',
@@ -375,7 +375,7 @@ export const generateFix = (
       return generateConfigSecretFix(finding, sourceLine);
     case 'forEach-without-concurrency':
       return generateForEachConcurrencyFix(finding, sourceLine);
-    case 'catchAll-vs-catchTag':
+    case 'catch-vs-catchTag':
       return generateCatchTagFix(finding, sourceLine);
     default:
       return undefined;

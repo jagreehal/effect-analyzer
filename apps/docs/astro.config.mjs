@@ -116,6 +116,7 @@ export default defineConfig({
           items: [
             { label: 'CLI', slug: 'reference/cli' },
             { label: 'Library API', slug: 'reference/api' },
+            { label: 'Diagram Fidelity', slug: 'reference/diagram-fidelity' },
             { label: 'Coupling Analyzer', slug: 'reference/coupling' },
             { label: 'Browser Playground', link: '/playground/' },
             { label: 'Interactive HTML', slug: 'reference/html-viewer' },

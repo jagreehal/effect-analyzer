@@ -587,18 +587,18 @@ describe('source-linter: forEach-without-concurrency', () => {
 });
 
 describe('source-linter: identity-catch', () => {
-  it('flags Effect.catchAll(e => Effect.fail(e))', () => {
+  it('flags Effect.catch(e => Effect.fail(e))', () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catchAll(Effect.succeed(1), (e) => Effect.fail(e));`,
+       export const p = Effect.catch(Effect.succeed(1), (e) => Effect.fail(e));`,
     );
     expect(issues.filter((i) => i.rule === 'identity-catch').length).toBe(1);
   });
 
-  it('flags Effect.catchAllCause(c => Effect.failCause(c))', () => {
+  it('flags Effect.catchCause(c => Effect.failCause(c))', () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catchAllCause(Effect.succeed(1), (c) => Effect.failCause(c));`,
+       export const p = Effect.catchCause(Effect.succeed(1), (c) => Effect.failCause(c));`,
     );
     expect(issues.filter((i) => i.rule === 'identity-catch').length).toBe(1);
   });
@@ -614,7 +614,7 @@ describe('source-linter: identity-catch', () => {
   it('does not flag a real recovery handler', () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catchAll(Effect.succeed(1), () => Effect.succeed(0));`,
+       export const p = Effect.catch(Effect.succeed(1), () => Effect.succeed(0));`,
     );
     expect(issues.filter((i) => i.rule === 'identity-catch')).toEqual([]);
   });
@@ -622,7 +622,7 @@ describe('source-linter: identity-catch', () => {
   it('does not flag when handler re-fails a different value', () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catchAll(Effect.succeed(1), (e) => Effect.fail(\`wrap:\${String(e)}\`));`,
+       export const p = Effect.catch(Effect.succeed(1), (e) => Effect.fail(\`wrap:\${String(e)}\`));`,
     );
     expect(issues.filter((i) => i.rule === 'identity-catch')).toEqual([]);
   });

@@ -80,6 +80,10 @@ import {
 } from './diagram-quality';
 import { loadDiagramQualityHintsFromEslintJson } from './diagram-quality-eslint';
 import {
+  computeDiagramFidelity,
+  formatDiagramFidelity,
+} from './diagram-fidelity';
+import {
   buildRuleIndex,
   explainRule,
   getRuleCodesForProfile,
@@ -198,6 +202,7 @@ interface CLIOptions {
   readonly quiet: boolean;
   readonly color: boolean;
   readonly quality: boolean;
+  readonly assertDiagramFidelity: boolean;
   readonly qualityEslint: string | undefined;
   readonly styleGuide: boolean;
   readonly serviceMap: boolean;
@@ -300,6 +305,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let quiet = false;
   let color = true;
   let quality = false;
+  let assertDiagramFidelity = false;
   let qualityEslint: string | undefined;
   let styleGuide = false;
   let explicitNoStyleGuide = false;
@@ -498,6 +504,8 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       color = false;
     } else if (arg === '--quality') {
       quality = true;
+    } else if (arg === '--assert-diagram-fidelity') {
+      assertDiagramFidelity = true;
     } else if (arg === '--quality-eslint') {
       qualityEslint = args[++i];
     } else if (arg.startsWith('--quality-eslint=')) {
@@ -714,6 +722,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     quiet,
     color,
     quality,
+    assertDiagramFidelity,
     qualityEslint,
     styleGuide,
     serviceMap,
@@ -809,6 +818,7 @@ Options:
   --known-effect-internals-root <path>      With --coverage-audit: treat local imports under path as Effect (improve.md §1)
   --json-summary           With --coverage-audit: print only audit JSON to stdout (CI mode)
   --quality                Add heuristic diagram readability estimate and top offenders report
+  --assert-diagram-fidelity  Fail when unresolved, opaque, dynamic-span, or ambiguous-span nodes make a diagram inexact
   --quality-eslint <path>  Ingest existing ESLint JSON for optional quality hints
   --style-guide            Apply summary-style rendering heuristics (default: on for --format mermaid-paths)
   --no-style-guide         Disable style-guide (e.g. for plain mermaid-paths output)
@@ -890,7 +900,7 @@ const loadQualityHintsByFile = (
     const hints = yield* Effect.tryPromise(() =>
       loadDiagramQualityHintsFromEslintJson(eslintPath),
     ).pipe(
-      Effect.catchAll((error) =>
+      Effect.catch((error) =>
         Effect.gen(function* () {
           yield* Console.error(
             style.yellow(
@@ -1088,7 +1098,7 @@ const writeTestStubsForFile = (
 
       const exists = yield* Effect.tryPromise(() => fs.access(target)).pipe(
         Effect.map(() => true),
-        Effect.catchAll(() => Effect.succeed(false)),
+        Effect.catch(() => Effect.succeed(false)),
       );
       if (exists && !overwrite) {
         results.push({ path: target, skipped: true });
@@ -1125,12 +1135,12 @@ const runAnalysis = (
       const content = yield* Effect.tryPromise(() =>
         fs.readFile(resolvedPath, 'utf-8'),
       ).pipe(
-        Effect.catchAll(() => Effect.succeed(null as string | null)),
+        Effect.catch(() => Effect.succeed(null as string | null)),
       );
       if (content !== null) {
         const cached = yield* Effect.tryPromise(() =>
           getCached(resolvedPath, content),
-        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+        ).pipe(Effect.catch(() => Effect.succeed(null)));
         if (cached !== null && cached.length > 0) {
           irs = cached;
           yield* Console.log(`(cache hit) Found ${String(irs.length)} program(s)`);
@@ -1184,6 +1194,21 @@ const runAnalysis = (
       const removed = beforeCount - filteredIrs.length;
       if (removed > 0 && !options.quiet) {
         yield* Console.log(`Filtered ${String(removed)} trivial program(s) (use --include-trivial to see all)`);
+      }
+    }
+
+    if (options.assertDiagramFidelity) {
+      const reports = filteredIrs.map((ir) => ({
+        programName: ir.root.programName,
+        report: computeDiagramFidelity(ir),
+      }));
+      for (const { programName, report } of reports) {
+        yield* Console.log(`\n${programName}:\n${formatDiagramFidelity(report)}`);
+      }
+      if (reports.some(({ report }) => !report.exact)) {
+        return yield* Effect.fail(
+          new Error('Diagram fidelity assertion failed'),
+        );
       }
     }
 
@@ -1431,7 +1456,7 @@ const runAnalysis = (
       case 'showcase': {
         const sourceCode = yield* Effect.tryPromise(() =>
           fs.readFile(resolvedPath, 'utf-8'),
-        ).pipe(Effect.catchAll(() => Effect.succeed('')));
+        ).pipe(Effect.catch(() => Effect.succeed('')));
         const showcaseEntries = generateMultipleShowcase(
           filteredIrs,
           { direction: options.direction },
@@ -1612,6 +1637,21 @@ const runProjectMode = (
     const end = options.maxFiles ? start + options.maxFiles : sortedEntries.length;
     const windowedEntries = sortedEntries.slice(start, Math.min(end, sortedEntries.length));
     const byFile = new Map(windowedEntries);
+    if (options.assertDiagramFidelity) {
+      let hasInexactDiagram = false;
+      for (const [filePath, programs] of byFile) {
+        for (const ir of programs) {
+          const report = computeDiagramFidelity(ir);
+          yield* Console.log(
+            `\n${filePath} :: ${ir.root.programName}:\n${formatDiagramFidelity(report)}`,
+          );
+          hasInexactDiagram ||= !report.exact;
+        }
+      }
+      if (hasInexactDiagram) {
+        return yield* Effect.fail(new Error('Diagram fidelity assertion failed'));
+      }
+    }
     const qualityHintsByFile = yield* loadQualityHintsByFile(options, style);
     const fileQualities = options.quality
       ? [...byFile.entries()].map(([filePath, programs]) =>
@@ -1646,7 +1686,7 @@ const runProjectMode = (
           resolvedPath,
         );
         yield* Effect.tryPromise(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
-          Effect.catchAll(() => Effect.succeed(undefined)),
+          Effect.catch(() => Effect.succeed(undefined)),
         );
         if (!options.quiet) {
           yield* Console.log(
@@ -1727,7 +1767,7 @@ const runProjectMode = (
       if (serviceCount > 0) {
         if (doColocate) {
           const servicePaths = yield* writeAllServiceArtifacts(svcMap).pipe(
-            Effect.catchAll(() => Effect.succeed([] as string[])),
+            Effect.catch(() => Effect.succeed([] as string[])),
           );
           for (const sp of servicePaths) {
             if (!options.quiet) {
@@ -1742,7 +1782,7 @@ const runProjectMode = (
           const graphPath = join(resolvedPath, 'service-graph.md');
           const graphContent = `# Service Dependency Graph\n\n\`\`\`mermaid\n${graphMd}\n\`\`\`\n`;
           yield* Effect.tryPromise(() => fs.writeFile(graphPath, graphContent, 'utf-8')).pipe(
-            Effect.catchAll(() => Effect.succeed(undefined)),
+            Effect.catch(() => Effect.succeed(undefined)),
           );
           if (!options.quiet) {
             yield* Console.log(
@@ -1775,12 +1815,12 @@ const runProjectMode = (
           }
         }
         return Promise.resolve(allStructures);
-      }).pipe(Effect.catchAll(() => Effect.succeed([] as HttpApiStructure[])));
+      }).pipe(Effect.catch(() => Effect.succeed([] as HttpApiStructure[])));
       if (apiStructures.length > 0) {
         const apiDocsPath = join(resolvedPath, 'api-docs.md');
         const apiDocsContent = renderApiDocsMarkdown(apiStructures);
         yield* Effect.tryPromise(() => fs.writeFile(apiDocsPath, apiDocsContent, 'utf-8')).pipe(
-          Effect.catchAll(() => Effect.succeed(undefined)),
+          Effect.catch(() => Effect.succeed(undefined)),
         );
         if (!options.quiet) {
           yield* Console.log(
@@ -1797,7 +1837,7 @@ const runProjectMode = (
         resolvedPath,
       );
       yield* Effect.tryPromise(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
-        Effect.catchAll(() => Effect.succeed(undefined)),
+        Effect.catch(() => Effect.succeed(undefined)),
       );
       if (!options.quiet) {
         yield* Console.log(
@@ -1865,7 +1905,7 @@ const runOpenApiRuntime = (
   entrypointPath: string,
   options: CLIOptions,
 ): Effect.Effect<void, unknown> =>
-  Effect.async<undefined, Error>((resume) => {
+  Effect.callback<undefined, Error>((resume) => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const runnerPath = join(__dirname, '..', 'scripts', 'openapi-runtime-runner.mjs');
     const absEntrypoint = resolve(process.cwd(), entrypointPath);
@@ -2134,7 +2174,7 @@ const runMigration = (resolvedPath: string): Effect.Effect<void> =>
       const report = yield* Effect.tryPromise(() =>
         findMigrationOpportunitiesInProject(resolvedPath),
       ).pipe(
-        Effect.catchAll((e) =>
+        Effect.catch((e) =>
           Effect.fail(new Error(e instanceof Error ? e.message : String(e))),
         ),
       );
@@ -2153,7 +2193,7 @@ const runMigration = (resolvedPath: string): Effect.Effect<void> =>
       });
     }
   }).pipe(
-    Effect.catchAll((e) =>
+    Effect.catch((e) =>
       Effect.sync(() => {
         console.error('Migration failed:', e instanceof Error ? e.message : e);
       }),
@@ -2173,13 +2213,13 @@ const runExtraAnalyzers = (
 
     if (options.entryPoints) {
       const r = yield* analyzeEntryPointsFile(filePath).pipe(
-        Effect.catchAll((e) => Effect.sync(() => ({ filePath, entryPoints: [], error: String(e) }))),
+        Effect.catch((e) => Effect.sync(() => ({ filePath, entryPoints: [], error: String(e) }))),
       );
       out.entryPoints = r;
     }
     if (options.configLeaks) {
       const r = yield* analyzeConfigSensitivityFile(filePath).pipe(
-        Effect.catchAll((e) =>
+        Effect.catch((e) =>
           Effect.sync(() => ({ filePath, sources: [], leaks: [], error: String(e) })),
         ),
       );
@@ -2187,7 +2227,7 @@ const runExtraAnalyzers = (
     }
     if (options.cliCommands) {
       const r = yield* analyzeCliCommandsFile(filePath).pipe(
-        Effect.catchAll((e) =>
+        Effect.catch((e) =>
           Effect.sync(() => ({ filePath, commands: [], runs: [], error: String(e) })),
         ),
       );
@@ -2197,7 +2237,7 @@ const runExtraAnalyzers = (
     const text = options.pretty ? JSON.stringify(out, null, 2) : JSON.stringify(out);
     if (options.output) {
       yield* Effect.tryPromise(() => fs.writeFile(options.output!, text, 'utf-8')).pipe(
-        Effect.catchAll((e) =>
+        Effect.catch((e) =>
           Effect.sync(() => {
             console.error('Write failed:', e instanceof Error ? e.message : e);
           }),
@@ -2284,7 +2324,7 @@ const main = Effect.gen(function* () {
     if (options.baseline) {
       const baselinePath = resolve(options.baseline);
       const baselineRaw = yield* Effect.tryPromise(() => fs.readFile(baselinePath, 'utf-8')).pipe(
-        Effect.catchAll(() =>
+        Effect.catch(() =>
           Effect.fail(new Error(`Failed to read baseline file: ${baselinePath}`)),
         ),
       );
@@ -2727,7 +2767,7 @@ const main = Effect.gen(function* () {
                     process.stdout.write(`\n\x1b[2m✓ Updated. Waiting for changes...\x1b[0m\n`);
                   }),
                 ),
-                Effect.catchAll((e) =>
+                Effect.catch((e) =>
                   Effect.sync(() => {
                     process.stdout.write(`\n\x1b[31m✗ Error: ${e instanceof Error ? e.message : String(e)}\x1b[0m\n`);
                     process.stdout.write(`\x1b[2mWaiting for changes...\x1b[0m\n`);
@@ -2749,7 +2789,7 @@ const main = Effect.gen(function* () {
 
   return Exit.succeed(undefined);
 }).pipe(
-  Effect.catchAll((error) =>
+  Effect.catch((error) =>
     Effect.gen(function* () {
       yield* Console.error(`Fatal error: ${String(error)}`);
       return Exit.fail(error);

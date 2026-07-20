@@ -29,14 +29,14 @@ import type {
 // =============================================================================
 
 export const ERROR_HANDLER_PATTERNS = [
-  '.catchAll',
+  '.catch',
   '.catchTag',
-  '.catchAllCause',
+  '.catchCause',
   '.catchIf',
   '.catchSome',
   '.catchSomeCause',
   '.catchSomeDefect',
-  '.catchAllDefect',
+  '.catchDefect',
   '.catchTags',
   '.orElse',
   '.orElseFail',

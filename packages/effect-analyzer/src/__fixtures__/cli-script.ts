@@ -34,7 +34,7 @@ export const cliMain = pipe(
     yield* Effect.log(`Created user ${user.id}`);
     return user;
   }),
-  Effect.catchAll((error) =>
+  Effect.catch((error) =>
     Effect.succeed({
       id: 'fallback',
       email: `error:${String(error)}`,

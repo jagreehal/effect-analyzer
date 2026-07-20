@@ -3,6 +3,38 @@ import { loadTsMorph } from './ts-morph-loader';
 import { buildProjectServiceMap } from './service-registry';
 
 describe('service-registry', () => {
+  it('maps Effect v4 Context.Service declarations to their service key', () => {
+    const { Project } = loadTsMorph();
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      skipAddingFilesFromTsConfig: true,
+    });
+    const filePath = '/virtual/v4-services.ts';
+    const sourceFile = project.createSourceFile(
+      filePath,
+      `
+      import { Context, Layer } from "effect";
+
+      export class Logger extends Context.Service<Logger, {
+        readonly log: (message: string) => void
+      }>()("AppLogger") {}
+
+      export const LoggerLive = Layer.succeed(Logger, {
+        log: (_message: string) => undefined
+      });
+      `,
+      { overwrite: true },
+    );
+
+    const serviceMap = buildProjectServiceMap(
+      new Map<string, readonly any[]>([[filePath, []]]),
+      new Map([[filePath, sourceFile]]),
+    );
+
+    expect(serviceMap.services.get('AppLogger')?.definition.methods).toContain('log');
+    expect(serviceMap.services.get('AppLogger')?.layerImplementations.map((layer) => layer.name)).toContain('LoggerLive');
+  });
+
   it('maps Layer.* providers to tag IDs even when class name differs from Context.Tag string', () => {
     const { Project } = loadTsMorph();
     const project = new Project({

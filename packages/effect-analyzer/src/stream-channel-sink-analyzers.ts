@@ -15,7 +15,6 @@
 import { Effect } from 'effect';
 import type {
   CallExpression,
-  Node,
   SourceFile,
   PropertyAccessExpression,
   ArrowFunction,
@@ -47,28 +46,11 @@ import {
 } from './callback-summary';
 import { channelOpCategory, sinkOpCategory } from './analysis-classifiers';
 import { getNumericLiteralFromNode } from './analysis-patterns';
-
-/**
- * Signature of `analyzeEffectExpression` — passed into the extracted analyzers
- * so they can recurse without re-importing the main module.
- */
-export type AnalyzeEffectExpressionFn = (
-  node: Node,
-  sourceFile: SourceFile,
-  filePath: string,
-  opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
-  stats: AnalysisStats,
-  serviceScope?: Map<string, string>,
-) => Effect.Effect<StaticFlowNode, AnalysisError>;
-
-export interface AnalyzerDeps {
-  readonly analyzeEffectExpression: AnalyzeEffectExpressionFn;
-}
+import type { AnalysisContext } from './analysis-context';
 
 /** Parse Stream.* call into StaticStreamNode (GAP 5). */
 export function analyzeStreamCall(
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -205,7 +187,7 @@ export function analyzeStreamCall(
       if (op.includes('decodeText') || op.includes('encodeText') || op.includes('splitLines')) return 'text';
       if (op.includes('merge') || op === 'concat' || op.includes('interleave') || op.includes('zip')) return 'merge';
       if (op.includes('buffer') || op.includes('debounce') || op.includes('throttle')) return 'backpressure';
-      if (op.includes('catchAll') || op.includes('catchTag') || op.includes('orElse') || op.includes('orDie') || op.includes('retry')) return 'error';
+      if (op.includes('catch') || op.includes('catchTag') || op.includes('orElse') || op.includes('orDie') || op.includes('retry')) return 'error';
       if (op.includes('filter') || op.includes('take') || op.includes('drop') || op.includes('head') || op === 'first' || op === 'last') return 'filter';
       if (op.includes('acquireRelease') || op.includes('scoped') || op.includes('ensuring') || op.includes('onDone') || op.includes('onError')) return 'resource';
       if (op.includes('provide') || op.includes('withSpan') || op.includes('annotate')) return 'context';
@@ -319,7 +301,7 @@ export function analyzeStreamCall(
 
 /** Parse Channel.* call into StaticChannelNode (improve.md §8). */
 export function analyzeChannelCall(
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -358,7 +340,7 @@ export function analyzeChannelCall(
 
 /** Parse Sink.* call into StaticSinkNode (improve.md §8). */
 export function analyzeSinkCall(
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,

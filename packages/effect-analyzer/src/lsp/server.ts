@@ -6,6 +6,7 @@
  *
  * Requires: vscode-languageserver, vscode-languageserver-textdocument
  */
+import '../register-node-ts-morph';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
@@ -124,7 +125,7 @@ async function getPrograms(
   if (cached && cached.version === version) return cached.programs;
   const programs = await Effect.runPromise(
     analyzeEffectSource(text, uri).pipe(
-      Effect.catchAll(() => Effect.succeed([] as StaticEffectIR[])),
+      Effect.catch(() => Effect.succeed([] as StaticEffectIR[])),
     ),
   );
   if (version !== undefined) irCache.set(uri, { version, programs });
@@ -684,7 +685,7 @@ const EFFECT_COMPLETIONS = [
   { label: 'Effect.flatMap', desc: 'Sequential composition', insertText: 'Effect.flatMap' },
   { label: 'Effect.map', desc: 'Transform success', insertText: 'Effect.map' },
   { label: 'Effect.tap', desc: 'Side effect, keep value', insertText: 'Effect.tap' },
-  { label: 'Effect.catchAll', desc: 'Handle all errors', insertText: 'Effect.catchAll' },
+  { label: 'Effect.catch', desc: 'Handle all errors', insertText: 'Effect.catch' },
   { label: 'Effect.catchTag', desc: 'Handle tagged error', insertText: 'Effect.catchTag' },
   { label: 'Effect.provide', desc: 'Provide service', insertText: 'Effect.provide' },
   { label: 'Effect.provideService', desc: 'Provide single service', insertText: 'Effect.provideService' },
@@ -980,10 +981,9 @@ const PARSERESULT_COMPLETIONS = [
   { label: 'ParseResult.failure', desc: 'Failure result', insertText: 'ParseResult.failure' },
 ];
 
-// @effect/platform - HttpClient, HttpServer, HttpApp, FileSystem, Worker, CommandExecutor
+// Effect v4 unstable platform modules: HTTP, filesystem, workers, and processes.
 const PLATFORM_HTTP_CLIENT_COMPLETIONS = [
-  { label: 'HttpClient.request', desc: 'HTTP request', insertText: 'HttpClient.request' },
-  { label: 'HttpClient.fetch', desc: 'Fetch URL', insertText: 'HttpClient.fetch' },
+  { label: 'HttpClient.execute', desc: 'Execute request', insertText: 'HttpClient.execute' },
   { label: 'HttpClient.get', desc: 'GET request', insertText: 'HttpClient.get' },
   { label: 'HttpClient.post', desc: 'POST request', insertText: 'HttpClient.post' },
   { label: 'HttpClient.put', desc: 'PUT request', insertText: 'HttpClient.put' },
@@ -1028,7 +1028,7 @@ const PLATFORM_COMMAND_EXECUTOR_COMPLETIONS = [
 const SIGNATURES: { label: string; docs?: string; params: { label: string; docs?: string }[] }[] = [
   { label: 'Effect.gen(generator)', docs: 'Generator-based effect composition', params: [{ label: 'generator', docs: 'Function* that yields effects' }] },
   { label: 'Effect.all(effects, options?)', docs: 'Run effects in parallel or sequential', params: [{ label: 'effects', docs: 'Tuple or array of effects' }, { label: 'options', docs: '{ concurrency?, batching?, discard? }' }] },
-  { label: 'Effect.pipe(effect, ...transforms)', docs: 'Pipe effect through transformations', params: [{ label: 'effect' }, { label: '...transforms', docs: 'flatMap, map, catchAll, etc.' }] },
+  { label: 'Effect.pipe(effect, ...transforms)', docs: 'Pipe effect through transformations', params: [{ label: 'effect' }, { label: '...transforms', docs: 'flatMap, map, catch, etc.' }] },
   { label: 'Effect.tryPromise(fn)', docs: 'Wrap Promise-returning function', params: [{ label: 'fn', docs: '() => Promise<A>' }] },
   { label: 'Effect.try(fn)', docs: 'Wrap sync function that may throw', params: [{ label: 'fn', docs: '() => A' }] },
   { label: 'Layer.merge(layer1, layer2)', docs: 'Merge two layers', params: [{ label: 'layer1' }, { label: 'layer2' }] },

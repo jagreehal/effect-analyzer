@@ -64,11 +64,11 @@ Migration Opportunities Found:
     Snippet: setTimeout(() => { console.log(`flushed analytics for ${user...
 
   before.ts:25:30  fetch()
-    →  HttpClient.request or @effect/platform HttpClient
+    →  effect/unstable/http HttpClient
     Snippet: fetch(`${this.baseUrl}/users/${id}`)...
 
   before.ts:20:1  class UserService (manual DI)
-    →  Context.Tag<UserService>() + Layer.effect or Layer.succeed
+    →  Context.Service<UserService, Shape>()('UserService') + Layer.effect or Layer.succeed
     Snippet: export class UserService { private readonly baseUrl = proces...
 
   before.ts:27:9  throw
@@ -94,7 +94,7 @@ Work down the list. Each reported pattern maps to a well-known Effect idiom:
 
 <Steps>
 
-1. **Class-based DI → `Context.Tag` + `Layer`.** The two `*Service` classes become services with explicit, type-checked dependencies.
+1. **Class-based DI → `Context.Service` + `Layer`.** The two `*Service` classes become services with explicit, type-checked dependencies.
 
 2. **`process.env` → `Config`.** The base URL becomes declared, typed configuration: `Config.string('API_URL')`.
 
@@ -112,13 +112,13 @@ The result is `after.ts` — see the [full file](https://github.com/jagreehal/ef
 
 ```ts
 // after.ts (excerpt)
-export class UserService extends Context.Tag('UserService')<
+export class UserService extends Context.Service<
   UserService,
   {
     readonly getUser: (id: string) => Effect.Effect<User, UserFetchError>;
     readonly getOrders: (userId: string) => Effect.Effect<readonly Order[], UserFetchError>;
   }
->() {}
+>()('UserService') {}
 
 const baseUrl = Config.string('API_URL').pipe(
   Config.withDefault('https://api.example.com'),

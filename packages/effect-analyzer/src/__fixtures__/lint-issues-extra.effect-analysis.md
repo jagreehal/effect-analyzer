@@ -19,9 +19,9 @@ flowchart TB
   end_node((End))
 
   n2["v <- tryPromise (side-effect)"]
-  n3["catchAll (error-handler)"]
+  n3["catch (error-handler)"]
   n4["Effect"]
-  err_handler_5["catchAll"]
+  err_handler_5["catch"]
   n6["Effect.void"]
 
   %% Edges
@@ -92,9 +92,9 @@ flowchart TB
   end_node((End))
 
   n2["v <- tryPromise (side-effect)"]
-  n3["catchAll (error-handler)"]
+  n3["catch (error-handler)"]
   n4["Effect"]
-  err_handler_5["catchAll"]
+  err_handler_5["catch"]
   n6["gen"]
 
   %% Edges

@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import '../src/register-node-ts-morph';
 import { join, resolve } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { runCoverageAudit } from '../src/project-analyzer';

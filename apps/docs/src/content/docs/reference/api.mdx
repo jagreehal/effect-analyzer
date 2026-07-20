@@ -7,20 +7,53 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-All exports are available from the `effect-analyzer` package. The library is designed for integration into custom tools, CI pipelines, and editors.
+Effect v4 is the only supported Effect release. The small root interface covers
+the canonical analysis/fidelity/trace workflow; expert capabilities live under
+`effect-analyzer/analysis`, `effect-analyzer/diagram`,
+`effect-analyzer/rules`, and `effect-analyzer/migration`.
 
 ```ts
-import { analyze, renderMermaid, calculateComplexity } from "effect-analyzer"
+import { analyze, renderMermaid, calculateComplexity } from "effect-analyzer/diagram"
 ```
 
+## Package Entry Points
+
+| Import | Use it for |
+|---|---|
+| `effect-analyzer` | Analysis sessions, fidelity checks, trace adapters, runtime overlays |
+| `effect-analyzer/analysis` | Full static analysis, project audits, IR traversal, paths, and data flow |
+| `effect-analyzer/diagram` | Mermaid, HTML, JSON, summaries, and diagram quality |
+| `effect-analyzer/rules` | Source linting, strict diagnostics, and rule metadata |
+| `effect-analyzer/migration` | Migration findings and semantic diffs |
+
+The v4 release removes expert APIs from the root import. Move each old root import to the matching entry point above.
+
 ## Analysis
+
+### `analysis`
+
+The root package exports a configured Node analysis session. It initializes `ts-morph` before you analyze a file, source string, or project.
+
+```ts
+import { analysis } from "effect-analyzer"
+import { Effect } from "effect"
+
+const one = await Effect.runPromise(analysis.file("./src/program.ts").single())
+const fromSource = await Effect.runPromise(analysis.source(source).all())
+const project = await Effect.runPromise(analysis.project("./src"))
+const audit = await Effect.runPromise(analysis.audit("./src"))
+
+analysis.clearCaches()
+```
+
+Call `createAnalysisSession()` when tests or tools need separate session objects. The sessions share the analyzer's project cache until you call `clearCaches()`.
 
 ### `analyze(path)`
 
 The primary entry point. Returns a fluent API for extracting programs from a file.
 
 ```ts
-import { analyze } from "effect-analyzer"
+import { analyze } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 // Get a single program (throws if file has zero or multiple)
@@ -42,7 +75,7 @@ Lower-level file analysis. Returns `StaticEffectIR[]` - one IR per detected prog
 Analyze a TypeScript source string directly, without reading from disk:
 
 ```ts
-import { analyzeEffectSource } from "effect-analyzer"
+import { analyzeEffectSource } from "effect-analyzer/analysis"
 
 const irs = analyzeEffectSource(`
   import { Effect } from 'effect';
@@ -55,7 +88,7 @@ const irs = analyzeEffectSource(`
 Analyze a TypeScript source string using the fluent API:
 
 ```ts
-import { analyze } from "effect-analyzer"
+import { analyze } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze.source(`
@@ -83,6 +116,59 @@ Analyze all TypeScript files in a directory. Returns a `ProjectAnalysisResult` w
 
 Run a coverage audit across a directory. Returns a `CoverageAuditResult`.
 
+### Deep IR traversal
+
+The analysis entry point exports one traversal vocabulary for the full IR tree. Traversal functions accept `ir.root.children`; the index accepts the full IR.
+
+| Function | Result |
+|---|---|
+| `childrenOf(node)` | Direct children for any supported IR node |
+| `visitIR(roots, visitor)` | Depth-first visit with parent and ancestor data |
+| `flattenIR(roots)` | All nodes in depth-first order |
+| `indexIR(ir)` | IDs, parents, runtime span paths, and span-path lookups |
+| `runtimeSpanNames(node)` | Literal span names attached to one node |
+
+The root package exports `findStaticNodesForSpanPath(ir, path)` for runtime-path lookups.
+
+```ts
+import { indexIR } from "effect-analyzer/analysis"
+
+const index = indexIR(ir)
+const parent = index.parentById.get(nodeId)
+const spanPath = index.spanPathById.get(nodeId)
+```
+
+## Diagram Fidelity and Runtime Traces
+
+`computeDiagramFidelity(ir)` reports whether the IR can identify each diagram node without ambiguity. It reports unknown nodes, opaque nodes, computed span names, and duplicate span paths.
+
+```ts
+import {
+  computeDiagramFidelity,
+  formatDiagramFidelity,
+} from "effect-analyzer"
+
+const report = computeDiagramFidelity(ir)
+console.log(formatDiagramFidelity(report))
+```
+
+Use `traceFromEffectSpans()` for Effect v4 spans or `traceFromOpenTelemetry()` for exported OpenTelemetry spans. `renderMermaidWithRuntimeTrace()` colors matched nodes by runtime status and returns unmatched or ambiguous span IDs.
+
+```ts
+import {
+  renderMermaidWithRuntimeTrace,
+  traceFromOpenTelemetry,
+} from "effect-analyzer"
+
+const trace = traceFromOpenTelemetry(readableSpans)
+const result = renderMermaidWithRuntimeTrace(ir, trace)
+
+console.log(result.mermaid)
+console.log(result.unmatchedSpanIds)
+```
+
+Read [Diagram Fidelity](/effect-analyzer/reference/diagram-fidelity/) for span naming rules and CI usage.
+
 ## Rendering
 
 ### Mermaid Diagrams
@@ -104,7 +190,7 @@ Run a coverage audit across a directory. Returns a `CoverageAuditResult`.
 All Mermaid renderers accept a `MermaidOptions` object:
 
 ```ts
-import { renderMermaid } from "effect-analyzer"
+import { renderMermaid } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
 const diagram = await Effect.runPromise(renderMermaid(ir, {
@@ -131,7 +217,7 @@ const diagram = await Effect.runPromise(renderMermaid(ir, {
 ### Interactive HTML
 
 ```ts
-import { renderInteractiveHTML } from "effect-analyzer"
+import { renderInteractiveHTML } from "effect-analyzer/diagram"
 
 const html = renderInteractiveHTML(ir, {
   title: "Transfer Analysis",
@@ -157,7 +243,7 @@ See [Interactive HTML](/effect-analyzer/reference/html-viewer/) for full details
 Returns `ComplexityMetrics` with 6 metrics:
 
 ```ts
-import { calculateComplexity } from "effect-analyzer"
+import { calculateComplexity } from "effect-analyzer/analysis"
 
 const metrics = calculateComplexity(ir)
 // { cyclomaticComplexity, cognitiveComplexity, pathCount, maxDepth, maxParallelBreadth, decisionPoints }
@@ -182,7 +268,7 @@ The default complexity thresholds object.
 Enumerate execution paths. Returns `EffectPath[]`.
 
 ```ts
-import { generatePaths } from "effect-analyzer"
+import { generatePaths } from "effect-analyzer/analysis"
 
 const paths = generatePaths(ir, { maxPaths: 100, expandLoops: true })
 ```
@@ -206,7 +292,7 @@ Filter paths by step names, error conditions, or loop presence.
 Generate test cases from paths. Returns a `TestMatrix`.
 
 ```ts
-import { generateTestMatrix } from "effect-analyzer"
+import { generateTestMatrix } from "effect-analyzer/analysis"
 
 const matrix = generateTestMatrix(paths, { testNamePrefix: "should" })
 ```
@@ -230,7 +316,7 @@ Render the test matrix as a markdown checklist.
 Build a data flow graph tracking value producers and consumers.
 
 ```ts
-import { buildDataFlowGraph, getProducers, getConsumers } from "effect-analyzer"
+import { buildDataFlowGraph, getProducers, getConsumers } from "effect-analyzer/analysis"
 
 const graph = buildDataFlowGraph(ir)
 const producers = getProducers(graph, "AccountService")
@@ -378,7 +464,7 @@ Complexity metrics for the composition graph.
 Validate an IR against strict diagnostic rules.
 
 ```ts
-import { validateStrict } from "effect-analyzer"
+import { validateStrict } from "effect-analyzer/rules"
 
 const result = validateStrict(ir, { warningsAsErrors: true })
 ```
@@ -434,7 +520,7 @@ Select the full set of auto-mode formats for a program.
 Run lint rules against an Effect program IR.
 
 ```ts
-import { lintEffectProgram, DEFAULT_LINT_RULES } from "effect-analyzer"
+import { lintEffectProgram, DEFAULT_LINT_RULES } from "effect-analyzer/rules"
 
 const result = lintEffectProgram(ir, DEFAULT_LINT_RULES)
 ```
@@ -455,7 +541,7 @@ Format lint issues as a human-readable report.
 | `missingErrorHandlerRule` | Errors produced but no handler present |
 | `deadCodeRule` | Unreachable code after terminal effects |
 | `complexLayerRule` | Layer with too many dependencies |
-| `catchAllVsCatchTagRule` | `catchAll` used where `catchTag` would be more precise |
+| `catchVsCatchTagRule` | `catch` used where `catchTag` would be more precise |
 
 ## Type Extraction
 
@@ -503,7 +589,7 @@ Build a report of the worst-quality diagrams.
 | `analyzeFiberLeaks(ir)` | Detect potentially leaked fibers |
 | `analyzeGenYields(ir)` | Detailed analysis of `yield*` bindings in generators |
 | `analyzeMatch(ir)` | Analyze `Match` pattern sites and arms |
-| `analyzePlatformUsage(ir)` | Detect `@effect/platform` usage |
+| `analyzePlatformUsage(ir)` | Detect Effect v4 platform-module usage |
 | `analyzeSqlPatterns(ir)` | Detect `@effect/sql` patterns |
 | `analyzeRpcPatterns(ir)` | Detect `@effect/rpc` patterns |
 | `analyzeRequestBatching(ir)` | Detect request batching patterns |

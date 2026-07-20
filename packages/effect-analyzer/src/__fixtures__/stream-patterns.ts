@@ -101,7 +101,7 @@ export const errorHandledStreamProgram = Effect.gen(function* () {
         ? Effect.fail(new Error('Three is not allowed'))
         : Effect.succeed(n * 2)
     ),
-    Stream.catchAll(() => Stream.fromIterable([0]))
+    Stream.catch(() => Stream.fromIterable([0]))
   );
   
   const result = yield* Stream.runCollect(stream);

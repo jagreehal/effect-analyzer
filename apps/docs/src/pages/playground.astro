@@ -27,7 +27,7 @@ export const sendMoney = (amount: number) =>
     yield* notifyLedger(reservation.reservationId);
     return reservation;
   }).pipe(
-    Effect.catchAll((error) =>
+    Effect.catch((error) =>
       Effect.succeed({ ok: false, reason: error.message }),
     ),
   );

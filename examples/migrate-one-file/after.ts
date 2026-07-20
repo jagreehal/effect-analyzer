@@ -1,7 +1,7 @@
 // The same service, migrated to Effect — one pattern at a time, in the order
 // the migration assistant reported them.
 //
-//   class (manual DI)  -> Context.Tag + Layer
+//   class (manual DI)  -> Context.Service + Layer
 //   process.env        -> Config
 //   try/catch + throw  -> typed error channel (Data.TaggedError + Effect.fail)
 //   fetch()            -> HttpClient
@@ -11,8 +11,8 @@
 // This is the destination. The tutorial walks through getting here; the point
 // of the analyzer is that it tells you *exactly* what to change and where.
 
-import { HttpClient, HttpClientResponse } from '@effect/platform';
 import { Config, Context, Data, Duration, Effect, Layer, Schema } from 'effect';
+import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
 
 const User = Schema.Struct({
   id: Schema.String,
@@ -39,14 +39,14 @@ const baseUrl = Config.string('API_URL').pipe(
   Config.withDefault('https://api.example.com'),
 );
 
-// class UserService (manual DI) -> Context.Tag + Layer.
-export class UserService extends Context.Tag('UserService')<
+// class UserService (manual DI) -> Context.Service + Layer.
+export class UserService extends Context.Service<
   UserService,
   {
     readonly getUser: (id: string) => Effect.Effect<User, UserFetchError>;
     readonly getOrders: (userId: string) => Effect.Effect<readonly Order[], UserFetchError>;
   }
->() {}
+>()('UserService') {}
 
 export const UserServiceLive = Layer.effect(
   UserService,
@@ -71,11 +71,11 @@ export const UserServiceLive = Layer.effect(
   }),
 );
 
-// class ReportService (manual DI) -> Context.Tag + Layer.
-export class ReportService extends Context.Tag('ReportService')<
+// class ReportService (manual DI) -> Context.Service + Layer.
+export class ReportService extends Context.Service<
   ReportService,
   { readonly buildSummary: (userId: string) => Effect.Effect<string, UserFetchError> }
->() {}
+>()('ReportService') {}
 
 export const ReportServiceLive = Layer.effect(
   ReportService,
@@ -93,9 +93,9 @@ export const ReportServiceLive = Layer.effect(
         const total = orders.reduce((sum, o) => sum + o.total, 0);
 
         // setTimeout side effect -> a sleep, forked so it doesn't block the result.
-        yield* Effect.fork(
+        yield* Effect.forkChild(
           Effect.sleep(Duration.seconds(1)).pipe(
-            Effect.zipRight(Effect.log(`flushed analytics for ${user.id}`)),
+            Effect.andThen(Effect.log(`flushed analytics for ${user.id}`)),
           ),
         );
 

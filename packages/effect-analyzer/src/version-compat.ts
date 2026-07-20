@@ -1,7 +1,7 @@
 /**
  * Effect Version Compatibility (GAP 25)
  *
- * Reads package.json for Effect version and flags deprecated API usage.
+ * Reads package.json and verifies the Effect v4-only support contract.
  */
 
 import { readFile } from 'fs/promises';
@@ -69,9 +69,11 @@ export async function checkVersionCompat(
   const deprecationWarnings: string[] = [];
   let suggestion: string | null = null;
   if (effectVersion) {
-    if (effectVersion.major < 3) {
-      deprecationWarnings.push('Effect v2 is deprecated; upgrade to Effect v3');
-      suggestion = 'pnpm add effect@^3';
+    if (effectVersion.major !== 4) {
+      deprecationWarnings.push(
+        `Effect v${String(effectVersion.major)} is unsupported; effect-analyzer requires Effect v4`,
+      );
+      suggestion = 'pnpm add effect@^4.0.0';
     }
   } else {
     suggestion = 'Add "effect" to dependencies to enable version checks';

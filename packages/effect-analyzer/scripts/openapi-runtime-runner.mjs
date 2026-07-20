@@ -3,10 +3,10 @@
  * Runtime OpenAPI generator - runs OpenApi.fromApi on a user's HttpApi.
  * Usage: npx tsx openapi-runtime-runner.mjs <entrypoint> [exportName] [--output file.json]
  *
- * Requires: @effect/platform, tsx (for .ts files)
+ * Requires: Effect v4, tsx (for .ts files)
  * Run with: npx tsx openapi-runtime-runner.mjs ./src/api.ts TodoApi
  *
- * Must be run with cwd = project root (so @effect/platform resolves from project's node_modules).
+ * Must be run with cwd = project root (so Effect v4 resolves from the project's node_modules).
  */
 
 import { resolve, join } from 'path';
@@ -30,11 +30,11 @@ async function main() {
   let OpenApi;
   try {
     const require = createRequire(join(process.cwd(), 'package.json'));
-    const platform = require('@effect/platform');
-    OpenApi = platform.OpenApi;
+    const httpApi = require('effect/unstable/httpapi');
+    OpenApi = httpApi.OpenApi;
   } catch (e) {
-    console.error('Error: @effect/platform is required for runtime OpenAPI generation.');
-    console.error('Install it: pnpm add @effect/platform');
+    console.error('Error: Effect v4 is required for runtime OpenAPI generation.');
+    console.error('Install it: pnpm add effect@^4.0.0-beta.99');
     if (e?.message) console.error('Details:', e.message);
     process.exit(1);
   }

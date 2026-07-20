@@ -4,11 +4,11 @@
 
 import { Effect, Schedule } from 'effect';
 
-// Error handling with catchAll
-export const catchAllProgram = Effect.gen(function* () {
+// Error handling with catch
+export const catchProgram = Effect.gen(function* () {
   yield* Effect.log('Starting');
   return yield* Effect.fail('error');
-}).pipe(Effect.catchAll((error) => Effect.succeed(`Recovered from: ${error}`)));
+}).pipe(Effect.catch((error) => Effect.succeed(`Recovered from: ${error}`)));
 
 // Error handling with catchTag
 export const catchTagProgram = Effect.gen(function* () {
@@ -34,4 +34,4 @@ export const orElseProgram = Effect.fail('first').pipe(
 // OrDie (fail on error)
 export const orDieProgram = Effect.succeed(42).pipe(Effect.orDie);
 
-export const main = catchAllProgram;
+export const main = catchProgram;

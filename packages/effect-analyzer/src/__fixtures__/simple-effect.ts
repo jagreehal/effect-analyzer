@@ -20,7 +20,7 @@ export const programWithErrorHandling = Effect.gen(function* () {
   });
 
   return result;
-}).pipe(Effect.catchAll((_error) => Effect.succeed(0)));
+}).pipe(Effect.catch((_error) => Effect.succeed(0)));
 
 // Exported for analysis
 export const main = simpleProgram;

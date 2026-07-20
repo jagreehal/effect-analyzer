@@ -24,9 +24,9 @@ flowchart TB
   n4["map (transform)"]
   n5["flatMap (transform)"]
   n6["tap (transform)"]
-  n7["catchAll (error-handler)"]
+  n7["catch (error-handler)"]
   n8["Effect"]
-  err_handler_9["catchAll"]
+  err_handler_9["catch"]
   n10["succeed"]
   n11["map (transform)"]
 
