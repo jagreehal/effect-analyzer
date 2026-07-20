@@ -16,19 +16,19 @@ Create a file called `transfer.ts` with a typical Effect workflow:
 ```ts
 import { Effect, Context } from "effect"
 
-class AccountService extends Context.Tag("AccountService")<
+class AccountService extends Context.Service<
   AccountService,
   {
     readonly getBalance: (id: string) => Effect.Effect<number, AccountNotFound>
     readonly debit: (id: string, amount: number) => Effect.Effect<void, InsufficientFunds>
     readonly credit: (id: string, amount: number) => Effect.Effect<void, AccountNotFound>
   }
->() {}
+>()("AccountService") {}
 
-class AuditLog extends Context.Tag("AuditLog")<
+class AuditLog extends Context.Service<
   AuditLog,
   { readonly record: (event: string) => Effect.Effect<void> }
->() {}
+>()("AuditLog") {}
 
 class AccountNotFound {
   readonly _tag = "AccountNotFound"
@@ -132,10 +132,10 @@ Watch mode re-runs the analysis on every save, printing fresh output to stdout. 
 
 ## Using the Library API
 
-For programmatic access, import the analyzer directly:
+Import analysis and rendering functions from their task-specific entry points:
 
 ```ts
-import { analyze, renderMermaid, calculateComplexity } from "effect-analyzer"
+import { analyze, renderMermaid, calculateComplexity } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./transfer.ts").single())
@@ -148,9 +148,32 @@ const metrics = calculateComplexity(ir)
 console.log(metrics.cyclomaticComplexity) // e.g. 3
 ```
 
+Use the root interface when you need a reusable analysis session or want to compare a static diagram with runtime spans:
+
+```ts
+import { analysis, computeDiagramFidelity } from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(analysis.file("./transfer.ts").single())
+const fidelity = computeDiagramFidelity(ir)
+
+console.log(fidelity.exact, fidelity.score)
+```
+
+## Checking Diagram Fidelity in CI
+
+The fidelity check fails when the analyzer finds an unknown or opaque node, a computed span name, or two nodes with the same span path:
+
+```bash
+npx effect-analyze ./transfer.ts --assert-diagram-fidelity
+```
+
+Use literal, distinct `Effect.withSpan` names for code that you plan to match against runtime traces. See [Diagram Fidelity](/effect-analyzer/reference/diagram-fidelity/) for the report fields and trace adapters.
+
 ## What to Explore Next
 
 - [Diagram Overview](/effect-analyzer/diagrams/overview/) - understand auto-detection and all diagram types
 - [Complexity Metrics](/effect-analyzer/analysis/complexity/) - deep dive into the 6 complexity metrics
 - [Coverage Audit](/effect-analyzer/project/coverage-audit/) - scan your entire project
 - [CLI Reference](/effect-analyzer/reference/cli/) - every flag and option
+- [Diagram Fidelity](/effect-analyzer/reference/diagram-fidelity/) - check static coverage and overlay runtime spans

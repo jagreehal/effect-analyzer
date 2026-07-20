@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { analyze } from './dist/index.js';
+import { analyze } from './dist/analysis.js';
 
 const src1 = `
 import { Layer, Context } from "effect";

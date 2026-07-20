@@ -158,7 +158,7 @@ class ClockLike {
   currentTimeMillis = Effect.sync(() => Date.now())
 
   sleep() {
-    return Effect.async<void>(() => undefined)
+    return Effect.callback<void>(() => undefined)
   }
 }
 `;

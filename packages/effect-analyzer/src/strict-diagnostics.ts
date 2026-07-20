@@ -172,8 +172,8 @@ function validateNodes(
         diagnostics.push({
           rule: 'effect-without-handler',
           severity: 'warning',
-          message: `Effect "${eff.callee}" can fail with "${errorType}" but has no error handler (catchAll/catchTag/orElse) on this path`,
-          fix: 'Wrap in .pipe(Effect.catchAll(...)) or handle errors before this point',
+          message: `Effect "${eff.callee}" can fail with "${errorType}" but has no error handler (catch/catchTag/orElse) on this path`,
+          fix: 'Wrap in .pipe(Effect.catch(...)) or handle errors before this point',
           location: eff.location,
           nodeId: eff.id,
         });

@@ -122,7 +122,7 @@ const findImmediateEffectCallContext = (
         txt === 'Effect.try' ||
         txt === 'Effect.tryPromise' ||
         txt === 'Effect.promise' ||
-        txt === 'Effect.async' ||
+        txt === 'Effect.callback' ||
         txt === 'Effect.asyncEffect'
       ) {
         return { calleeText: txt, call };
@@ -268,11 +268,11 @@ const checkRawSideEffectInGen = (
     if (isInsideEffectSyncOrTry(ne)) continue;
     issues.push({
       rule: 'raw-side-effect-in-gen',
-      message: 'Bare new Promise(...) inside Effect.gen body — should use Effect.promise/Effect.async.',
+      message: 'Bare new Promise(...) inside Effect.gen body — should use Effect.promise/Effect.callback.',
       severity: 'warning',
       location: makeLocation(ne, ctx.filePath),
       suggestion:
-        'Use Effect.promise(() => ...) or Effect.async(...) so interruption/error handling remain in Effect.',
+        'Use Effect.promise(() => ...) or Effect.callback(...) so interruption/error handling remain in Effect.',
     });
   }
   // Be aware that RAW_SIDE_EFFECT_ACCESSES is reserved for future patterns.
@@ -398,7 +398,7 @@ const checkRunPromiseThenChain = (
       severity: 'info',
       location: makeLocation(call, ctx.filePath),
       suggestion:
-        'Use Effect.map / Effect.flatMap / Effect.catchAll BEFORE runPromise. If you must escape, do it at the entry point.',
+        'Use Effect.map / Effect.flatMap / Effect.catch BEFORE runPromise. If you must escape, do it at the entry point.',
     });
   }
   return issues;
@@ -422,7 +422,7 @@ const checkRunSyncOnAsync = (
     /Effect\.sleep\b/.test(text);
 
   // Build a set of file-level identifiers that look async-tainted: variables initialised
-  // with Effect.promise / Effect.tryPromise / Effect.async* / Effect.sleep.
+  // with Effect.promise / Effect.tryPromise / Effect.callback* / Effect.sleep.
   const asyncIdents = new Set<string>();
   for (const vd of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
     const init = vd.getInitializer();
@@ -865,14 +865,14 @@ const checkForEachWithoutConcurrency = (
 
 /**
  * A "catch handler" is identity when it just re-fails with the same value it
- * received, e.g. `Effect.catchAll((e) => Effect.fail(e))`. These add noise
+ * received, e.g. `Effect.catch((e) => Effect.fail(e))`. These add noise
  * without changing semantics and are usually leftover from refactors.
  */
 
 const CATCH_RECEIVERS: Record<string, 'Effect.fail' | 'Effect.failCause' | 'Effect.die'> = {
-  'Effect.catchAll': 'Effect.fail',
-  'Effect.catchAllCause': 'Effect.failCause',
-  'Effect.catchAllDefect': 'Effect.die',
+  'Effect.catch': 'Effect.fail',
+  'Effect.catchCause': 'Effect.failCause',
+  'Effect.catchDefect': 'Effect.die',
   'Effect.catchTag': 'Effect.fail',
 };
 
@@ -1223,7 +1223,7 @@ const EFFECT_CONSTRUCTOR_NAMES = new Set<string>([
   'Effect.try',
   'Effect.promise',
   'Effect.tryPromise',
-  'Effect.async',
+  'Effect.callback',
   'Effect.asyncEffect',
   'Effect.flatMap',
   'Effect.map',

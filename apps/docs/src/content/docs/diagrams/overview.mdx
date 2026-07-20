@@ -38,14 +38,14 @@ When hard rules do not apply, the analyzer scores your program on several dimens
 
 - **Complexity** - low cyclomatic complexity favors railway; high complexity favors flowchart
 - **Error density** - many error types or handlers trigger the error flow view
-- **Service count** - programs with several `Context.Tag` dependencies get a service map
+- **Service count** - programs with several `Context.Service` dependencies get a service map
 - **Retry/timeout presence** - retry or timeout nodes trigger the retry timeline view
 - **Layer composition** - programs with `Layer.provide` or `Layer.merge` get a layer graph
 
 The `inferBestDiagramType` function implements the baseline selection:
 
 ```ts
-import { inferBestDiagramType } from "effect-analyzer"
+import { inferBestDiagramType } from "effect-analyzer/diagram"
 
 const type = inferBestDiagramType(ir)
 // Returns 'railway' or 'mermaid'

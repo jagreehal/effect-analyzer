@@ -121,7 +121,7 @@ export const missingErrorHandlerRule: LintRule = {
         
         if (canFail && !currentHasHandler) {
           // Check if it's a common error-throwing operation
-          const errorProneOps = ['Effect.try', 'Effect.tryPromise', 'Effect.fail', 'Effect.catchAll'];
+          const errorProneOps = ['Effect.try', 'Effect.tryPromise', 'Effect.fail', 'Effect.catch'];
           const isErrorProne = errorProneOps.some(op => node.callee.includes(op));
           
           if (isErrorProne || node.typeSignature.errorType !== 'unknown') {
@@ -131,7 +131,7 @@ export const missingErrorHandlerRule: LintRule = {
               severity: 'error',
               location: node.location,
               nodeId: node.id,
-              suggestion: 'Add .pipe(Effect.catchAll(...)) or handle the error appropriately',
+              suggestion: 'Add .pipe(Effect.catch(...)) or handle the error appropriately',
             });
           }
         }
@@ -303,23 +303,23 @@ export const complexLayerRule: LintRule = {
 };
 
 /**
- * Detect catchAll when catchTag would be more appropriate
+ * Detect catch when catchTag would be more appropriate
  */
-export const catchAllVsCatchTagRule: LintRule = {
-  name: 'catchAll-vs-catchTag',
-  description: 'Suggests using catchTag instead of catchAll when error type is tagged',
+export const catchVsCatchTagRule: LintRule = {
+  name: 'catch-vs-catchTag',
+  description: 'Suggests using catchTag instead of catch when error type is tagged',
   severity: 'info',
   check: (ir) => {
     const issues: LintIssue[] = [];
     
     const checkNode = (node: StaticFlowNode) => {
       if (isStaticErrorHandlerNode(node)) {
-        if (node.handlerType === 'catchAll') {
+        if (node.handlerType === 'catch') {
           // Check if source has a tagged error type
           // This is a heuristic - we'd need type info to be certain
           issues.push({
-            rule: 'catchAll-vs-catchTag',
-            message: 'Using catchAll - consider catchTag if error type has _tag discriminator',
+            rule: 'catch-vs-catchTag',
+            message: 'Using catch - consider catchTag if error type has _tag discriminator',
             severity: 'info',
             location: node.location,
             nodeId: node.id,
@@ -450,7 +450,7 @@ export const orDieWarningRule: LintRule = {
           severity: 'info',
           location: node.location,
           nodeId: node.id,
-          suggestion: 'Reserve orDie for truly unrecoverable cases; handle recoverable errors with catchTag/catchAll',
+          suggestion: 'Reserve orDie for truly unrecoverable cases; handle recoverable errors with catchTag/catch',
         });
       }
       const childrenOpt = getStaticChildren(node);
@@ -498,7 +498,7 @@ export const DEFAULT_LINT_RULES: readonly LintRule[] = [
   missingErrorHandlerRule,
   deadCodeRule,
   complexLayerRule,
-  catchAllVsCatchTagRule,
+  catchVsCatchTagRule,
   errorTypeTooWideRule,
   unboundedParallelismRule,
   redundantPipeRule,

@@ -18,7 +18,7 @@ npx effect-analyze ./src/transfer.ts --format mermaid-errors
 The diagram shows:
 
 - **Error producers** - steps that can fail, annotated with their error types
-- **Error handlers** - `catchAll`, `catchTag`, `catchTags` nodes that intercept errors
+- **Error handlers** - `catch`, `catchTag`, `catchTags` nodes that intercept errors
 - **Unhandled errors** - errors that propagate out of the program without being caught
 
 For a program with `AccountNotFound` and `InsufficientFunds` errors:
@@ -45,7 +45,7 @@ graph TB
 Auto mode includes the error flow view when your program has:
 
 - Multiple distinct error types
-- One or more error handler nodes (`catchAll`, `catchTag`, `catchTags`)
+- One or more error handler nodes (`catch`, `catchTag`, `catchTags`)
 - A mix of handled and unhandled errors
 
 ## Cause Diagrams
@@ -63,8 +63,8 @@ This visualizes `Fail`, `Die`, `Interrupt`, and composite causes (`Sequential`, 
 Generate error flow diagrams through the library API:
 
 ```ts
-import { analyze } from "effect-analyzer"
-import { renderErrorsMermaid } from "effect-analyzer"
+import { analyze } from "effect-analyzer/analysis"
+import { renderErrorsMermaid } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())

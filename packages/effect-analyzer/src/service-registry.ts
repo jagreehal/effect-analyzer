@@ -95,22 +95,25 @@ function extractServiceTagsFromFile(
     const extExpr = classDecl.getExtends();
     if (!extExpr) continue;
     const extText = extExpr.getText();
-    if (!extText.includes('Context.Tag') && !extText.includes('Effect.Service')) continue;
+    if (!extText.includes('Context.Service') && !extText.includes('Context.Tag') && !extText.includes('Effect.Service')) continue;
 
     // Extract tag string from Context.Tag('TagName') if possible
     let tagId = name;
     const tagMatch = /Context\.Tag\s*\(\s*['"]([^'"]+)['"]\s*\)/.exec(extText);
     if (tagMatch?.[1]) {
       tagId = tagMatch[1];
+    } else {
+      const serviceMatch = /Context\.Service[\s\S]*?\(\s*\)\s*\(\s*['"]([^'"]+)['"]/.exec(extText);
+      if (serviceMatch?.[1]) tagId = serviceMatch[1];
     }
 
     // Get type arguments for interface shape
     let typeArgs: readonly TsMorphNode[] = extExpr.getTypeArguments();
-    if (typeArgs.length < 2) {
-      const inner = extExpr.getExpression();
-      if (inner && 'getTypeArguments' in inner && typeof inner.getTypeArguments === 'function') {
-        typeArgs = inner.getTypeArguments();
-      }
+    let expression: TsMorphNode | undefined = extExpr;
+    while (typeArgs.length < 2) {
+      expression = expression.getExpression();
+      if (!expression) break;
+      typeArgs = expression.getTypeArguments();
     }
 
     let definition: ServiceDefinition = { tagId, methods: [], properties: [] };

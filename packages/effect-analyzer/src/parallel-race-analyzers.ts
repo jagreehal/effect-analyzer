@@ -33,10 +33,10 @@ import {
   computeSemanticRole,
 } from './analysis-utils';
 import { parseEffectAllOptions } from './analysis-classifiers';
-import type { AnalyzerDeps } from './stream-channel-sink-analyzers';
+import type { AnalysisContext } from './analysis-context';
 
 export const analyzeParallelCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -130,7 +130,7 @@ export const analyzeParallelCall = (
   });
 
 export const analyzeRaceCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,

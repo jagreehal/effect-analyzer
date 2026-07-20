@@ -66,7 +66,7 @@ const SCENARIOS = [
     whatChanged:
       'The PR introduces a `FraudCheck` service and verifies each transfer before execution.',
     textDiffTakeaway:
-      'Looks like a standard "add dependency, call it" change. The interesting detail — a new service in the R channel — is easy to miss when the `Context.Tag` class definition takes more visual space than the call.',
+      'Looks like a standard "add dependency, call it" change. The interesting detail — a new service in the R channel — is easy to miss when the `Context.Service` class definition takes more visual space than the call.',
     analyzerTakeaway:
       'The structural diff lists both the new service yield and the new verify call as added steps. The services map for this workflow now has an extra node; anyone wiring this program up for tests or production needs to provide a `FraudCheck` implementation.',
     reviewerQuestion:

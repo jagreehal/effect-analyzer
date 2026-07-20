@@ -194,7 +194,7 @@ export const analyzeProgramNode = (
         );
 
         // If the gen call is the base of an enclosing `.pipe(...)`, analyze the
-        // pipe's Effect-level transformations (retry/timeout/catchAll/etc.) so
+        // pipe's Effect-level transformations (retry/timeout/catch/etc.) so
         // wrappers around the gen are captured in the IR and stats.
         const outerPipe = findOuterPipeOnGen(genCall);
         if (outerPipe) {
@@ -387,13 +387,14 @@ export const analyzeProgramNode = (
           if (clauseText.includes('Schema.TaggedClass')) { callee = 'Schema.TaggedClass'; break; }
           if (clauseText.includes('Schema.Class')) { callee = 'Schema.Class'; break; }
           if (clauseText.includes('Context.Tag')) { callee = 'Context.Tag'; break; }
+          if (clauseText.includes('Context.Service')) { callee = 'Context.Service'; break; }
           if (clauseText.includes('Context.Reference')) { callee = 'Context.Reference'; break; }
           if (clauseText.includes('Effect.Service')) { callee = 'Effect.Service'; break; }
         }
         const description =
           callee.includes('Error') ? 'error-type' :
           callee.includes('Schema') ? 'schema' :
-          callee === 'Context.Tag' || callee === 'Context.Reference' || callee === 'Effect.Service' ? 'service-tag' :
+          callee === 'Context.Service' || callee === 'Context.Tag' || callee === 'Context.Reference' || callee === 'Effect.Service' ? 'service-tag' :
           'data';
         const classEffectNode: StaticEffectNode = {
           id: generateId(),
@@ -2005,7 +2006,7 @@ function findOuterLayerUnwrapOnGen(genCall: CallExpression): CallExpression | un
 /**
  * Apply each transformation of an outer `.pipe(...)` call to the accumulated
  * child nodes from a gen body. Known Effect-level wrappers (retry, timeout,
- * catchAll, catchTag, orElse*, mapError, tap, tapError, ensuring, withSpan)
+ * catch, catchTag, orElse*, mapError, tap, tapError, ensuring, withSpan)
  * produce corresponding IR nodes and bump the relevant stats.
  *
  * This is a targeted implementation that covers the transformations people
@@ -2094,7 +2095,7 @@ const applyOuterPipeTransformsToGen = (
       }
 
       // Fallback: analyze the arg as an ordinary effect expression so it
-      // appears in the IR and stats (e.g., Effect.timeout, Effect.catchAll,
+      // appears in the IR and stats (e.g., Effect.timeout, Effect.catch,
       // Effect.withSpan). We append rather than wrap — the structural
       // semantics of each wrapper is specialized above only where needed.
       const analyzed = yield* analyzeEffectCall(

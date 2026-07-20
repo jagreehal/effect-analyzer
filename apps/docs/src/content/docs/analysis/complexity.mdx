@@ -64,7 +64,7 @@ This prints all six metrics along with analysis metadata (step count, service co
 ### Library API
 
 ```ts
-import { analyze, calculateComplexity } from "effect-analyzer"
+import { analyze, calculateComplexity } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
@@ -86,7 +86,7 @@ console.log(metrics)
 Use `assessComplexity` to evaluate metrics against configurable thresholds and get actionable recommendations:
 
 ```ts
-import { calculateComplexity, assessComplexity } from "effect-analyzer"
+import { calculateComplexity, assessComplexity } from "effect-analyzer/analysis"
 
 const metrics = calculateComplexity(ir)
 const assessment = assessComplexity(metrics)
@@ -122,7 +122,7 @@ const assessment = assessComplexity(metrics, {
 Use `formatComplexitySummary` to produce a human-readable string:
 
 ```ts
-import { calculateComplexity, formatComplexitySummary } from "effect-analyzer"
+import { calculateComplexity, formatComplexitySummary } from "effect-analyzer/analysis"
 
 const metrics = calculateComplexity(ir)
 const summary = formatComplexitySummary(metrics)

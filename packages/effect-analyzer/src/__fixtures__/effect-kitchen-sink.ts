@@ -104,7 +104,7 @@ export const errorTopologyProgram = unstableLookup.pipe(
   Effect.tapError(() => Effect.log('tapError')),
   Effect.tapErrorCause(() => Effect.log('tapErrorCause')),
   Effect.catchTag('NotFound', () => Effect.succeed({ id: 'fallback', name: 'fallback' })),
-  Effect.catchAll(() => Effect.succeed({ id: 'recover', name: 'recover' })),
+  Effect.catch(() => Effect.succeed({ id: 'recover', name: 'recover' })),
   Effect.retry(Schedule.recurs(2)),
   Effect.timeout('2 seconds'),
 );

@@ -1,0 +1,111 @@
+---
+title: Diagram Fidelity
+description: Check whether a static diagram represents Effect v4 source and match runtime spans to IR nodes.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Diagram fidelity measures whether the analyzer can represent a program without unresolved or ambiguous nodes. A score helps you track coverage. The `exact` field gives CI a strict pass or fail result.
+
+## Run the Check
+
+```ts
+import {
+  analysis,
+  computeDiagramFidelity,
+  formatDiagramFidelity,
+} from "effect-analyzer"
+import { Effect } from "effect"
+
+const ir = await Effect.runPromise(
+  analysis.file("./src/transfer.ts").single(),
+)
+
+const report = computeDiagramFidelity(ir)
+console.log(formatDiagramFidelity(report))
+```
+
+`DiagramFidelityReport` contains:
+
+| Field | Meaning |
+|---|---|
+| `exact` | `true` when the report contains no issues |
+| `score` | Percentage of IR nodes without a fidelity penalty |
+| `totalNodes` | Number of nodes in the deep IR tree |
+| `exactRuntimeNodes` | Span-backed nodes with a unique runtime identity |
+| `staticOnlyNodes` | Nodes that have no runtime span identity |
+| `ambiguousRuntimeNodes` | Nodes that share a span path |
+| `unresolvedNodes` | Unknown, opaque, or dynamic-span nodes |
+| `issues` | Located findings with a suggested source change |
+
+## Issue Types
+
+| Issue | Cause | Source change |
+|---|---|---|
+| `unknown-node` | The analyzer cannot resolve an expression | Use a supported Effect v4 operation or extract a named `Effect.fn` |
+| `opaque-node` | The analyzer treats a boundary as opaque | Extract diagram-relevant work or add an explicit span |
+| `dynamic-span-name` | Code computes the `Effect.withSpan` name | Use a string literal and store dynamic values in span attributes |
+| `duplicate-span-path` | Two nodes produce the same nested span path | Give sibling spans distinct names |
+
+<Aside type="note">
+Static-only nodes do not make a report inexact. They remain visible in the diagram but cannot receive runtime status colors.
+</Aside>
+
+## Enforce Fidelity in CI
+
+```bash
+npx effect-analyze ./src --assert-diagram-fidelity
+```
+
+The command checks one file or each analyzed program in a directory. It prints the findings and exits with code 1 when any report has `exact: false`.
+
+## Match Runtime Spans
+
+The analyzer joins runtime spans to static nodes by their full nested path. These two spans form the path `transfer > debit`:
+
+```ts
+const program = Effect.gen(function* () {
+  yield* debit
+}).pipe(
+  Effect.withSpan("debit"),
+  Effect.withSpan("transfer"),
+)
+```
+
+Keep names literal and give sibling spans different names. Put request IDs, account IDs, and other runtime values in span attributes.
+
+### Effect v4 spans
+
+```ts
+import {
+  renderMermaidWithRuntimeTrace,
+  traceFromEffectSpans,
+} from "effect-analyzer"
+
+const trace = traceFromEffectSpans(effectSpans)
+const overlay = renderMermaidWithRuntimeTrace(ir, trace)
+```
+
+### OpenTelemetry spans
+
+```ts
+import {
+  renderMermaidWithRuntimeTrace,
+  traceFromOpenTelemetry,
+} from "effect-analyzer"
+
+const trace = traceFromOpenTelemetry(readableSpans)
+const overlay = renderMermaidWithRuntimeTrace(ir, trace)
+```
+
+`RuntimeOverlayResult` returns the Mermaid source and three span-ID lists:
+
+| Field | Meaning |
+|---|---|
+| `matchedSpanIds` | The trace path identifies one static node |
+| `unmatchedSpanIds` | The trace path identifies no static node |
+| `ambiguousSpanIds` | The trace path identifies more than one static node |
+
+The renderer colors successful spans green, failed spans red, and running spans amber.

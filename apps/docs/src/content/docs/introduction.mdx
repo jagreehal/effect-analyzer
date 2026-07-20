@@ -19,9 +19,9 @@ The analyzer recognizes a broad set of Effect patterns and control-flow construc
 
 - **Generators** - `Effect.gen` functions with `yield*` bindings
 - **Pipes** - `Effect.pipe` and `.pipe()` chains
-- **Services** - `Context.Tag` dependencies and `Layer` providers
+- **Services** - `Context.Service` dependencies and `Layer` providers
 - **Layers** - `Layer.effect`, `Layer.provide`, `Layer.merge` compositions
-- **Error handlers** - `Effect.catchAll`, `Effect.catchTag`, `Effect.catchTags`
+- **Error handlers** - `Effect.catch`, `Effect.catchTag`, `Effect.catchTags`
 - **Parallel & race** - `Effect.all` with concurrency, `Effect.race`
 - **Retry & timeout** - `Effect.retry`, `Effect.timeout`, schedule-based policies
 - **Streams** - `Stream` pipelines and operators

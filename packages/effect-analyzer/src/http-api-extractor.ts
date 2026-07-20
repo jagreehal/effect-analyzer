@@ -1,7 +1,7 @@
 /**
  * HttpApi Structure Extractor
  *
- * Extracts HttpApi, HttpApiGroup, and HttpApiEndpoint structure from @effect/platform
+ * Extracts Effect v4 HttpApi, HttpApiGroup, and HttpApiEndpoint structure
  * source code for API documentation generation.
  */
 

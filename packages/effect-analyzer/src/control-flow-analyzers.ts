@@ -53,10 +53,10 @@ import {
   buildPureCallbackSummaryNodes,
   summarizeLoopCallbackSource,
 } from './callback-summary';
-import type { AnalyzerDeps } from './stream-channel-sink-analyzers';
+import type { AnalysisContext } from './analysis-context';
 
 export const analyzeConditionalCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -201,7 +201,7 @@ export const analyzeConditionalCall = (
   });
 
 export const analyzeLoopCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -381,7 +381,7 @@ export const analyzeMatchCall = (
 
 /** Analyze Cause.fail / die / interrupt / parallel / sequential / failures / etc. */
 export const analyzeCauseCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -468,7 +468,7 @@ export const analyzeExitCall = (
 
 /** Analyze Effect.map / flatMap / andThen / tap / zip / as / flatten etc. */
 export const analyzeTransformCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,

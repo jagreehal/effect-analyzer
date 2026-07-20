@@ -99,7 +99,7 @@
   - `effect-fail-untagged` — `Effect.fail(new Error(...))` (use `Data.TaggedError`)
   - `run-effect-in-gen` — `Effect.runPromise/runSync/runFork` inside `Effect.gen` (nested runtime)
   - `forEach-without-concurrency` — `Effect.forEach` with no options (silent sequential default)
-  - `identity-catch` — `Effect.catchAll(e => Effect.fail(e))` and tag variants (no-op)
+  - `identity-catch` — `Effect.catch(e => Effect.fail(e))` and tag variants (no-op)
   - `empty-effect-all` — `Effect.all([])` / `Effect.all({})` (always-succeeds dead branch)
   - `layer-duplicate-merge` — `Layer.merge(A, A)` (last-wins; usually a typo)
   - `schedule-unbounded` — `Schedule.forever`/`Schedule.spaced` without bounding combinator

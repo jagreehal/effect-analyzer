@@ -328,7 +328,7 @@ A common pattern with AI-generated refactors is simplifying code by removing `ca
 ## Programmatic Usage
 
 ```ts
-import { analyze, diffPrograms, renderDiffMarkdown } from "effect-analyzer"
+import { analyze, diffPrograms, renderDiffMarkdown } from "effect-analyzer/migration"
 import { Effect } from "effect"
 
 const before = await Effect.runPromise(analyze("./old-version.ts").single())
@@ -343,7 +343,7 @@ console.log(report)
 Additional rendering functions:
 
 ```ts
-import { renderDiffJSON, renderDiffMermaid } from "effect-analyzer"
+import { renderDiffJSON, renderDiffMermaid } from "effect-analyzer/migration"
 
 // JSON output for CI
 const json = renderDiffJSON(diff)

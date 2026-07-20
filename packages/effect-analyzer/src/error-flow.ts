@@ -233,9 +233,9 @@ function walkPropagation(
         // Predicate/selective catches remove a subset we cannot fully infer.
         removed.push(...sourceErrors.slice(0, Math.ceil(sourceErrors.length / 2)));
       } else if (
-        handler.handlerType === 'catchAll' ||
-        handler.handlerType === 'catchAllCause' ||
-        handler.handlerType === 'catchAllDefect' ||
+        handler.handlerType === 'catch' ||
+        handler.handlerType === 'catchCause' ||
+        handler.handlerType === 'catchDefect' ||
         handler.handlerType === 'orElse' ||
         handler.handlerType === 'orDie' ||
         handler.handlerType === 'orDieWith'

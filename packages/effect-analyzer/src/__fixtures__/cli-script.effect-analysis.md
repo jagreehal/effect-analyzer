@@ -20,9 +20,9 @@ flowchart TB
 
   n1["Pipe (1 steps)"]
   n2["gen"]
-  n3["catchAll (error-handler)"]
+  n3["catch (error-handler)"]
   n4["Effect"]
-  err_handler_5["catchAll"]
+  err_handler_5["catch"]
   n6["succeed"]
 
   %% Edges

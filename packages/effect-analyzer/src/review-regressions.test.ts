@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { describe, it, expect } from 'vitest';
-import { Effect } from 'effect';
+import { Cause, Effect, Result } from 'effect';
 import { analyze } from './analyze';
 import { getStaticChildren, type StaticFlowNode } from './types';
 
@@ -48,9 +48,10 @@ runTask(1);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure') {
-      expect(exit.cause._tag).toBe('Fail');
-      if (exit.cause._tag === 'Fail') {
-        expect(exit.cause.error).toMatchObject({ code: 'NO_EFFECTS_FOUND' });
+      const error = Cause.findError(exit.cause);
+      expect(Result.isSuccess(error)).toBe(true);
+      if (Result.isSuccess(error)) {
+        expect(error.success).toMatchObject({ code: 'NO_EFFECTS_FOUND' });
       }
     }
   });

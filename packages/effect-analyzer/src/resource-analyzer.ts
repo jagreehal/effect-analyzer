@@ -30,10 +30,10 @@ import {
   computeDisplayName,
   computeSemanticRole,
 } from './analysis-utils';
-import type { AnalyzerDeps } from './stream-channel-sink-analyzers';
+import type { AnalysisContext } from './analysis-context';
 
 export const analyzeResourceCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,

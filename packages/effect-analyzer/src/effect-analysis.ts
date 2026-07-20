@@ -80,73 +80,31 @@ import {
   tryResolveServicePropertyAccess,
   classifyUseCallbackKind,
 } from './service-type-heuristics';
-import type { AnalyzerDeps } from './stream-channel-sink-analyzers';
+import {
+  bindAnalysisContext,
+  createAnalysisContext,
+} from './analysis-context';
 import {
   analyzeStreamCall as _analyzeStreamCall,
   analyzeChannelCall as _analyzeChannelCall,
   analyzeSinkCall as _analyzeSinkCall,
 } from './stream-channel-sink-analyzers';
-
-/**
- * Deferred reference to `analyzeEffectExpression` used by extracted analyzers
- * (stream/channel/sink) that need to recurse. The getter resolves at call time,
- * which is after the module's top-level evaluation, so the export is in scope.
- */
-const _analyzerDeps: AnalyzerDeps = {
-  get analyzeEffectExpression() {
-    return analyzeEffectExpression;
-  },
-};
-
-const analyzeStreamCall: OmitFirst<typeof _analyzeStreamCall> = (...args) =>
-  _analyzeStreamCall(_analyzerDeps, ...args);
-const analyzeChannelCall: OmitFirst<typeof _analyzeChannelCall> = (...args) =>
-  _analyzeChannelCall(_analyzerDeps, ...args);
-const analyzeSinkCall: OmitFirst<typeof _analyzeSinkCall> = (...args) =>
-  _analyzeSinkCall(_analyzerDeps, ...args);
-
 import {
   analyzeRetryCall as _analyzeRetryCall,
   analyzeTimeoutCall as _analyzeTimeoutCall,
   analyzeScheduleCall,
 } from './retry-timeout-analyzers';
-
-const analyzeRetryCall: OmitFirst<typeof _analyzeRetryCall> = (...args) =>
-  _analyzeRetryCall(_analyzerDeps, ...args);
-const analyzeTimeoutCall: OmitFirst<typeof _analyzeTimeoutCall> = (...args) =>
-  _analyzeTimeoutCall(_analyzerDeps, ...args);
-
 import {
   analyzeConcurrencyPrimitiveCall,
   analyzeFiberCall as _analyzeFiberCall,
   analyzeInterruptionCall as _analyzeInterruptionCall,
 } from './concurrency-fiber-analyzers';
-
-const analyzeFiberCall: OmitFirst<typeof _analyzeFiberCall> = (...args) =>
-  _analyzeFiberCall(_analyzerDeps, ...args);
-const analyzeInterruptionCall: OmitFirst<typeof _analyzeInterruptionCall> = (
-  ...args
-) => _analyzeInterruptionCall(_analyzerDeps, ...args);
-
 import {
   analyzeParallelCall as _analyzeParallelCall,
   analyzeRaceCall as _analyzeRaceCall,
 } from './parallel-race-analyzers';
-
-const analyzeParallelCall: OmitFirst<typeof _analyzeParallelCall> = (...args) =>
-  _analyzeParallelCall(_analyzerDeps, ...args);
-const analyzeRaceCall: OmitFirst<typeof _analyzeRaceCall> = (...args) =>
-  _analyzeRaceCall(_analyzerDeps, ...args);
-
 import { analyzeErrorHandlerCall as _analyzeErrorHandlerCall } from './error-handler-analyzer';
-const analyzeErrorHandlerCall: OmitFirst<typeof _analyzeErrorHandlerCall> = (
-  ...args
-) => _analyzeErrorHandlerCall(_analyzerDeps, ...args);
-
 import { analyzeResourceCall as _analyzeResourceCall } from './resource-analyzer';
-const analyzeResourceCall: OmitFirst<typeof _analyzeResourceCall> = (...args) =>
-  _analyzeResourceCall(_analyzerDeps, ...args);
-
 import {
   analyzeConditionalCall as _analyzeConditionalCall,
   analyzeLoopCall as _analyzeLoopCall,
@@ -155,20 +113,29 @@ import {
   analyzeExitCall,
   analyzeTransformCall as _analyzeTransformCall,
 } from './control-flow-analyzers';
-const analyzeConditionalCall: OmitFirst<typeof _analyzeConditionalCall> = (
-  ...args
-) => _analyzeConditionalCall(_analyzerDeps, ...args);
-const analyzeLoopCall: OmitFirst<typeof _analyzeLoopCall> = (...args) =>
-  _analyzeLoopCall(_analyzerDeps, ...args);
-const analyzeCauseCall: OmitFirst<typeof _analyzeCauseCall> = (...args) =>
-  _analyzeCauseCall(_analyzerDeps, ...args);
-const analyzeTransformCall: OmitFirst<typeof _analyzeTransformCall> = (
-  ...args
-) => _analyzeTransformCall(_analyzerDeps, ...args);
 
-type OmitFirst<F> = F extends (first: AnalyzerDeps, ...rest: infer R) => infer Out
-  ? (...args: R) => Out
-  : never;
+/**
+ * Deferred reference to `analyzeEffectExpression` used by extracted analyzers
+ * (stream/channel/sink) that need to recurse. The getter resolves at call time,
+ * which is after the module's top-level evaluation, so the export is in scope.
+ */
+const analysisContext = createAnalysisContext(() => analyzeEffectExpression);
+
+const analyzeStreamCall = bindAnalysisContext(analysisContext, _analyzeStreamCall);
+const analyzeChannelCall = bindAnalysisContext(analysisContext, _analyzeChannelCall);
+const analyzeSinkCall = bindAnalysisContext(analysisContext, _analyzeSinkCall);
+const analyzeRetryCall = bindAnalysisContext(analysisContext, _analyzeRetryCall);
+const analyzeTimeoutCall = bindAnalysisContext(analysisContext, _analyzeTimeoutCall);
+const analyzeFiberCall = bindAnalysisContext(analysisContext, _analyzeFiberCall);
+const analyzeInterruptionCall = bindAnalysisContext(analysisContext, _analyzeInterruptionCall);
+const analyzeParallelCall = bindAnalysisContext(analysisContext, _analyzeParallelCall);
+const analyzeRaceCall = bindAnalysisContext(analysisContext, _analyzeRaceCall);
+const analyzeErrorHandlerCall = bindAnalysisContext(analysisContext, _analyzeErrorHandlerCall);
+const analyzeResourceCall = bindAnalysisContext(analysisContext, _analyzeResourceCall);
+const analyzeConditionalCall = bindAnalysisContext(analysisContext, _analyzeConditionalCall);
+const analyzeLoopCall = bindAnalysisContext(analysisContext, _analyzeLoopCall);
+const analyzeCauseCall = bindAnalysisContext(analysisContext, _analyzeCauseCall);
+const analyzeTransformCall = bindAnalysisContext(analysisContext, _analyzeTransformCall);
 
 // Schema decode/encode operations are NOT collection operations.
 const SCHEMA_OPS = [
@@ -199,7 +166,7 @@ const SCHEMA_OPS = [
  * combinators — cheap, no type-checker needed.
  */
 const EFFECT_PIPE_OP_REGEX =
-  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catchAll|catchAllCause|catchTag|catchTags|catchSome|catchSomeCause|catchSomeDefect|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*\(/;
+  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catch|catchCause|catchTag|catchTags|catchSome|catchSomeCause|catchSomeDefect|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*\(/;
 
 const pipeArgsIncludeEffectOp = (call: CallExpression): boolean => {
   for (const arg of call.getArguments()) {
@@ -270,7 +237,8 @@ export const analyzePipeChain = (
     }
 
     // Detect Effect.withSpan in transformations and merge as annotation
-    let spanName: string | undefined;
+    const sourceOrderedSpanNames: string[] = [];
+    let spanNameDynamic = false;
     const filteredTransformations = transformations.filter((t) => {
       if (t.type === 'effect' && t.callee.includes('withSpan')) {
         return false; // Remove withSpan from transformations list
@@ -279,19 +247,21 @@ export const analyzePipeChain = (
     });
 
     // Extract span name from the AST transform arguments
-    if (!spanName) {
-      for (const arg of transformArgs) {
-        if (arg) {
-          const argText = arg.getText();
-          if (argText.includes('withSpan')) {
-            const match = /withSpan\s*\(\s*["']([^"']+)["']/.exec(argText);
-            if (match?.[1]) {
-              spanName = match[1];
-            }
+    for (const arg of transformArgs) {
+      if (arg) {
+        const argText = arg.getText();
+        if (argText.includes('withSpan')) {
+          const match = /withSpan\s*\(\s*["']([^"']+)["']/.exec(argText);
+          if (match?.[1]) {
+            sourceOrderedSpanNames.push(match[1]);
+          } else {
+            spanNameDynamic = true;
           }
         }
       }
     }
+    const spanNames = [...sourceOrderedSpanNames].reverse();
+    const spanName = spanNames.at(-1);
 
     // Extract type flow through pipe chain
     let typeFlow: EffectTypeSignature[] | undefined;
@@ -320,6 +290,8 @@ export const analyzePipeChain = (
       transformations: filteredTransformations,
       ...(typeFlow ? { typeFlow } : {}),
       ...(spanName ? { spanName } : {}),
+      ...(spanNames.length > 0 ? { spanNames } : {}),
+      ...(spanNameDynamic ? { spanNameDynamic: true } : {}),
     };
     const enrichedPipeNode: StaticPipeNode = {
       ...pipeNode,
@@ -734,7 +706,7 @@ export const analyzeEffectCall = (
 
     // pipe(base, ...fns) or <base>.pipe(...fns) inside generator → analyze as pipe chain so transformations (e.g. RcRef.update) are classified
     // For method-style .pipe(), route Effect-based pipes, plus any pipe whose
-    // transformations include explicit Effect.* operations (e.g. retry, timeout, catchAll)
+    // transformations include explicit Effect.* operations (e.g. retry, timeout, catch)
     // on a non-Effect-prefixed base like `serviceCall().pipe(Effect.retry(...))`.
     const isEffectMethodPipe =
       callee.endsWith('.pipe') &&
@@ -1123,7 +1095,7 @@ export const analyzeEffectCall = (
     const CONSTRUCTOR_CALLBACK_CALLEES = [
       'Effect.sync',
       'Effect.promise',
-      'Effect.async',
+      'Effect.callback',
       'Effect.asyncEffect',
       'Effect.callback',
       'Effect.tryPromise',
@@ -1200,9 +1172,9 @@ export const analyzeEffectCall = (
         }
         if (innerNodes.length > 0) callbackBody = innerNodes;
 
-        // Effect.async/asyncEffect: resume/canceller patterns (GAP async callback interop)
+        // Effect.callback/asyncEffect: resume/canceller patterns (GAP async callback interop)
         if (
-          callee.includes('Effect.async') ||
+          callee.includes('Effect.callback') ||
           callee.includes('Effect.asyncEffect') ||
           callee.includes('Effect.callback')
         ) {
@@ -1404,7 +1376,7 @@ export const analyzeEffectCall = (
       callee: normalizedCallee,
       description: usePattern
         ? `use-pattern (${usePattern.callbackKind})`
-        : serviceCall
+        : serviceCall || serviceMethod
           ? 'service-call'
           : getSemanticDescriptionWithAliases(normalizedCallee, getAliasesForFile(sourceFile)),
       location,
@@ -1550,7 +1522,7 @@ const analyzeLayerCall = (
 
     // Layer error-handling / utility ops — track as semantic description on the node
     // These don't change the primitive provides/requires but are important to detect:
-    // catchAll, orDie, orElse, retry, tap, mapError, build, launch, toRuntime,
+    // catch, orDie, orElse, retry, tap, mapError, build, launch, toRuntime,
     // passthrough, project, flatMap, flatten, annotateLogs, annotateSpans,
     // setConfigProvider, setClock, setTracer, locally, withSpan
 
@@ -1658,7 +1630,7 @@ const analyzeLayerCall = (
     // Extract a semantic name for utility Layer ops
     const layerOpName = callee.replace(/^Layer\./, '').replace(/^[a-zA-Z]+\./, '');
     const UTILITY_LAYER_OPS = new Set([
-      'catchAll', 'catchAllCause', 'orDie', 'orElse', 'retry', 'tap',
+      'catch', 'catchCause', 'orDie', 'orElse', 'retry', 'tap',
       'mapError', 'mapErrorCause', 'build', 'launch', 'toRuntime',
       'passthrough', 'project', 'flatMap', 'flatten', 'annotateLogs',
       'annotateSpans', 'setConfigProvider', 'setClock', 'setTracer',
@@ -1699,6 +1671,3 @@ const analyzeLayerCall = (
       semanticRole: computeSemanticRole(layerNode),
     };
   });
-
-
-

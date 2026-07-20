@@ -489,7 +489,7 @@ export function analyzeProject(
         .all()
         .pipe(
           Effect.map((programs) => ({ _tag: 'ok' as const, programs })),
-          Effect.catchAll((err) =>
+          Effect.catch((err) =>
             Effect.succeed({
               _tag: 'fail' as const,
               error: err instanceof Error ? err.message : String(err),
@@ -611,7 +611,7 @@ export function runCoverageAudit(
         .all()
         .pipe(
           Effect.map((programs) => ({ _tag: 'ok' as const, programs })),
-          Effect.catchAll((err) =>
+          Effect.catch((err) =>
             Effect.succeed({
               _tag: 'fail' as const,
               error: err instanceof Error ? err.message : String(err),

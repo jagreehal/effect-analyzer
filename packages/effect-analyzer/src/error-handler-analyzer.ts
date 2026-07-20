@@ -1,5 +1,5 @@
 /**
- * Error-handler call analyzer (catchAll/catchTag/catchTags/orElse/orDie/match/...).
+ * Error-handler call analyzer (catch/catchTag/catchTags/orElse/orDie/match/...).
  *
  * Recurses via `deps.analyzeEffectExpression` into the source effect and the
  * handler. Tag/tags extraction reads the first/handler argument literally.
@@ -33,10 +33,10 @@ import {
   computeDisplayName,
   computeSemanticRole,
 } from './analysis-utils';
-import type { AnalyzerDeps } from './stream-channel-sink-analyzers';
+import type { AnalysisContext } from './analysis-context';
 
 export const analyzeErrorHandlerCall = (
-  deps: AnalyzerDeps,
+  deps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
@@ -49,14 +49,14 @@ export const analyzeErrorHandlerCall = (
     const args = call.getArguments();
 
     let handlerType: StaticErrorHandlerNode['handlerType'];
-    if (callee.includes('catchAllCause')) {
-      handlerType = 'catchAllCause';
+    if (callee.includes('catchCause')) {
+      handlerType = 'catchCause';
     } else if (callee.includes('catchSomeCause')) {
       handlerType = 'catchSomeCause';
     } else if (callee.includes('catchSomeDefect')) {
       handlerType = 'catchSomeDefect';
-    } else if (callee.includes('catchAllDefect')) {
-      handlerType = 'catchAllDefect';
+    } else if (callee.includes('catchDefect')) {
+      handlerType = 'catchDefect';
     } else if (callee.includes('catchTags')) {
       handlerType = 'catchTags';
     } else if (callee.includes('catchIf')) {
@@ -65,8 +65,8 @@ export const analyzeErrorHandlerCall = (
       handlerType = 'catchSome';
     } else if (callee.includes('catchTag')) {
       handlerType = 'catchTag';
-    } else if (callee.includes('catchAll')) {
-      handlerType = 'catchAll';
+    } else if (callee.includes('catch')) {
+      handlerType = 'catch';
     } else if (callee.includes('orElseFail')) {
       handlerType = 'orElseFail';
     } else if (callee.includes('orElseSucceed')) {
@@ -116,15 +116,15 @@ export const analyzeErrorHandlerCall = (
     } else if (callee.includes('eventually')) {
       handlerType = 'eventually';
     } else {
-      handlerType = 'catchAll';
+      handlerType = 'catch';
     }
 
-    // For methods that are called as effect.pipe(Effect.catchAll(handler))
+    // For methods that are called as effect.pipe(Effect.catch(handler))
     // we need to find the source effect differently
     let source: StaticFlowNode;
     let handler: StaticFlowNode | undefined;
 
-    // Check if this is a method call on an effect (e.g., effect.catchAll(fn))
+    // Check if this is a method call on an effect (e.g., effect.catch(fn))
     const expr = call.getExpression();
     if (expr.getKind() === loadTsMorph().SyntaxKind.PropertyAccessExpression) {
       // This is effect.method() - the source is the object of the property access

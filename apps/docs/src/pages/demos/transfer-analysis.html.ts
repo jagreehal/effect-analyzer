@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { Effect } from 'effect';
-import { analyze, renderInteractiveHTML } from '../../../../../packages/effect-analyzer/dist/index.js';
+import { analyze } from '../../../../../packages/effect-analyzer/dist/analysis.js';
+import { renderInteractiveHTML } from '../../../../../packages/effect-analyzer/dist/diagram.js';
 
 export const prerender = true;
 

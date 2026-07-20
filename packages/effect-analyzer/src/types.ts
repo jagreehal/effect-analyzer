@@ -83,6 +83,10 @@ export interface StaticBaseNode {
   readonly semanticRole?: SemanticRole | undefined;
   /** Span name from Effect.withSpan annotation */
   readonly spanName?: string | undefined;
+  /** Runtime nesting order for multiple Effect.withSpan transformations. */
+  readonly spanNames?: readonly string[] | undefined;
+  /** True when a span name is computed and cannot be joined statically. */
+  readonly spanNameDynamic?: boolean | undefined;
 }
 
 /**
@@ -122,7 +126,7 @@ export interface StaticEffectNode extends StaticBaseNode {
   } | undefined;
   /** Inner effects from Effect.sync/promise/async callback body (one level only) */
   readonly callbackBody?: readonly StaticFlowNode[] | undefined;
-  /** Callback-style constructors: resume/canceller patterns for Effect.async/asyncEffect/callback. */
+  /** Callback-style constructors: resume/canceller patterns for Effect.callback/asyncEffect/callback. */
   readonly asyncCallback?: {
     readonly resumeParamName: string;
     readonly resumeCallCount: number;
@@ -209,20 +213,20 @@ export interface StaticRaceNode extends StaticBaseNode {
 }
 
 /**
- * Error handling (catchAll, catchTag, orElse, etc.).
+ * Error handling (catch, catchTag, orElse, etc.).
  */
 export interface StaticErrorHandlerNode extends StaticBaseNode {
   readonly type: 'error-handler';
-  /** Type of handler: catchAll, catchTag, orElse, etc. */
+  /** Type of handler: catch, catchTag, orElse, etc. */
   readonly handlerType:
-    | 'catchAll'
+    | 'catch'
     | 'catchTag'
-    | 'catchAllCause'
+    | 'catchCause'
     | 'catchIf'
     | 'catchSome'
     | 'catchSomeCause'
     | 'catchSomeDefect'
-    | 'catchAllDefect'
+    | 'catchDefect'
     | 'catchTags'
     | 'orElse'
     | 'orElseFail'

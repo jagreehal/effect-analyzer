@@ -375,7 +375,7 @@ export const analyzeSchemaOperations = (
  * Check if a Schema operation has error handling
  */
 const checkForErrorHandling = (node: Node): boolean => {
-  // Walk up the AST to find if there's a catchTag('ParseError') or catchAll
+  // Walk up the AST to find if there's a catchTag('ParseError') or catch
   let current: Node | undefined = node;
   
   while (current) {
@@ -388,7 +388,7 @@ const checkForErrorHandling = (node: Node): boolean => {
       return true;
     }
     
-    if (text.includes('catchAll')) {
+    if (text.includes('catch')) {
       return true;
     }
     

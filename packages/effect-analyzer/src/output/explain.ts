@@ -279,7 +279,7 @@ export function explainNode(
           ? ` [${node.errorTags.join(', ')}]`
           : '';
       switch (node.handlerType) {
-        case 'catchAll':
+        case 'catch':
           lines.push(`${pad}Catches all errors on:`);
           break;
         case 'catchTag':

@@ -1,4 +1,4 @@
-# Effect Analysis: catchAllProgram
+# Effect Analysis: catchProgram
 
 ## Metadata
 
@@ -13,7 +13,7 @@
 ```mermaid
 flowchart TB
 
-  %% Program: catchAllProgram
+  %% Program: catchProgram
 
   start((Start))
   end_node((End))
@@ -22,9 +22,9 @@ flowchart TB
   n3["return"]
   term_4(["return"])
   n5["fail"]
-  n6["catchAll (error-handler)"]
+  n6["catch (error-handler)"]
   n7["Effect"]
-  err_handler_8["catchAll"]
+  err_handler_8["catch"]
   n9["succeed"]
 
   %% Edges
@@ -65,7 +65,7 @@ flowchart TB
 ## Explanation
 
 ```
-catchAllProgram (generator):
+catchProgram (generator):
   1. Calls log
   2. Returns:
     Calls fail — constructor

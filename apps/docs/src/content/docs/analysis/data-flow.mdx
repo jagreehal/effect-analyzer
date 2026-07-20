@@ -12,7 +12,7 @@ The **data flow analyzer** builds a graph of value and service dependencies betw
 ## Building a Data Flow Graph
 
 ```ts
-import { analyze, buildDataFlowGraph } from "effect-analyzer"
+import { analyze, buildDataFlowGraph } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
@@ -50,7 +50,7 @@ Each `DataFlowNode` records:
 Find which steps produce or consume a given key:
 
 ```ts
-import { getProducers, getConsumers } from "effect-analyzer"
+import { getProducers, getConsumers } from "effect-analyzer/analysis"
 
 // Who produces the "balance" value?
 const producers = getProducers(graph, "balance")
@@ -64,7 +64,7 @@ const consumers = getConsumers(graph, "AccountService")
 Trace the full dependency chain for a node:
 
 ```ts
-import { getTransitiveDependencies } from "effect-analyzer"
+import { getTransitiveDependencies } from "effect-analyzer/analysis"
 
 const deps = getTransitiveDependencies(graph, "step-4")
 // All nodes that step-4 transitively depends on
@@ -75,7 +75,7 @@ const deps = getTransitiveDependencies(graph, "step-4")
 Detect circular dependencies in the data flow:
 
 ```ts
-import { findCycles } from "effect-analyzer"
+import { findCycles } from "effect-analyzer/analysis"
 
 const cycles = findCycles(graph)
 if (cycles.length > 0) {
@@ -88,7 +88,7 @@ if (cycles.length > 0) {
 Run a comprehensive validation that checks for undefined reads, duplicate writes, and other issues:
 
 ```ts
-import { validateDataFlow } from "effect-analyzer"
+import { validateDataFlow } from "effect-analyzer/analysis"
 
 const validation = validateDataFlow(graph)
 
@@ -105,7 +105,7 @@ Undefined reads are not always bugs - they may indicate services provided at the
 Get the topological order of data flow nodes - the order in which they must execute based on their dependencies:
 
 ```ts
-import { getDataFlowOrder } from "effect-analyzer"
+import { getDataFlowOrder } from "effect-analyzer/analysis"
 
 const order = getDataFlowOrder(graph)
 // Returns node IDs in dependency-respecting order
@@ -124,7 +124,7 @@ npx effect-analyze ./src/transfer.ts --format mermaid-dataflow
 ### Library API
 
 ```ts
-import { buildDataFlowGraph, renderDataFlowMermaid } from "effect-analyzer"
+import { buildDataFlowGraph, renderDataFlowMermaid } from "effect-analyzer/diagram"
 
 const graph = buildDataFlowGraph(ir)
 const diagram = renderDataFlowMermaid(graph)

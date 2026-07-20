@@ -9,7 +9,7 @@
  * @example
  * ```typescript
  * import { Effect } from "effect";
- * import { analyze } from "effect-analyzer";
+ * import { analyze } from "effect-analyzer/analysis";
  *
  * // Single program file
  * const ir = await Effect.runPromise(analyze("./program.ts").single());

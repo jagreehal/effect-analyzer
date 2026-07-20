@@ -976,6 +976,7 @@ export const findEffectPrograms = (
     'Schema.TaggedError',
     'Schema.TaggedRequest',
     'Context.Tag',
+    'Context.Service',
     'Context.Reference',
     'Effect.Service',
   ];
@@ -1163,7 +1164,7 @@ export function extractServiceDefinitionsFromFile(sourceFile: SourceFile): Servi
     const extExpr = classDecl.getExtends();
     if (!extExpr) continue;
     const extText = extExpr.getText();
-    if (!extText.includes('Context.Tag') && !extText.includes('Effect.Service')) continue;
+    if (!extText.includes('Context.Service') && !extText.includes('Context.Tag') && !extText.includes('Effect.Service')) continue;
     let typeArgs: readonly TypeNode[] = extExpr.getTypeArguments();
     if (typeArgs.length < 2) {
       const inner = extExpr.getExpression();

@@ -267,7 +267,7 @@ complexLayerProgram (generator):
 
 ---
 
-# Effect Analysis: catchAllProgram
+# Effect Analysis: catchProgram
 
 ## Metadata
 
@@ -282,7 +282,7 @@ complexLayerProgram (generator):
 ```mermaid
 flowchart TB
 
-  %% Program: catchAllProgram
+  %% Program: catchProgram
 
   start((Start))
   end_node((End))
@@ -290,9 +290,9 @@ flowchart TB
   n2["return"]
   term_3(["return"])
   n4["fail"]
-  n5["catchAll (error-handler)"]
+  n5["catch (error-handler)"]
   n6["Effect"]
-  err_handler_7["catchAll"]
+  err_handler_7["catch"]
   n8["succeed"]
 
   %% Edges
@@ -331,7 +331,7 @@ flowchart TB
 ## Explanation
 
 ```
-catchAllProgram (generator):
+catchProgram (generator):
   1. Returns:
     Calls fail — constructor
 
@@ -370,9 +370,9 @@ flowchart TB
 
   n2["log (side-effect)"]
   n3["result <- succeed"]
-  n4["catchAll (error-handler)"]
+  n4["catch (error-handler)"]
   n5["Effect"]
-  err_handler_6["catchAll"]
+  err_handler_6["catch"]
   n7["succeed"]
 
   %% Edges

@@ -189,7 +189,7 @@ export const authenticatedCall = <A>(
     yield* Effect.log('Making authenticated request');
     
     const result = yield* makeRequest.pipe(
-      Effect.catchAll((error: HttpError | AuthError) =>
+      Effect.catch((error: HttpError | AuthError) =>
         error._tag === 'HttpError' && error.status === 401
           ? Effect.fail<AuthError>({ _tag: 'AuthError', reason: 'Authentication failed' })
           : Effect.fail(error)
@@ -210,7 +210,7 @@ export const dbTransaction = <A, E, R>(
     
     const result = yield* operations.pipe(
       Effect.tap(() => Effect.log('Committing transaction')),
-      Effect.catchAll((error: E) =>
+      Effect.catch((error: E) =>
         Effect.gen(function* () {
           yield* Effect.log('Rolling back transaction');
           return yield* Effect.fail(error);
@@ -284,7 +284,7 @@ export const withCircuitBreaker = <A, E>(
     
     const result = yield* operation.pipe(
       Effect.tap(() => Ref.set(failureCount, 0)),
-      Effect.catchAll((error: E) =>
+      Effect.catch((error: E) =>
         Effect.gen(function* () {
           yield* Ref.update(failureCount, (n) => n + 1);
           return yield* Effect.fail(error);

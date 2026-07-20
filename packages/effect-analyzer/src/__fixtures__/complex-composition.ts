@@ -145,11 +145,11 @@ export const chainedErrorHandlerProgram = Effect.gen(function* () {
 });
 
 /**
- * Program with catchAllCause
+ * Program with catchCause
  */
-export const catchAllCauseProgram = Effect.gen(function* () {
+export const catchCauseProgram = Effect.gen(function* () {
   const result = yield* Effect.fail('error').pipe(
-    Effect.catchAllCause((cause) =>
+    Effect.catchCause((cause) =>
       Effect.gen(function* () {
         yield* Effect.log(`Caught cause: ${String(cause)}`);
         return 'recovered';

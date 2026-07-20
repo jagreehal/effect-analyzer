@@ -674,7 +674,7 @@ chainedErrorHandlerProgram (generator):
 
 ---
 
-# Effect Analysis: catchAllCauseProgram
+# Effect Analysis: catchCauseProgram
 
 ## Metadata
 
@@ -689,16 +689,16 @@ chainedErrorHandlerProgram (generator):
 ```mermaid
 flowchart TB
 
-  %% Program: catchAllCauseProgram
+  %% Program: catchCauseProgram
 
   start((Start))
   end_node((End))
 
   n2["Pipe (1 steps)"]
   n3["fail"]
-  n4["catchAllCause (error-handler)"]
+  n4["catchCause (error-handler)"]
   n5["Effect"]
-  err_handler_6["catchAllCause"]
+  err_handler_6["catchCause"]
   n7["gen"]
 
   %% Edges
@@ -735,10 +735,10 @@ flowchart TB
 ## Explanation
 
 ```
-catchAllCauseProgram (generator):
+catchCauseProgram (generator):
   1. result = Pipes fail through:
     Calls fail — constructor
-    Handles errors (catchAllCause):
+    Handles errors (catchCause):
       Calls Effect
       Handler:
         Calls gen

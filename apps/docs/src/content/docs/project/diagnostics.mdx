@@ -12,7 +12,7 @@ The **strict diagnostics** module validates your Effect programs against a set o
 ## Running Diagnostics
 
 ```ts
-import { analyze, validateStrict, formatDiagnostics } from "effect-analyzer"
+import { analyze, validateStrict, formatDiagnostics } from "effect-analyzer/rules"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
@@ -36,7 +36,7 @@ The validator checks 10 rules:
 | `unknown-error-type` | warning | An effect step has `unknown` as its error type |
 | `parallel-missing-errors` | error | Effects inside `Effect.all` lack error types, making parallel failure behavior unclear |
 | `race-missing-errors` | error | Effects inside `Effect.race` lack error types |
-| `effect-without-handler` | warning | An effect produces errors but no handler (`catchAll`, `catchTag`) exists |
+| `effect-without-handler` | warning | An effect produces errors but no handler (`catch`, `catchTag`) exists |
 | `fiber-potential-leak` | warning | A fiber is forked but never joined or interrupted |
 | `resource-missing-scope` | warning | `acquireRelease` used outside an explicit `Scope` |
 | `unbounded-concurrency` | warning | `Effect.all` without a `concurrency` option - defaults to sequential but may be unintentional |
@@ -66,7 +66,7 @@ const result = validateStrict(ir, {
 ### Human-Readable
 
 ```ts
-import { formatDiagnostics } from "effect-analyzer"
+import { formatDiagnostics } from "effect-analyzer/rules"
 
 const output = formatDiagnostics(result)
 console.log(output)
@@ -77,7 +77,7 @@ Example output:
 ```
 ERROR [missing-error-type] Step "getBalance" can fail but has no declared error type
   at src/transfer.ts:15:5
-  Fix: Add an error type annotation or use Effect.catchAll
+  Fix: Add an error type annotation or use Effect.catch
 
 WARNING [fiber-potential-leak] Fiber forked at "backgroundSync" is never joined
   at src/transfer.ts:42:3
@@ -89,7 +89,7 @@ WARNING [fiber-potential-leak] Fiber forked at "backgroundSync" is never joined
 ### JSON
 
 ```ts
-import { formatDiagnosticsJSON } from "effect-analyzer"
+import { formatDiagnosticsJSON } from "effect-analyzer/rules"
 
 const json = formatDiagnosticsJSON(result)
 console.log(json)
@@ -98,7 +98,7 @@ console.log(json)
 ### Summary
 
 ```ts
-import { getSummary } from "effect-analyzer"
+import { getSummary } from "effect-analyzer/analysis"
 
 const summary = getSummary(result)
 console.log(summary)

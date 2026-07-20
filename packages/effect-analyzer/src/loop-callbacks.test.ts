@@ -28,7 +28,7 @@ describe('loop callback summaries', () => {
         Effect.sync(() => n).pipe(
           Effect.tap(() => Effect.sync(() => console.log(n))),
           Effect.retry({ times: 2 }),
-          Effect.catchAll(() => Effect.sync(() => undefined)),
+          Effect.catch(() => Effect.sync(() => undefined)),
         ),
       );
     `;
@@ -38,7 +38,7 @@ describe('loop callback summaries', () => {
 
     expect(explanation).toContain('forEach callback:');
     expect(explanation).toContain('Effect.retry');
-    expect(explanation).toContain('Calls catchAll');
+    expect(explanation).toContain('Calls catch');
     expect(explanation).toContain('Callback:');
     expect(explanation).not.toContain('(opaque: callback-body)');
   });

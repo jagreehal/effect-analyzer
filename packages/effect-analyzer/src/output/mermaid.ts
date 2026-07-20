@@ -22,6 +22,8 @@ import { getStaticChildren } from '../types';
 import { buildDataFlowGraph } from '../data-flow';
 import { analyzeErrorFlow, analyzeErrorPropagation } from '../error-flow';
 import { DEFAULT_LABEL_MAX, truncateDisplayText, countMeaningfulNodes } from '../analysis-utils';
+import type { RuntimeTrace, RuntimeSpanStatus } from '../runtime-trace';
+import { indexIR, spanPathKey } from '../ir';
 
 // =============================================================================
 // Default styles (include start/end for Start/End nodes)
@@ -1126,6 +1128,65 @@ export function renderStaticMermaid(
 ): string {
   const { lines } = renderStaticMermaidInternal(ir, options);
   return lines.join('\n');
+}
+
+const TRACE_STYLES: Record<RuntimeSpanStatus, string> = {
+  running: 'fill:#422006,stroke:#eab308,stroke-width:3px,color:#fef9c3',
+  success: 'fill:#052e16,stroke:#22c55e,stroke-width:3px,color:#dcfce7',
+  error: 'fill:#450a0a,stroke:#ef4444,stroke-width:3px,color:#fee2e2',
+};
+
+export interface RuntimeOverlayResult {
+  readonly mermaid: string;
+  readonly matchedSpanIds: readonly string[];
+  readonly unmatchedSpanIds: readonly string[];
+  readonly ambiguousSpanIds: readonly string[];
+}
+
+/** Render the full static program with one Effect v4 span trace overlaid. */
+export function renderMermaidWithRuntimeTrace(
+  ir: StaticEffectIR,
+  trace: RuntimeTrace,
+  options?: Partial<MermaidOptions>,
+): RuntimeOverlayResult {
+  const { lines, context } = renderStaticMermaidInternal(ir, options);
+  const irIndex = indexIR(ir);
+  const matchedSpanIds: string[] = [];
+  const unmatchedSpanIds: string[] = [];
+  const ambiguousSpanIds: string[] = [];
+  const usedStatuses = new Set<RuntimeSpanStatus>();
+  const assignments: string[] = [];
+
+  for (const span of trace.spans) {
+    const staticIds = irIndex.idsBySpanPath.get(spanPathKey(span.path)) ?? [];
+    if (staticIds.length === 0) {
+      unmatchedSpanIds.push(span.spanId);
+      continue;
+    }
+    if (staticIds.length > 1) {
+      ambiguousSpanIds.push(span.spanId);
+      continue;
+    }
+    const staticId = staticIds[0];
+    const mermaidId = staticId ? context.nodeIdMap.get(staticId) : undefined;
+    if (!mermaidId) {
+      unmatchedSpanIds.push(span.spanId);
+      continue;
+    }
+    matchedSpanIds.push(span.spanId);
+    usedStatuses.add(span.status);
+    assignments.push(`  class ${mermaidId} trace_${span.status}`);
+  }
+
+  if (assignments.length > 0) {
+    lines.push('', '  %% Runtime span overlay');
+    for (const status of usedStatuses) {
+      lines.push(`  classDef trace_${status} ${TRACE_STYLES[status]}`);
+    }
+    lines.push(...assignments);
+  }
+
+  return { mermaid: lines.join('\n'), matchedSpanIds, unmatchedSpanIds, ambiguousSpanIds };
 }
 
 /**

@@ -170,6 +170,52 @@ function alphabetMembers(type: TsType, at: Node): string[] {
   return tags.length ? tags : stringLiteralsOfType(type);
 }
 
+/**
+ * Effect v4 Schema classes intentionally hide more of their encoded union
+ * shape from the TypeScript checker. Recover the declared alphabet from the
+ * local schema declarations instead of depending on v3-era type expansion.
+ *
+ * Best-effort syntactic recovery: runs only as a fallback when the checker
+ * yields nothing, and matches tags by regex over declaration text, so unusual
+ * formatting or indirection silently under-reports. Upgrade to a real AST walk
+ * if the checked path keeps losing ground to Schema changes.
+ */
+function alphabetMembersFromSyntax(
+  typeName: string | undefined,
+  sf: ReturnType<Project['createSourceFile']>,
+): string[] {
+  if (!typeName) return [];
+  const names = new Set<string>();
+  const alias = sf.getTypeAlias(typeName);
+  const aliasText = alias?.getTypeNode()?.getText() ?? typeName;
+  for (const match of aliasText.matchAll(/\b[A-Z][A-Za-z0-9_$]*\b/g)) {
+    if (match[0] !== 'Schema' && match[0] !== 'Type') names.add(match[0]);
+  }
+  names.add(typeName);
+
+  const tags: string[] = [];
+  const add = (tag: string | undefined): void => {
+    if (tag && !tags.includes(tag)) tags.push(tag);
+  };
+
+  for (const name of names) {
+    const cls = sf.getClass(name);
+    const extendsText = cls?.getExtends()?.getText() ?? '';
+    add(/Tagged(?:Class|Request|Error)[\s\S]*?\)\s*\(\s*["'`]([^"'`]+)["'`]/.exec(extendsText)?.[1]);
+
+    const variable = sf.getVariableDeclaration(name);
+    const initializerText = variable?.getInitializer()?.getText() ?? '';
+    for (const match of initializerText.matchAll(/TaggedStruct\s*\(\s*["'`]([^"'`]+)["'`]/g)) {
+      add(match[1]);
+    }
+    for (const match of initializerText.matchAll(/Schema\.Literal\s*\(\s*["'`]([^"'`]+)["'`]/g)) {
+      add(match[1]);
+    }
+  }
+
+  return tags;
+}
+
 /** Classify a named type as Schema-derived or a plain tagged union. */
 function classifyAlphabet(
   typeName: string | undefined,
@@ -232,12 +278,20 @@ function alphabetFromFunction(
   const stateParam = params[0];
   const eventParam = params[1];
   if (!stateParam || !eventParam) return EMPTY_ALPHABET;
-  const states = alphabetMembers(stateParam.getType(), stateParam);
-  const events = alphabetMembers(eventParam.getType(), eventParam);
+  const stateTypeName = stateParam.getTypeNode()?.getText();
+  const eventTypeName = eventParam.getTypeNode()?.getText();
+  const checkedStates = alphabetMembers(stateParam.getType(), stateParam);
+  const checkedEvents = alphabetMembers(eventParam.getType(), eventParam);
+  const states = checkedStates.length
+    ? checkedStates
+    : alphabetMembersFromSyntax(stateTypeName, sf);
+  const events = checkedEvents.length
+    ? checkedEvents
+    : alphabetMembersFromSyntax(eventTypeName, sf);
   return {
     states: states.length ? states : undefined,
     events: events.length ? events : undefined,
-    source: classifyAlphabet(stateParam.getTypeNode()?.getText(), sf),
+    source: classifyAlphabet(stateTypeName, sf),
   };
 }
 
@@ -264,7 +318,13 @@ function alphabetFromTable(
     const name = ia.getObjectTypeNode().getText();
     if (seen.has(name)) continue;
     seen.add(name);
-    groups.push({ name, tags: stringLiteralsOfType(ia.getType()) });
+    const checkedTags = stringLiteralsOfType(ia.getType());
+    groups.push({
+      name,
+      tags: checkedTags.length
+        ? checkedTags
+        : alphabetMembersFromSyntax(name, sf),
+    });
   }
   const stateGroup = groups[0];
   const eventGroup = groups[1];

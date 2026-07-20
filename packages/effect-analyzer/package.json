@@ -18,6 +18,26 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./analysis": {
+      "types": "./dist/analysis.d.ts",
+      "import": "./dist/analysis.js",
+      "require": "./dist/analysis.cjs"
+    },
+    "./diagram": {
+      "types": "./dist/diagram.d.ts",
+      "import": "./dist/diagram.js",
+      "require": "./dist/diagram.cjs"
+    },
+    "./rules": {
+      "types": "./dist/rules.d.ts",
+      "import": "./dist/rules.js",
+      "require": "./dist/rules.cjs"
+    },
+    "./migration": {
+      "types": "./dist/migration.d.ts",
+      "import": "./dist/migration.js",
+      "require": "./dist/migration.cjs"
+    },
     "./browser": {
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.js",
@@ -69,19 +89,15 @@
   },
   "homepage": "https://github.com/jagreehal/effect-analyzer/tree/main/packages/effect-analyzer#readme",
   "peerDependencies": {
-    "effect": ">=3.21.3",
-    "@effect/platform": ">=0.96.1"
+    "effect": "^4.0.0-beta.99"
   },
   "peerDependenciesMeta": {
     "effect": {
       "optional": false
-    },
-    "@effect/platform": {
-      "optional": true
     }
   },
   "dependencies": {
-    "effect": "^3.21.4",
+    "effect": "^4.0.0-beta.99",
     "ts-morph": "^28.0.0"
   },
   "optionalDependencies": {

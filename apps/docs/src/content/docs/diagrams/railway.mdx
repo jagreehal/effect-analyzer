@@ -71,8 +71,8 @@ npx effect-analyze ./src/transfer.ts --format mermaid-railway --direction TB
 Generate railway diagrams through the library API:
 
 ```ts
-import { analyze } from "effect-analyzer"
-import { renderRailwayMermaid } from "effect-analyzer"
+import { analyze } from "effect-analyzer/analysis"
+import { renderRailwayMermaid } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())

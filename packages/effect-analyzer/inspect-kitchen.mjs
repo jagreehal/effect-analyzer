@@ -1,5 +1,5 @@
 import { Effect, Option } from 'effect';
-import { analyze } from './dist/index.js';
+import { analyze } from './dist/analysis.js';
 import { resolve } from 'node:path';
 const p=resolve('./src/__fixtures__/effect-kitchen-sink.ts');
 const irs=await Effect.runPromise(analyze(p).all());

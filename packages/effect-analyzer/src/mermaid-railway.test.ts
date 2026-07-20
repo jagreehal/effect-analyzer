@@ -169,7 +169,7 @@ describe('renderRailwayMermaid', () => {
             {
               id: 'handler-1',
               type: 'error-handler',
-              handlerType: 'catchAll',
+              handlerType: 'catch',
               source: makeNode({ id: 'n3', callee: 'recover', displayName: 'Recover', typeSignature: makeSig('RecoveryError') }),
             } as unknown as StaticFlowNode,
           ],

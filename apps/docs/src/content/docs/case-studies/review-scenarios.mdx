@@ -363,7 +363,7 @@ The PR introduces a `FraudCheck` service and verifies each transfer before execu
 
 ### What GitHub shows you
 
-Looks like a standard "add dependency, call it" change. The interesting detail — a new service in the R channel — is easy to miss when the `Context.Tag` class definition takes more visual space than the call.
+Looks like a standard "add dependency, call it" change. The interesting detail — a new service in the R channel — is easy to miss when the `Context.Service` class definition takes more visual space than the call.
 
 ```diff
 --- before.ts
@@ -377,18 +377,18 @@ Looks like a standard "add dependency, call it" change. The interesting detail �
  type TransferRejectedError = { _tag: 'TransferRejectedError' };
 +type FraudDeniedError = { _tag: 'FraudDeniedError' };
  
- export class Payments extends Context.Tag('Payments')<
+ export class Payments extends Context.Service<
    Payments,
 @@ -13,9 +14,18 @@
    }
- >() {}
+ >()('Payments') {}
  
-+export class FraudCheck extends Context.Tag('FraudCheck')<
++export class FraudCheck extends Context.Service<
 +  FraudCheck,
 +  {
 +    readonly verify: (amount: number) => Effect.Effect<void, FraudDeniedError>;
 +  }
-+>() {}
++>()('FraudCheck') {}
 +
  export const initiateTransfer = (amount: number) =>
    Effect.gen(function* () {
@@ -599,4 +599,3 @@ The analyzer's output, structural diff, error surface, railway diagram, answers 
 - [Semantic Diff](/effect-analyzer/project/diff/) — the feature powering every "Structural diff" block on this page.
 - [Transfer Observability](/effect-analyzer/diagrams/transfer-observability/) — the narrative around why the transfer example is worth analyzing at all.
 - [Transfer Evolution](/effect-analyzer/diagrams/transfer-evolution/) — the five-step build-up of the same workflow, showing the error channel grow step by step.
-

@@ -5,6 +5,10 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
+      analysis: 'src/analysis-entry.ts',
+      diagram: 'src/diagram-entry.ts',
+      rules: 'src/rules-entry.ts',
+      migration: 'src/migration-entry.ts',
       browser: 'src/browser.ts',
       'effect-workflow': 'src/effect-workflow.ts',
     },

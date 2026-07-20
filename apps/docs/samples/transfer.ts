@@ -1,18 +1,18 @@
 import { Effect, Context } from "effect"
 
-class AccountRepo extends Context.Tag("AccountRepo")<
+class AccountRepo extends Context.Service<
   AccountRepo,
   {
     readonly getBalance: (id: string) => Effect.Effect<number, AccountNotFoundError>
     readonly debit: (id: string, amount: number) => Effect.Effect<void, InsufficientFundsError>
     readonly credit: (id: string, amount: number) => Effect.Effect<void, AccountNotFoundError>
   }
->() {}
+>()("AccountRepo") {}
 
-class AuditLog extends Context.Tag("AuditLog")<
+class AuditLog extends Context.Service<
   AuditLog,
   { readonly record: (event: string) => Effect.Effect<void> }
->() {}
+>()("AuditLog") {}
 
 class AccountNotFoundError {
   readonly _tag = "AccountNotFoundError"

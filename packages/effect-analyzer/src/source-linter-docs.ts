@@ -45,9 +45,9 @@ Effect.fail(new Boom({ cause: "boom" }));`,
   'identity-catch': {
     docsUrl: `${D}/error-management/fallback/`,
     example: {
-      bad: `Effect.catchAll(eff, (e) => Effect.fail(e));`,
-      good: `// Either drop the catchAll entirely, or actually recover:
-Effect.catchAll(eff, (e) => Effect.succeed(defaultValue));`,
+      bad: `Effect.catch(eff, (e) => Effect.fail(e));`,
+      good: `// Either drop the catch entirely, or actually recover:
+Effect.catch(eff, (e) => Effect.succeed(defaultValue));`,
     },
   },
   'tryPromise-without-catch': {
@@ -157,7 +157,7 @@ Effect.suspend(() => Effect.succeed(1));`,
 Effect.runPromise(
   eff.pipe(
     Effect.map((x) => x + 1),
-    Effect.catchAll((e) => Effect.logError(e)),
+    Effect.catch((e) => Effect.logError(e)),
   ),
 );`,
     },

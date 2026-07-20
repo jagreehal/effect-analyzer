@@ -5,21 +5,21 @@ type TransferId = { id: string };
 type TransferRejectedError = { _tag: 'TransferRejectedError' };
 type FraudDeniedError = { _tag: 'FraudDeniedError' };
 
-export class Payments extends Context.Tag('Payments')<
+export class Payments extends Context.Service<
   Payments,
   {
     readonly execute: (
       amount: number,
     ) => Effect.Effect<TransferId, TransferRejectedError>;
   }
->() {}
+>()('Payments') {}
 
-export class FraudCheck extends Context.Tag('FraudCheck')<
+export class FraudCheck extends Context.Service<
   FraudCheck,
   {
     readonly verify: (amount: number) => Effect.Effect<void, FraudDeniedError>;
   }
->() {}
+>()('FraudCheck') {}
 
 export const initiateTransfer = (amount: number) =>
   Effect.gen(function* () {

@@ -25,7 +25,7 @@ import type {
 
 /** Regex to parse Effect<A, E, R> from type text when Type API fails */
 const EFFECT_TYPE_REGEX_3 = /Effect(?:\.Effect)?<([^,]+),\s*([^,]+),\s*([^>]+)>/;
-/** Regex to parse Effect<A, E> (2 params, R defaults to never in Effect v3) */
+/** Regex to parse Effect<A, E> (2 params, R defaults to never) */
 const EFFECT_TYPE_REGEX_2 = /Effect(?:\.Effect)?<([^,>]+),\s*([^,>]+)>/;
 
 /**
@@ -54,7 +54,7 @@ export function effectTypeSignatureFromTypeText(
     };
   }
 
-  // Try 2-param: Effect<A, E> (R defaults to never in Effect v3)
+  // Try 2-param: Effect<A, E> (R defaults to never)
   const match2 = EFFECT_TYPE_REGEX_2.exec(typeText);
   if (match2) {
     return {

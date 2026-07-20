@@ -30,7 +30,7 @@ const findIRByName = (
 };
 
 describe('swallowed-error', () => {
-  it('flags catchAll returning Effect.void', { timeout: 30_000 }, async () => {
+  it('flags catch returning Effect.void', { timeout: 30_000 }, async () => {
     const irs = await runFile();
     const ir = findIRByName(irs, 'swallowedErrorProgram');
     const issues = swallowedErrorRule.check(ir);
@@ -38,7 +38,7 @@ describe('swallowed-error', () => {
     expect(issues[0]?.rule).toBe('swallowed-error');
   });
 
-  it('does not flag catchAll that logs the error', { timeout: 30_000 }, async () => {
+  it('does not flag catch that logs the error', { timeout: 30_000 }, async () => {
     const irs = await runFile();
     const ir = findIRByName(irs, 'swallowedErrorWithLog');
     const issues = swallowedErrorRule.check(ir);

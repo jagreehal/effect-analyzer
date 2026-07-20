@@ -22,13 +22,13 @@ pnpm add effect-analyzer
 yarn add effect-analyzer
 ```
 
-`ts-morph` (the TypeScript AST parser that powers all static analysis) is bundled automatically.
+`ts-morph` ships with the analyzer.
 
-<Aside type="note">
-`effect` (version 3.0.0 or later) is a peer dependency. If your project already uses Effect, you likely have it installed. If not, add it:
+<Aside type="caution" title="Effect v4 only">
+`effect-analyzer` supports Effect v4. It does not support Effect v3. Install a v4 release in the project you want to analyze:
 
 ```bash
-npm install effect
+npm install effect@^4.0.0-beta.99
 ```
 </Aside>
 

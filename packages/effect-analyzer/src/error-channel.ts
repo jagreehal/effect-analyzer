@@ -102,7 +102,7 @@ export const analyzeErrorChannels = (
           line: ir.root.location?.line ?? 1,
           errorType: uh,
           description: `Error type "${uh}" is not handled in program "${ir.root.programName}"`,
-          suggestion: `Add a catchTag("${uh}", handler) or catchAll handler for this error type`,
+          suggestion: `Add a catchTag("${uh}", handler) or catch handler for this error type`,
           severity: 'warning',
         });
       }
@@ -223,7 +223,7 @@ const findUnhandledErrors = (ir: StaticEffectIR): readonly string[] => {
 
   visitNodes(ir.root, (node) => {
     if (isStaticErrorHandlerNode(node)) {
-      if (node.handlerType === 'catchAll' || node.handlerType === 'catchAllCause') {
+      if (node.handlerType === 'catch' || node.handlerType === 'catchCause') {
         hasCatchAll.value = true;
       }
       if (node.handlerType === 'catchTag' && node.errorTag) {
@@ -237,7 +237,7 @@ const findUnhandledErrors = (ir: StaticEffectIR): readonly string[] => {
     }
   });
 
-  // If there's a catchAll, all errors are handled (albeit generically)
+  // If there's a catch, all errors are handled (albeit generically)
   if (hasCatchAll.value) return [];
 
   // Collect error types from effect nodes that aren't caught

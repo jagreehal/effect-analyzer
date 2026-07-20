@@ -114,7 +114,7 @@ Without workspace-aware resolution, these are bare specifiers — indistinguisha
 Building the workspace map from each package's `package.json` and passing it to `analyzeCoupling`:
 
 ```typescript
-import { analyzeCoupling } from 'effect-analyzer';
+import { analyzeCoupling } from 'effect-analyzer/analysis';
 
 const workspacePackages = {
   'alchemy':                  resolve(repo, 'packages/alchemy/src'),

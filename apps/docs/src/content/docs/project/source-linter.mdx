@@ -23,7 +23,7 @@ Eighteen rules covering the most common Effect anti-patterns surfaced in [`Effec
 | `effect-fail-untagged` | warning | `Effect.fail(new Error("…"))` — degrades the typed error channel |
 | `empty-effect-all` | info | `Effect.all([])` — dead or placeholder code |
 | `forEach-without-concurrency` | info | `Effect.forEach(items, f)` without an explicit `concurrency` option |
-| `identity-catch` | warning | `Effect.catchAll(e, (e) => Effect.fail(e))` — no-op handler |
+| `identity-catch` | warning | `Effect.catch(e, (e) => Effect.fail(e))` — no-op handler |
 | `live-layer-in-test` | warning | `Live` layer references in test files where test layers are expected |
 | `mutable-in-concurrent` | warning | `let`/`var` mutation inside parallel / fork / race contexts |
 | `nondeterministic-test-api` | warning | `Date.now()` / `new Date()` / `Math.random()` in test code |

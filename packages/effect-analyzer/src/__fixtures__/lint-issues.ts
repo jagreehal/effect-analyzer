@@ -19,7 +19,7 @@ export const missingHandlerProgram = Effect.gen(function* () {
     catch: (error) => new Error(String(error)),
   });
   return result as unknown;
-}); // No catchAll or catchTag after the gen
+}); // No catch or catchTag after the gen
 
 // Issue: Unused variable (dead code)
 export const deadCodeProgram = Effect.gen(function* () {
@@ -47,12 +47,12 @@ export const complexLayerProgram = Effect.gen(function* () {
   Effect.provideService('Service11' as never, {} as never),
 );
 
-// Using catchAll when catchTag might be better
-export const catchAllProgram = Effect.gen(function* () {
+// Using catch when catchTag might be better
+export const catchProgram = Effect.gen(function* () {
   return yield* Effect.fail({ _tag: 'NotFound' as const, message: 'Not found' });
 }).pipe(
-  // LINT: Using catchAll when error has _tag discriminator
-  Effect.catchAll((error) => Effect.succeed({ recovered: true, error })),
+  // LINT: Using catch when error has _tag discriminator
+  Effect.catch((error) => Effect.succeed({ recovered: true, error })),
 );
 
 // Good example - proper error handling
@@ -61,7 +61,7 @@ export const goodProgram = Effect.gen(function* () {
   const result = yield* Effect.succeed(42);
   return result;
 }).pipe(
-  Effect.catchAll(() => Effect.succeed(0)),
+  Effect.catch(() => Effect.succeed(0)),
 );
 
 export const main = goodProgram;

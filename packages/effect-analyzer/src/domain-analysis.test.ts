@@ -571,10 +571,11 @@ describe('effect-analyzer (domain)', () => {
       expect(lookupIR).toBeDefined();
       if (!lookupIR) return;
 
-      // Walk the IR to find an effect node with serviceCall populated
+      // Effect v4 identifies yielded Context tags directly, so service method
+      // calls are joined to the tag rather than a checker-expanded interface.
       const serviceCalls: import('./types').StaticEffectNode[] = [];
       const walk = (node: import('./types').StaticFlowNode) => {
-        if (isStaticEffectNode(node) && node.serviceCall) {
+        if (isStaticEffectNode(node) && node.serviceMethod) {
           serviceCalls.push(node);
         }
         const children = Option.getOrElse(getStaticChildren(node), () => []);
@@ -583,11 +584,11 @@ describe('effect-analyzer (domain)', () => {
       lookupIR.root.children.forEach(walk);
 
       const getByIdCall = serviceCalls.find(
-        (n) => n.serviceCall?.methodName === 'getById',
+        (n) => n.serviceMethod?.methodName === 'getById',
       );
       expect(getByIdCall).toBeDefined();
-      expect(getByIdCall?.serviceCall?.serviceType).toBe('UserRepo');
-      expect(getByIdCall?.serviceCall?.objectName).toBe('repo');
+      expect(getByIdCall?.serviceMethod?.serviceId).toBe('UserRepoService');
+      expect(getByIdCall?.callee).toBe('repo.getById');
       expect(getByIdCall?.description).toBe('service-call');
     });
   });
@@ -741,7 +742,7 @@ export const program = E.gen(function* () {
             tsConfigPath: tsconfigPath,
             knownEffectInternalsRoot: join(tmp, 'nonexistent-effect-root'),
           }).all().pipe(
-            Effect.catchAll(() => Effect.succeed([] as readonly import('./types').StaticEffectIR[])),
+            Effect.catch(() => Effect.succeed([] as readonly import('./types').StaticEffectIR[])),
           ),
         );
         expect(result.length).toBe(0);

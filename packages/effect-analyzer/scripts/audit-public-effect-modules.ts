@@ -27,13 +27,13 @@ async function auditModule(
   knownEffectInternalsRoot: string,
 ): Promise<unknown> {
   const base = await Effect.runPromise(
-    analyze(filePath, { knownEffectInternalsRoot }).all().pipe(Effect.either),
+    analyze(filePath, { knownEffectInternalsRoot }).all().pipe(Effect.result),
   );
-  if (base._tag === 'Left') {
-    return { file: filePath, error: base.left.code };
+  if (base._tag === 'Failure') {
+    return { file: filePath, error: base.failure.code };
   }
 
-  const rows = base.right;
+  const rows = base.success;
   const low = rows.filter((r) => r.root.discoveryConfidence === 'low');
   const medium = rows.filter((r) => r.root.discoveryConfidence === 'medium');
   const high = rows.filter((r) => r.root.discoveryConfidence === 'high');
@@ -43,7 +43,7 @@ async function auditModule(
       knownEffectInternalsRoot,
       onlyExportedPrograms: true,
       minDiscoveryConfidence: 'high',
-    }).all().pipe(Effect.either),
+    }).all().pipe(Effect.result),
   );
 
   const exportedAll = await Effect.runPromise(
@@ -51,13 +51,13 @@ async function auditModule(
       knownEffectInternalsRoot,
       onlyExportedPrograms: true,
       minDiscoveryConfidence: 'low',
-    }).all().pipe(Effect.either),
+    }).all().pipe(Effect.result),
   );
 
   const exportedLowNames =
-    exportedAll._tag === 'Left'
+    exportedAll._tag === 'Failure'
       ? []
-      : exportedAll.right
+      : exportedAll.success
           .filter((r) => r.root.discoveryConfidence === 'low')
           .map((r) => r.root.programName);
 
@@ -73,11 +73,11 @@ async function auditModule(
     exportedLowNames,
     launchReadyPublicSurface: exportedLowNames.length === 0,
     publicHigh:
-      publicHigh._tag === 'Left'
-        ? { error: publicHigh.left.code }
+      publicHigh._tag === 'Failure'
+        ? { error: publicHigh.failure.code }
         : {
-            count: publicHigh.right.length,
-            sample: publicHigh.right.slice(0, 20).map((r) => r.root.programName),
+            count: publicHigh.success.length,
+            sample: publicHigh.success.slice(0, 20).map((r) => r.root.programName),
           },
   };
 }
