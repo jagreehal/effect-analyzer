@@ -47,3 +47,6 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Statechart coverage gate
+        run: node packages/effect-analyzer/dist/cli.js ./apps/docs/samples/observability-transfer/transfer-lifecycle.ts --format statechart-coverage --min-coverage 80

@@ -231,7 +231,7 @@ All exported from `src/index.ts`:
 - **Strict diagnostics:** `validateStrict()` — Strict mode validation
 - **Match analysis:** `analyzeMatch()` — Match statement patterns
 - **State machines:** `analyzeStateMachines(filePath)` — extracts FSMs (transition tables + `Match.when` functions + nested `Match.tags` state/event dispatch), declared alphabet from types/Schema/Schema.TaggedClass/Schema.TaggedRequest; `computeStateMachineCoverage()` flags unhandled events / unreachable states / undeclared symbols. Renderers: `renderStatechartMermaid`, `renderStatechartSVG`, `renderStatechartVisualizerHTML`, `renderXStateConfig`, `renderCoverageReport`, `hasCoverageWarnings`. CLI handled by `runStatechartMode` (early dispatch, not the IR pipeline).
-  - Convention guide: `packages/effect-analyzer/state-machine-conventions.md`
+  - Convention guide: `apps/docs/src/content/docs/reference/state-machines.mdx` (https://jagreehal.github.io/effect-analyzer/reference/state-machines/)
 - **Platform:** `analyzePlatformUsage()` — Platform detection
 - **Testing:** `analyzeTestingPatterns()` — Test pattern detection
 - **Version:** `getEffectVersion()`, `checkVersionCompat()`

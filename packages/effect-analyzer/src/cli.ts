@@ -2077,7 +2077,7 @@ const runStatechartMode = (
       });
       if (rejections.length === 0) {
         yield* Console.error(
-          'No state machines found. See docs/effect-state-machine-conventions.md for the transition-table and Match.when shapes.',
+          'No state machines found. See https://jagreehal.github.io/effect-analyzer/reference/state-machines/ for the transition-table and Match.when shapes.',
         );
       } else {
         yield* Console.error(

@@ -8,6 +8,7 @@
  * a hub fan out to separate lanes so their pills never overlap a node.
  */
 
+import { finalStatesOf } from '../state-machine';
 import type { StateMachine } from '../state-machine';
 import type { StateMachineCoverage } from '../state-machine-coverage';
 
@@ -155,7 +156,7 @@ export function renderStatechartSVG(
     MARGIN_TOP + maxRows * (NODE_H + V_GAP) - V_GAP + MARGIN_BOTTOM;
   const dipY = contentH - 32;
 
-  const hasOutgoing = new Set(machine.transitions.map((t) => t.from));
+  const finals = finalStatesOf(machine);
   const edges: string[] = [];
   const pills: string[] = [];
 
@@ -252,7 +253,7 @@ export function renderStatechartSVG(
   const nodes: string[] = [];
   for (const box of boxes.values()) {
     const isInitial = box.state === machine.initial;
-    const isFinal = !hasOutgoing.has(box.state);
+    const isFinal = finals.has(box.state);
     const isUnreachable = unreachableSet.has(box.state);
     const isUndeclared = undeclaredSet.has(box.state);
     const stroke = isUnreachable

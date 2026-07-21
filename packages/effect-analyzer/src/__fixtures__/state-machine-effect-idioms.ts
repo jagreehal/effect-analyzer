@@ -4,21 +4,9 @@ class Idle extends Schema.TaggedClass<Idle>()('Idle', {}) {}
 class Active extends Schema.TaggedClass<Active>()('Active', {}) {}
 class Closed extends Schema.TaggedClass<Closed>()('Closed', {}) {}
 
-class Start extends Schema.TaggedRequest<Start>()('Start', {
-  failure: Schema.Never,
-  success: Schema.Void,
-  payload: {},
-}) {}
-class Stop extends Schema.TaggedRequest<Stop>()('Stop', {
-  failure: Schema.Never,
-  success: Schema.Void,
-  payload: {},
-}) {}
-class Fail extends Schema.TaggedRequest<Fail>()('Fail', {
-  failure: Schema.Never,
-  success: Schema.Void,
-  payload: {},
-}) {}
+class Start extends Schema.TaggedClass<Start>()('Start', {}) {}
+class Stop extends Schema.TaggedClass<Stop>()('Stop', {}) {}
+class Fail extends Schema.TaggedClass<Fail>()('Fail', {}) {}
 
 type WorkflowState = Idle | Active | Closed;
 type WorkflowEvent = Start | Stop | Fail;
@@ -43,24 +31,29 @@ export const workflowTransitions = {
   Partial<Record<WorkflowEvent['_tag'], WorkflowTarget>>
 >;
 
+// Nested Match dispatch: outer tags are states, inner tags are events. The
+// outer matcher closes with `tagsExhaustive`; inner matchers close with
+// `orElse` so unhandled events keep the current state.
 export const taggedTransition = (
   state: WorkflowState,
   event: WorkflowEvent,
 ): WorkflowState =>
   Match.value(state).pipe(
-    Match.tags({
+    Match.tagsExhaustive({
       Idle: () =>
         Match.value(event).pipe(
           Match.tags({
-            Start: () => ({ _tag: 'Active' as const }),
+            Start: (): WorkflowState => new Active(),
           }),
+          Match.orElse(() => state),
         ),
       Active: () =>
         Match.value(event).pipe(
           Match.tags({
-            Stop: () => ({ _tag: 'Closed' as const }),
-            Fail: () => ({ _tag: 'Idle' as const }),
+            Stop: (): WorkflowState => new Closed(),
+            Fail: (): WorkflowState => new Idle(),
           }),
+          Match.orElse(() => state),
         ),
       Closed: () => state,
     }),
@@ -68,7 +61,7 @@ export const taggedTransition = (
 
 export const plainVariantDispatch = (event: WorkflowEvent): string =>
   Match.value(event).pipe(
-    Match.tags({
+    Match.tagsExhaustive({
       Start: () => 'started',
       Stop: () => 'stopped',
       Fail: () => 'failed',

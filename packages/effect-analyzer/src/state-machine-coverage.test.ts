@@ -69,6 +69,13 @@ describe('computeStateMachineCoverage', () => {
     expect(cov.undeclaredStates).toEqual([]);
     expect(cov.unreachableStates).toEqual([]);
   });
+
+  it('does not report explicitly final states as dead ends', () => {
+    const cov = coverageFor('state-machine-advanced.ts', 'publishTransitions');
+    // Published is marked `type: 'final'` — intentional, not a dead end.
+    expect(cov.deadEndStates).toEqual([]);
+    expect(cov.findings.filter((f) => f.kind === 'dead-end-state')).toEqual([]);
+  });
 });
 
 describe('coverage report + annotations', () => {

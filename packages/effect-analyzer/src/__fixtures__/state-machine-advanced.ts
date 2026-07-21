@@ -54,3 +54,44 @@ export const gateTransitions = {
   Closed: { Unlock: 'Open' },
   Open: { Lock: 'Closed' },
 } as const;
+
+// ---------------------------------------------------------------------------
+// Hierarchical states (dotted names) + automatic transitions (always / after)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Actions, invoke annotations, and an explicit final state
+// ---------------------------------------------------------------------------
+
+/** @initial Draft */
+export const publishTransitions = {
+  Draft: {
+    entry: 'enterDraft',
+    exit: ['persistDraft'],
+    Submit: { target: 'Submitting', actions: ['persistDraft', 'recordSubmission'] },
+  },
+  Submitting: {
+    invoke: {
+      src: 'submitPayment',
+      onDone: 'Published',
+      onError: { target: 'Draft', guard: 'retryable' },
+    },
+  },
+  Published: { type: 'final' },
+} as const;
+
+/** @initial Loading */
+export const playerTransitions = {
+  Loading: {
+    always: { target: 'Playing.Running', guard: 'autoplay' },
+    Ready: 'Playing.Paused',
+  },
+  'Playing.Running': {
+    Pause: 'Playing.Paused',
+    'after 5000ms': 'Stopped',
+  },
+  'Playing.Paused': {
+    Play: 'Playing.Running',
+  },
+  Stopped: {},
+} as const;

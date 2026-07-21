@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fromMachineJSON, type MachineJSON } from './state-machine-json';
 import { computeStateMachineCoverage } from './state-machine-coverage';
 import { renderStatechartMermaid } from './output/mermaid-statechart';
+import { renderXStateConfig } from './output/xstate-config';
 
 const door: MachineJSON = {
   id: 'door',
@@ -250,6 +251,165 @@ describe('fromMachineJSON', () => {
     expect(mermaid).toContain('Closed --> Open: Toggle');
   });
 
+  it('round-trips a nested config through the renderers', () => {
+    const m = fromMachineJSON({
+      id: 'checkout',
+      initial: 'Checkout',
+      states: {
+        Checkout: {
+          initial: { target: 'Cart' },
+          states: {
+            Cart: { on: { Submit: 'Payment' } },
+            Payment: { on: { Back: 'Cart', Pay: '#checkout.Done' } },
+          },
+        },
+        Done: { type: 'final' },
+        Abandoned: {},
+      },
+    });
+
+    const mermaid = renderStatechartMermaid(m);
+    // Composite block with the compound initial rendered inside it.
+    expect(mermaid).toContain('state Checkout {');
+    expect(mermaid).toContain('[*] --> Checkout_Cart');
+    expect(mermaid).toContain('state "Cart" as Checkout_Cart');
+    expect(mermaid).not.toContain(': initial');
+
+    const config = renderXStateConfig(m);
+    expect(config).toContain("initial: 'Checkout',");
+    expect(config).toContain("initial: 'Cart'");
+    expect(config).toContain("Submit: '#checkout.Checkout.Payment'");
+    // Only an explicit `type: 'final'` is final; a transitionless `{}` node
+    // is still active and must not be converted.
+    expect(config).toContain("Done: { type: 'final' }");
+    expect(config).toContain('Abandoned: {}');
+    expect(config).not.toContain('on: { initial:');
+    expect(mermaid).toContain('Done --> [*]');
+    expect(mermaid).not.toContain('Abandoned --> [*]');
+  });
+
+  it('ingests invoke, entry/exit actions, and transition actions', () => {
+    const m = fromMachineJSON({
+      id: 'payment',
+      initial: 'Editing',
+      states: {
+        Editing: {
+          entry: [{ type: 'focusForm' }],
+          on: {
+            Submit: { target: 'Submitting', actions: [{ type: 'persistDraft' }] },
+          },
+        },
+        Submitting: {
+          invoke: {
+            src: 'submitPayment',
+            onDone: 'Done',
+            onError: { target: 'Editing', guard: { type: 'retryable' } },
+          },
+        },
+        Done: { type: 'final' },
+      },
+    });
+
+    expect(m.entryActions).toEqual({ Editing: ['focusForm'] });
+    expect(m.invokes).toEqual({ Submitting: [{ src: 'submitPayment' }] });
+    expect(m.transitions).toContainEqual({
+      from: 'Editing',
+      event: 'Submit',
+      to: 'Submitting',
+      actions: ['persistDraft'],
+    });
+    expect(m.transitions).toContainEqual({
+      from: 'Submitting',
+      event: 'onDone',
+      to: 'Done',
+      trigger: 'done',
+      invokeIndex: 0,
+    });
+    // invoke completions are reachability edges, not events, in coverage
+    const cov = computeStateMachineCoverage(m);
+    expect(cov.usedEvents).toEqual(['Submit']);
+    expect(cov.unreachableStates).toEqual([]);
+
+    const config = renderXStateConfig(m);
+    expect(config).toContain(
+      "invoke: { src: 'submitPayment', onDone: 'Done', onError: [{ target: 'Editing', guard: 'retryable' }] }",
+    );
+    expect(config).toContain("entry: ['focusForm']");
+  });
+
+  it('preserves every invoke and associates completion transitions by index', () => {
+    const m = fromMachineJSON({
+      id: 'multiInvoke',
+      initial: 'Busy',
+      states: {
+        Busy: {
+          invoke: [
+            { id: 'loadUser', src: 'loadUser', onDone: 'UserReady' },
+            { id: 'loadTeam', src: 'loadTeam', onDone: 'TeamReady' },
+          ],
+        },
+        UserReady: {},
+        TeamReady: {},
+      },
+    });
+
+    expect(m.invokes).toEqual({
+      Busy: [
+        { id: 'loadUser', src: 'loadUser' },
+        { id: 'loadTeam', src: 'loadTeam' },
+      ],
+    });
+    expect(m.transitions).toContainEqual({
+      from: 'Busy',
+      event: 'onDone',
+      to: 'UserReady',
+      trigger: 'done',
+      invokeIndex: 0,
+    });
+    expect(m.transitions).toContainEqual({
+      from: 'Busy',
+      event: 'onDone',
+      to: 'TeamReady',
+      trigger: 'done',
+      invokeIndex: 1,
+    });
+
+    const config = renderXStateConfig(m);
+    expect(config).toContain(
+      "invoke: [{ src: 'loadUser', id: 'loadUser', onDone: 'UserReady' }, { src: 'loadTeam', id: 'loadTeam', onDone: 'TeamReady' }]",
+    );
+  });
+
+  it('carries parallel states through to the exported config', () => {
+    const m = fromMachineJSON({
+      id: 'checkout',
+      initial: 'Active',
+      states: {
+        Active: {
+          type: 'parallel',
+          states: {
+            Payment: {
+              initial: 'Editing',
+              states: { Editing: { on: { Save: 'Saved' } }, Saved: {} },
+            },
+            Validation: {
+              initial: 'Pending',
+              states: { Pending: { on: { Validate: 'Valid' } }, Valid: {} },
+            },
+          },
+        },
+      },
+    });
+    expect(m.parallelStates).toEqual(['Active']);
+
+    const config = renderXStateConfig(m);
+    expect(config).toContain("type: 'parallel'");
+    // a parallel node has no initial of its own; its regions keep theirs
+    expect(config).toMatch(/Active: \{\n\s+type: 'parallel',\n\s+states: \{/);
+    expect(config).toContain("initial: 'Editing'");
+    expect(config).toContain("initial: 'Pending'");
+  });
+
   it('honors a name override', () => {
     expect(fromMachineJSON(door, { name: 'FrontDoor' }).name).toBe('FrontDoor');
     expect(fromMachineJSON({ initial: 'X', states: { X: { on: {} } } }).name).toBe('machine');
@@ -272,5 +432,16 @@ describe('fromMachineJSON', () => {
         } as unknown as MachineJSON),
       ).toThrow(/target/);
     });
+    it.each([42, null, {}, { $unserializable: 'unknown' }])(
+      'rejects malformed invoke src %j',
+      (src) => {
+        expect(() =>
+          fromMachineJSON({
+            initial: 'A',
+            states: { A: { invoke: { src } } },
+          } as unknown as MachineJSON),
+        ).toThrow(/fromMachineJSON:.*invoke\[0\]\.src/);
+      },
+    );
   });
 });

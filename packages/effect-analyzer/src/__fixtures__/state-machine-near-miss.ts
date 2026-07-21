@@ -32,4 +32,5 @@ export const describe = (state: S): string =>
       A: () => 'is A',
       B: () => 'is B',
     }),
+    Match.orElse(() => 'unknown'),
   );
