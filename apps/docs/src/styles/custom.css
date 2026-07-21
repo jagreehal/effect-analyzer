@@ -859,12 +859,14 @@ site-search button[data-open-modal] kbd {
 }
 .ea-compare__code code { font: inherit; background: transparent; border: none; padding: 0; color: inherit; }
 
-/* lightweight token colors for the inline-highlighted Effect snippet */
+/* lightweight token colors for the inline-highlighted Effect snippet.
+   Forced-dark splash panels (#15171c): hardcode so light theme greys
+   cannot collapse contrast on params / identifiers. */
 .t-kw  { color: #c792ea; }
-.t-fn  { color: var(--ea-primary-soft); }
-.t-typ { color: var(--ea-signal); font-weight: 500; }
-.t-arg { color: var(--sl-color-gray-2); }
-.t-svc { color: var(--ea-signal); font-weight: 500; }
+.t-fn  { color: #a78bfa; }
+.t-typ { color: #4dd4ff; font-weight: 500; }
+.t-arg { color: #b8bcc6; }
+.t-svc { color: #4dd4ff; font-weight: 500; }
 .t-err { color: #ff7b7b; }
 .t-str { color: #a0c891; }
 
@@ -1000,7 +1002,7 @@ site-search button[data-open-modal] kbd {
   border-radius: 3px;
   background: var(--ea-bg-elevated);
   border: 1px solid var(--sl-color-hairline);
-  color: var(--ea-primary-soft);
+  color: var(--sl-color-text-accent);
 }
 
 @media (max-width: 960px) {

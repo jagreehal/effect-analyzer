@@ -120,26 +120,33 @@ Auto-mode picks the most relevant views for your program, or choose explicitly:
 
 ### State Machines Without XState
 
-Write deterministic state machines in plain Effect — a declarative transition
-table, a `Match.when` transition function, or nested `Match.tags` state/event
-dispatch — and render them as XState-style statecharts. No XState dependency
-required. See the full convention guide in
-[`state-machine-conventions.md`](./state-machine-conventions.md).
+Write deterministic state machines as ordinary TypeScript — a declarative
+transition table, a `Match.when` transition function, or nested `Match.tags`
+state/event dispatch — and render them as XState-style statecharts. Guards,
+named actions (`entry` / `exit` / transition `actions`), invoked effects
+(`invoke` with `onDone` / `onError`), explicit final states, hierarchical
+states (dotted names like `'Playing.Paused'` nest in the diagrams and exported
+config), and automatic transitions (`always`, `'after 500ms'`) are all
+modeled. Much of XState's modeling value with no extra runtime: execution and
+effects stay in your Effect code. See the full convention guide in the
+[State Machines](https://jagreehal.github.io/effect-analyzer/reference/state-machines/)
+docs.
 
 ```bash
-# No flags: the default view surfaces any state machine in the file
-npx effect-analyze ./workflow.ts
+# Machine-only files: use a statechart format (skips the Effect IR path)
+npx effect-analyze ./workflow.ts --format mermaid-statechart
 
 # A local visualizer page (diagram + coverage + paste-ready config).
 # With no -o it writes workflow.statechart.html next to the input
 npx effect-analyze ./workflow.ts --format statechart-html
 
-# A stateDiagram-v2 for markdown / GitHub
-npx effect-analyze ./workflow.ts --format mermaid-statechart
-
 # An XState createMachine() config — paste into stately.ai/viz for the real
 # interactive visualizer, generated straight from your Effect code
 npx effect-analyze ./workflow.ts --format xstate-config
+
+# Files that also contain Effect programs: default view runs Effect analysis,
+# then appends any detected statecharts
+npx effect-analyze ./workflow.ts
 ```
 
 These shapes are recognized:

@@ -136,7 +136,11 @@ export function computeStateMachineCoverage(
     ? usedEvents.filter((e) => !eventSet.has(e))
     : [];
   // A dead end has no outgoing edge of any kind (no event, no auto-advance).
-  const deadEndStates = [...reachable].filter((s) => !hasAnyOutgoing.has(s));
+  // States explicitly marked final are intentional, not dead ends.
+  const explicitFinals = new Set(machine.finalStates ?? []);
+  const deadEndStates = [...reachable].filter(
+    (s) => !hasAnyOutgoing.has(s) && !explicitFinals.has(s),
+  );
 
   // Coverage = handled (state,event) pairs over reachable states that actually
   // handle events. States whose only exit is automatic expect no events.

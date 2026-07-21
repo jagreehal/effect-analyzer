@@ -35,12 +35,25 @@ export interface StateTransition {
   /** Guard condition text when the transition is conditional (best-effort). */
   readonly guard?: string;
   /**
-   * Present when the transition fires automatically rather than on a user
-   * event: `initial`, `always` (eventless), or `after` (delayed).
-   * Automatic transitions are reachability edges but are excluded from
-   * event-coverage accounting. Absent for ordinary event transitions.
+   * Named action labels attached to the transition. Labels only: the analyzer
+   * renders and exports them but never runs anything.
    */
-  readonly trigger?: 'initial' | 'always' | 'after';
+  readonly actions?: readonly string[];
+  /**
+   * Present when the transition fires automatically rather than on a user
+   * event: `initial`, `always` (eventless), `after` (delayed), or
+   * `done`/`error` (invoke completion). Automatic transitions are
+   * reachability edges but are excluded from event-coverage accounting.
+   * Absent for ordinary event transitions.
+   */
+  readonly trigger?: 'initial' | 'always' | 'after' | 'done' | 'error';
+  /** Zero-based index of the invoke that owns a done/error transition. */
+  readonly invokeIndex?: number;
+}
+
+export interface StateInvoke {
+  readonly src: string;
+  readonly id?: string;
 }
 
 export interface StateMachine {
@@ -59,6 +72,27 @@ export interface StateMachine {
   readonly declaredStates: readonly string[] | undefined;
   readonly declaredEvents: readonly string[] | undefined;
   readonly alphabetSource: 'schema' | 'tagged-union' | 'config' | undefined;
+  /**
+   * States the source explicitly marks final (`type: 'final'` in MachineJSON
+   * or a transition table). `undefined` means the source has no final marker,
+   * and renderers fall back to no-outgoing-transition inference.
+   */
+  readonly finalStates?: readonly string[];
+  /** States marked `type: 'parallel'` (MachineJSON): every child region is entered. */
+  readonly parallelStates?: readonly string[];
+  /** Entry action labels per state. Labels only — never executed. */
+  readonly entryActions?: Readonly<Record<string, readonly string[]>>;
+  /** Exit action labels per state. Labels only — never executed. */
+  readonly exitActions?: Readonly<Record<string, readonly string[]>>;
+  /** Invoked-effect metadata per state (`invoke: { src }` or an invoke array). */
+  readonly invokes?: Readonly<Record<string, readonly StateInvoke[]>>;
+}
+
+/** Explicit finals when the source declares them; else no-outgoing inference. */
+export function finalStatesOf(machine: StateMachine): ReadonlySet<string> {
+  if (machine.finalStates !== undefined) return new Set(machine.finalStates);
+  const hasOutgoing = new Set(machine.transitions.map((t) => t.from));
+  return new Set(machine.states.filter((s) => !hasOutgoing.has(s)));
 }
 
 export interface StateMachineAnalysis {
@@ -178,6 +212,21 @@ function alphabetMembers(type: TsType, at: Node): string[] {
 }
 
 /**
+ * The tag of a `Schema.TaggedClass<X>()('Tag', ...)`-style class declared in
+ * this file, read syntactically from its extends clause. `undefined` when the
+ * class is absent, imported, or not a Schema tagged class.
+ */
+function classTag(
+  name: string,
+  sf: ReturnType<Project['createSourceFile']>,
+): string | undefined {
+  const extendsText = sf.getClass(name)?.getExtends()?.getText() ?? '';
+  return /Tagged(?:Class|Request|Error)[\s\S]*?\)\s*\(\s*["'`]([^"'`]+)["'`]/.exec(
+    extendsText,
+  )?.[1];
+}
+
+/**
  * Effect v4 Schema classes intentionally hide more of their encoded union
  * shape from the TypeScript checker. Recover the declared alphabet from the
  * local schema declarations instead of depending on v3-era type expansion.
@@ -206,9 +255,7 @@ function alphabetMembersFromSyntax(
   };
 
   for (const name of names) {
-    const cls = sf.getClass(name);
-    const extendsText = cls?.getExtends()?.getText() ?? '';
-    add(/Tagged(?:Class|Request|Error)[\s\S]*?\)\s*\(\s*["'`]([^"'`]+)["'`]/.exec(extendsText)?.[1]);
+    add(classTag(name, sf));
 
     const variable = sf.getVariableDeclaration(name);
     const initializerText = variable?.getInitializer()?.getText() ?? '';
@@ -381,7 +428,7 @@ function annotatedInitials(decl: Node): string[] {
   const leading = stmt
     .getFullText()
     .slice(0, stmt.getStart() - stmt.getFullStart());
-  return [...leading.matchAll(/@initial\s+([A-Za-z_$][\w$]*)/g)]
+  return [...leading.matchAll(/@initial\s+([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/g)]
     .map((m) => m[1])
     .filter((x): x is string => x !== undefined);
 }
@@ -405,23 +452,51 @@ function pickInitial(
 // Shape A: declarative transition table
 // =============================================================================
 
-function tableLeafTargets(
-  node: Node | undefined,
-): { to: string; guard?: string }[] {
+/** A string, or an array of strings, read as a string list. */
+function stringList(node: Node | undefined): string[] | undefined {
+  if (!node) return undefined;
+  const u = unwrap(node);
+  const single = stringValue(u);
+  if (single !== undefined) return [single];
+  if (Node.isArrayLiteralExpression(u)) {
+    const items = u.getElements().map((e) => stringValue(e));
+    return items.every((x): x is string => x !== undefined) && items.length > 0
+      ? items
+      : undefined;
+  }
+  return undefined;
+}
+
+function propInitializer(obj: ObjectLiteralExpression, name: string): Node | undefined {
+  return obj.getProperty(name)?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+}
+
+interface TableTarget {
+  readonly to: string;
+  readonly guard?: string;
+  readonly actions?: readonly string[];
+}
+
+function tableLeafTargets(node: Node | undefined): TableTarget[] {
   if (!node) return [];
   const leaf = unwrap(node);
   const direct = stringValue(leaf);
   if (direct) return [{ to: direct }];
   if (Node.isObjectLiteralExpression(leaf)) {
     const target =
-      stringValue(leaf.getProperty('target')?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer()) ??
-      stringValue(leaf.getProperty('to')?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer()) ??
+      stringValue(propInitializer(leaf, 'target')) ??
+      stringValue(propInitializer(leaf, 'to')) ??
       tagFromObject(leaf);
     if (!target) return [];
-    const guard = stringValue(
-      leaf.getProperty('guard')?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer(),
-    );
-    return guard === undefined ? [{ to: target }] : [{ to: target, guard }];
+    const guard = stringValue(propInitializer(leaf, 'guard'));
+    const actions = stringList(propInitializer(leaf, 'actions'));
+    return [
+      {
+        to: target,
+        ...(guard !== undefined ? { guard } : {}),
+        ...(actions !== undefined ? { actions } : {}),
+      },
+    ];
   }
   if (Node.isArrayLiteralExpression(leaf)) {
     return leaf
@@ -445,6 +520,30 @@ function extractTable(
 
   const transitions: StateTransition[] = [];
   const fromStates: string[] = [];
+  const finals: string[] = [];
+  const entryActions: Record<string, readonly string[]> = {};
+  const exitActions: Record<string, readonly string[]> = {};
+  const invokes: Record<string, readonly StateInvoke[]> = {};
+
+  const pushTargets = (
+    from: string,
+    event: string,
+    targets: readonly TableTarget[],
+    trigger?: StateTransition['trigger'],
+    invokeIndex?: number,
+  ): void => {
+    for (const { to, guard, actions } of targets) {
+      transitions.push({
+        from,
+        event,
+        to,
+        ...(guard !== undefined ? { guard } : {}),
+        ...(actions !== undefined ? { actions } : {}),
+        ...(trigger !== undefined ? { trigger } : {}),
+        ...(invokeIndex !== undefined ? { invokeIndex } : {}),
+      });
+    }
+  };
 
   for (const prop of obj.getProperties()) {
     if (!Node.isPropertyAssignment(prop)) return undefined; // not a clean table
@@ -456,13 +555,46 @@ function extractTable(
     for (const inner of val.getProperties()) {
       if (!Node.isPropertyAssignment(inner)) return undefined;
       const event = propName(inner);
-      const targets = tableLeafTargets(inner.getInitializer());
-      if (event === undefined || targets.length === 0) return undefined;
-      for (const { to, guard } of targets) {
-        transitions.push(
-          guard === undefined ? { from, event, to } : { from, event, to, guard },
-        );
+      if (event === undefined) return undefined;
+
+      // Reserved state-level keys (not events): `type: 'final'`, entry/exit
+      // action labels, and `invoke: { src, onDone, onError }`.
+      if (event === 'type') {
+        if (stringValue(inner.getInitializer()) !== 'final') return undefined;
+        finals.push(from);
+        continue;
       }
+      if (event === 'entry' || event === 'exit') {
+        const labels = stringList(inner.getInitializer());
+        if (labels === undefined) return undefined;
+        if (event === 'entry') entryActions[from] = labels;
+        else exitActions[from] = labels;
+        continue;
+      }
+      if (event === 'invoke') {
+        const inv = unwrap(inner.getInitializerOrThrow());
+        if (!Node.isObjectLiteralExpression(inv)) return undefined;
+        const src = stringValue(propInitializer(inv, 'src'));
+        if (src === undefined) return undefined;
+        invokes[from] = [{ src }];
+        const done = tableLeafTargets(propInitializer(inv, 'onDone'));
+        const error = tableLeafTargets(propInitializer(inv, 'onError'));
+        pushTargets(from, 'onDone', done, 'done', 0);
+        pushTargets(from, 'onError', error, 'error', 0);
+        continue;
+      }
+
+      const targets = tableLeafTargets(inner.getInitializer());
+      if (targets.length === 0) return undefined;
+      // Reserved keys for automatic transitions, mirroring the MachineJSON
+      // event labels: `always` (eventless) and `'after 500ms'` (delayed).
+      const trigger =
+        event === 'always'
+          ? ('always' as const)
+          : /^after\s+\S+$/.test(event)
+            ? ('after' as const)
+            : undefined;
+      pushTargets(from, event, targets, trigger);
     }
   }
 
@@ -472,7 +604,10 @@ function extractTable(
   const fromSet = new Set(fromStates);
   if (!transitions.some((t) => fromSet.has(t.to))) return undefined;
 
+  // Transition states plus declared-but-disconnected table keys (e.g. an
+  // explicitly final state nothing targets yet) so they render and get judged.
   const states = uniqueStates(transitions);
+  for (const s of fromStates) if (!states.includes(s)) states.push(s);
   const alphabet = alphabetFromTable(decl, sf);
   return {
     name: decl.getName(),
@@ -484,6 +619,10 @@ function extractTable(
     declaredStates: alphabet.states,
     declaredEvents: alphabet.events,
     alphabetSource: alphabet.source,
+    ...(finals.length > 0 ? { finalStates: finals } : {}),
+    ...(Object.keys(entryActions).length > 0 ? { entryActions } : {}),
+    ...(Object.keys(exitActions).length > 0 ? { exitActions } : {}),
+    ...(Object.keys(invokes).length > 0 ? { invokes } : {}),
   };
 }
 
@@ -491,11 +630,27 @@ function extractTable(
 // Shape B: Match.when tuple function
 // =============================================================================
 
-/** Target state of a handler return: `{ _tag: 'X' }` or a bare `'X'` literal. */
+/**
+ * Target state of a handler return: `{ _tag: 'X' }`, a bare `'X'` literal, or
+ * `new X(...)` for Schema.TaggedClass states. The tag comes from the class's
+ * `Schema.TaggedClass<X>()('Tag', ...)` declaration when it is in this file
+ * (class name and tag need not match); otherwise the class name is the
+ * best-effort fallback.
+ */
 function targetFromExpr(node: Node): string | undefined {
   const u = unwrap(node);
   if (Node.isObjectLiteralExpression(u)) return tagFromObject(u);
   if (Node.isStringLiteral(u)) return u.getLiteralValue();
+  if (Node.isNewExpression(u)) {
+    const cls = u.getExpression();
+    if (!Node.isIdentifier(cls)) return undefined;
+    const name = cls.getText();
+    // Prefer the constructed instance type: unlike a syntax lookup, this also
+    // resolves imported/aliased tagged classes whose class name differs from
+    // their `_tag` literal.
+    const [typeTag] = tagsOfUnion(u.getType(), u);
+    return typeTag ?? classTag(name, u.getSourceFile()) ?? name;
+  }
   return undefined;
 }
 
@@ -711,7 +866,7 @@ export function analyzeStateMachines(
   // Only trust the cache when the mtime is known; a failed stat must re-analyze.
   if (source === undefined && mtimeMs !== undefined) {
     const cached = analysisCache.get(filePath);
-    if (cached && cached.mtimeMs === mtimeMs) return cached.analysis;
+    if (cached?.mtimeMs === mtimeMs) return cached.analysis;
   }
   const project = new Project({ useInMemoryFileSystem: !!source });
   const sf = source

@@ -18,7 +18,7 @@
  * so coverage counts them as reachability edges without treating them as events.
  */
 
-import type { StateMachine, StateTransition } from './state-machine';
+import type { StateInvoke, StateMachine, StateTransition } from './state-machine';
 
 // =============================================================================
 // MachineJSON shape (structural — the XState v6 machine-as-data format)
@@ -59,6 +59,13 @@ export type MachineJSONInitial =
   | string
   | { readonly target: string; readonly input?: unknown };
 
+export interface MachineJSONInvoke {
+  readonly id?: string;
+  readonly src: string | MachineJSONUnserializable;
+  readonly onDone?: MachineJSONValue;
+  readonly onError?: MachineJSONValue;
+}
+
 export interface MachineJSONStateNode {
   readonly id?: string;
   readonly type?: 'atomic' | 'compound' | 'parallel' | 'final' | 'history' | 'choice';
@@ -66,6 +73,7 @@ export interface MachineJSONStateNode {
   readonly states?: Record<string, MachineJSONStateNode>;
   readonly entry?: readonly MachineJSONAction[];
   readonly exit?: readonly MachineJSONAction[];
+  readonly invoke?: MachineJSONInvoke | readonly MachineJSONInvoke[];
   readonly on?: Record<string, MachineJSONValue>;
   readonly always?: MachineJSONValue;
   readonly after?: Record<string, MachineJSONValue>;
@@ -106,6 +114,36 @@ function markerLabel(value: MachineJSONUnserializable): string {
   return value.id ?? `$unserializable:${value.$unserializable}`;
 }
 
+function invokeSource(
+  value: unknown,
+  where: string,
+): StateInvoke {
+  if (typeof value === 'string') return { src: value };
+  if (!isPlainObject(value)) {
+    throw new Error(
+      `fromMachineJSON: ${where}.src must be a string or $unserializable object`,
+    );
+  }
+  const marker = value;
+  const kind = marker.$unserializable;
+  if (
+    kind !== 'function' &&
+    kind !== 'actor' &&
+    kind !== 'schema' &&
+    kind !== 'value'
+  ) {
+    throw new Error(
+      `fromMachineJSON: ${where}.src must contain a valid $unserializable marker`,
+    );
+  }
+  if (marker.id !== undefined && typeof marker.id !== 'string') {
+    throw new Error(`fromMachineJSON: ${where}.src.id must be a string`);
+  }
+  return {
+    src: marker.id ?? `$unserializable:${kind}`,
+  };
+}
+
 function guardLabel(value: MachineJSONGuard, where: string): string {
   if (!isPlainObject(value)) {
     throw new Error(`fromMachineJSON: ${where}.guard must be an object`);
@@ -122,12 +160,35 @@ function guardLabel(value: MachineJSONGuard, where: string): string {
   );
 }
 
+/** Best-effort label for an action: its type, expression text, or marker. */
+function actionLabel(value: MachineJSONAction): string | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const record = value as unknown as Record<string, unknown>;
+  if (typeof record.type === 'string') return record.type;
+  if (typeof record['@expr'] === 'string') return record['@expr'];
+  if (typeof record['@code'] === 'string') return record['@code'];
+  if (typeof record.$unserializable === 'string') {
+    return markerLabel(record as unknown as MachineJSONUnserializable);
+  }
+  return undefined;
+}
+
+function actionLabels(
+  value: readonly MachineJSONAction[] | undefined,
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  const labels = value.map(actionLabel).filter((x): x is string => x !== undefined);
+  return labels.length > 0 ? labels : undefined;
+}
+
 /** Normalize a transition value to one record per target/branch. */
 function normalizeValue(
   value: MachineJSONValue,
   where: string,
-): readonly { target?: string; guard?: string }[] {
-  const one = (v: MachineJSONSingleValue): readonly { target?: string; guard?: string }[] => {
+): readonly { target?: string; guard?: string; actions?: readonly string[] }[] {
+  const one = (
+    v: MachineJSONSingleValue,
+  ): readonly { target?: string; guard?: string; actions?: readonly string[] }[] => {
     if (typeof v === 'string') return [{ target: v }];
     if (!isPlainObject(v)) {
       throw new Error(`fromMachineJSON: ${where} must be a string or object, got ${typeof v}`);
@@ -149,9 +210,11 @@ function normalizeValue(
       throw new Error(`fromMachineJSON: ${where}.target must be a string or string array`);
     }
     const guard = transition.guard === undefined ? undefined : guardLabel(transition.guard, where);
+    const actions = actionLabels(transition.actions);
     return targets.map((candidate) => ({
       ...(candidate !== undefined ? { target: candidate } : {}),
       ...(guard !== undefined ? { guard } : {}),
+      ...(actions !== undefined ? { actions } : {}),
     }));
   };
 
@@ -251,7 +314,8 @@ export function fromMachineJSON(
     value: MachineJSONValue,
     where: string,
     parentPath: string | undefined,
-    trigger?: 'always' | 'after',
+    trigger?: 'always' | 'after' | 'done' | 'error',
+    invokeIndex?: number,
   ): void => {
     for (const norm of normalizeValue(value, where)) {
       transitions.push({
@@ -259,12 +323,68 @@ export function fromMachineJSON(
         event,
         to: norm.target === undefined ? from : resolveTarget(norm.target, from, parentPath),
         ...(norm.guard !== undefined ? { guard: norm.guard } : {}),
+        ...(norm.actions !== undefined ? { actions: norm.actions } : {}),
         ...(trigger !== undefined ? { trigger } : {}),
+        ...(invokeIndex !== undefined ? { invokeIndex } : {}),
       });
     }
   };
 
+  const entryActions: Record<string, readonly string[]> = {};
+  const exitActions: Record<string, readonly string[]> = {};
+  const invokes: Record<string, readonly StateInvoke[]> = {};
+
   for (const { path: from, parentPath, node } of entries) {
+    const entry = actionLabels(node.entry);
+    if (entry !== undefined) entryActions[from] = entry;
+    const exit = actionLabels(node.exit);
+    if (exit !== undefined) exitActions[from] = exit;
+
+    // Invoked effects: preserve every invoke and associate its completion
+    // transitions by index so the XState exporter can rebuild the array.
+    const invokeValues: readonly MachineJSONInvoke[] =
+      node.invoke === undefined
+        ? []
+        : Array.isArray(node.invoke)
+          ? node.invoke
+          : [node.invoke];
+    if (invokeValues.length > 0) {
+      const metadata: StateInvoke[] = [];
+      for (const [invokeIndex, invoke] of invokeValues.entries()) {
+        const where = `state '${from}'.invoke[${invokeIndex}]`;
+        requireObject(invoke, where);
+        if (invoke.id !== undefined && typeof invoke.id !== 'string') {
+          throw new Error(`fromMachineJSON: ${where}.id must be a string`);
+        }
+        metadata.push({
+          ...invokeSource(invoke.src, where),
+          ...(invoke.id !== undefined ? { id: invoke.id } : {}),
+        });
+        if (invoke.onDone !== undefined) {
+          emit(
+            from,
+            'onDone',
+            invoke.onDone,
+            `${where}.onDone`,
+            parentPath,
+            'done',
+            invokeIndex,
+          );
+        }
+        if (invoke.onError !== undefined) {
+          emit(
+            from,
+            'onError',
+            invoke.onError,
+            `${where}.onError`,
+            parentPath,
+            'error',
+            invokeIndex,
+          );
+        }
+      }
+      invokes[from] = metadata;
+    }
     if (node.initial !== undefined) {
       transitions.push({
         from,
@@ -334,5 +454,19 @@ export function fromMachineJSON(
     declaredStates,
     declaredEvents,
     alphabetSource: 'config',
+    // Explicit finals only: a transitionless `{}` node is active, not final.
+    finalStates: entries
+      .filter(({ node }) => node.type === 'final')
+      .map(({ path }) => path),
+    ...(entries.some(({ node }) => node.type === 'parallel')
+      ? {
+          parallelStates: entries
+            .filter(({ node }) => node.type === 'parallel')
+            .map(({ path }) => path),
+        }
+      : {}),
+    ...(Object.keys(entryActions).length > 0 ? { entryActions } : {}),
+    ...(Object.keys(exitActions).length > 0 ? { exitActions } : {}),
+    ...(Object.keys(invokes).length > 0 ? { invokes } : {}),
   };
 }

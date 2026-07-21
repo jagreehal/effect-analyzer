@@ -9,6 +9,7 @@
  * and unhandled events are listed in a note.
  */
 
+import { finalStatesOf } from '../state-machine';
 import type { StateMachine, StateMachineAnalysis } from '../state-machine';
 import type { StateMachineCoverage } from '../state-machine-coverage';
 
@@ -42,30 +43,89 @@ export function renderStatechartMermaid(
   );
   const undeclared = new Set(coverage?.undeclaredStates ?? []);
 
-  const idByState = new Map<string, string>();
+  const idOf = (s: string): string => sanitizeId(s);
+
+  // Hierarchy: a dotted state name ('Playing.Paused') nests under its parent
+  // segments, which become composite states. Flat machines have no dots and
+  // render exactly as before.
+  const childrenOf = new Map<string, string[]>(); // parent path ('' = root) → child paths
+  const known = new Set<string>();
   for (const state of machine.states) {
-    const id = sanitizeId(state);
-    idByState.set(state, id);
-    if (id !== state) {
-      lines.push(`  state "${escapeLabel(state)}" as ${id}`);
+    let path = '';
+    for (const seg of state.split('.')) {
+      const parent = path;
+      path = path === '' ? seg : `${path}.${seg}`;
+      if (known.has(path)) continue;
+      known.add(path);
+      childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), path]);
     }
   }
-  const idOf = (s: string): string => idByState.get(s) ?? sanitizeId(s);
+
+  // Compound-initial edges (trigger 'initial') render as [*] markers inside
+  // their parent's block, not as labeled edges.
+  const initialsOf = new Map<string, string[]>();
+  for (const t of machine.transitions) {
+    if (t.trigger !== 'initial') continue;
+    initialsOf.set(t.from, [...(initialsOf.get(t.from) ?? []), t.to]);
+  }
+
+  const emitState = (path: string, indent: string): void => {
+    const id = idOf(path);
+    const kids = childrenOf.get(path) ?? [];
+    const label = path.includes('.') ? (path.split('.').pop() ?? path) : path;
+    if (kids.length === 0) {
+      if (id !== path || label !== path) {
+        lines.push(`${indent}state "${escapeLabel(label)}" as ${id}`);
+      }
+      return;
+    }
+    lines.push(
+      id === label
+        ? `${indent}state ${id} {`
+        : `${indent}state "${escapeLabel(label)}" as ${id} {`,
+    );
+    for (const to of initialsOf.get(path) ?? []) {
+      lines.push(`${indent}  [*] --> ${idOf(to)}`);
+    }
+    for (const kid of kids) emitState(kid, `${indent}  `);
+    lines.push(`${indent}}`);
+  };
+  for (const top of childrenOf.get('') ?? []) emitState(top, '  ');
 
   if (machine.initial) {
     lines.push(`  [*] --> ${idOf(machine.initial)}`);
   }
 
+  // Entry/exit action and invoke labels as state description lines.
+  for (const state of machine.states) {
+    const entry = machine.entryActions?.[state];
+    const exit = machine.exitActions?.[state];
+    const invokes = machine.invokes?.[state];
+    if (entry) lines.push(`  ${idOf(state)} : entry / ${escapeLabel(entry.join(', '))}`);
+    if (exit) lines.push(`  ${idOf(state)} : exit / ${escapeLabel(exit.join(', '))}`);
+    for (const invoke of invokes ?? []) {
+      const label = invoke.id === undefined
+        ? invoke.src
+        : `${invoke.src} (${invoke.id})`;
+      lines.push(`  ${idOf(state)} : invoke ${escapeLabel(label)}`);
+    }
+  }
+
   for (const t of machine.transitions) {
-    const label = t.guard
-      ? `${escapeLabel(t.event)} [${escapeLabel(t.guard)}]`
-      : escapeLabel(t.event);
+    if (t.trigger === 'initial' && (childrenOf.get(t.from)?.length ?? 0) > 0) {
+      continue; // rendered as a [*] marker inside the parent block
+    }
+    let label = escapeLabel(t.event);
+    if (t.guard) label += ` [${escapeLabel(t.guard)}]`;
+    if (t.actions && t.actions.length > 0) {
+      label += ` / ${escapeLabel(t.actions.join(', '))}`;
+    }
     lines.push(`  ${idOf(t.from)} --> ${idOf(t.to)}: ${label}`);
   }
 
-  const hasOutgoing = new Set(machine.transitions.map((t) => t.from));
+  const finals = finalStatesOf(machine);
   for (const state of machine.states) {
-    if (!hasOutgoing.has(state)) {
+    if (finals.has(state)) {
       lines.push(`  ${idOf(state)} --> [*]`);
     }
   }

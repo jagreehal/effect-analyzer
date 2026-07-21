@@ -103,6 +103,11 @@ const effectIdiomsFixture = join(
   '__fixtures__',
   'state-machine-effect-idioms.ts',
 );
+const importedTransitionFixture = join(
+  __dirname,
+  '__fixtures__',
+  'state-machine-imported-transition.ts',
+);
 
 describe('detection depth', () => {
   it('extracts a string-literal-union machine (no _tag) with its alphabet', () => {
@@ -224,7 +229,7 @@ describe('declared alphabet', () => {
     ]);
   });
 
-  it('classifies Schema.TaggedClass and TaggedRequest unions as schema alphabets', () => {
+  it('classifies Schema.TaggedClass unions as schema alphabets', () => {
     const { machines } = analyzeStateMachines(effectIdiomsFixture);
     const workflow = machines.find((m) => m.name === 'workflowTransitions');
     expect(workflow?.alphabetSource).toBe('schema');
@@ -246,6 +251,180 @@ describe('declared alphabet', () => {
     // gateTransitions uses `as const` with no `satisfies`, so no declared alphabet
     expect(gate?.declaredStates).toBeUndefined();
     expect(gate?.declaredEvents).toBeUndefined();
+  });
+});
+
+describe('hierarchy and automatic transitions', () => {
+  const player = (): ReturnType<typeof analyzeStateMachines>['machines'][number] => {
+    const { machines } = analyzeStateMachines(advancedFixture);
+    return machines.find((m) => m.name === 'playerTransitions')!;
+  };
+
+  it('tags always/after table keys as automatic transitions', () => {
+    const m = player();
+    expect(m.transitions).toContainEqual({
+      from: 'Loading',
+      event: 'always',
+      to: 'Playing.Running',
+      guard: 'autoplay',
+      trigger: 'always',
+    });
+    expect(m.transitions).toContainEqual({
+      from: 'Playing.Running',
+      event: 'after 5000ms',
+      to: 'Stopped',
+      trigger: 'after',
+    });
+    // ordinary events carry no trigger
+    expect(
+      m.transitions.find((t) => t.event === 'Ready')?.trigger,
+    ).toBeUndefined();
+  });
+
+  it('renders dotted states as nested composites in mermaid', () => {
+    const chart = renderStatechartMermaid(player());
+    expect(chart).toContain('state Playing {');
+    expect(chart).toContain('state "Running" as Playing_Running');
+    expect(chart).toContain('state "Paused" as Playing_Paused');
+    expect(chart).toContain('[*] --> Loading');
+    expect(chart).toContain('Loading --> Playing_Running: always [autoplay]');
+    expect(chart).toContain('Playing_Running --> Stopped: after 5000ms');
+  });
+
+  it('emits nested states, always/after keys, and absolute targets in xstate config', () => {
+    const config = renderXStateConfig(player());
+    expect(config).toContain(
+      "always: [{ target: '#playerTransitions.Playing.Running', guard: 'autoplay' }]",
+    );
+    expect(config).toContain("after: { '5000': '#playerTransitions.Stopped' }");
+    expect(config).toContain("initial: 'Running'");
+    expect(config).toContain("Pause: '#playerTransitions.Playing.Paused'");
+    expect(config).toContain("Stopped: { type: 'final' }");
+    // nested Playing block with child states, not flat dotted keys
+    expect(config).toMatch(/Playing: \{[\s\S]*states: \{[\s\S]*Running: \{/);
+    expect(config).not.toContain("'Playing.Running':");
+
+    // the emitted config parses as valid TypeScript
+    const project = new Project({ useInMemoryFileSystem: true });
+    const sf = project.createSourceFile('machine.ts', config);
+    expect(
+      project.getProgram().getSyntacticDiagnostics(sf).map((d) => d.getMessageText()),
+    ).toEqual([]);
+  });
+
+  it('parses a dotted @initial annotation', () => {
+    const source = `
+      /** @initial Playing.Running */
+      export const miniPlayer = {
+        'Playing.Running': { Pause: 'Playing.Paused' },
+        'Playing.Paused': { Play: 'Playing.Running' },
+        Stopped: {},
+      } as const;
+    `;
+    const { machines } = analyzeStateMachines('inline.ts', source);
+    const m = machines.find((x) => x.name === 'miniPlayer');
+    expect(m?.initial).toBe('Playing.Running');
+    const config = renderXStateConfig(m!);
+    expect(config).toContain("initial: 'Playing',");
+  });
+
+  it('reads new-expression targets from Schema.TaggedClass handlers', () => {
+    const { machines } = analyzeStateMachines(effectIdiomsFixture);
+    const tagged = machines.find((m) => m.name === 'taggedTransition');
+    expect(tagged?.transitions).toContainEqual({
+      from: 'Idle',
+      event: 'Start',
+      to: 'Active',
+    });
+  });
+
+  it('reads actions, entry/exit, invoke, and explicit finals from a table', () => {
+    const { machines } = analyzeStateMachines(advancedFixture);
+    const m = machines.find((x) => x.name === 'publishTransitions')!;
+    expect(m.transitions).toContainEqual({
+      from: 'Draft',
+      event: 'Submit',
+      to: 'Submitting',
+      actions: ['persistDraft', 'recordSubmission'],
+    });
+    expect(m.transitions).toContainEqual({
+      from: 'Submitting',
+      event: 'onDone',
+      to: 'Published',
+      trigger: 'done',
+      invokeIndex: 0,
+    });
+    expect(m.transitions).toContainEqual({
+      from: 'Submitting',
+      event: 'onError',
+      to: 'Draft',
+      guard: 'retryable',
+      trigger: 'error',
+      invokeIndex: 0,
+    });
+    expect(m.finalStates).toEqual(['Published']);
+    expect(m.entryActions).toEqual({ Draft: ['enterDraft'] });
+    expect(m.exitActions).toEqual({ Draft: ['persistDraft'] });
+    expect(m.invokes).toEqual({ Submitting: [{ src: 'submitPayment' }] });
+  });
+
+  it('renders actions and invoke labels in mermaid and xstate config', () => {
+    const { machines } = analyzeStateMachines(advancedFixture);
+    const m = machines.find((x) => x.name === 'publishTransitions')!;
+    const chart = renderStatechartMermaid(m);
+    expect(chart).toContain('Draft : entry / enterDraft');
+    expect(chart).toContain('Draft : exit / persistDraft');
+    expect(chart).toContain('Submitting : invoke submitPayment');
+    expect(chart).toContain(
+      'Draft --> Submitting: Submit / persistDraft, recordSubmission',
+    );
+    expect(chart).toContain('Published --> [*]');
+
+    const config = renderXStateConfig(m);
+    expect(config).toContain("entry: ['enterDraft']");
+    expect(config).toContain("exit: ['persistDraft']");
+    expect(config).toContain(
+      "invoke: { src: 'submitPayment', onDone: 'Published', onError: [{ target: 'Draft', guard: 'retryable' }] }",
+    );
+    expect(config).toContain(
+      "Submit: [{ target: 'Submitting', actions: ['persistDraft', 'recordSubmission'] }]",
+    );
+    expect(config).toContain("Published: { type: 'final' }");
+  });
+
+  it('resolves a new-expression target to the class tag, not the class name', () => {
+    const source = `
+      import { Match, Schema } from 'effect';
+      class IdleState extends Schema.TaggedClass<IdleState>()('Idle', {}) {}
+      class RunningState extends Schema.TaggedClass<RunningState>()('Running', {}) {}
+      type S = IdleState | RunningState;
+      type E = { readonly _tag: 'Start' };
+
+      export const transition = (state: S, event: E): S =>
+        Match.value([state._tag, event._tag] as const).pipe(
+          Match.when(['Idle', 'Start'], () => new RunningState()),
+          Match.orElse(() => state),
+        );
+    `;
+    const { machines } = analyzeStateMachines('inline.ts', source);
+    const m = machines.find((x) => x.name === 'transition');
+    expect(m?.transitions).toContainEqual({
+      from: 'Idle',
+      event: 'Start',
+      to: 'Running',
+    });
+    expect(m?.transitions.some((t) => t.to === 'RunningState')).toBe(false);
+  });
+
+  it('resolves an imported new-expression target through its _tag type', () => {
+    const { machines } = analyzeStateMachines(importedTransitionFixture);
+    const m = machines.find((x) => x.name === 'importedTransition');
+    expect(m?.transitions).toContainEqual({
+      from: 'Idle',
+      event: 'Start',
+      to: 'Running',
+    });
+    expect(m?.transitions.some((t) => t.to === 'RunningState')).toBe(false);
   });
 });
 

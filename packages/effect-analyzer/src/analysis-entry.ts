@@ -19,12 +19,14 @@ export * from './state-flow';
 export {
   analyzeStateMachines,
   type StateMachine,
+  type StateInvoke,
   type StateTransition,
   type StateMachineAnalysis,
 } from './state-machine';
 export {
   fromMachineJSON,
   type MachineJSON,
+  type MachineJSONInvoke,
   type MachineJSONStateNode,
   type MachineJSONValue,
   type MachineJSONTransition,
@@ -41,4 +43,9 @@ export {
   type CoverageFinding,
   type CoverageKind,
 } from './state-machine-coverage';
+// Statechart renderers, so MachineJSON machines (which the CLI does not
+// discover in source) can be rendered programmatically too.
+export { renderStatechartMermaid, renderStatechartsMermaid } from './output/mermaid-statechart';
+export { renderXStateConfig } from './output/xstate-config';
+export { renderStatechartSVG } from './output/svg-statechart';
 export type * from './types';
