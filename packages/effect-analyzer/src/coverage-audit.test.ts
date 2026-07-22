@@ -52,7 +52,7 @@ describe('Coverage audit', () => {
 });
 
 describe('Corpus regression / benchmark shape', () => {
-  it('produces audit result with benchmark JSON shape (discovered, analyzed, analyzableCoverage, unknownNodeRate, suspiciousZerosCount)', async () => {
+  it('produces audit result with named assessment dimensions and diagnostic rates', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'benchmark-shape-'));
     const tsconfigPath = join(dir, 'tsconfig.json');
     const appPath = join(dir, 'app.ts');
@@ -74,8 +74,7 @@ describe('Corpus regression / benchmark shape', () => {
         analyzed: audit.analyzed,
         zeroPrograms: audit.zeroPrograms,
         failed: audit.failed,
-        percentage: audit.percentage,
-        analyzableCoverage: audit.analyzableCoverage,
+        assessment: audit.assessment,
         unknownNodeRate: audit.unknownNodeRate,
         suspiciousZerosCount: audit.suspiciousZeros.length,
         durationMs: 0,
@@ -83,7 +82,13 @@ describe('Corpus regression / benchmark shape', () => {
 
       expect(typeof benchmarkRow.discovered).toBe('number');
       expect(typeof benchmarkRow.analyzed).toBe('number');
-      expect(typeof benchmarkRow.analyzableCoverage).toBe('number');
+      expect(benchmarkRow.assessment.effectAdoption).toEqual({
+        numerator: 1,
+        denominator: 1,
+        rate: 1,
+      });
+      expect(benchmarkRow.assessment.analysisSuccess.rate).toBe(1);
+      expect(benchmarkRow.assessment.sourceResolution.rate).toBe(1);
       expect(typeof benchmarkRow.unknownNodeRate).toBe('number');
       expect(typeof benchmarkRow.suspiciousZerosCount).toBe('number');
       expect(benchmarkRow.discovered).toBeGreaterThanOrEqual(0);
@@ -96,18 +101,18 @@ describe('Corpus regression / benchmark shape', () => {
     }
   });
 
-  it('delta vs baseline has expected numeric shape (analyzed, unknownNodeRate, percentage)', () => {
-    const baseline = { discovered: 10, analyzed: 8, zeroPrograms: 1, failed: 1, percentage: 80, analyzableCoverage: 88.89, unknownNodeRate: 0.1, suspiciousZerosCount: 1 };
-    const current = { discovered: 10, analyzed: 9, zeroPrograms: 0, failed: 1, percentage: 90, analyzableCoverage: 90, unknownNodeRate: 0.08, suspiciousZerosCount: 0 };
+  it('delta vs baseline uses the named adoption rate', () => {
+    const baseline = { analyzed: 8, effectAdoption: 0.8, unknownNodeRate: 0.1 };
+    const current = { analyzed: 9, effectAdoption: 0.9, unknownNodeRate: 0.08 };
     const delta = (a: typeof baseline, b: typeof current) => ({
       analyzed: b.analyzed - a.analyzed,
       unknownNodeRate: b.unknownNodeRate - a.unknownNodeRate,
-      percentage: b.percentage - a.percentage,
+      effectAdoption: b.effectAdoption - a.effectAdoption,
     });
     const d = delta(baseline, current);
     expect(typeof d.analyzed).toBe('number');
     expect(typeof d.unknownNodeRate).toBe('number');
-    expect(typeof d.percentage).toBe('number');
+    expect(typeof d.effectAdoption).toBe('number');
     expect(d.analyzed).toBe(1);
     expect(d.unknownNodeRate).toBeCloseTo(-0.02);
   });

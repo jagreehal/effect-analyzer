@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StaticEffectIR, StaticFlowNode } from './types';
 import { computeDiagramFidelity } from './diagram-fidelity';
+import { assessIRFidelity } from './fidelity-findings';
 import { indexIR } from './ir';
 import { renderMermaidWithRuntimeTrace } from './output/mermaid';
 import { traceFromOpenTelemetry } from './runtime-trace';
@@ -76,6 +77,20 @@ describe('diagram fidelity and runtime overlay', () => {
       'duplicate-span-path',
       'duplicate-span-path',
     ]);
+
+    const assessment = assessIRFidelity(ir);
+    expect(assessment.sourceRepresentation).toMatchObject({
+      exact: false,
+      resolved: 3,
+      total: 4,
+      rate: 0.75,
+    });
+    expect(assessment.runtimeJoinability).toMatchObject({
+      exact: false,
+      resolved: 0,
+      total: 3,
+      rate: 0,
+    });
   });
 
   it('normalizes OpenTelemetry spans and overlays exact paths', () => {

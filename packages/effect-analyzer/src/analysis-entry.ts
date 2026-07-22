@@ -3,8 +3,31 @@
 export * from './analysis-session';
 export { analyze, type AnalyzeResult } from './analyze';
 export { analyzeEffectFile, analyzeEffectSource } from './static-analyzer';
-export { analyzeProject, runCoverageAudit } from './project-analyzer';
+export {
+  analyzeProject,
+  analyzeProjectCorpus,
+  runCoverageAudit,
+  runCoverageAuditFromCorpus,
+  type AnalyzeProjectOptions,
+  type CoverageAuditResult,
+  type FileOutcome,
+  type ProjectAnalysisResult,
+  type ProjectFidelityFinding,
+  type ZeroProgramCategory,
+  type ZeroProgramClassification,
+} from './project-analyzer';
+export * from './audit-assessment';
+export * from './audit-policy';
+export * from './output/coverage-report';
+export {
+  scanProjectCorpus,
+  type ProjectCorpus,
+  type ProjectCorpusFile,
+  type ProjectCorpusFileStatus,
+  type ScanProjectCorpusOptions,
+} from './project-corpus';
 export * from './ir';
+export * from './fidelity-findings';
 export * from './complexity';
 export * from './path-generator';
 export * from './data-flow';

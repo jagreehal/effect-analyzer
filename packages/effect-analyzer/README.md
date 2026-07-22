@@ -35,6 +35,12 @@ npx effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff
 
 # Audit an entire project
 npx effect-analyze ./src --coverage-audit
+
+# Concise CI audit with native quality gates
+npx effect-analyze ./src --coverage-audit --quiet \
+  --max-audit-failed-files 0 \
+  --max-audit-suspicious-zeros 0 \
+  --min-audit-source-resolution 98
 ```
 
 ## What You Get
@@ -267,6 +273,11 @@ Scan an entire project to understand Effect usage, identify complex programs, an
 ```bash
 npx effect-analyze ./src --coverage-audit
 ```
+
+The audit reports three named dimensions with explicit denominators: Effect
+adoption across discovered files, analysis success across relevant files, and
+IR source resolution across analyzed nodes. `--quiet` emits one summary line;
+native audit policy flags return exit code 1 when a threshold fails.
 
 [Learn more →](https://jagreehal.github.io/effect-analyzer/project/coverage-audit/)
 

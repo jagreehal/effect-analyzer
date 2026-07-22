@@ -15,6 +15,14 @@ export {
 } from './diagram-fidelity';
 
 export {
+  assessIRFidelity,
+  type FidelityDimension,
+  type FidelityFinding,
+  type FidelityFindingKind,
+  type IRFidelityAssessment,
+} from './fidelity-findings';
+
+export {
   traceFromEffectSpans,
   traceFromOpenTelemetry,
   type RuntimeTrace,

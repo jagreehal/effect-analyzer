@@ -6,20 +6,21 @@ sidebar:
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import DiagramSource from '../../../components/DiagramSource.astro';
 
 The **railway diagram** is the signature visualization of effect-analyzer. Inspired by the railway-oriented programming pattern, it renders your Effect program as a straight-line happy path with error branches forking off at failure points.
 
-Example fixture: `packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts`
-
-```mermaid
-flowchart LR
+<DiagramSource
+  sourcePath="packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts"
+  title="transfer-workflow.ts"
+  mermaid={`flowchart LR
   A[accounts #lt;- AccountService] -->|ok| B[audit #lt;- AuditLog]
   B -->|ok| C[balance #lt;- accounts.getBalance]
   C -->|ok| D[decision]
   D -->|ok| Done((Success))
-  C -->|err| CE[AccountNotFound]
-  D -->|err| DE[InsufficientFunds]
-```
+  C -->|err| CE[AccountNotFoundError]
+  D -->|err| DE[InsufficientFundsError]`}
+/>
 
 ## The Railway Pattern
 
@@ -37,9 +38,7 @@ This makes it immediately clear:
 npx effect-analyze ./src/transfer.ts --format mermaid-railway
 ```
 
-For the docs transfer fixture, this produces:
-
-The solid arrows trace the happy path. Dashed arrows indicate error branches.
+For the docs transfer fixture, this produces the diagram above. Solid `|ok|` arrows trace the happy path; solid `|err|` arrows show error branches.
 
 ## When Auto Mode Selects Railway
 

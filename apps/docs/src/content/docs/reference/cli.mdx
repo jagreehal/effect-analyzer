@@ -156,6 +156,10 @@ These flags are used with `--coverage-audit`:
 | `--min-meaningful-nodes <n>` | Minimum node count to consider a file meaningful |
 | `--known-effect-internals-root <path>` | Treat local paths as Effect-like |
 | `--exclude-from-suspicious-zero <pattern>` | Exclude patterns from suspicious-zero reporting |
+| `--max-audit-failed-files <n>` | Exit 1 when analysis failures exceed `n` |
+| `--max-audit-suspicious-zeros <n>` | Exit 1 when suspicious zero-program files exceed `n` |
+| `--min-audit-effect-adoption <percent>` | Exit 1 when Effect-bearing files fall below this percentage of discovered files |
+| `--min-audit-source-resolution <percent>` | Exit 1 when resolved IR nodes fall below this percentage of all IR nodes |
 
 ## Quality Options
 

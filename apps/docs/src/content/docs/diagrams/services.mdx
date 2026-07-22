@@ -6,20 +6,21 @@ sidebar:
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import DiagramSource from '../../../components/DiagramSource.astro';
 
 The **service map** diagram shows which `Context.Service` services your Effect program depends on and how steps in the program consume those services. For project-wide analysis, the `--service-map` flag produces a deduplicated registry of all services across your codebase.
 
-Example fixture: `packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts`
-
-```mermaid
-flowchart LR
+<DiagramSource
+  sourcePath="packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts"
+  title="transfer-workflow.ts"
+  mermaid={`flowchart LR
   prog["transferWorkflow"]
 
   svc_AccountService{{"AccountService"}}
   prog -->|requires| svc_AccountService
   svc_AuditLog{{"AuditLog"}}
-  prog -->|requires| svc_AuditLog
-```
+  prog -->|requires| svc_AuditLog`}
+/>
 
 ## Generating a Service Map
 

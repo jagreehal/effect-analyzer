@@ -1,0 +1,185 @@
+---
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Code } from '@astrojs/starlight/components';
+
+interface Props {
+  /** Path relative to the monorepo root. */
+  sourcePath: string;
+  /** Optional title shown on the source code block. */
+  title?: string;
+  /** Mermaid diagram source (without fences). */
+  mermaid: string;
+}
+
+const { sourcePath, title, mermaid } = Astro.props;
+
+/** Walk up from cwd — import.meta.url points into dist/ during prerender. */
+function resolveRepoRoot(): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(resolve(dir, 'packages/effect-analyzer/package.json'))) {
+      return dir;
+    }
+    dir = resolve(dir, '..');
+  }
+  throw new Error(
+    `DiagramSource: could not find monorepo root from cwd ${process.cwd()}`,
+  );
+}
+
+/** Short deterministic hash for stable element ids across builds. */
+function shortHash(input: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+const code = readFileSync(resolve(resolveRepoRoot(), sourcePath), 'utf8');
+const codeTitle = title ?? sourcePath.split('/').pop() ?? 'source.ts';
+
+const id = `ea-ds-${shortHash(`${sourcePath}\0${mermaid}`)}`;
+---
+
+<div class="ea-diagram-source" data-ea-diagram-source={id}>
+  <div class="ea-diagram-source__tabs" role="tablist" aria-label="Diagram or source">
+    <button
+      type="button"
+      class="ea-diagram-source__tab"
+      role="tab"
+      id={`${id}-tab-diagram`}
+      aria-controls={`${id}-panel-diagram`}
+      aria-selected="true"
+      tabindex="0"
+      data-tab="diagram"
+    >
+      <svg class="ea-diagram-source__icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24">
+        <path
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9.143 4H4.857A.857.857 0 0 0 4 4.857v4.286c0 .473.384.857.857.857h4.286A.857.857 0 0 0 10 9.143V4.857A.857.857 0 0 0 9.143 4Zm10 0h-4.286a.857.857 0 0 0-.857.857v4.286c0 .473.384.857.857.857h4.286A.857.857 0 0 0 20 9.143V4.857A.857.857 0 0 0 19.143 4Zm-10 10H4.857a.857.857 0 0 0-.857.857v4.286c0 .473.384.857.857.857h4.286a.857.857 0 0 0 .857-.857v-4.286A.857.857 0 0 0 9.143 14Zm10 0h-4.286a.857.857 0 0 0-.857.857v4.286c0 .473.384.857.857.857h4.286a.857.857 0 0 0 .857-.857v-4.286a.857.857 0 0 0-.857-.857Z"
+        ></path>
+      </svg>
+      Diagram
+    </button>
+    <button
+      type="button"
+      class="ea-diagram-source__tab"
+      role="tab"
+      id={`${id}-tab-source`}
+      aria-controls={`${id}-panel-source`}
+      aria-selected="false"
+      tabindex="-1"
+      data-tab="source"
+    >
+      <svg class="ea-diagram-source__icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24">
+        <path
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="m8 8-4 4 4 4m8 0 4-4-4-4m-2-3-4 14"
+        ></path>
+      </svg>
+      Source
+    </button>
+  </div>
+
+  <div
+    class="ea-diagram-source__panel"
+    role="tabpanel"
+    id={`${id}-panel-diagram`}
+    aria-labelledby={`${id}-tab-diagram`}
+    data-panel="diagram"
+  >
+    <pre class="mermaid">{mermaid}</pre>
+  </div>
+
+  <div
+    class="ea-diagram-source__panel"
+    role="tabpanel"
+    id={`${id}-panel-source`}
+    aria-labelledby={`${id}-tab-source`}
+    data-panel="source"
+    hidden
+  >
+    <Code code={code} lang="ts" title={codeTitle} />
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    function initDiagramSource(root) {
+      if (root.dataset.eaDsReady) return;
+      root.dataset.eaDsReady = '1';
+
+      const tabs = Array.from(root.querySelectorAll('[role="tab"]'));
+      const panels = root.querySelectorAll('[data-panel]');
+
+      function select(name, { focus } = {}) {
+        for (const tab of tabs) {
+          const active = tab.dataset.tab === name;
+          tab.setAttribute('aria-selected', active ? 'true' : 'false');
+          tab.tabIndex = active ? 0 : -1;
+          if (active && focus) tab.focus();
+        }
+        for (const panel of panels) {
+          panel.hidden = panel.dataset.panel !== name;
+        }
+      }
+
+      for (const tab of tabs) {
+        tab.addEventListener('click', () => {
+          const name = tab.dataset.tab;
+          if (name) select(name);
+        });
+
+        tab.addEventListener('keydown', (event) => {
+          const i = tabs.indexOf(tab);
+          if (i < 0) return;
+
+          let next = -1;
+          switch (event.key) {
+            case 'ArrowRight':
+            case 'ArrowDown':
+              next = (i + 1) % tabs.length;
+              break;
+            case 'ArrowLeft':
+            case 'ArrowUp':
+              next = (i - 1 + tabs.length) % tabs.length;
+              break;
+            case 'Home':
+              next = 0;
+              break;
+            case 'End':
+              next = tabs.length - 1;
+              break;
+            default:
+              return;
+          }
+
+          event.preventDefault();
+          const name = tabs[next]?.dataset.tab;
+          if (name) select(name, { focus: true });
+        });
+      }
+    }
+
+    function initAll() {
+      document
+        .querySelectorAll('[data-ea-diagram-source]')
+        .forEach(initDiagramSource);
+    }
+
+    initAll();
+    if (!window.__eaDiagramSourceListen) {
+      window.__eaDiagramSourceListen = true;
+      document.addEventListener('astro:page-load', initAll);
+    }
+  })();
+</script>

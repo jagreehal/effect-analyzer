@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import DiagramSource from '../../../components/DiagramSource.astro';
 
 The **error flow diagram** visualizes how errors propagate through your Effect program - which steps produce errors, which handlers catch them, and which errors remain unhandled at the program boundary.
 
@@ -21,22 +22,25 @@ The diagram shows:
 - **Error handlers** - `catch`, `catchTag`, `catchTags` nodes that intercept errors
 - **Unhandled errors** - errors that propagate out of the program without being caught
 
-For a program with `AccountNotFound` and `InsufficientFunds` errors:
+For a program with `AccountNotFoundError` and `InsufficientFundsError`:
 
-```mermaid
-graph TB
-  getBalance -->|AccountNotFound| ERR1[AccountNotFound]
-  debit -->|InsufficientFunds| ERR2[InsufficientFunds]
-  credit -->|AccountNotFound| ERR1
+<DiagramSource
+  sourcePath="packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts"
+  title="transfer-workflow.ts"
+  mermaid={`graph TB
+  getBalance -->|AccountNotFoundError| ERR1[AccountNotFoundError]
+  decision -->|InsufficientFundsError| ERR2[InsufficientFundsError]
+  debit -->|AccountNotFoundError| ERR1
+  credit -->|AccountNotFoundError| ERR1
   ERR1 -.->|unhandled| BOUNDARY[Program Boundary]
-  ERR2 -.->|unhandled| BOUNDARY
-```
+  ERR2 -.->|unhandled| BOUNDARY`}
+/>
 
 If the program includes a `catchTag` handler, the diagram shows the error being intercepted:
 
 ```mermaid
 graph TB
-  getBalance -->|AccountNotFound| CATCH[catchTag AccountNotFound]
+  getBalance -->|AccountNotFoundError| CATCH[catchTag AccountNotFoundError]
   CATCH --> recovery[fallback logic]
 ```
 
