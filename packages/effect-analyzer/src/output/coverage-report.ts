@@ -104,11 +104,16 @@ const renderHuman = (
   }
 
   if (options.showTopUnknown) {
-    const findings = audit.fidelityFindings
-      .filter((finding) => finding.kind === 'unknown-node')
-      .slice(0, 10);
+    const unknownNodes = audit.fidelityFindings.filter(
+      (finding) => finding.kind === 'unknown-node',
+    );
+    const findings = unknownNodes.slice(0, 10);
     if (findings.length > 0) {
-      lines.push('', 'Located unknown nodes:');
+      const header =
+        findings.length < unknownNodes.length
+          ? `Located unknown nodes (showing ${String(findings.length)} of ${String(unknownNodes.length)}):`
+          : 'Located unknown nodes:';
+      lines.push('', header);
       for (const finding of findings) {
         const location = finding.location
           ? `${finding.location.filePath}:${String(finding.location.line)}:${String(finding.location.column)}`
