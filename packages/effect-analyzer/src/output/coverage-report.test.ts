@@ -65,6 +65,41 @@ describe('coverage report', () => {
     expect(output).not.toContain('/repo/src/index.ts');
   });
 
+  it('flags truncation when more unknown nodes exist than are listed', () => {
+    const findings = Array.from({ length: 14 }, (_, index) => ({
+      kind: 'unknown-node' as const,
+      nodeId: `n${String(index)}`,
+      message: 'unresolved',
+      suggestion: 'extract',
+      reason: 'unresolved',
+      location: { filePath: `/repo/src/f${String(index)}.ts`, line: index + 1, column: 1 },
+    }));
+    const output = renderCoverageReport(
+      { ...audit, fidelityFindings: findings },
+      { mode: 'human', root: '/repo/src', showTopUnknown: true },
+    );
+
+    expect(output).toContain('Located unknown nodes (showing 10 of 14):');
+  });
+
+  it('omits the truncation note when every unknown node is listed', () => {
+    const findings = Array.from({ length: 3 }, (_, index) => ({
+      kind: 'unknown-node' as const,
+      nodeId: `n${String(index)}`,
+      message: 'unresolved',
+      suggestion: 'extract',
+      reason: 'unresolved',
+      location: { filePath: `/repo/src/f${String(index)}.ts`, line: index + 1, column: 1 },
+    }));
+    const output = renderCoverageReport(
+      { ...audit, fidelityFindings: findings },
+      { mode: 'human', root: '/repo/src', showTopUnknown: true },
+    );
+
+    expect(output).toContain('Located unknown nodes:');
+    expect(output).not.toContain('showing');
+  });
+
   it('includes the typed policy decision in JSON output', () => {
     const output = renderCoverageReport(audit, {
       mode: 'json',

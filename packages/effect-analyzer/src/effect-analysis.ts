@@ -671,11 +671,37 @@ export const analyzeEffectExpression = (
       }
     }
 
-    // Default: unknown
+    // Default: unknown. Classify by node kind so the audit's "unknown node
+    // reasons" histogram is actionable instead of one opaque bucket. Most of
+    // these are non-Effect sub-expressions the walker reached in a position
+    // that isn't an Effect program (option objects, predicates, service impls).
+    const unknownReason = ((): string => {
+      switch (node.getKind()) {
+        case SyntaxKind.ObjectLiteralExpression:
+          return 'Non-Effect object literal (e.g. service impl or options argument)';
+        case SyntaxKind.BinaryExpression:
+        case SyntaxKind.PrefixUnaryExpression:
+          return 'Non-Effect predicate or boolean expression';
+        case SyntaxKind.NewExpression:
+          return 'Unrecognized constructor (not an error-like type)';
+        case SyntaxKind.PropertyAccessExpression:
+        case SyntaxKind.ElementAccessExpression:
+          return 'Unresolved property access (not tied back to an Effect)';
+        case SyntaxKind.Identifier:
+          return 'Unresolved identifier (not tied back to an Effect)';
+        case SyntaxKind.ConditionalExpression:
+          return 'Non-Effect conditional expression';
+        case SyntaxKind.ArrowFunction:
+        case SyntaxKind.FunctionExpression:
+          return 'Non-Effect function expression';
+        default:
+          return 'Could not determine effect type';
+      }
+    })();
     const unknownNode: StaticUnknownNode = {
       id: generateId(),
       type: 'unknown',
-      reason: 'Could not determine effect type',
+      reason: unknownReason,
       sourceCode: node.getText().slice(0, 100),
       location: extractLocation(node, filePath, opts.includeLocations ?? false),
     };
