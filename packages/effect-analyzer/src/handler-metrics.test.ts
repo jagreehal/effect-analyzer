@@ -263,7 +263,7 @@ describe('effect-analyzer (handler/metrics)', () => {
       }
     });
 
-    it('should have aggregate audit shape with analyzableCoverage and unknownNodeRate', async () => {
+    it('should have named aggregate audit dimensions and unknownNodeRate', async () => {
       const tmp = mkdtempSync(join(tmpdir(), 'audit-shape-'));
       const tsconfigPath = join(tmp, 'tsconfig.json');
       const appPath = join(tmp, 'app.ts');
@@ -279,13 +279,14 @@ describe('effect-analyzer (handler/metrics)', () => {
         expect(typeof audit.analyzed).toBe('number');
         expect(typeof audit.zeroPrograms).toBe('number');
         expect(typeof audit.failed).toBe('number');
-        expect(typeof audit.percentage).toBe('number');
-        expect(typeof audit.analyzableCoverage).toBe('number');
+        expect(typeof audit.assessment.effectAdoption.rate).toBe('number');
+        expect(typeof audit.assessment.analysisSuccess.rate).toBe('number');
+        expect(typeof audit.assessment.sourceResolution.rate).toBe('number');
         expect(typeof audit.unknownNodeRate).toBe('number');
         expect(Array.isArray(audit.suspiciousZeros)).toBe(true);
         expect(audit.discovered).toBeGreaterThanOrEqual(0);
-        expect(audit.analyzableCoverage).toBeGreaterThanOrEqual(0);
-        expect(audit.analyzableCoverage).toBeLessThanOrEqual(100);
+        expect(audit.assessment.analysisSuccess.rate).toBeGreaterThanOrEqual(0);
+        expect(audit.assessment.analysisSuccess.rate).toBeLessThanOrEqual(1);
         expect(audit.unknownNodeRate).toBeGreaterThanOrEqual(0);
         expect(audit.unknownNodeRate).toBeLessThanOrEqual(1);
       } finally {
@@ -384,7 +385,7 @@ describe('effect-analyzer (handler/metrics)', () => {
       expect(pipeChild).toBeDefined();
     });
 
-    it('audit result includes analyzableCoverage and unknownNodeRate for CLI output', async () => {
+    it('audit result includes named assessment dimensions for CLI output', async () => {
       const tmp = mkdtempSync(join(tmpdir(), 'checklist-audit-'));
       const tsconfigPath = join(tmp, 'tsconfig.json');
       writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] }));
@@ -392,10 +393,10 @@ describe('effect-analyzer (handler/metrics)', () => {
       clearProjectCache();
       try {
         const audit = await Effect.runPromise(runCoverageAudit(tmp, { tsconfig: tsconfigPath }));
-        expect(typeof audit.analyzableCoverage).toBe('number');
+        expect(typeof audit.assessment.analysisSuccess.rate).toBe('number');
         expect(typeof audit.unknownNodeRate).toBe('number');
-        expect(audit.analyzableCoverage).toBeGreaterThanOrEqual(0);
-        expect(audit.analyzableCoverage).toBeLessThanOrEqual(100);
+        expect(audit.assessment.analysisSuccess.rate).toBeGreaterThanOrEqual(0);
+        expect(audit.assessment.analysisSuccess.rate).toBeLessThanOrEqual(1);
       } finally {
         rmSync(tmp, { recursive: true });
         clearProjectCache();

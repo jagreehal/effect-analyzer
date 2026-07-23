@@ -14,15 +14,15 @@ Example corpus: `packages/effect-analyzer/src/__fixtures__/docs/audit`
 ```text
 $ npx effect-analyze ./src/__fixtures__/docs/audit --coverage-audit
 
-Discovered: 4
-Analyzed:   2
-Zero programs: 2
-Suspicious zeros: 0
-Failed:     0
-Coverage:   50.0%
-Analyzable coverage: 100.0%
-Unknown node rate: 0.00%
-Duration:   1183ms
+Files discovered:      4
+Effect-bearing files:  2
+No Effect programs:    2
+Analysis failures:     0
+Suspicious zero files: 0
+Effect adoption:       50.0% (2/4 discovered files)
+Analysis success:      100.0% (2/2 relevant files)
+IR source resolution:  100.00% (8/8 IR nodes)
+Duration:              1183ms
 Zero categories: barrel/index=1, config/build=0, test/dtslint=0, type-only=0, suspicious=0, other=1
 ```
 
@@ -35,21 +35,27 @@ npx effect-analyze ./src --coverage-audit
 This produces a report covering:
 
 - **Discovery** - how many files were found, analyzed, and failed
-- **Coverage** - percentage of files containing Effect programs
+- **Effect adoption** - Effect-bearing files divided by all discovered files
+- **Analysis success** - successfully analyzed Effect-bearing files divided by those files plus analysis failures
+- **IR source resolution** - resolved IR nodes divided by all IR nodes
 - **Zero-program files** - files with no Effect programs, classified by type
 - **Top offenders** - files with highest complexity
-- **Unknown node rates** - files where the analyzer encountered unrecognized patterns
+- **Fidelity findings** - located source patterns the analyzer could not represent exactly
 
 ## Audit Output
 
-### Discovery and Coverage
+### Named Assessment Dimensions
 
 ```
-Files discovered: 142
-Files analyzed:   138
-Files failed:       4
-Coverage:         72% (99/138 files contain Effect programs)
+Effect adoption:      69.7% (99/142 discovered files)
+Analysis success:     96.1% (99/103 relevant files)
+IR source resolution: 98.4% (1842/1872 IR nodes)
 ```
+
+Each dimension includes its numerator and denominator in human and JSON output.
+This prevents a mixed TypeScript project from looking like an analyzer failure:
+zero-program files lower Effect adoption, while only failed analysis lowers
+analysis success.
 
 ### Zero-Program Classification
 
@@ -71,15 +77,15 @@ Show files that appear to import Effect but have no detected programs:
 npx effect-analyze ./src --coverage-audit --show-suspicious-zeros
 ```
 
-### Unknown Node Rates
+### Located Fidelity Findings
 
-Show files with the highest percentage of unrecognized AST patterns:
+Show source locations where the analyzer could not represent an expression:
 
 ```bash
 npx effect-analyze ./src --coverage-audit --show-top-unknown
 ```
 
-Add `--show-top-unknown-reasons` to include the specific patterns that weren't recognized:
+Add `--show-top-unknown-reasons` to aggregate the unresolved patterns by reason:
 
 ```bash
 npx effect-analyze ./src --coverage-audit --show-top-unknown --show-top-unknown-reasons
@@ -101,7 +107,20 @@ Output the audit as JSON for CI/CD integration:
 npx effect-analyze ./src --coverage-audit --json-summary
 ```
 
-This produces a machine-readable JSON object suitable for parsing in CI scripts, tracking metrics over time, or failing builds when quality thresholds are not met.
+This produces a machine-readable JSON object with the same named assessment
+dimensions as the human report.
+
+Use native audit policy flags to fail CI without a separate parsing script:
+
+```bash
+npx effect-analyze ./src --coverage-audit --quiet \
+  --max-audit-failed-files 0 \
+  --max-audit-suspicious-zeros 0 \
+  --min-audit-source-resolution 98
+```
+
+Quiet mode prints one summary line plus any policy violations. A failed policy
+returns exit code 1. JSON output includes the typed policy decision and violations.
 
 ## Performance Timing
 
@@ -133,11 +152,15 @@ const audit = await runCoverageAudit("./src", {
 console.log(audit.discovered)  // Total files found
 console.log(audit.analyzed)    // Files successfully analyzed
 console.log(audit.failed)      // Files that failed analysis
-console.log(audit.coverage)    // Coverage percentage
+console.log(audit.assessment.effectAdoption)      // { numerator, denominator, rate }
+console.log(audit.assessment.analysisSuccess)     // { numerator, denominator, rate }
+console.log(audit.assessment.sourceResolution)    // { numerator, denominator, rate }
 ```
 
 <Aside type="note">
-The coverage audit is designed to run on large codebases. It processes files in parallel and reports failures gracefully, so a single broken file does not stop the entire audit.
+The coverage audit reports failures without stopping at the first broken file.
+It currently analyzes files sequentially because node identity and TypeScript
+project state remain shared within an analysis session.
 </Aside>
 
 ## Related

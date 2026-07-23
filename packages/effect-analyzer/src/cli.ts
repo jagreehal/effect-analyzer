@@ -3,7 +3,7 @@
  */
 
 import './register-node-ts-morph';
-import { resolve, sep, join, dirname, extname, isAbsolute, basename } from 'path';
+import { resolve, join, dirname, extname, isAbsolute, basename } from 'path';
 import { watch, existsSync } from 'fs';
 import * as fs from 'node:fs/promises';
 import { Project } from 'ts-morph';
@@ -61,6 +61,8 @@ import {
 } from './migration-assistant';
 import { getCached, setCached } from './analysis-cache';
 import { runCoverageAudit, analyzeProject } from './project-analyzer';
+import { evaluateAuditPolicy, type AuditPolicy } from './audit-policy';
+import { renderCoverageReport as renderProjectCoverageReport } from './output/coverage-report';
 import { writeColocatedOutputForFile, writeAllServiceArtifacts } from './output/colocate';
 import { renderExplanation, renderMultipleExplanations } from './output/explain';
 import { renderMultipleSummaries } from './output/summary';
@@ -151,8 +153,6 @@ function createStyle(useColor: boolean) {
   };
 }
 
-const MAX_FAILED_OR_ZERO_ROWS = 120;
-
 const resolveCliPath = (inputPath: string | undefined): string => {
   const candidate = inputPath ?? '.';
   if (isAbsolute(candidate)) return candidate;
@@ -199,6 +199,10 @@ interface CLIOptions {
   readonly open: boolean;
   readonly excludeFromSuspiciousZeros: string[];
   readonly knownEffectInternalsRoot: string | undefined;
+  readonly maxAuditFailedFiles: number | undefined;
+  readonly maxAuditSuspiciousZeros: number | undefined;
+  readonly minAuditEffectAdoption: number | undefined;
+  readonly minAuditSourceResolution: number | undefined;
   readonly quiet: boolean;
   readonly color: boolean;
   readonly quality: boolean;
@@ -302,6 +306,10 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let open = false;
   const excludeFromSuspiciousZeros: string[] = [];
   let knownEffectInternalsRoot: string | undefined;
+  let maxAuditFailedFiles: number | undefined;
+  let maxAuditSuspiciousZeros: number | undefined;
+  let minAuditEffectAdoption: number | undefined;
+  let minAuditSourceResolution: number | undefined;
   let quiet = false;
   let color = true;
   let quality = false;
@@ -496,6 +504,22 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       if (value !== undefined) excludeFromSuspiciousZeros.push(value);
     } else if (arg === '--known-effect-internals-root') {
       knownEffectInternalsRoot = args[++i];
+    } else if (arg === '--max-audit-failed-files') {
+      const parsed = Number.parseInt(args[++i] ?? '', 10);
+      if (Number.isFinite(parsed) && parsed >= 0) maxAuditFailedFiles = parsed;
+    } else if (arg === '--max-audit-suspicious-zeros') {
+      const parsed = Number.parseInt(args[++i] ?? '', 10);
+      if (Number.isFinite(parsed) && parsed >= 0) maxAuditSuspiciousZeros = parsed;
+    } else if (arg === '--min-audit-effect-adoption') {
+      const parsed = Number.parseFloat(args[++i] ?? '');
+      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
+        minAuditEffectAdoption = parsed / 100;
+      }
+    } else if (arg === '--min-audit-source-resolution') {
+      const parsed = Number.parseFloat(args[++i] ?? '');
+      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
+        minAuditSourceResolution = parsed / 100;
+      }
     } else if (arg === '--json-summary') {
       jsonSummary = true;
     } else if (arg === '--quiet' || arg === '-q') {
@@ -686,7 +710,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   }
 
   // Coverage audit: show top unknown files and reasons by default (bounded, useful for prioritization)
-  if (coverageAudit) {
+  if (coverageAudit && !quiet) {
     if (!explicitNoShowTopUnknown) showTopUnknown = true;
     if (!explicitNoShowTopUnknownReasons) showTopUnknownReasons = true;
   }
@@ -719,6 +743,10 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     open,
     excludeFromSuspiciousZeros,
     knownEffectInternalsRoot,
+    maxAuditFailedFiles,
+    maxAuditSuspiciousZeros,
+    minAuditEffectAdoption,
+    minAuditSourceResolution,
     quiet,
     color,
     quality,
@@ -816,6 +844,10 @@ Options:
   --open                   With --format statechart-html/svg-statechart: open the written HTML in your browser
   --exclude-from-suspicious-zero <pattern>  With --coverage-audit: exclude paths matching pattern from suspicious zeros (repeatable)
   --known-effect-internals-root <path>      With --coverage-audit: treat local imports under path as Effect (improve.md §1)
+  --max-audit-failed-files <n>              Fail the audit when analysis failures exceed n
+  --max-audit-suspicious-zeros <n>          Fail the audit when suspicious zero-program files exceed n
+  --min-audit-effect-adoption <percent>     Fail when Effect-bearing files fall below this share of discovered files
+  --min-audit-source-resolution <percent>   Fail when resolved IR nodes fall below this share of all IR nodes
   --json-summary           With --coverage-audit: print only audit JSON to stdout (CI mode)
   --quality                Add heuristic diagram readability estimate and top offenders report
   --assert-diagram-fidelity  Fail when unresolved, opaque, dynamic-span, or ambiguous-span nodes make a diagram inexact
@@ -1508,107 +1540,44 @@ const runCoverageAuditCli = (
       excludeFromSuspiciousZeros: options.excludeFromSuspiciousZeros,
       knownEffectInternalsRoot: options.knownEffectInternalsRoot,
     });
-    if (options.jsonSummary) {
-      yield* Console.log(JSON.stringify({
-        ...audit,
-        timestamp: new Date().toISOString(),
-        dirPath: resolvedPath,
-      }, null, options.pretty ? 2 : undefined));
-      return;
-    }
-    yield* Console.log(`Coverage audit for ${resolvedPath}...`);
-    const lines: string[] = [
-      `Discovered: ${audit.discovered}`,
-      `Analyzed:   ${audit.analyzed}`,
-      `Zero programs: ${audit.zeroPrograms}`,
-      `Suspicious zeros: ${audit.suspiciousZeros.length}`,
-      `Failed:     ${audit.failed}`,
-      `Coverage:   ${audit.percentage.toFixed(1)}%`,
-      `Analyzable coverage: ${audit.analyzableCoverage.toFixed(1)}%`,
-      `Unknown node rate: ${(audit.unknownNodeRate * 100).toFixed(2)}%`,
-      ...(audit.durationMs !== undefined ? [`Duration:   ${audit.durationMs}ms`] : []),
-    ];
-    yield* Console.log(lines.join('\n'));
-    yield* Console.log(
-      `Zero categories: barrel/index=${audit.zeroProgramCategoryCounts.barrel_or_index}, config/build=${audit.zeroProgramCategoryCounts.config_or_build}, test/dtslint=${audit.zeroProgramCategoryCounts.test_or_dtslint}, type-only=${audit.zeroProgramCategoryCounts.type_only}, suspicious=${audit.zeroProgramCategoryCounts.suspicious}, other=${audit.zeroProgramCategoryCounts.other}`,
-    );
-    if (options.showOkZeroFailByFolder && audit.outcomes.length > 0) {
-      const byFolder = new Map<string, { ok: number; zero: number; fail: number }>();
-      for (const o of audit.outcomes) {
-        const rel = resolvedPath ? o.file.replace(resolvedPath, '').replace(/^[/\\]+/, '') : o.file;
-        const topFolder = rel.split(sep)[0] ?? '(root)';
-        const cur = byFolder.get(topFolder) ?? { ok: 0, zero: 0, fail: 0 };
-        if (o.status === 'ok') cur.ok++;
-        else if (o.status === 'zero') cur.zero++;
-        else cur.fail++;
-        byFolder.set(topFolder, cur);
-      }
-      yield* Console.log('\nBy top-level folder:');
-      for (const [folder, counts] of [...byFolder.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-        yield* Console.log(`  ${folder}: ok=${counts.ok} zero=${counts.zero} fail=${counts.fail}`);
-      }
-    }
-    yield* Console.log('(Detection is heuristic; re-exports and some aliases may be under-detected.)');
-    if (options.showSuspiciousZeros && audit.suspiciousZeros.length > 0) {
-      yield* Console.log('\nSuspicious zeros (Effect import but 0 programs):');
-      for (const f of audit.suspiciousZeros) {
-        yield* Console.log(`  ${f}`);
-      }
-    } else if (audit.suspiciousZeros.length > 0) {
-      const sample = audit.suspiciousZeros.slice(0, 10);
-      yield* Console.log('\nSuspicious zeros (sample):');
-      for (const f of sample) {
-        yield* Console.log(`  ${f}`);
-      }
-      if (audit.suspiciousZeros.length > sample.length) {
-        yield* Console.log(
-          `  ... and ${audit.suspiciousZeros.length - sample.length} more (use --show-suspicious-zeros for full list)`,
-        );
-      }
-    }
-    if (options.showTopUnknown && audit.topUnknownFiles && audit.topUnknownFiles.length > 0) {
-      yield* Console.log('\nTop files by unknown node rate:');
-      for (const f of audit.topUnknownFiles) {
-        yield* Console.log(`  ${f}`);
-      }
-    }
-    if (options.showTopUnknownReasons && audit.topUnknownReasons && audit.topUnknownReasons.length > 0) {
-      yield* Console.log('\nTop unknown node reasons (by count):');
-      for (const { reason, count } of audit.topUnknownReasons) {
-        yield* Console.log(`  ${count}\t${reason}`);
-      }
-    }
-    const failedOrZero = audit.outcomes.filter(
-      (o) => o.status === 'fail' || o.status === 'zero',
-    );
-    if (failedOrZero.length > 0) {
-      yield* Console.log('\nFailed or zero programs:');
-      const visible = failedOrZero.slice(0, MAX_FAILED_OR_ZERO_ROWS);
-      for (const o of visible) {
-        const reason =
-          o.status === 'fail' ? ` error: ${o.error ?? ''}` : ' (0 programs)';
-        yield* Console.log(`  ${o.file}${reason}`);
-      }
-      if (failedOrZero.length > visible.length) {
-        yield* Console.log(
-          `  ... and ${failedOrZero.length - visible.length} more (use --json-summary or -o to inspect full results)`,
-        );
-      }
-    }
-    const jsonPayload = {
-      ...audit,
-      timestamp: new Date().toISOString(),
-      dirPath: resolvedPath,
+    const policy: AuditPolicy = {
+      maxFailedFiles: options.maxAuditFailedFiles,
+      maxSuspiciousZeros: options.maxAuditSuspiciousZeros,
+      minEffectAdoption: options.minAuditEffectAdoption,
+      minSourceResolution: options.minAuditSourceResolution,
     };
+    const hasPolicy = Object.values(policy).some((value) => value !== undefined);
+    const decision = hasPolicy
+      ? evaluateAuditPolicy({
+          assessment: audit.assessment,
+          failedFiles: audit.failed,
+          suspiciousZeros: audit.suspiciousZeros.length,
+        }, policy)
+      : undefined;
+    const timestamp = new Date().toISOString();
+    const render = (mode: 'human' | 'quiet' | 'json') => renderProjectCoverageReport(audit, {
+      mode,
+      root: resolvedPath,
+      decision,
+      pretty: options.pretty,
+      showSuspiciousZeros: options.showSuspiciousZeros,
+      showTopUnknown: options.showTopUnknown,
+      showTopUnknownReasons: options.showTopUnknownReasons,
+      showByFolder: options.showOkZeroFailByFolder,
+      timestamp,
+    });
+
+    yield* Console.log(render(options.jsonSummary ? 'json' : options.quiet ? 'quiet' : 'human'));
+
     const outputPath = options.output;
     if (outputPath) {
-      const jsonStr = JSON.stringify(
-        jsonPayload,
-        null,
-        options.pretty ? 2 : undefined,
-      );
-      yield* Effect.tryPromise(() => fs.writeFile(outputPath, jsonStr, 'utf-8'));
-      yield* Console.log(`\nAudit written to ${outputPath}`);
+      yield* Effect.tryPromise(() => fs.writeFile(outputPath, render('json'), 'utf-8'));
+      if (!options.quiet && !options.jsonSummary) {
+        yield* Console.log(`Audit written to ${outputPath}`);
+      }
+    }
+    if (decision?.passed === false) {
+      process.exitCode = 1;
     }
   });
 

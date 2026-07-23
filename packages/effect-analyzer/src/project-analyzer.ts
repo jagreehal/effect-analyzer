@@ -4,15 +4,19 @@
  * Analyzes a directory of TypeScript files and aggregates results.
  */
 
-import { Effect, Option } from 'effect';
+import { Effect } from 'effect';
 import { readdir, readFile, stat } from 'fs/promises';
 import { readFileSync } from 'fs';
 import { join, extname, resolve, basename } from 'path';
-import type { StaticEffectIR, StaticFlowNode, ProjectServiceMap } from './types';
-import { getStaticChildren, isStaticUnknownNode } from './types';
-import { analyze } from './analyze';
+import type { StaticEffectIR, ProjectServiceMap } from './types';
 import { loadTsMorph } from './ts-morph-loader';
 import { buildProjectServiceMap } from './service-registry';
+import { scanProjectCorpus, type ProjectCorpus } from './project-corpus';
+import { assessAudit, type AuditAssessment } from './audit-assessment';
+import {
+  assessIRFidelity,
+  type FidelityFinding,
+} from './fidelity-findings';
 import {
   extractProjectArchitecture,
   type ProjectArchitectureSummary,
@@ -88,6 +92,11 @@ export interface ZeroProgramClassification {
   readonly importsEffect: boolean;
 }
 
+export interface ProjectFidelityFinding extends FidelityFinding {
+  readonly file: string;
+  readonly programName: string;
+}
+
 /** Coverage audit: discovered vs analyzed vs failed/zero, with per-file outcomes. */
 export interface CoverageAuditResult {
   readonly discovered: number;
@@ -95,15 +104,15 @@ export interface CoverageAuditResult {
   readonly zeroPrograms: number;
   readonly failed: number;
   readonly outcomes: readonly FileOutcome[];
-  readonly percentage: number;
-  /** analyzed / (analyzed + failed) * 100 — excludes zero-program files (correct classification). */
-  readonly analyzableCoverage: number;
+  readonly assessment: AuditAssessment;
   /** unknownCount / totalNodes across all analyzed files (0–1). */
   readonly unknownNodeRate: number;
   /** Repo-level aggregate: total node count across all analyzed programs (improve.md §5). */
   readonly totalNodes: number;
   /** Repo-level aggregate: unknown node count across all analyzed programs (improve.md §5). */
   readonly unknownNodes: number;
+  /** Located fidelity evidence across every analyzed program. */
+  readonly fidelityFindings: readonly ProjectFidelityFinding[];
   /** Files that import from effect/@effect but produced zero programs. */
   readonly suspiciousZeros: readonly string[];
   /** Per-category zero-program counts for triage. */
@@ -131,42 +140,6 @@ const DEFAULT_OPTIONS: Required<Omit<AnalyzeProjectOptions, 'tsconfig'>> = {
 };
 
 
-
-// =============================================================================
-// Precision metric helpers
-// =============================================================================
-
-function countNodes(nodes: readonly StaticFlowNode[]): { total: number; unknown: number } {
-  let total = 0;
-  let unknown = 0;
-  const visit = (list: readonly StaticFlowNode[]) => {
-    for (const node of list) {
-      total++;
-      if (node.type === 'unknown') unknown++;
-      const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
-      if (children.length > 0) visit(children);
-    }
-  };
-  visit(nodes);
-  return { total, unknown };
-}
-
-/** Aggregate unknown node counts by reason. */
-function countUnknownReasons(nodes: readonly StaticFlowNode[]): Map<string, number> {
-  const byReason = new Map<string, number>();
-  const visit = (list: readonly StaticFlowNode[]) => {
-    for (const node of list) {
-      if (isStaticUnknownNode(node)) {
-        const r = node.reason;
-        byReason.set(r, (byReason.get(r) ?? 0) + 1);
-      }
-      const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
-      if (children.length > 0) visit(children);
-    }
-  };
-  visit(nodes);
-  return byReason;
-}
 
 /** Modules from `effect` that do NOT produce Effect programs on their own. */
 const NON_PROGRAM_EFFECT_MODULES = new Set([
@@ -309,36 +282,6 @@ function detectExpectedZeroCategory(filePath: string): Exclude<ZeroProgramCatego
   return undefined;
 }
 // =============================================================================
-// Discovery
-// =============================================================================
-
-async function findTsFiles(
-  dir: string,
-  extensions: readonly string[],
-  maxDepth: number,
-  currentDepth: number,
-): Promise<string[]> {
-  if (currentDepth >= maxDepth) return [];
-  const result: string[] = [];
-  try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const ent of entries) {
-      const full = join(dir, ent.name);
-      if (ent.isDirectory()) {
-        if (ent.name !== 'node_modules' && ent.name !== '.git') {
-          result.push(...(await findTsFiles(full, extensions, maxDepth, currentDepth + 1)));
-        }
-      } else if (ent.isFile() && extensions.includes(extname(ent.name))) {
-        result.push(full);
-      }
-    }
-  } catch {
-    // ignore permission errors etc.
-  }
-  return result;
-}
-
-// =============================================================================
 // Entry points from package.json (Gap 4: semantic entry-point detection)
 // =============================================================================
 
@@ -465,46 +408,31 @@ async function getEntryPointsFromPackageJson(
 /**
  * Analyze all TypeScript files in a directory and return aggregated IRs.
  */
-export function analyzeProject(
-  dirPath: string,
+export function analyzeProjectCorpus(
+  corpus: ProjectCorpus,
   options: AnalyzeProjectOptions = {},
 ): Effect.Effect<ProjectAnalysisResult> {
+  const dirPath = corpus.root;
   const extensions = (options.extensions ?? DEFAULT_OPTIONS.extensions)!;
-  const maxDepth = (options.maxDepth ?? DEFAULT_OPTIONS.maxDepth)!;
   return Effect.gen(function* () {
-    const files = yield* Effect.promise(() =>
-      findTsFiles(dirPath, extensions, maxDepth, 0),
-    );
+    const files = corpus.files.map((entry) => entry.file);
     const byFile = new Map<string, readonly StaticEffectIR[]>();
     const allPrograms: StaticEffectIR[] = [];
     const entryPointFiles: string[] = [];
     const failedFiles: ProjectFileFailure[] = [];
     const zeroProgramFiles: string[] = [];
 
-    for (const file of files) {
-      const result = yield* analyze(file, {
-        tsConfigPath: options.tsconfig,
-        knownEffectInternalsRoot: options.knownEffectInternalsRoot,
-      })
-        .all()
-        .pipe(
-          Effect.map((programs) => ({ _tag: 'ok' as const, programs })),
-          Effect.catch((err) =>
-            Effect.succeed({
-              _tag: 'fail' as const,
-              error: err instanceof Error ? err.message : String(err),
-            }),
-          ),
-        );
-      if (result._tag === 'fail') {
-        failedFiles.push({ file, error: result.error });
+    for (const entry of corpus.files) {
+      const file = entry.file;
+      if (entry.status === 'fail') {
+        failedFiles.push({ file, error: entry.error ?? 'Unknown analysis failure' });
         continue;
       }
-      const programs = result.programs;
-      if (programs.length === 0) {
+      if (entry.status === 'zero') {
         zeroProgramFiles.push(file);
         continue;
       }
+      const programs = entry.programs;
       byFile.set(file, programs);
       allPrograms.push(...programs);
       for (const ir of programs) {
@@ -575,6 +503,22 @@ export function analyzeProject(
   });
 }
 
+export function analyzeProject(
+  dirPath: string,
+  options: AnalyzeProjectOptions = {},
+): Effect.Effect<ProjectAnalysisResult> {
+  const extensions = options.extensions ?? DEFAULT_OPTIONS.extensions;
+  const maxDepth = options.maxDepth ?? DEFAULT_OPTIONS.maxDepth;
+  return scanProjectCorpus(dirPath, {
+    extensions,
+    maxDepth,
+    tsconfig: options.tsconfig,
+    knownEffectInternalsRoot: options.knownEffectInternalsRoot,
+  }).pipe(
+    Effect.flatMap((corpus) => analyzeProjectCorpus(corpus, options)),
+  );
+}
+
 // =============================================================================
 // Coverage audit (missing-gaps: discovered vs analyzed, failed/skipped list)
 // =============================================================================
@@ -588,50 +532,58 @@ export function runCoverageAudit(
   dirPath: string,
   options: AnalyzeProjectOptions = {},
 ): Effect.Effect<CoverageAuditResult> {
-  const extensions = (options.extensions ?? DEFAULT_OPTIONS.extensions)!;
-  const maxDepth = (options.maxDepth ?? DEFAULT_OPTIONS.maxDepth)!;
-  return Effect.gen(function* () {
-    const startMs = Date.now();
-    const files = yield* Effect.promise(() =>
-      findTsFiles(dirPath, extensions, maxDepth, 0),
-    );
+  return scanProjectCorpus(dirPath, {
+    extensions: options.extensions ?? DEFAULT_OPTIONS.extensions,
+    maxDepth: options.maxDepth ?? DEFAULT_OPTIONS.maxDepth,
+    tsconfig: options.tsconfig,
+    includePerFileTiming: options.includePerFileTiming,
+    knownEffectInternalsRoot: options.knownEffectInternalsRoot,
+  }).pipe(
+    Effect.flatMap((corpus) => runCoverageAuditFromCorpus(corpus, options)),
+  );
+}
+
+export function runCoverageAuditFromCorpus(
+  corpus: ProjectCorpus,
+  options: AnalyzeProjectOptions = {},
+): Effect.Effect<CoverageAuditResult> {
+  return Effect.sync(() => {
     const outcomes: FileOutcome[] = [];
     let totalNodes = 0;
     let unknownNodes = 0;
+    let sourceUnresolvedNodes = 0;
+    const fidelityFindings: ProjectFidelityFinding[] = [];
     const fileUnknownRates: { file: string; total: number; unknown: number }[] = [];
     const unknownReasonsCorpus = new Map<string, number>();
 
-    const includePerFileTiming = options.includePerFileTiming === true;
-    for (const file of files) {
-      const fileStartMs = includePerFileTiming ? Date.now() : 0;
-      const result = yield* analyze(file, {
-        tsConfigPath: options.tsconfig,
-        knownEffectInternalsRoot: options.knownEffectInternalsRoot,
-      })
-        .all()
-        .pipe(
-          Effect.map((programs) => ({ _tag: 'ok' as const, programs })),
-          Effect.catch((err) =>
-            Effect.succeed({
-              _tag: 'fail' as const,
-              error: err instanceof Error ? err.message : String(err),
-            }),
-          ),
-        );
-      const durationMs = includePerFileTiming ? Date.now() - fileStartMs : undefined;
-      if (result._tag === 'ok') {
-        const count = result.programs.length;
+    for (const entry of corpus.files) {
+      const file = entry.file;
+      const durationMs = entry.durationMs;
+      if (entry.status !== 'fail') {
+        const count = entry.programs.length;
         let fileTotal = 0;
         let fileUnknown = 0;
-        for (const ir of result.programs) {
-          const counts = countNodes(ir.root.children);
-          totalNodes += counts.total;
-          unknownNodes += counts.unknown;
-          fileTotal += counts.total;
-          fileUnknown += counts.unknown;
-          const reasonCounts = countUnknownReasons(ir.root.children);
-          for (const [reason, n] of reasonCounts) {
-            unknownReasonsCorpus.set(reason, (unknownReasonsCorpus.get(reason) ?? 0) + n);
+        for (const ir of entry.programs) {
+          const fidelity = assessIRFidelity(ir);
+          const unknownFindings = fidelity.findings.filter(
+            (finding) => finding.kind === 'unknown-node',
+          );
+          totalNodes += fidelity.sourceRepresentation.total;
+          unknownNodes += unknownFindings.length;
+          sourceUnresolvedNodes +=
+            fidelity.sourceRepresentation.total - fidelity.sourceRepresentation.resolved;
+          fileTotal += fidelity.sourceRepresentation.total;
+          fileUnknown += unknownFindings.length;
+          for (const finding of fidelity.findings) {
+            fidelityFindings.push({
+              ...finding,
+              file,
+              programName: ir.root.programName,
+            });
+            if (finding.kind === 'unknown-node') {
+              const reason = finding.reason ?? 'Unknown reason';
+              unknownReasonsCorpus.set(reason, (unknownReasonsCorpus.get(reason) ?? 0) + 1);
+            }
           }
         }
         if (fileTotal > 0) {
@@ -643,26 +595,19 @@ export function runCoverageAudit(
             : { file, status: 'zero', programCount: 0, ...(durationMs !== undefined ? { durationMs } : {}) },
         );
       } else {
-        const msg = result.error ?? '';
-        const isZeroPrograms =
-          msg.includes('No Effect programs found') || msg.includes('NO_EFFECTS_FOUND');
-        outcomes.push(
-          isZeroPrograms
-            ? { file, status: 'zero', programCount: 0, ...(durationMs !== undefined ? { durationMs } : {}) }
-            : { file, status: 'fail', error: result.error, ...(durationMs !== undefined ? { durationMs } : {}) },
-        );
+        outcomes.push({
+          file,
+          status: 'fail',
+          ...(entry.error === undefined ? {} : { error: entry.error }),
+          ...(durationMs !== undefined ? { durationMs } : {}),
+        });
       }
     }
 
-    const discovered = files.length;
+    const discovered = corpus.files.length;
     const analyzed = outcomes.filter((o) => o.status === 'ok').length;
     const zeroPrograms = outcomes.filter((o) => o.status === 'zero').length;
     const failed = outcomes.filter((o) => o.status === 'fail').length;
-    const percentage = discovered > 0 ? (analyzed / discovered) * 100 : 0;
-    const analyzableCoverage = (analyzed + failed) > 0
-      ? (analyzed / (analyzed + failed)) * 100
-      : 100;
-
     const excludePatterns = options.excludeFromSuspiciousZeros ?? [];
     const isExcludedFromSuspicious = (filePath: string): boolean => {
       const normalized = filePath.replace(/\\/g, '/');
@@ -698,6 +643,13 @@ export function runCoverageAudit(
       if (category === 'suspicious') suspiciousZeros.push(o.file);
     }
     const unknownNodeRate = totalNodes > 0 ? unknownNodes / totalNodes : 0;
+    const assessment = assessAudit({
+      discoveredFiles: discovered,
+      effectFiles: analyzed,
+      failedFiles: failed,
+      totalNodes,
+      unresolvedNodes: sourceUnresolvedNodes,
+    });
     const topUnknownFiles = fileUnknownRates
       .filter((f) => f.total > 0)
       .sort((a, b) => (b.unknown / b.total) - (a.unknown / a.total))
@@ -711,18 +663,18 @@ export function runCoverageAudit(
       .slice(0, 20)
       .map(([reason, count]) => ({ reason, count }));
 
-    const durationMs = Date.now() - startMs;
+    const durationMs = corpus.durationMs;
     return {
       discovered,
       analyzed,
       zeroPrograms,
       failed,
       outcomes,
-      percentage,
-      analyzableCoverage,
+      assessment,
       unknownNodeRate,
       totalNodes,
       unknownNodes,
+      fidelityFindings,
       suspiciousZeros,
       zeroProgramCategoryCounts,
       zeroProgramClassifications,

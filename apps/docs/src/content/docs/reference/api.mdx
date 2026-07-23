@@ -114,7 +114,24 @@ Analyze all TypeScript files in a directory. Returns a `ProjectAnalysisResult` w
 
 ### `runCoverageAudit(dirPath, options?)`
 
-Run a coverage audit across a directory. Returns a `CoverageAuditResult`.
+Run a coverage audit across a directory. Returns a `CoverageAuditResult` with
+named `effectAdoption`, `analysisSuccess`, and `sourceResolution` assessment
+dimensions. Each dimension contains `{ numerator, denominator, rate }`.
+
+### `analysis.corpus(dirPath, options?)`
+
+Discover and analyze a project once. The returned Project corpus records every
+file and its Effect IR programs, zero-program result, analysis failure, and
+optional timing. Project-wide views use this shared evidence model.
+
+Pass the corpus to `analysis.projectFromCorpus(corpus)` and
+`analysis.auditFromCorpus(corpus)` to derive both views without scanning source
+files again.
+
+### `evaluateAuditPolicy(facts, policy)`
+
+Evaluate native CI expectations against an Audit assessment. Returns a pass or
+fail decision with typed violations and does not mutate the measurements.
 
 ### Deep IR traversal
 

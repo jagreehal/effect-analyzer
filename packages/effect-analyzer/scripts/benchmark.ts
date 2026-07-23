@@ -21,8 +21,9 @@ interface BenchmarkResult {
   analyzed: number;
   zeroPrograms: number;
   failed: number;
-  percentage: number;
-  analyzableCoverage: number;
+  effectAdoption: number;
+  analysisSuccess: number;
+  sourceResolution: number;
   unknownNodeRate: number;
   suspiciousZerosCount: number;
   durationMs: number;
@@ -45,8 +46,9 @@ async function benchmarkRepo(repoPath: string): Promise<BenchmarkResult> {
     analyzed: audit.analyzed,
     zeroPrograms: audit.zeroPrograms,
     failed: audit.failed,
-    percentage: Math.round(audit.percentage * 100) / 100,
-    analyzableCoverage: Math.round(audit.analyzableCoverage * 100) / 100,
+    effectAdoption: Math.round(audit.assessment.effectAdoption.rate * 10_000) / 100,
+    analysisSuccess: Math.round(audit.assessment.analysisSuccess.rate * 10_000) / 100,
+    sourceResolution: Math.round(audit.assessment.sourceResolution.rate * 10_000) / 100,
     unknownNodeRate: Math.round(audit.unknownNodeRate * 10000) / 10000,
     suspiciousZerosCount: audit.suspiciousZeros.length,
     durationMs: Date.now() - start,
@@ -73,7 +75,7 @@ async function main() {
     const result = await benchmarkRepo(repoResolved);
     results.push(result);
     console.log(`  discovered=${result.discovered} analyzed=${result.analyzed} zero=${result.zeroPrograms} failed=${result.failed}`);
-    console.log(`  coverage=${result.percentage}% analyzable=${result.analyzableCoverage}% unknownRate=${result.unknownNodeRate}`);
+    console.log(`  adoption=${result.effectAdoption}% analysisSuccess=${result.analysisSuccess}% sourceResolution=${result.sourceResolution}% unknownRate=${result.unknownNodeRate}`);
     console.log(`  duration=${result.durationMs}ms`);
   }
 
@@ -99,7 +101,7 @@ async function main() {
         const diff = curr - prev;
         return diff >= 0 ? `+${diff}` : `${diff}`;
       };
-      console.log(`  ${result.repo}: analyzed ${delta('analyzed')} | unknown ${delta('unknownNodeRate')} | coverage ${delta('percentage')}%`);
+      console.log(`  ${result.repo}: analyzed ${delta('analyzed')} | unknown ${delta('unknownNodeRate')} | adoption ${delta('effectAdoption')}%`);
     }
   }
 }

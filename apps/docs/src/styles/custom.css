@@ -634,6 +634,98 @@ site-search button[data-open-modal] kbd {
   padding: 1rem;
 }
 
+/* ---- Diagram | Source tabs (awaitly-style) ---- */
+
+.ea-diagram-source {
+  margin: 1.25rem 0 1.75rem;
+  overflow: hidden;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: var(--ea-radius-lg);
+  background: var(--ea-bg-surface);
+}
+
+.ea-diagram-source__tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 0.25rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+.ea-diagram-source__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--sl-color-gray-3);
+  font-family: var(--sl-font);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ea-diagram-source__tab:hover {
+  color: var(--sl-color-gray-2);
+}
+
+.ea-diagram-source__tab:focus {
+  outline: none;
+}
+
+.ea-diagram-source__tab:focus-visible {
+  color: var(--sl-color-accent);
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: -2px;
+  border-radius: var(--ea-radius);
+}
+
+.ea-diagram-source__tab::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0.75rem;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.ea-diagram-source__tab[aria-selected='true'] {
+  color: var(--sl-color-accent);
+}
+
+.ea-diagram-source__tab[aria-selected='true']::after {
+  background: var(--sl-color-accent);
+}
+
+.ea-diagram-source__icon {
+  flex-shrink: 0;
+}
+
+.ea-diagram-source__panel {
+  min-height: 12rem;
+}
+
+.ea-diagram-source__panel[hidden] {
+  display: none;
+}
+
+.ea-diagram-source__panel .mermaid {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+.ea-diagram-source__panel .expressive-code,
+.ea-diagram-source__panel .expressive-code .frame {
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
 /* ---- Animations ---- */
 
 @keyframes ea-pulse {

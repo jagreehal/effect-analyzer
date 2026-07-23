@@ -357,9 +357,9 @@ Analyzed:   178
 Zero programs: 311
 Suspicious zeros: 0
 Failed:     0
-Coverage:   36.4%
-Analyzable coverage: 100.0%
-Unknown node rate: 4.92%
+Effect adoption:       36.4%
+Analysis success:      100.0%
+IR source resolution:  95.08%
 ```
 
 If you narrow to the actual server/service layer, the picture is much cleaner:
@@ -375,9 +375,9 @@ Analyzed:   72
 Zero programs: 26
 Suspicious zeros: 0
 Failed:     0
-Coverage:   73.5%
-Analyzable coverage: 100.0%
-Unknown node rate: 2.26%
+Effect adoption:       73.5%
+Analysis success:      100.0%
+IR source resolution:  97.74%
 ```
 
 That is the right reading of this repo. The analyzer is strong on the service layer and correctly ignores a large amount of React/UI/type-only code that is not meaningful Effect program analysis.
