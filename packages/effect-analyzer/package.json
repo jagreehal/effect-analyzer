@@ -89,7 +89,7 @@
   },
   "homepage": "https://github.com/jagreehal/effect-analyzer/tree/main/packages/effect-analyzer#readme",
   "peerDependencies": {
-    "effect": "^4.0.0-beta.99"
+    "effect": "^4.0.0-beta.101"
   },
   "peerDependenciesMeta": {
     "effect": {
@@ -97,7 +97,7 @@
     }
   },
   "dependencies": {
-    "effect": "^4.0.0-beta.99",
+    "effect": "^4.0.0-beta.101",
     "ts-morph": "^28.0.0"
   },
   "optionalDependencies": {
