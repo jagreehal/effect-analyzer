@@ -1,27 +1,37 @@
 /**
- * Finite State Machine Analysis
+ * State machine analysis.
  *
- * Recognizes plain-Effect state machines (no XState) and extracts
- * (fromState, event, toState) transition triples so they can be rendered
- * as an XState-style statechart.
+ * Recognizes machines written with `@typeonce/effect-machine` — the
+ * schema-first Machine API from Effect PR #6429 — and extracts the state tree
+ * plus (fromState, event, toState) transition triples so they can be rendered
+ * as an XState statechart.
  *
- * Shapes detected:
- *  A) Declarative transition table — a nested object literal:
- *       { Triage: { RefundRequested: 'Refund', ... }, ... }
- *  B) Match.when tuple function — Match.value([s._tag, e._tag]).pipe(
- *       Match.when(['Draft', 'Submit'], () => ({ _tag: 'Review' })), ...)
- *  C) Nested Match.tags dispatch — outer tags are states, inner tags are events.
- *     Both expression-body and block-body (`{ return { _tag } }`) handlers
- *     are supported; a handler with multiple distinct returned tags yields
- *     one transition per target (best-effort guarded transitions).
- * Initial state is taken from, in order: an `@initial <State>` annotation on
- * the machine declaration, a sibling `initial`/`initialState`/`startState`
- * declaration whose value is one of the machine's states, else the first
- * reachable state.
+ * Shape detected:
+ *   Machine.make({ states, events, initial }).handle({ ... })
+ *
+ * The state tree comes from `Machine.defineStates({...})` (or an inline
+ * `states:` literal): a leaf is a tagged schema, a node is
+ * `{ schema, type?, initial?, states }`. Nesting becomes dotted paths
+ * ('workspace.document.Clean'), `type: 'parallel'` carries through, and a
+ * compound `initial` becomes an `initial`-triggered edge. Final states can be
+ * declared in either the state tree or the handler tree.
+ *
+ * Transitions come from the `.handle({...})` tree: `on` (events), `always`
+ * (eventless), and `onDone` (compound completion). Targets are read from the
+ * `target.full` / `target.local` / `target.branch` builders, including
+ * `target.local.with(value, child => ...)` and nested region builders.
  */
 
 import { statSync } from 'node:fs';
-import { Node, Project, SyntaxKind, type ObjectLiteralExpression } from 'ts-morph';
+import {
+  Node,
+  Project,
+  SyntaxKind,
+  type ArrowFunction,
+  type CallExpression,
+  type FunctionExpression,
+  type ObjectLiteralExpression,
+} from 'ts-morph';
 import type { SourceLocation } from './types';
 
 // =============================================================================
@@ -58,33 +68,33 @@ export interface StateInvoke {
 
 export interface StateMachine {
   readonly name: string;
-  readonly source: 'transition-table' | 'match' | 'machine-json';
+  readonly source: 'effect-machine' | 'machine-json';
   readonly initial: string | undefined;
-  /** States that appear in the extracted transitions. */
+  /** Every state path in the machine, parents included. */
   readonly states: readonly string[];
   readonly transitions: readonly StateTransition[];
   readonly location: SourceLocation | undefined;
   /**
-   * The declared alphabet — the full set of states/events from the machine's
-   * types (a tagged union or a Schema-derived type). `undefined` when the type
-   * could not be resolved. Used to check the machine for completeness.
+   * The declared alphabet — the full set of states/events the machine declares.
+   * `undefined` when it could not be resolved (e.g. an imported state tree).
+   * Used to check the machine for completeness.
    */
   readonly declaredStates: readonly string[] | undefined;
   readonly declaredEvents: readonly string[] | undefined;
   readonly alphabetSource: 'schema' | 'tagged-union' | 'config' | undefined;
   /**
-   * States the source explicitly marks final (`type: 'final'` in MachineJSON
-   * or a transition table). `undefined` means the source has no final marker,
-   * and renderers fall back to no-outgoing-transition inference.
+   * States the source explicitly marks final (`type: 'final'`). `undefined`
+   * means the source has no final marker, and renderers fall back to
+   * no-outgoing-transition inference.
    */
   readonly finalStates?: readonly string[];
-  /** States marked `type: 'parallel'` (MachineJSON): every child region is entered. */
+  /** States marked `type: 'parallel'`: every child region is entered. */
   readonly parallelStates?: readonly string[];
   /** Entry action labels per state. Labels only — never executed. */
   readonly entryActions?: Readonly<Record<string, readonly string[]>>;
   /** Exit action labels per state. Labels only — never executed. */
   readonly exitActions?: Readonly<Record<string, readonly string[]>>;
-  /** Invoked-effect metadata per state (`invoke: { src }` or an invoke array). */
+  /** Invoked-child metadata per state (`invoke:` in the handler tree). */
   readonly invokes?: Readonly<Record<string, readonly StateInvoke[]>>;
 }
 
@@ -102,6 +112,8 @@ export interface StateMachineAnalysis {
 // =============================================================================
 // AST helpers
 // =============================================================================
+
+type SourceFile = ReturnType<Project['createSourceFile']>;
 
 /** Strip `as const`, `satisfies`, parentheses and `<T>` assertions. */
 function unwrap(node: Node): Node {
@@ -130,20 +142,34 @@ function stringValue(node: Node | undefined): string | undefined {
   return undefined;
 }
 
-function propName(prop: Node): string | undefined {
-  if (!Node.isPropertyAssignment(prop)) return undefined;
-  const nameNode = prop.getNameNode();
-  if (Node.isStringLiteral(nameNode)) return nameNode.getLiteralValue();
-  if (Node.isIdentifier(nameNode)) return nameNode.getText();
-  return undefined;
+interface PropEntry {
+  readonly name: string;
+  /** `undefined` for a shorthand property (`{ Idle }`). */
+  readonly value: Node | undefined;
 }
 
-/** Extract the `_tag` string literal from an object literal, if present. */
-function tagFromObject(obj: Node): string | undefined {
-  if (!Node.isObjectLiteralExpression(obj)) return undefined;
-  const tagProp = obj.getProperty('_tag');
-  if (!tagProp || !Node.isPropertyAssignment(tagProp)) return undefined;
-  return stringValue(tagProp.getInitializer());
+/** Named properties of an object literal, shorthand included. */
+function propEntries(obj: ObjectLiteralExpression): PropEntry[] {
+  const out: PropEntry[] = [];
+  for (const prop of obj.getProperties()) {
+    if (Node.isShorthandPropertyAssignment(prop)) {
+      out.push({ name: prop.getName(), value: undefined });
+      continue;
+    }
+    if (!Node.isPropertyAssignment(prop)) continue;
+    const nameNode = prop.getNameNode();
+    const name = Node.isStringLiteral(nameNode)
+      ? nameNode.getLiteralValue()
+      : Node.isIdentifier(nameNode)
+        ? nameNode.getText()
+        : undefined;
+    if (name !== undefined) out.push({ name, value: prop.getInitializer() });
+  }
+  return out;
+}
+
+function propValue(obj: ObjectLiteralExpression, name: string): Node | undefined {
+  return obj.getProperty(name)?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
 }
 
 function locOf(node: Node, filePath: string): SourceLocation {
@@ -153,62 +179,92 @@ function locOf(node: Node, filePath: string): SourceLocation {
   return { filePath, line, column, offset };
 }
 
-function uniqueStates(transitions: readonly StateTransition[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const t of transitions) {
-    for (const s of [t.from, t.to]) {
-      if (!seen.has(s)) {
-        seen.add(s);
-        out.push(s);
-      }
+const join = (parent: string, child: string): string =>
+  parent === '' ? child : `${parent}.${child}`;
+
+function isFunctionLike(node: Node): node is ArrowFunction | FunctionExpression {
+  return Node.isArrowFunction(node) || Node.isFunctionExpression(node);
+}
+
+function isEffectMachineBinding(name: string, sf: SourceFile): boolean {
+  return sf.getImportDeclarations().some((declaration) => {
+    if (declaration.getModuleSpecifierValue() !== '@typeonce/effect-machine') {
+      return false;
     }
-  }
-  return out;
+    return declaration.getNamedImports().some((namedImport) => {
+      if (namedImport.getName() !== 'Machine') return false;
+      return (namedImport.getAliasNode()?.getText() ?? 'Machine') === name;
+    });
+  });
 }
 
-// =============================================================================
-// Declared-alphabet extraction (via the type checker)
-//
-// The type checker resolves a hand-written tagged union and a Schema-derived
-// type (`Schema.Schema.Type<typeof X>`) to the same shape, so one path handles
-// both. We read `_tag` string-literal members off the resolved type.
-// =============================================================================
-
-type TsType = ReturnType<Node['getType']>;
-
-/** String-literal members of a (possibly union) type, e.g. `'a' | 'b'` → ['a','b']. */
-function stringLiteralsOfType(type: TsType): string[] {
-  const members = type.isUnion() ? type.getUnionTypes() : [type];
-  const out: string[] = [];
-  for (const m of members) {
-    const v = m.getLiteralValue();
-    if (typeof v === 'string' && !out.includes(v)) out.push(v);
-  }
-  return out;
+function isEffectMachineNamespace(name: string, sf: SourceFile): boolean {
+  return sf.getImportDeclarations().some(
+    (declaration) =>
+      declaration.getModuleSpecifierValue() === '@typeonce/effect-machine' &&
+      declaration.getNamespaceImport()?.getText() === name,
+  );
 }
 
-/** `_tag` literals of each member of a tagged-union type. */
-function tagsOfUnion(type: TsType, at: Node): string[] {
-  const members = type.isUnion() ? type.getUnionTypes() : [type];
-  const out: string[] = [];
-  for (const m of members) {
-    const prop = m.getProperty('_tag');
-    if (!prop) continue;
-    const v = prop.getTypeAtLocation(at).getLiteralValue();
-    if (typeof v === 'string' && !out.includes(v)) out.push(v);
+/** A call to a method on the imported `Machine` namespace. */
+function isMachineCall(node: Node, name: string): node is CallExpression {
+  if (!Node.isCallExpression(node)) return false;
+  const expr = node.getExpression();
+  if (!Node.isPropertyAccessExpression(expr) || expr.getName() !== name) {
+    return false;
   }
-  return out;
+  const owner = expr.getExpression();
+  if (Node.isIdentifier(owner)) {
+    return isEffectMachineBinding(owner.getText(), node.getSourceFile());
+  }
+  return (
+    Node.isPropertyAccessExpression(owner) &&
+    owner.getName() === 'Machine' &&
+    Node.isIdentifier(owner.getExpression()) &&
+    isEffectMachineNamespace(owner.getExpression().getText(), node.getSourceFile())
+  );
 }
 
 /**
- * Alphabet members of a type: `_tag` literals of a tagged union, or — for a
- * `Schema.Literal('a','b')` / `type E = 'a' | 'b'` style — the string literals
- * themselves.
+ * The object literal behind a value, following a local `const` binding.
+ * `undefined` when the value is imported or computed.
  */
-function alphabetMembers(type: TsType, at: Node): string[] {
-  const tags = tagsOfUnion(type, at);
-  return tags.length ? tags : stringLiteralsOfType(type);
+function objectLiteral(
+  node: Node | undefined,
+  sf: SourceFile,
+  depth = 0,
+): ObjectLiteralExpression | undefined {
+  if (!node || depth > 8) return undefined;
+  const u = unwrap(node);
+  if (Node.isObjectLiteralExpression(u)) return u;
+  if (Node.isIdentifier(u)) {
+    return objectLiteral(sf.getVariableDeclaration(u.getText())?.getInitializer(), sf, depth + 1);
+  }
+  return undefined;
+}
+
+/**
+ * The object literal behind a `states:` value: an inline tree, a
+ * `Machine.defineStates({...})` call, or the `.states` of one. `undefined` when
+ * the tree is declared in another file.
+ */
+function stateTree(
+  node: Node | undefined,
+  sf: SourceFile,
+  depth = 0,
+): ObjectLiteralExpression | undefined {
+  if (!node || depth > 8) return undefined;
+  const u = unwrap(node);
+  if (isMachineCall(u, 'defineStates')) {
+    return objectLiteral(u.getArguments()[0], sf);
+  }
+  if (Node.isPropertyAccessExpression(u) && u.getName() === 'states') {
+    return stateTree(u.getExpression(), sf, depth + 1);
+  }
+  if (Node.isIdentifier(u)) {
+    return stateTree(sf.getVariableDeclaration(u.getText())?.getInitializer(), sf, depth + 1);
+  }
+  return objectLiteral(u, sf);
 }
 
 /**
@@ -216,638 +272,501 @@ function alphabetMembers(type: TsType, at: Node): string[] {
  * this file, read syntactically from its extends clause. `undefined` when the
  * class is absent, imported, or not a Schema tagged class.
  */
-function classTag(
-  name: string,
-  sf: ReturnType<Project['createSourceFile']>,
-): string | undefined {
+function classTag(name: string, sf: SourceFile): string | undefined {
   const extendsText = sf.getClass(name)?.getExtends()?.getText() ?? '';
   return /Tagged(?:Class|Request|Error)[\s\S]*?\)\s*\(\s*["'`]([^"'`]+)["'`]/.exec(
     extendsText,
   )?.[1];
 }
 
-/**
- * Effect v4 Schema classes intentionally hide more of their encoded union
- * shape from the TypeScript checker. Recover the declared alphabet from the
- * local schema declarations instead of depending on v3-era type expansion.
- *
- * Best-effort syntactic recovery: runs only as a fallback when the checker
- * yields nothing, and matches tags by regex over declaration text, so unusual
- * formatting or indirection silently under-reports. Upgrade to a real AST walk
- * if the checked path keeps losing ground to Schema changes.
- */
-function alphabetMembersFromSyntax(
-  typeName: string | undefined,
-  sf: ReturnType<Project['createSourceFile']>,
-): string[] {
-  if (!typeName) return [];
-  const names = new Set<string>();
-  const alias = sf.getTypeAlias(typeName);
-  const aliasText = alias?.getTypeNode()?.getText() ?? typeName;
-  for (const match of aliasText.matchAll(/\b[A-Z][A-Za-z0-9_$]*\b/g)) {
-    if (match[0] !== 'Schema' && match[0] !== 'Type') names.add(match[0]);
-  }
-  names.add(typeName);
-
-  const tags: string[] = [];
-  const add = (tag: string | undefined): void => {
-    if (tag && !tags.includes(tag)) tags.push(tag);
-  };
-
-  for (const name of names) {
-    add(classTag(name, sf));
-
-    const variable = sf.getVariableDeclaration(name);
-    const initializerText = variable?.getInitializer()?.getText() ?? '';
-    for (const match of initializerText.matchAll(/TaggedStruct\s*\(\s*["'`]([^"'`]+)["'`]/g)) {
-      add(match[1]);
-    }
-    for (const match of initializerText.matchAll(/Schema\.Literal\s*\(\s*["'`]([^"'`]+)["'`]/g)) {
-      add(match[1]);
-    }
-  }
-
-  return tags;
-}
-
-/** Classify a named type as Schema-derived or a plain tagged union. */
-function classifyAlphabet(
-  typeName: string | undefined,
-  sf: ReturnType<Project['createSourceFile']>,
-): 'schema' | 'tagged-union' | undefined {
-  if (!typeName) return undefined;
-  const alias = sf.getTypeAlias(typeName);
-  if (!alias) return undefined;
-  const txt = alias.getTypeNode()?.getText() ?? '';
-  if (/\bSchema\b|typeof/.test(txt)) return 'schema';
-  const names = [...txt.matchAll(/\b[A-Z][A-Za-z0-9_$]*\b/g)].map((m) => m[0]);
-  if (
-    names.some((name) =>
-      sf.getClass(name)?.getExtends()?.getText().includes('Schema.'),
-    )
-  ) {
-    return 'schema';
-  }
-  return 'tagged-union';
-}
-
-/** Find the function node behind a machine declaration (arrow / fn expr / fn decl). */
-function functionOf(decl: Node): Node | undefined {
-  if (Node.isFunctionDeclaration(decl)) return decl;
-  if (Node.isVariableDeclaration(decl)) {
-    const init = decl.getInitializer();
-    if (init && (Node.isArrowFunction(init) || Node.isFunctionExpression(init))) {
-      return init;
-    }
-  }
-  return undefined;
-}
-
-interface Alphabet {
-  readonly states: readonly string[] | undefined;
-  readonly events: readonly string[] | undefined;
-  readonly source: 'schema' | 'tagged-union' | undefined;
-}
-
-const EMPTY_ALPHABET: Alphabet = {
-  states: undefined,
-  events: undefined,
-  source: undefined,
-};
-
-const analysisCache = new Map<
-  string,
-  { readonly mtimeMs: number; readonly analysis: StateMachineAnalysis }
->();
-
-/** Alphabet for a `(state, event) => state` transition function (Shape B). */
-function alphabetFromFunction(
-  fn: Node,
-  sf: ReturnType<Project['createSourceFile']>,
-): Alphabet {
-  if (!Node.isArrowFunction(fn) && !Node.isFunctionExpression(fn) && !Node.isFunctionDeclaration(fn)) {
-    return EMPTY_ALPHABET;
-  }
-  const params = fn.getParameters();
-  const stateParam = params[0];
-  const eventParam = params[1];
-  if (!stateParam || !eventParam) return EMPTY_ALPHABET;
-  const stateTypeName = stateParam.getTypeNode()?.getText();
-  const eventTypeName = eventParam.getTypeNode()?.getText();
-  const checkedStates = alphabetMembers(stateParam.getType(), stateParam);
-  const checkedEvents = alphabetMembers(eventParam.getType(), eventParam);
-  const states = checkedStates.length
-    ? checkedStates
-    : alphabetMembersFromSyntax(stateTypeName, sf);
-  const events = checkedEvents.length
-    ? checkedEvents
-    : alphabetMembersFromSyntax(eventTypeName, sf);
-  return {
-    states: states.length ? states : undefined,
-    events: events.length ? events : undefined,
-    source: classifyAlphabet(stateTypeName, sf),
-  };
-}
-
-/** Alphabet for a `... satisfies Record<State['_tag'], Record<Event['_tag'], ...>>` table (Shape A). */
-function alphabetFromTable(
-  decl: Node,
-  sf: ReturnType<Project['createSourceFile']>,
-): Alphabet {
-  if (!Node.isVariableDeclaration(decl)) return EMPTY_ALPHABET;
-  const init = decl.getInitializer();
-  if (init?.getKind() !== SyntaxKind.SatisfiesExpression) {
-    return EMPTY_ALPHABET; // no `satisfies` ⇒ no declared alphabet
-  }
-  const typeNode = (
-    init as unknown as { getTypeNode(): Node | undefined }
-  ).getTypeNode();
-  if (!typeNode) return EMPTY_ALPHABET;
-
-  // Collect distinct `X['_tag']` indexed-access types in source order.
-  const groups: { name: string; tags: string[] }[] = [];
-  const seen = new Set<string>();
-  for (const ia of typeNode.getDescendantsOfKind(SyntaxKind.IndexedAccessType)) {
-    if (!ia.getIndexTypeNode().getText().includes('_tag')) continue;
-    const name = ia.getObjectTypeNode().getText();
-    if (seen.has(name)) continue;
-    seen.add(name);
-    const checkedTags = stringLiteralsOfType(ia.getType());
-    groups.push({
-      name,
-      tags: checkedTags.length
-        ? checkedTags
-        : alphabetMembersFromSyntax(name, sf),
-    });
-  }
-  const stateGroup = groups[0];
-  const eventGroup = groups[1];
-  return {
-    states: stateGroup?.tags.length ? stateGroup.tags : undefined,
-    events: eventGroup?.tags.length ? eventGroup.tags : undefined,
-    source: classifyAlphabet(stateGroup?.name, sf),
-  };
-}
-
 // =============================================================================
-// Initial-state detection
+// State tree
 // =============================================================================
 
-const INITIAL_NAMES = /^(initial|initialState|startState|start)$/i;
+type NodeKind = 'atomic' | 'compound' | 'parallel' | 'final';
 
-/** Collect candidate initial-state tags from `initial`-ish declarations. */
-function collectInitialHints(sf: ReturnType<Project['createSourceFile']>): string[] {
-  const hints: string[] = [];
-  for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-    if (!INITIAL_NAMES.test(decl.getName())) continue;
-    const init = decl.getInitializer();
-    if (!init) continue;
-    const u = unwrap(init);
-    const direct = stringValue(u);
-    if (direct) {
-      hints.push(direct);
-      continue;
-    }
-    const tag = tagFromObject(u);
-    if (tag) hints.push(tag);
-  }
-  return hints;
+interface TreeNode {
+  readonly path: string;
+  readonly kind: NodeKind;
+  /** Declared initial child key of a compound node. */
+  readonly initial: string | undefined;
+  readonly parent: string | undefined;
+  /** Full paths of the direct children, in declaration order. */
+  readonly children: string[];
 }
 
 /**
- * All `@initial <State>` annotations in a declaration's leading trivia.
- * Reads the raw leading comment text (more reliable than the JSDoc/comment-range
- * APIs, which vary with preceding dividers). Returns every match so callers can
- * pick the one that is actually a declared state.
+ * Flatten a state tree literal into dotted paths, keeping the parent/child
+ * links so nothing downstream has to re-derive them from the path strings.
+ * A property whose value is an identifier (a tagged schema) is atomic; an
+ * object with a `schema` property is a node config carrying
+ * `type` / `initial` / `states`.
  */
-function annotatedInitials(decl: Node): string[] {
-  const stmt = Node.isVariableDeclaration(decl)
-    ? decl.getVariableStatement()
-    : decl;
-  if (!stmt) return [];
-  const leading = stmt
-    .getFullText()
-    .slice(0, stmt.getStart() - stmt.getFullStart());
-  return [...leading.matchAll(/@initial\s+([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/g)]
-    .map((m) => m[1])
-    .filter((x): x is string => x !== undefined);
+function readStateTree(
+  obj: ObjectLiteralExpression,
+  parent: TreeNode | undefined,
+  out: Map<string, TreeNode>,
+  sf: SourceFile,
+): void {
+  for (const { name: key, value } of propEntries(obj)) {
+    const inner = value ? unwrap(value) : undefined;
+    const config =
+      inner && Node.isObjectLiteralExpression(inner) && inner.getProperty('schema')
+        ? inner
+        : undefined;
+    const type = config ? stringValue(propValue(config, 'type')) : undefined;
+    const children = config ? stateTree(propValue(config, 'states'), sf) : undefined;
+    const node: TreeNode = {
+      path: join(parent?.path ?? '', key),
+      kind:
+        type === 'parallel'
+          ? 'parallel'
+          : type === 'final'
+            ? 'final'
+            : children
+              ? 'compound'
+              : 'atomic',
+      initial: config ? stringValue(propValue(config, 'initial')) : undefined,
+      parent: parent?.path,
+      children: [],
+    };
+    out.set(node.path, node);
+    parent?.children.push(node.path);
+    if (children) readStateTree(children, node, out, sf);
+  }
 }
 
-function pickInitial(
-  states: readonly string[],
-  fallback: string | undefined,
-  decl: Node | undefined,
-  hints: readonly string[],
+/** Nearest self-or-ancestor compound node — the scope of `target.local`. */
+function localScope(path: string, tree: ReadonlyMap<string, TreeNode>): string {
+  let node = tree.get(path);
+  while (node) {
+    if (node.kind === 'compound') return node.path;
+    node = node.parent === undefined ? undefined : tree.get(node.parent);
+  }
+  return '';
+}
+
+// =============================================================================
+// Target builders
+// =============================================================================
+
+/**
+ * Walk a nested region builder: `parent(value, child => child.Leaf(...))`
+ * appends `.Leaf`. Stops when the callback chains more than one region
+ * (a parallel entry) — the parent path is then the sound target.
+ */
+function descendBuilder(call: CallExpression, path: string, depth = 0): string {
+  if (depth > 8) return path;
+  const arrows = call.getArguments().map(unwrap).filter(isFunctionLike);
+  const arrow = arrows[0];
+  if (arrows.length !== 1 || !arrow) return path;
+  const param = arrow.getParameters()[0]?.getName();
+  const body = unwrap(arrow.getBody());
+  if (param === undefined || !Node.isCallExpression(body)) return path;
+  const expr = body.getExpression();
+  if (!Node.isPropertyAccessExpression(expr)) return path;
+  const base = expr.getExpression();
+  // A chained base (`region.a(...).b(...)`) enters several regions at once.
+  if (!Node.isIdentifier(base) || base.getText() !== param) return path;
+  return descendBuilder(body, join(path, expr.getName()), depth + 1);
+}
+
+/**
+ * Resolve one `target.<mode>.<state>(...)` call to a full state path.
+ * `full` and `branch` are absolute; `local` is relative to the nearest
+ * compound ancestor, and `local.with(...)` re-enters that scope itself.
+ */
+function targetPath(
+  call: CallExpression,
+  from: string,
+  tree: ReadonlyMap<string, TreeNode>,
 ): string | undefined {
-  const set = new Set(states);
-  for (const a of decl ? annotatedInitials(decl) : []) {
-    if (set.has(a)) return a;
+  const expr = call.getExpression();
+  if (!Node.isPropertyAccessExpression(expr)) return undefined;
+  const mode = expr.getExpression();
+  if (!Node.isPropertyAccessExpression(mode)) return undefined;
+  const modeName = mode.getName();
+  if (modeName !== 'full' && modeName !== 'local' && modeName !== 'branch') {
+    return undefined;
   }
-  const hinted = hints.find((h) => set.has(h));
-  if (hinted) return hinted;
-  return fallback;
+  if (!/(^|\.)target$/.test(mode.getExpression().getText())) return undefined;
+
+  const segment = expr.getName();
+  const base = modeName === 'local' ? localScope(from, tree) : '';
+  const start =
+    modeName === 'local' && segment === 'with' ? base : join(base, segment);
+  return descendBuilder(call, start);
 }
-
-// =============================================================================
-// Shape A: declarative transition table
-// =============================================================================
-
-/** A string, or an array of strings, read as a string list. */
-function stringList(node: Node | undefined): string[] | undefined {
-  if (!node) return undefined;
-  const u = unwrap(node);
-  const single = stringValue(u);
-  if (single !== undefined) return [single];
-  if (Node.isArrayLiteralExpression(u)) {
-    const items = u.getElements().map((e) => stringValue(e));
-    return items.every((x): x is string => x !== undefined) && items.length > 0
-      ? items
-      : undefined;
-  }
-  return undefined;
-}
-
-function propInitializer(obj: ObjectLiteralExpression, name: string): Node | undefined {
-  return obj.getProperty(name)?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
-}
-
-interface TableTarget {
-  readonly to: string;
-  readonly guard?: string;
-  readonly actions?: readonly string[];
-}
-
-function tableLeafTargets(node: Node | undefined): TableTarget[] {
-  if (!node) return [];
-  const leaf = unwrap(node);
-  const direct = stringValue(leaf);
-  if (direct) return [{ to: direct }];
-  if (Node.isObjectLiteralExpression(leaf)) {
-    const target =
-      stringValue(propInitializer(leaf, 'target')) ??
-      stringValue(propInitializer(leaf, 'to')) ??
-      tagFromObject(leaf);
-    if (!target) return [];
-    const guard = stringValue(propInitializer(leaf, 'guard'));
-    const actions = stringList(propInitializer(leaf, 'actions'));
-    return [
-      {
-        to: target,
-        ...(guard !== undefined ? { guard } : {}),
-        ...(actions !== undefined ? { actions } : {}),
-      },
-    ];
-  }
-  if (Node.isArrayLiteralExpression(leaf)) {
-    return leaf
-      .getElements()
-      .flatMap((element) => tableLeafTargets(element));
-  }
-  return [];
-}
-
-function extractTable(
-  decl: Node,
-  filePath: string,
-  hints: readonly string[],
-  sf: ReturnType<Project['createSourceFile']>,
-): StateMachine | undefined {
-  if (!Node.isVariableDeclaration(decl)) return undefined;
-  const init = decl.getInitializer();
-  if (!init) return undefined;
-  const obj = unwrap(init);
-  if (!Node.isObjectLiteralExpression(obj)) return undefined;
-
-  const transitions: StateTransition[] = [];
-  const fromStates: string[] = [];
-  const finals: string[] = [];
-  const entryActions: Record<string, readonly string[]> = {};
-  const exitActions: Record<string, readonly string[]> = {};
-  const invokes: Record<string, readonly StateInvoke[]> = {};
-
-  const pushTargets = (
-    from: string,
-    event: string,
-    targets: readonly TableTarget[],
-    trigger?: StateTransition['trigger'],
-    invokeIndex?: number,
-  ): void => {
-    for (const { to, guard, actions } of targets) {
-      transitions.push({
-        from,
-        event,
-        to,
-        ...(guard !== undefined ? { guard } : {}),
-        ...(actions !== undefined ? { actions } : {}),
-        ...(trigger !== undefined ? { trigger } : {}),
-        ...(invokeIndex !== undefined ? { invokeIndex } : {}),
-      });
-    }
-  };
-
-  for (const prop of obj.getProperties()) {
-    if (!Node.isPropertyAssignment(prop)) return undefined; // not a clean table
-    const from = propName(prop);
-    if (from === undefined) return undefined;
-    const val = unwrap(prop.getInitializerOrThrow());
-    if (!Node.isObjectLiteralExpression(val)) return undefined; // every value must be an object
-    fromStates.push(from);
-    for (const inner of val.getProperties()) {
-      if (!Node.isPropertyAssignment(inner)) return undefined;
-      const event = propName(inner);
-      if (event === undefined) return undefined;
-
-      // Reserved state-level keys (not events): `type: 'final'`, entry/exit
-      // action labels, and `invoke: { src, onDone, onError }`.
-      if (event === 'type') {
-        if (stringValue(inner.getInitializer()) !== 'final') return undefined;
-        finals.push(from);
-        continue;
-      }
-      if (event === 'entry' || event === 'exit') {
-        const labels = stringList(inner.getInitializer());
-        if (labels === undefined) return undefined;
-        if (event === 'entry') entryActions[from] = labels;
-        else exitActions[from] = labels;
-        continue;
-      }
-      if (event === 'invoke') {
-        const inv = unwrap(inner.getInitializerOrThrow());
-        if (!Node.isObjectLiteralExpression(inv)) return undefined;
-        const src = stringValue(propInitializer(inv, 'src'));
-        if (src === undefined) return undefined;
-        invokes[from] = [{ src }];
-        const done = tableLeafTargets(propInitializer(inv, 'onDone'));
-        const error = tableLeafTargets(propInitializer(inv, 'onError'));
-        pushTargets(from, 'onDone', done, 'done', 0);
-        pushTargets(from, 'onError', error, 'error', 0);
-        continue;
-      }
-
-      const targets = tableLeafTargets(inner.getInitializer());
-      if (targets.length === 0) return undefined;
-      // Reserved keys for automatic transitions, mirroring the MachineJSON
-      // event labels: `always` (eventless) and `'after 500ms'` (delayed).
-      const trigger =
-        event === 'always'
-          ? ('always' as const)
-          : /^after\s+\S+$/.test(event)
-            ? ('after' as const)
-            : undefined;
-      pushTargets(from, event, targets, trigger);
-    }
-  }
-
-  // FSM signal: at least one transition, and at least one target is itself a
-  // declared state — distinguishes a transition table from an arbitrary config.
-  if (transitions.length === 0) return undefined;
-  const fromSet = new Set(fromStates);
-  if (!transitions.some((t) => fromSet.has(t.to))) return undefined;
-
-  // Transition states plus declared-but-disconnected table keys (e.g. an
-  // explicitly final state nothing targets yet) so they render and get judged.
-  const states = uniqueStates(transitions);
-  for (const s of fromStates) if (!states.includes(s)) states.push(s);
-  const alphabet = alphabetFromTable(decl, sf);
-  return {
-    name: decl.getName(),
-    source: 'transition-table',
-    initial: pickInitial(states, fromStates[0], decl, hints),
-    states,
-    transitions,
-    location: locOf(decl.getNameNode(), filePath),
-    declaredStates: alphabet.states,
-    declaredEvents: alphabet.events,
-    alphabetSource: alphabet.source,
-    ...(finals.length > 0 ? { finalStates: finals } : {}),
-    ...(Object.keys(entryActions).length > 0 ? { entryActions } : {}),
-    ...(Object.keys(exitActions).length > 0 ? { exitActions } : {}),
-    ...(Object.keys(invokes).length > 0 ? { invokes } : {}),
-  };
-}
-
-// =============================================================================
-// Shape B: Match.when tuple function
-// =============================================================================
 
 /**
- * Target state of a handler return: `{ _tag: 'X' }`, a bare `'X'` literal, or
- * `new X(...)` for Schema.TaggedClass states. The tag comes from the class's
- * `Schema.TaggedClass<X>()('Tag', ...)` declaration when it is in this file
- * (class name and tag need not match); otherwise the class name is the
- * best-effort fallback.
+ * The branch condition guarding a target, as source text. A handler picks its
+ * target with an ordinary `if` or ternary, so the nearest enclosing condition
+ * is the guard label — negated when the target sits in the else branch.
  */
-function targetFromExpr(node: Node): string | undefined {
-  const u = unwrap(node);
-  if (Node.isObjectLiteralExpression(u)) return tagFromObject(u);
-  if (Node.isStringLiteral(u)) return u.getLiteralValue();
-  if (Node.isNewExpression(u)) {
-    const cls = u.getExpression();
-    if (!Node.isIdentifier(cls)) return undefined;
-    const name = cls.getText();
-    // Prefer the constructed instance type: unlike a syntax lookup, this also
-    // resolves imported/aliased tagged classes whose class name differs from
-    // their `_tag` literal.
-    const [typeTag] = tagsOfUnion(u.getType(), u);
-    return typeTag ?? classTag(name, u.getSourceFile()) ?? name;
-  }
-  return undefined;
-}
-
-/** The guard condition for a `return` nested in an `if`, as source text. */
-function guardForReturn(ret: Node, handler: Node): string | undefined {
-  let cur: Node | undefined = ret.getParent();
+function guardOf(call: Node, handler: Node): string | undefined {
+  let child = call;
+  let cur: Node | undefined = call.getParent();
   while (cur && cur !== handler) {
+    if (Node.isConditionalExpression(cur)) {
+      const cond = cur.getCondition().getText();
+      return cur.getWhenTrue() === child ? cond : `!(${cond})`;
+    }
     if (Node.isIfStatement(cur)) {
       const cond = cur.getExpression().getText();
-      const thenStmt = cur.getThenStatement();
+      const then = cur.getThenStatement();
       const inThen =
-        ret.getStart() >= thenStmt.getStart() &&
-        ret.getEnd() <= thenStmt.getEnd();
+        call.getStart() >= then.getStart() && call.getEnd() <= then.getEnd();
       return inThen ? cond : `!(${cond})`;
     }
+    child = cur;
     cur = cur.getParent();
   }
   return undefined;
 }
 
-/**
- * Target states a handler can return, each with its guard condition (if any).
- * More than one target ⇒ a guarded (conditional) transition.
- */
-function returnedTransitions(
-  handler: Node | undefined,
-): { to: string; guard?: string }[] {
-  if (!handler) return [];
-  if (!Node.isArrowFunction(handler) && !Node.isFunctionExpression(handler)) {
-    return [];
-  }
-  const out: { to: string; guard?: string }[] = [];
-  const seen = new Set<string>();
-  const push = (to: string | undefined, guard?: string): void => {
-    if (!to) return;
-    const k = `${to}|${guard ?? ''}`;
-    if (seen.has(k)) return;
-    seen.add(k);
-    out.push(guard === undefined ? { to } : { to, guard });
-  };
+interface HandlerTarget {
+  readonly to: string;
+  readonly guard?: string;
+}
 
-  const body = handler.getBody();
-  if (!Node.isBlock(body)) {
-    push(targetFromExpr(body)); // expression body
-    return out;
-  }
-  for (const ret of body.getDescendantsOfKind(SyntaxKind.ReturnStatement)) {
-    const re = ret.getExpression();
-    if (re) push(targetFromExpr(re), guardForReturn(ret, handler));
+/** Every distinct state path a handler body can transition to. */
+function targetsOf(
+  handler: Node,
+  from: string,
+  tree: ReadonlyMap<string, TreeNode>,
+): HandlerTarget[] {
+  const out: HandlerTarget[] = [];
+  const seen = new Set<string>();
+  const calls = [
+    ...(Node.isCallExpression(handler) ? [handler] : []),
+    ...handler.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  for (const call of calls) {
+    const to = targetPath(call, from, tree);
+    if (to === undefined) continue;
+    const guard = guardOf(call, handler);
+    const key = `${to}|${guard ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(guard === undefined ? { to } : { to, guard });
   }
   return out;
 }
 
-function matchTagsObject(call: Node): ObjectLiteralExpression | undefined {
-  if (!Node.isCallExpression(call)) return undefined;
-  const expr = call.getExpression();
-  if (!Node.isPropertyAccessExpression(expr)) return undefined;
-  if (expr.getExpression().getText() !== 'Match') return undefined;
-  const name = expr.getName();
-  if (name !== 'tags' && name !== 'tagsExhaustive') return undefined;
-  const [arg] = call.getArguments();
-  if (!arg) return undefined;
-  const obj = unwrap(arg);
-  return Node.isObjectLiteralExpression(obj) ? obj : undefined;
+// =============================================================================
+// Handler tree
+// =============================================================================
+
+/**
+ * The id an invoked child was registered under: `Machine.child('selection', M)`
+ * declares `'selection'`. Falls back to the reference's own text.
+ */
+function childId(node: Node | undefined, sf: SourceFile): string | undefined {
+  if (!node) return undefined;
+  const u = unwrap(node);
+  if (!Node.isIdentifier(u)) return u.getText();
+  const decl = sf.getVariableDeclaration(u.getText())?.getInitializer();
+  const call = decl ? unwrap(decl) : undefined;
+  return (
+    (call && isMachineCall(call, 'child')
+      ? stringValue(call.getArguments()[0])
+      : undefined) ?? u.getText()
+  );
 }
 
-function functionInitializer(prop: Node): Node | undefined {
-  if (!Node.isPropertyAssignment(prop)) return undefined;
-  const init = prop.getInitializer();
-  if (!init) return undefined;
-  const u = unwrap(init);
-  return Node.isArrowFunction(u) || Node.isFunctionExpression(u) ? u : undefined;
+/** Label invoked children by their `id`, `child`, or called function. */
+function invokesOf(node: Node | undefined, sf: SourceFile, depth = 0): StateInvoke[] {
+  if (!node || depth > 8) return [];
+  const u = unwrap(node);
+  if (isFunctionLike(u)) return invokesOf(u.getBody(), sf, depth + 1);
+  if (Node.isArrayLiteralExpression(u)) {
+    return u.getElements().flatMap((element) => invokesOf(element, sf, depth + 1));
+  }
+  if (Node.isIdentifier(u)) {
+    return invokesOf(
+      sf.getVariableDeclaration(u.getText())?.getInitializer(),
+      sf,
+      depth + 1,
+    );
+  }
+  if (!Node.isCallExpression(u)) return [];
+  const callee = u.getExpression().getText();
+  if (isMachineCall(u, 'invoke') || isMachineCall(u, 'invokeMachine')) {
+    const config = objectLiteral(u.getArguments()[0], sf);
+    const id = config ? stringValue(propValue(config, 'id')) : undefined;
+    const src = id ?? childId(config ? propValue(config, 'child') : undefined, sf);
+    return src === undefined ? [] : [{ src, ...(id !== undefined ? { id } : {}) }];
+  }
+  // `invoke: () => SearchMachine({...})` — a local factory whose body builds the
+  // invoke, so the declared id is one hop away.
+  const factory = sf.getVariableDeclaration(callee)?.getInitializer();
+  if (factory && isFunctionLike(unwrap(factory))) {
+    return invokesOf(factory, sf, depth + 1);
+  }
+  return [{ src: callee.split('.').pop() ?? callee }];
 }
 
-function nestedTagsTransitions(call: Node): StateTransition[] {
-  const outerObj = matchTagsObject(call);
-  if (!outerObj) return [];
-  const transitions: StateTransition[] = [];
-  for (const stateProp of outerObj.getProperties()) {
-    const from = propName(stateProp);
-    const stateHandler = functionInitializer(stateProp);
-    if (!from || !stateHandler) continue;
-    for (const innerCall of stateHandler.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const innerObj = matchTagsObject(innerCall);
-      if (!innerObj) continue;
-      for (const eventProp of innerObj.getProperties()) {
-        const event = propName(eventProp);
-        const eventHandler = functionInitializer(eventProp);
-        if (!event || !eventHandler) continue;
-        for (const { to, guard } of returnedTransitions(eventHandler)) {
-          transitions.push(
-            guard === undefined ? { from, event, to } : { from, event, to, guard },
-          );
-        }
-      }
+/**
+ * Label for an `entry` / `exit` action. A named reference (`entry: logStart`)
+ * carries its own name; an inline anonymous effect has none, so the state gets
+ * a bare marker recording that an action runs there.
+ */
+function actionLabel(node: Node, kind: 'entry' | 'exit'): string {
+  const u = unwrap(node);
+  return Node.isIdentifier(u) ? u.getText() : kind;
+}
+
+interface HandlerScan {
+  readonly transitions: StateTransition[];
+  readonly finalStates: string[];
+  readonly entry: Record<string, readonly string[]>;
+  readonly exit: Record<string, readonly string[]>;
+  readonly invokes: Record<string, readonly StateInvoke[]>;
+}
+
+/** Read one state's handler config: transitions, final marker, actions, invokes, children. */
+function readHandlerNode(
+  config: ObjectLiteralExpression,
+  path: string,
+  tree: ReadonlyMap<string, TreeNode>,
+  sf: SourceFile,
+  out: HandlerScan,
+): void {
+  const push = (
+    event: string,
+    handler: Node,
+    trigger?: StateTransition['trigger'],
+  ): void => {
+    for (const { to, guard } of targetsOf(handler, path, tree)) {
+      out.transitions.push({
+        from: path,
+        event,
+        to,
+        ...(guard !== undefined ? { guard } : {}),
+        ...(trigger !== undefined ? { trigger } : {}),
+      });
+    }
+  };
+
+  const on = objectLiteral(propValue(config, 'on'), sf);
+  for (const { name: event, value } of on ? propEntries(on) : []) {
+    if (!value) continue;
+    const handler = unwrap(value);
+    // `{ reenter: true, transition: handler }` is the long form of a handler.
+    push(
+      event,
+      Node.isObjectLiteralExpression(handler)
+        ? (propValue(handler, 'transition') ?? handler)
+        : handler,
+    );
+  }
+
+  const always = propValue(config, 'always');
+  if (always) push('always', always, 'always');
+
+  const onDone = propValue(config, 'onDone');
+  if (onDone) push('onDone', onDone, 'done');
+
+  if (stringValue(propValue(config, 'type')) === 'final') {
+    out.finalStates.push(path);
+  }
+
+  const entry = propValue(config, 'entry');
+  if (entry) out.entry[path] = [actionLabel(entry, 'entry')];
+  const exit = propValue(config, 'exit');
+  if (exit) out.exit[path] = [actionLabel(exit, 'exit')];
+
+  const invoke = propValue(config, 'invoke');
+  if (invoke) {
+    const found = invokesOf(invoke, sf);
+    if (found.length > 0) out.invokes[path] = found;
+  }
+
+  const children = objectLiteral(propValue(config, 'states'), sf);
+  for (const { name: key, value } of children ? propEntries(children) : []) {
+    const child = objectLiteral(value, sf);
+    if (child) readHandlerNode(child, join(path, key), tree, sf, out);
+  }
+}
+
+// =============================================================================
+// Machine assembly
+// =============================================================================
+
+/** The `.handle({...})` object chained onto a `Machine.make(...)` call. */
+function handleObject(
+  makeCall: CallExpression,
+  sf: SourceFile,
+): ObjectLiteralExpression | undefined {
+  const parent = makeCall.getParent();
+  if (!parent || !Node.isPropertyAccessExpression(parent)) return undefined;
+  if (parent.getName() !== 'handle') return undefined;
+  const call = parent.getParent();
+  if (!call || !Node.isCallExpression(call)) return undefined;
+  return objectLiteral(call.getArguments()[0], sf);
+}
+
+/** `{ path, state: { path, ... } }` — the deepest path of a snapshot literal. */
+function snapshotPath(
+  obj: ObjectLiteralExpression,
+  depth = 0,
+): string | undefined {
+  if (depth > 8) return undefined;
+  const path = stringValue(propValue(obj, 'path'));
+  if (path === undefined) return undefined;
+  const child = objectLiteral(propValue(obj, 'state'), obj.getSourceFile());
+  return (child ? snapshotPath(child, depth + 1) : undefined) ?? path;
+}
+
+/**
+ * The initial state path from the `initial:` value — either a
+ * `States.initial.<state>(...)` builder chain or a `{ path }` snapshot literal.
+ */
+function initialPath(node: Node | undefined): string | undefined {
+  if (!node) return undefined;
+  for (const call of node.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expr = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) continue;
+    const owner = expr.getExpression();
+    if (Node.isPropertyAccessExpression(owner) && owner.getName() === 'initial') {
+      return descendBuilder(call, expr.getName());
     }
   }
-  return transitions;
+  for (const obj of node.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+    const path = snapshotPath(obj);
+    if (path !== undefined) return path;
+  }
+  return undefined;
 }
 
-function ownerOf(
-  node: Node,
-): { readonly name: string; readonly decl: Node; readonly anchor: Node } | undefined {
+/** The declaration a `Machine.make(...)` chain is assigned to. */
+function ownerOf(node: Node): { readonly name: string; readonly anchor: Node } | undefined {
   let cur: Node | undefined = node.getParent();
   while (cur) {
     if (Node.isVariableDeclaration(cur)) {
-      return { name: cur.getName(), decl: cur, anchor: cur.getNameNode() };
-    }
-    if (Node.isFunctionDeclaration(cur)) {
-      const name = cur.getName();
-      if (name) return { name, decl: cur, anchor: cur.getNameNodeOrThrow() };
+      return { name: cur.getName(), anchor: cur.getNameNode() };
     }
     cur = cur.getParent();
   }
   return undefined;
 }
 
-function extractMatchMachines(
-  sf: ReturnType<Project['createSourceFile']>,
+function arrayLiteral(
+  node: Node | undefined,
+  sf: SourceFile,
+  depth = 0,
+): Node | undefined {
+  if (!node || depth > 8) return undefined;
+  const unwrapped = unwrap(node);
+  if (Node.isArrayLiteralExpression(unwrapped)) return unwrapped;
+  if (Node.isIdentifier(unwrapped)) {
+    return arrayLiteral(
+      sf.getVariableDeclaration(unwrapped.getText())?.getInitializer(),
+      sf,
+      depth + 1,
+    );
+  }
+  return undefined;
+}
+
+/** Tags of the `events: [A, B]` array — the declared event alphabet. */
+function declaredEventsOf(
+  config: ObjectLiteralExpression,
+  sf: SourceFile,
+): string[] | undefined {
+  const array = arrayLiteral(propValue(config, 'events'), sf);
+  if (!array || !Node.isArrayLiteralExpression(array)) return undefined;
+  const elements = array.getElements().map(unwrap);
+  if (!elements.every(Node.isIdentifier)) return undefined;
+  return elements.map((element) => classTag(element.getText(), sf) ?? element.getText());
+}
+
+function extractMachine(
+  makeCall: CallExpression,
   filePath: string,
-  hints: readonly string[],
-): StateMachine[] {
-  const groups = new Map<
-    string,
-    { transitions: StateTransition[]; decl: Node; anchor: Node }
-  >();
+  sf: SourceFile,
+): StateMachine | undefined {
+  const config = objectLiteral(makeCall.getArguments()[0], sf);
+  if (!config) return undefined;
+  const statesObj = stateTree(propValue(config, 'states'), sf);
+  if (!statesObj) return undefined;
 
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const nestedTransitions = nestedTagsTransitions(call);
-    if (nestedTransitions.length > 0) {
-      const owner = ownerOf(call);
-      if (!owner) continue;
-      const group = groups.get(owner.name) ?? {
-        transitions: [],
-        decl: owner.decl,
-        anchor: owner.anchor,
-      };
-      group.transitions.push(...nestedTransitions);
-      groups.set(owner.name, group);
-      continue;
-    }
+  const tree = new Map<string, TreeNode>();
+  readStateTree(statesObj, undefined, tree, sf);
+  if (tree.size === 0) return undefined;
 
-    const expr = call.getExpression();
-    if (!Node.isPropertyAccessExpression(expr)) continue;
-    if (expr.getName() !== 'when') continue;
-    if (expr.getExpression().getText() !== 'Match') continue;
-
-    const [patternArg, handlerArg] = call.getArguments();
-    if (!patternArg || !handlerArg) continue;
-    const tuple = unwrap(patternArg);
-    if (!Node.isArrayLiteralExpression(tuple)) continue;
-    const els = tuple.getElements();
-    if (els.length !== 2) continue;
-    const from = stringValue(els[0]);
-    const event = stringValue(els[1]);
-    const tos = returnedTransitions(handlerArg);
-    if (from === undefined || event === undefined || tos.length === 0) continue;
-
-    const owner = ownerOf(call);
-    if (!owner) continue;
-    const group = groups.get(owner.name) ?? {
-      transitions: [],
-      decl: owner.decl,
-      anchor: owner.anchor,
-    };
-    for (const { to, guard } of tos) {
-      group.transitions.push(
-        guard === undefined ? { from, event, to } : { from, event, to, guard },
-      );
-    }
-    groups.set(owner.name, group);
+  const scan: HandlerScan = {
+    transitions: [],
+    finalStates: [],
+    entry: {},
+    exit: {},
+    invokes: {},
+  };
+  const handlers = handleObject(makeCall, sf);
+  for (const { name: key, value } of handlers ? propEntries(handlers) : []) {
+    const nodeConfig = objectLiteral(value, sf);
+    if (nodeConfig) readHandlerNode(nodeConfig, key, tree, sf, scan);
   }
 
-  const machines: StateMachine[] = [];
-  for (const [name, { transitions, decl, anchor }] of groups) {
-    if (transitions.length === 0) continue;
-    const states = uniqueStates(transitions);
-    const fn = functionOf(decl);
-    const alphabet = fn ? alphabetFromFunction(fn, sf) : EMPTY_ALPHABET;
-    machines.push({
-      name,
-      source: 'match',
-      initial: pickInitial(states, transitions[0]?.from, decl, hints),
-      states,
-      transitions,
-      location: locOf(anchor, filePath),
-      declaredStates: alphabet.states,
-      declaredEvents: alphabet.events,
-      alphabetSource: alphabet.source,
-    });
+  const declaredStates: string[] = [];
+  const finals: string[] = [];
+  const parallels: string[] = [];
+  const transitions: StateTransition[] = [];
+  for (const node of tree.values()) {
+    declaredStates.push(node.path);
+    if (node.kind === 'final') finals.push(node.path);
+    if (node.kind === 'parallel') parallels.push(node.path);
+    // Entering a state implies entering its initial child — a compound's
+    // declared `initial`, and every region of a parallel node.
+    const entered =
+      node.kind === 'parallel'
+        ? node.children
+        : node.initial !== undefined
+          ? [join(node.path, node.initial)]
+          : [];
+    for (const to of entered) {
+      transitions.push({ from: node.path, event: '', to, trigger: 'initial' });
+    }
   }
-  return machines;
+  for (const finalState of scan.finalStates) {
+    if (!finals.includes(finalState)) finals.push(finalState);
+  }
+  transitions.push(...scan.transitions);
+
+  // A target that is not in the tree (a typo, or a state added to a handler but
+  // not to `defineStates`) still gets drawn, and coverage flags it as undeclared.
+  const states = [...new Set([...declaredStates, ...transitions.map((t) => t.to)])];
+  const declaredEvents = declaredEventsOf(config, sf);
+  const owner = ownerOf(makeCall);
+
+  return {
+    name: owner?.name ?? stringValue(propValue(config, 'id')) ?? 'Machine',
+    source: 'effect-machine',
+    initial: initialPath(propValue(config, 'initial')) ?? declaredStates[0],
+    states,
+    transitions,
+    location: locOf(owner?.anchor ?? makeCall, filePath),
+    declaredStates,
+    declaredEvents,
+    alphabetSource: 'config',
+    // Always set, even when empty: the state tree and handler config declare
+    // finals explicitly, so no-outgoing inference would mark ordinary leaves.
+    finalStates: finals,
+    ...(parallels.length > 0 ? { parallelStates: parallels } : {}),
+    ...(Object.keys(scan.entry).length > 0 ? { entryActions: scan.entry } : {}),
+    ...(Object.keys(scan.exit).length > 0 ? { exitActions: scan.exit } : {}),
+    ...(Object.keys(scan.invokes).length > 0 ? { invokes: scan.invokes } : {}),
+  };
 }
 
 // =============================================================================
 // Entry point
 // =============================================================================
+
+const analysisCache = new Map<
+  string,
+  { readonly mtimeMs: number; readonly analysis: StateMachineAnalysis }
+>();
 
 export function analyzeStateMachines(
   filePath: string,
@@ -873,17 +792,12 @@ export function analyzeStateMachines(
     ? project.createSourceFile(filePath, source, { overwrite: true })
     : project.addSourceFileAtPath(filePath);
 
-  const hints = collectInitialHints(sf);
   const machines: StateMachine[] = [];
-
-  // Shape A: scan top-level + exported variable declarations.
-  for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-    const machine = extractTable(decl, filePath, hints, sf);
+  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isMachineCall(call, 'make')) continue;
+    const machine = extractMachine(call, filePath, sf);
     if (machine) machines.push(machine);
   }
-
-  // Shape B: Match.when tuple functions.
-  machines.push(...extractMatchMachines(sf, filePath, hints));
 
   const analysis = { machines };
   if (source === undefined && mtimeMs !== undefined) {

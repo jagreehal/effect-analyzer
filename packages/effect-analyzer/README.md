@@ -124,17 +124,15 @@ Auto-mode picks the most relevant views for your program, or choose explicitly:
 
 [See all formats →](https://jagreehal.github.io/effect-analyzer/diagrams/all-formats/)
 
-### State Machines Without XState
+### State Machines → XState
 
-Write deterministic state machines as ordinary TypeScript — a declarative
-transition table, a `Match.when` transition function, or nested `Match.tags`
-state/event dispatch — and render them as XState-style statecharts. Guards,
-named actions (`entry` / `exit` / transition `actions`), invoked effects
-(`invoke` with `onDone` / `onError`), explicit final states, hierarchical
-states (dotted names like `'Playing.Paused'` nest in the diagrams and exported
-config), and automatic transitions (`always`, `'after 500ms'`) are all
-modeled. Much of XState's modeling value with no extra runtime: execution and
-effects stay in your Effect code. See the full convention guide in the
+Machines written with [`@typeonce/effect-machine`](https://github.com/typeonce-dev/effect-machine)
+— the schema-first `Machine` API proposed in
+[Effect PR #6429](https://github.com/Effect-TS/effect/pull/6429) — are read
+statically and rendered as XState-style statecharts. Nested and parallel state
+trees, final states, entry/exit actions, invoked children, and eventless
+(`always`) transitions all carry through. Nothing is executed: the analyzer only
+reads your source. See the full guide in the
 [State Machines](https://jagreehal.github.io/effect-analyzer/reference/state-machines/)
 docs.
 
@@ -155,51 +153,46 @@ npx effect-analyze ./workflow.ts --format xstate-config
 npx effect-analyze ./workflow.ts
 ```
 
-These shapes are recognized:
+The recognized shape is `Machine.make({...}).handle({...})`:
 
 ```ts
-// A) declarative transition table
-const transitions = {
-  Triage: {
-    RefundRequested: { target: 'Refund', guard: 'canRefund' },
-    AnswerRequested: 'Answered',
+const CheckoutStates = Machine.defineStates({
+  Idle,
+  Paying,
+  Paid: { schema: Paid, type: 'final' },
+});
+
+export const CheckoutMachine = Machine.make({
+  states: CheckoutStates.states,
+  events: [Pay, Settled],
+  initial: () => CheckoutStates.initial.Idle(new Idle()),
+}).handle({
+  Idle: {
+    on: {
+      Pay: ({ event, target }) =>
+        target.full.Paying(new Paying({ amount: event.amount })),
+    },
   },
-  Refund: { Resolved: 'Answered' },
-  Answered: {},
-} as const;
-
-// B) Match.when transition function
-const transition = (state: State, event: Event): State =>
-  Match.value([state._tag, event._tag] as const).pipe(
-    Match.when(['Draft', 'Submit'], () => ({ _tag: 'Review' as const })),
-    Match.orElse(() => state),
-  );
-
-// C) nested Match.tags with state tags outside and event tags inside
-const transitionWithTags = (state: State, event: Event): State =>
-  Match.value(state).pipe(
-    Match.tags({
-      Draft: () =>
-        Match.value(event).pipe(
-          Match.tags({
-            Submit: () => ({ _tag: 'Review' as const }),
-          }),
-        ),
-      Review: () => state,
-    }),
-  );
+  Paying: {
+    entry: () => Machine.action(Effect.log('charging')),
+    invoke: () => ChargeCard,
+    on: { Settled: ({ target }) => target.full.Paid(new Paid()) },
+  },
+});
 ```
 
-Initial state is read from an `@initial <State>` annotation or an
-`initial`/`initialState` declaration. Table leaves can be strings,
-`{ target, guard }`, `{ to }`, or arrays of guarded targets. A handler that can
-return more than one state becomes a guarded (multi-target) transition.
+A nested state tree becomes dotted paths (`workspace.document.Clean`) that nest
+in the diagrams and the exported config, and a `type: 'parallel'` node enters
+every region. Targets are read from the `target.full`, `target.local` and
+`target.branch` builders, including `target.local.with(value, child => ...)`.
+XState `MachineJSON` (from Stately or any tool that emits it) can be ingested
+too, and runs through the same renderers and coverage engine.
 
-#### Completeness checking (Schema-aware)
+#### Completeness checking
 
-When the State/Event types are a tagged union or a `Schema`-derived type, the
-analyzer reads the **declared alphabet** and checks the machine against it —
-turning the statechart from a drawing into a verified machine:
+The state tree and the `events:` list are the machine's **declared alphabet**,
+so the analyzer can check the machine against it — turning the statechart from a
+drawing into a verified machine:
 
 ```bash
 npx effect-analyze ./workflow.ts --format statechart-coverage
@@ -210,17 +203,17 @@ npx effect-analyze ./workflow.ts --format statechart-coverage
 
 1 machine, 2 warnings.
 
-## checkoutTransition (alphabet: schema)
+## OrderMachine (alphabet: config)
 Coverage: 33% (2/6 reachable state×event pairs handled)
-- ⚠ Unhandled events: `Cancel`        # declared, but no state handles it
+- ⚠ Unhandled events: `Abandon`       # declared, but no state handles it
 - ⚠ Unreachable states: `Cancelled`   # declared, but nothing transitions to it
 ```
 
-It reports **unhandled events**, **unreachable states**, and **undeclared
-symbols** (transitions that drifted from the types). The command **exits
-non-zero when any warning is found**, so it works as a CI gate. The
-`mermaid-statechart` and `svg-statechart` outputs are annotated with the same
-findings (orphaned states highlighted, unhandled events noted).
+It reports **unhandled events**, **unreachable states**, and **dead-end
+states**. The command **exits non-zero when any warning is found**, so it works
+as a CI gate. The `mermaid-statechart` and `svg-statechart` outputs are
+annotated with the same findings (orphaned states highlighted, unhandled events
+noted).
 
 Run it over a whole directory for a summary table, set a coverage floor, or emit
 JSON for dashboards:
@@ -230,21 +223,6 @@ npx effect-analyze ./src --format statechart-coverage              # all machine
 npx effect-analyze ./src --format statechart-coverage --min-coverage 60   # fail under 60%
 npx effect-analyze ./src --format statechart-coverage --coverage-json     # { machines, summary }
 ```
-
-Guarded (conditional) transitions are captured with their condition and shown
-on every renderer (`Event [guard]` in diagrams, `{ target, guard }` in the
-XState config). State/Event alphabets may be tagged unions, `Schema`-derived
-types, `Schema.TaggedClass`/`Schema.TaggedRequest` unions, or plain
-string-literal unions (`'a' | 'b'`).
-
-Plain single-level `Match.tags` dispatch is intentionally ignored unless there
-is a nested state/event shape, because ordinary variant handling does not have
-the source-state dimension required for a statechart.
-
-> **Not yet supported:** hierarchical (nested) and parallel states. There is no
-> standard Effect encoding for them, so detection is deferred until a convention
-> is settled (dotted tags like `'Active.Running'` are the likely path and render
-> safely as flat states today).
 
 ### Complexity Metrics
 

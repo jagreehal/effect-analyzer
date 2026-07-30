@@ -1994,8 +1994,8 @@ const openInBrowser = (file: string): Effect.Effect<void> =>
 
 /**
  * Run a statechart format (mermaid-statechart | svg-statechart | statechart-html | xstate-config).
- * These analyze plain-Effect state machines directly from source (transition
- * tables and Match.when transition functions) — no Effect IR required.
+ * These read `@typeonce/effect-machine` machines directly from source
+ * (`Machine.make({...}).handle({...})`) — no Effect IR required.
  */
 const runStatechartMode = (
   resolvedPath: string,
@@ -2046,7 +2046,7 @@ const runStatechartMode = (
       });
       if (rejections.length === 0) {
         yield* Console.error(
-          'No state machines found. See https://jagreehal.github.io/effect-analyzer/reference/state-machines/ for the transition-table and Match.when shapes.',
+          'No state machines found. See https://jagreehal.github.io/effect-analyzer/reference/state-machines/ for the Machine.make(...).handle(...) shape.',
         );
       } else {
         yield* Console.error(

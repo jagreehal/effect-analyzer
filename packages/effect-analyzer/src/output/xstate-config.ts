@@ -24,6 +24,13 @@ function key(name: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : str(name);
 }
 
+/** Turn a display name or machine id into a valid generated binding name. */
+function identifier(name: string): string {
+  const sanitized = name.replace(/[^A-Za-z0-9_$]/g, '_');
+  const prefixed = /^[0-9]/.test(sanitized) ? `_${sanitized}` : sanitized;
+  return prefixed === '' ? 'Machine' : prefixed;
+}
+
 interface Target {
   readonly to: string;
   readonly guard?: string;
@@ -215,7 +222,7 @@ export function renderXStateConfig(machine: StateMachine): string {
   const lines = [
     "import { createMachine } from 'xstate';",
     '',
-    `export const ${machine.name}Machine = createMachine({`,
+    `export const ${identifier(machine.name)}Machine = createMachine({`,
     `  id: ${str(machine.name)},`,
   ];
   if (machine.initial) {
