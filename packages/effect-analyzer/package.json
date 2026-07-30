@@ -108,7 +108,7 @@
     "@eslint/js": "^10.0.1",
     "@total-typescript/ts-reset": "^0.6.1",
     "@typeonce/effect-machine": "0.1.0",
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.1.2",
     "effect": "4.0.0-beta.102",
     "eslint": "^10.8.0",
     "ts-morph": "^28.0.0",
