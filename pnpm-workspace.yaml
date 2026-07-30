@@ -4,3 +4,4 @@ packages:
 
 minimumReleaseAgeExclude:
   - effect
+  - '@typeonce/effect-machine'

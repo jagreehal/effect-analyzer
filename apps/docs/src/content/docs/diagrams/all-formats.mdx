@@ -41,6 +41,29 @@ effect-analyzer supports over 25 output formats. Use `--format <name>` on the CL
 | Showcase | `--format showcase` | Detailed step-by-step breakdown | Comprehensive documentation |
 | Migration | `--format migration` | Patterns that could migrate to Effect | Adoption planning |
 
+## Statecharts
+
+These read `@typeonce/effect-machine` machines (`Machine.make({...}).handle({...})`)
+rather than the Effect IR, so they work on machine-only files that contain no
+Effect program. See [State Machines](/effect-analyzer/reference/state-machines/).
+
+| Format | CLI Flag | Description | Best For |
+|---|---|---|---|
+| Mermaid statechart | `--format mermaid-statechart` | Machine as `stateDiagram-v2`, coverage-annotated | Embedding in markdown |
+| SVG statechart | `--format svg-statechart` | Self-contained XState-styled SVG | Sharing a single file |
+| Local visualizer | `--format statechart-html` | One page: SVG, coverage report, XState config | Reviewing a machine |
+| XState config | `--format xstate-config` | Paste-ready `createMachine({...})` | [stately.ai/viz](https://stately.ai/viz) import |
+| Coverage report | `--format statechart-coverage` | Unhandled events, unreachable states, dead ends | CI gate (exits non-zero on warnings) |
+
+```bash
+# Diagram + coverage + paste-ready config, opened in your browser
+npx effect-analyze ./machine.ts --format statechart-html --open
+
+# CI gate with a coverage floor, or JSON for dashboards
+npx effect-analyze ./src --format statechart-coverage --min-coverage 60
+npx effect-analyze ./src --format statechart-coverage --coverage-json
+```
+
 ## API Documentation
 
 | Format | CLI Flag | Description | Best For |
@@ -96,5 +119,6 @@ npx effect-analyze ./src/program.ts --include-trivial
 ## Related
 
 - [Diagram Overview](/effect-analyzer/diagrams/overview/) - how auto-detection works
+- [State Machines](/effect-analyzer/reference/state-machines/) - what the statechart formats read
 - [CLI Reference](/effect-analyzer/reference/cli/) - complete flag reference
 - [Library API](/effect-analyzer/reference/api/) - programmatic rendering functions

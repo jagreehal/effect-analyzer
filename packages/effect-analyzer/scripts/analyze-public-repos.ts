@@ -27,6 +27,11 @@ const REPOS: { name: string; url: string }[] = [
   { name: 'effect-aws', url: 'https://github.com/floydspace/effect-aws.git' },
   { name: 'effect-nextjs', url: 'https://github.com/mcrovero/effect-nextjs.git' },
   { name: 'sqlfx', url: 'https://github.com/tim-smart/sqlfx.git' },
+  // Upstream home of `@typeonce/effect-machine`. Its `examples/pokemon` is the
+  // reference statechart (parallel regions, invoked children, local targets) —
+  // run the statechart formats over it to catch drift in the machine API:
+  //   node dist/cli.js .analysis-output/effect-machine/examples/pokemon/src/machines/selection.ts --format xstate-config
+  { name: 'effect-machine', url: 'https://github.com/typeonce-dev/effect-machine.git' },
   // EffectReact templates: add exact repo URL when known (e.g. Effect-TS/effect-react or template repo)
 ];
 

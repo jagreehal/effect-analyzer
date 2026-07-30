@@ -117,6 +117,10 @@ export default defineConfig({
             { label: 'CLI', slug: 'reference/cli' },
             { label: 'Library API', slug: 'reference/api' },
             { label: 'State Machines', slug: 'reference/state-machines' },
+            {
+              label: 'Tutorial: Stately Visualizer',
+              slug: 'reference/state-machines-stately',
+            },
             { label: 'Diagram Fidelity', slug: 'reference/diagram-fidelity' },
             { label: 'Coupling Analyzer', slug: 'reference/coupling' },
             { label: 'Browser Playground', link: '/playground/' },

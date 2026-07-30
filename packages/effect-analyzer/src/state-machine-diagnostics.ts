@@ -1,22 +1,23 @@
 /**
  * State machine diagnostics.
  *
- * Explains why a declaration that looks like a state machine was not
- * recognized. The CLI uses this so a failed `--format statechart-*` run teaches
- * the convention instead of printing "no machines found".
+ * Explains why a declaration that looks like an `@typeonce/effect-machine`
+ * machine was not recognized. The CLI uses this so a failed
+ * `--format statechart-*` run teaches the convention instead of printing
+ * "no machines found".
  *
  * This scanner is intentionally independent of the extraction code: it
  * re-derives near-miss candidates with its own light AST checks so it stays
  * stable while the extractor evolves.
  */
 
-import { Node, Project, SyntaxKind } from 'ts-morph';
+import { Node, Project, SyntaxKind, type CallExpression } from 'ts-morph';
 import type { SourceLocation } from './types';
 import { analyzeStateMachines, type StateMachine } from './state-machine';
 
 export interface StateMachineRejection {
   readonly name: string;
-  readonly kind: 'transition-table' | 'match';
+  readonly kind: 'effect-machine';
   readonly reason: string;
   readonly hint: string;
   readonly location: SourceLocation | undefined;
@@ -27,67 +28,53 @@ export interface StateMachineDiagnostics {
   readonly rejected: readonly StateMachineRejection[];
 }
 
-function unwrap(node: Node): Node {
-  let cur = node;
-  for (;;) {
-    const k = cur.getKind();
-    if (
-      k === SyntaxKind.AsExpression ||
-      k === SyntaxKind.SatisfiesExpression ||
-      k === SyntaxKind.ParenthesizedExpression ||
-      k === SyntaxKind.TypeAssertionExpression
-    ) {
-      cur = (cur as unknown as { getExpression(): Node }).getExpression();
-      continue;
+function locOf(node: Node, filePath: string): SourceLocation {
+  const sf = node.getSourceFile();
+  const offset = node.getStart();
+  const { line, column } = sf.getLineAndColumnAtPos(offset);
+  return { filePath, line, column, offset };
+}
+
+function isEffectMachineBinding(name: string, sf: ReturnType<Project['createSourceFile']>): boolean {
+  return sf.getImportDeclarations().some((declaration) => {
+    if (declaration.getModuleSpecifierValue() !== '@typeonce/effect-machine') {
+      return false;
     }
-    return cur;
-  }
+    return declaration.getNamedImports().some((namedImport) => {
+      if (namedImport.getName() !== 'Machine') return false;
+      return (namedImport.getAliasNode()?.getText() ?? 'Machine') === name;
+    });
+  });
 }
 
-function stringVal(node: Node | undefined): string | undefined {
-  if (!node) return undefined;
-  const u = unwrap(node);
-  return Node.isStringLiteral(u) ? u.getLiteralValue() : undefined;
+function isEffectMachineNamespace(
+  name: string,
+  sf: ReturnType<Project['createSourceFile']>,
+): boolean {
+  return sf.getImportDeclarations().some(
+    (declaration) =>
+      declaration.getModuleSpecifierValue() === '@typeonce/effect-machine' &&
+      declaration.getNamespaceImport()?.getText() === name,
+  );
 }
 
-function propName(prop: Node): string | undefined {
-  if (!Node.isPropertyAssignment(prop)) return undefined;
-  const n = prop.getNameNode();
-  if (Node.isStringLiteral(n)) return n.getLiteralValue();
-  if (Node.isIdentifier(n)) return n.getText();
-  return undefined;
-}
-
-/** Resolve a table leaf to its target state: string, `{ target }`, or array. */
-function leafTarget(node: Node | undefined): string | undefined {
-  if (!node) return undefined;
-  const u = unwrap(node);
-  if (Node.isStringLiteral(u)) return u.getLiteralValue();
-  if (Node.isObjectLiteralExpression(u)) {
-    const t = u.getProperty('target');
-    return t ? stringVal((t as { getInitializer?(): Node | undefined }).getInitializer?.()) : undefined;
-  }
-  if (Node.isArrayLiteralExpression(u)) {
-    return leafTarget(u.getElements()[0]);
-  }
-  return undefined;
-}
-
-function returnsLiteralState(handler: Node): boolean {
-  if (!Node.isArrowFunction(handler) && !Node.isFunctionExpression(handler)) {
+/** A call to a method on the imported `Machine` namespace. */
+function isMachineCall(node: Node, name: string): node is CallExpression {
+  if (!Node.isCallExpression(node)) return false;
+  const expr = node.getExpression();
+  if (!Node.isPropertyAccessExpression(expr) || expr.getName() !== name) {
     return false;
   }
-  const isLiteral = (n: Node | undefined): boolean => {
-    if (!n) return false;
-    const u = unwrap(n);
-    if (Node.isStringLiteral(u)) return true;
-    return Node.isObjectLiteralExpression(u) && u.getProperty('_tag') !== undefined;
-  };
-  const body = handler.getBody();
-  if (!Node.isBlock(body)) return isLiteral(body);
-  return body
-    .getDescendantsOfKind(SyntaxKind.ReturnStatement)
-    .some((r) => isLiteral(r.getExpression()));
+  const owner = expr.getExpression();
+  if (Node.isIdentifier(owner)) {
+    return isEffectMachineBinding(owner.getText(), node.getSourceFile());
+  }
+  return (
+    Node.isPropertyAccessExpression(owner) &&
+    owner.getName() === 'Machine' &&
+    Node.isIdentifier(owner.getExpression()) &&
+    isEffectMachineNamespace(owner.getExpression().getText(), node.getSourceFile())
+  );
 }
 
 function ownerOf(node: Node): { name: string; nameNode: Node } | undefined {
@@ -96,30 +83,54 @@ function ownerOf(node: Node): { name: string; nameNode: Node } | undefined {
     if (Node.isVariableDeclaration(cur)) {
       return { name: cur.getName(), nameNode: cur.getNameNode() };
     }
-    if (Node.isFunctionDeclaration(cur)) {
-      const name = cur.getName();
-      if (name) return { name, nameNode: cur.getNameNodeOrThrow() };
-    }
     cur = cur.getParent();
   }
   return undefined;
 }
 
-function locOf(node: Node, filePath: string): SourceLocation {
-  const sf = node.getSourceFile();
-  const offset = node.getStart();
-  const { line, column } = sf.getLineAndColumnAtPos(offset);
-  return { filePath, line, column, offset };
+/** An `X.<name>(...)` call, wherever `X` came from. */
+function isNamedCall(node: Node, name: string): node is CallExpression {
+  if (!Node.isCallExpression(node)) return false;
+  const expr = node.getExpression();
+  return Node.isPropertyAccessExpression(expr) && expr.getName() === name;
 }
 
-function isMatchCall(call: Node, method: string): boolean {
-  if (!Node.isCallExpression(call)) return false;
+/** The receiver of an `X.make(...)` call, as written. */
+function receiverOf(call: CallExpression): string {
   const expr = call.getExpression();
+  return Node.isPropertyAccessExpression(expr)
+    ? expr.getExpression().getText()
+    : '';
+}
+
+/**
+ * Is `.handle({...})` chained onto this call? It is the signature that
+ * separates a real machine from an unrelated `make` — worth reporting even
+ * when the receiver is not a recognized `Machine` binding.
+ */
+function hasHandleChain(call: CallExpression): boolean {
+  const parent = call.getParent();
   return (
-    Node.isPropertyAccessExpression(expr) &&
-    expr.getName() === method &&
-    expr.getExpression().getText() === 'Match'
+    !!parent &&
+    Node.isPropertyAccessExpression(parent) &&
+    parent.getName() === 'handle'
   );
+}
+
+const unresolvedBindingReason = (call: CallExpression): string =>
+  `\`${receiverOf(call)}\` is not a \`Machine\` imported from @typeonce/effect-machine`;
+
+const UNRESOLVED_BINDING_HINT =
+  'import it directly — `import { Machine } from "@typeonce/effect-machine"`; a local re-export cannot be followed';
+
+/** The `states:` value of a `Machine.make(...)` config, if written inline. */
+function statesArgument(makeCall: CallExpression): Node | undefined {
+  const config = makeCall.getArguments()[0];
+  if (!config || !Node.isObjectLiteralExpression(config)) return undefined;
+  return config
+    .getProperty('states')
+    ?.asKind(SyntaxKind.PropertyAssignment)
+    ?.getInitializer();
 }
 
 export function diagnoseStateMachines(
@@ -138,129 +149,88 @@ export function diagnoseStateMachines(
 
   const add = (
     name: string,
-    kind: StateMachineRejection['kind'],
     reason: string,
     hint: string,
     anchor: Node,
   ): void => {
     if (matched.has(name) || reported.has(name)) return;
     reported.add(name);
-    rejected.push({ name, kind, reason, hint, location: locOf(anchor, filePath) });
+    rejected.push({
+      name,
+      kind: 'effect-machine',
+      reason,
+      hint,
+      location: locOf(anchor, filePath),
+    });
   };
 
-  // A) Object literals that look like a transition table.
-  for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-    const name = decl.getName();
-    if (matched.has(name)) continue;
-    const init = decl.getInitializer();
-    if (!init) continue;
-    const hasSatisfies = init.getKind() === SyntaxKind.SatisfiesExpression;
-    const intentional =
-      hasSatisfies || /transition|machine|states?|fsm|workflow/i.test(name);
-    if (!intentional) continue;
-    const obj = unwrap(init);
-    if (!Node.isObjectLiteralExpression(obj)) continue;
-    const props = obj.getProperties().filter((p) => Node.isPropertyAssignment(p));
-    if (props.length === 0) continue;
+  const usedStateTrees = new Set<string>();
+  /** An unresolved `Machine` binding was already reported for this file. */
+  let bindingReported = false;
 
-    const keys = new Set(
-      props.map(propName).filter((k): k is string => k !== undefined),
+  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isMachineCall(call, 'make')) {
+      // A `.make(...).handle(...)` chain the extractor skipped because its
+      // receiver is not a `Machine` imported from the package — most often a
+      // local barrel that re-exports it. Without this the file goes silent.
+      if (!isNamedCall(call, 'make') || !hasHandleChain(call)) continue;
+      const chained = ownerOf(call);
+      add(
+        chained?.name ?? 'Machine.make',
+        unresolvedBindingReason(call),
+        UNRESOLVED_BINDING_HINT,
+        chained?.nameNode ?? call,
+      );
+      bindingReported = true;
+      continue;
+    }
+    const owner = ownerOf(call);
+    const name = owner?.name ?? 'Machine.make';
+    const anchor = owner?.nameNode ?? call;
+
+    const states = statesArgument(call);
+    if (states) {
+      // `MyStates.states` — remember the tree so an unused defineStates is not
+      // also reported.
+      const root = states.getText().split('.')[0];
+      if (root) usedStateTrees.add(root);
+    }
+
+    add(
+      name,
+      states
+        ? 'the state tree is not declared in this file, so its states cannot be read'
+        : 'the machine config has no `states` property',
+      'declare `Machine.defineStates({...})` in this file and pass its `.states`',
+      anchor,
     );
-    let hasObjectValue = false;
-    let hasLeaf = false;
-    let targetsAnotherState = false;
-    for (const p of props) {
-      if (!Node.isPropertyAssignment(p)) continue;
-      const value = unwrap(p.getInitializer() ?? p);
-      if (!Node.isObjectLiteralExpression(value)) continue;
-      hasObjectValue = true;
-      for (const ev of value.getProperties()) {
-        if (!Node.isPropertyAssignment(ev)) continue;
-        const target = leafTarget(ev.getInitializer());
-        if (target !== undefined) {
-          hasLeaf = true;
-          if (keys.has(target)) targetsAnotherState = true;
-        }
-      }
-    }
-
-    if (!hasObjectValue) {
-      add(
-        name,
-        'transition-table',
-        'values are not nested event→state objects',
-        'shape it as `{ State: { Event: NextState } }`',
-        decl.getNameNode(),
-      );
-    } else if (!hasLeaf) {
-      add(
-        name,
-        'transition-table',
-        'no event maps to a state',
-        'a leaf must be a state string or `{ target: State }`',
-        decl.getNameNode(),
-      );
-    } else if (!targetsAnotherState) {
-      add(
-        name,
-        'transition-table',
-        'no event targets another state, so it reads as config, not a machine',
-        'at least one event should lead to a different state',
-        decl.getNameNode(),
-      );
-    }
   }
 
-  // B) Match.when arms whose owner produced no machine.
+  // A state tree that no machine in this file consumes.
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!isMatchCall(call, 'when')) continue;
-    const owner = ownerOf(call);
-    if (!owner || matched.has(owner.name) || reported.has(owner.name)) continue;
-    const [pattern, handler] = call.getArguments();
-    const tuple = pattern ? unwrap(pattern) : undefined;
-    if (
-      !tuple ||
-      !Node.isArrayLiteralExpression(tuple) ||
-      tuple.getElements().length !== 2
-    ) {
+    if (!isMachineCall(call, 'defineStates')) {
+      // A barrel-imported `defineStates`. Same root cause as an unresolved
+      // `.make(...)` chain, so only speak when that has not already said it.
+      if (bindingReported || !isNamedCall(call, 'defineStates')) continue;
+      const unresolved = ownerOf(call);
+      if (!unresolved) continue;
       add(
-        owner.name,
-        'match',
-        'a Match.when pattern is not a 2-tuple [state, event]',
-        "use Match.when(['State', 'Event'], () => nextState)",
-        owner.nameNode,
+        unresolved.name,
+        unresolvedBindingReason(call),
+        UNRESOLVED_BINDING_HINT,
+        unresolved.nameNode,
       );
-    } else if (!handler || !returnsLiteralState(handler)) {
-      add(
-        owner.name,
-        'match',
-        'a Match.when handler does not return a literal next state',
-        "return { _tag: 'Next' } or a state string",
-        owner.nameNode,
-      );
+      bindingReported = true;
+      continue;
     }
-  }
-
-  // C) Single-level Match.tags (variant dispatch mistaken for a machine).
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!isMatchCall(call, 'tags')) continue;
     const owner = ownerOf(call);
-    if (!owner || matched.has(owner.name) || reported.has(owner.name)) continue;
-    const [arg] = call.getArguments();
-    const obj = arg ? unwrap(arg) : undefined;
-    const nested =
-      obj !== undefined &&
-      Node.isObjectLiteralExpression(obj) &&
-      obj.getProperties().some((p) => p.getText().includes('Match.'));
-    if (!nested) {
-      add(
-        owner.name,
-        'match',
-        'single-level Match.tags reads as variant dispatch, not transitions',
-        'nest Match.value(event).pipe(Match.tags({...})) inside each state',
-        owner.nameNode,
-      );
-    }
+    if (!owner || usedStateTrees.has(owner.name)) continue;
+    add(
+      owner.name,
+      'states are defined but no Machine.make in this file uses them',
+      'pass `states: ' + owner.name + '.states` to Machine.make({...})',
+      owner.nameNode,
+    );
   }
 
   return { machines, rejected };

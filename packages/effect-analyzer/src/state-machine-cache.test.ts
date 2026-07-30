@@ -5,12 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { analyzeStateMachines } from './state-machine';
 
 const machineSource = (open: string) => `
-import { Match } from 'effect'
-export const m = (s: 'Closed' | '${open}', e: 'Toggle'): 'Closed' | '${open}' =>
-  Match.value([s, e] as const).pipe(
-    Match.when(['Closed', 'Toggle'], () => '${open}' as const),
-    Match.orElse(() => s),
-  )
+import { Machine } from '@typeonce/effect-machine'
+export const m = Machine.make({
+  states: { Closed, ${open} },
+  events: [Toggle],
+  initial: () => States.initial.Closed(new Closed()),
+}).handle({
+  Closed: { on: { Toggle: ({ target }) => target.full.${open}(new ${open}()) } },
+})
 `;
 
 describe('analysis cache', () => {

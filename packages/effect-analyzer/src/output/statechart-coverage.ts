@@ -120,7 +120,10 @@ export function renderCoverageReport(
         `- ⚠ Coverage ${pct(c.coverageRatio)} is below the ${minCoverage}% threshold`,
       );
     }
-    const infoLines = [list('ℹ Final states', c.deadEndStates)].filter(
+    // Not "final": a machine that declares its finals explicitly (effect-machine)
+    // renders these as ordinary states, so calling them final here would
+    // contradict the diagram. They are simply states nothing exits.
+    const infoLines = [list('ℹ Dead-end states', c.deadEndStates)].filter(
       (x): x is string => x !== undefined,
     );
 

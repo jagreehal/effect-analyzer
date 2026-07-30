@@ -1,47 +1,50 @@
 ---
 title: State Machines
-description: Model state machines in ordinary TypeScript with Effect patterns — diagrams, XState configs, and structural coverage without a runtime.
+description: Read @typeonce/effect-machine machines statically — statechart diagrams, XState configs, and structural coverage without a runtime.
 sidebar:
   order: 7
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Write state machines as ordinary TypeScript using Effect's `Match` and `Schema`
-patterns. The `effect-analyzer` package (which provides the `effect-analyze`
-CLI) reads these conventions, renders statechart diagrams, exports an XState
-config for [stately.ai/viz](https://stately.ai/viz), and checks the machine for
-structural completeness.
+Write state machines with
+[`@typeonce/effect-machine`](https://github.com/typeonce-dev/effect-machine) —
+the schema-first `Machine` API proposed in
+[Effect PR #6429](https://github.com/Effect-TS/effect/pull/6429). The
+`effect-analyzer` package (which provides the `effect-analyze` CLI) reads those
+machines statically, renders statechart diagrams, exports an XState config for
+[stately.ai/viz](https://stately.ai/viz), and checks the machine for structural
+completeness.
 
 <Aside type="tip" title="Try it">
-Walk the transfer sample from transition table to an interactive Stately
-diagram in
+Walk a machine from source to an interactive Stately diagram in
 [Tutorial: Visualize a state machine in Stately](/effect-analyzer/reference/state-machines-stately/).
 </Aside>
 
-It covers the state-machine features most application workflows need — typed
-states and events, guarded transitions, state data, named actions and invoked
-effects, automatic and delayed transitions, visual hierarchy, diagrams, and
-structural coverage — while leaving execution and effects to ordinary Effect
-code. Much of XState's modeling value, no extra runtime.
+Nothing is executed. The analyzer reads the state tree and the handler tree and
+derives the model: states, events, transitions, hierarchy, parallel regions,
+invoked children, and entry/exit actions.
 
 ## Quickstart
 
-Write a transition function over two tagged unions and mark the initial state:
-
 ```ts
-import { Match } from 'effect'
+import { Machine } from '@typeonce/effect-machine'
+import { Schema } from 'effect'
 
-type State = { readonly _tag: 'Closed' } | { readonly _tag: 'Open' }
-type Event = { readonly _tag: 'Toggle' }
+class Closed extends Schema.TaggedClass<Closed>('Closed')('Closed', {}) {}
+class Open extends Schema.TaggedClass<Open>('Open')('Open', {}) {}
+class Toggle extends Schema.TaggedClass<Toggle>('Toggle')('Toggle', {}) {}
 
-/** @initial Closed */
-export const door = (state: State, event: Event): State =>
-  Match.value([state._tag, event._tag] as const).pipe(
-    Match.when(['Closed', 'Toggle'], () => ({ _tag: 'Open' as const })),
-    Match.when(['Open', 'Toggle'], () => ({ _tag: 'Closed' as const })),
-    Match.orElse(() => state),
-  )
+const DoorStates = Machine.defineStates({ Closed, Open })
+
+export const DoorMachine = Machine.make({
+  states: DoorStates.states,
+  events: [Toggle],
+  initial: () => DoorStates.initial.Closed(new Closed()),
+}).handle({
+  Closed: { on: { Toggle: ({ target }) => target.full.Open(new Open()) } },
+  Open: { on: { Toggle: ({ target }) => target.full.Closed(new Closed()) } },
+})
 ```
 
 Machine-only files have no Effect programs, so use a statechart format. These
@@ -65,194 +68,142 @@ When a file also contains Effect programs, the default view (no `--format`)
 still runs Effect analysis first, then appends a mermaid statechart for every
 detected machine plus a hint pointing at `statechart-html`.
 
-## Contract
+## What Is Read
 
-For the executable authoring styles (`Match.when`, nested `Match.tags`), a
-state machine is a deterministic transition function:
+The recognized shape is `Machine.make({...}).handle({...})`. The machine's name
+is the variable it is assigned to.
 
-```ts
-type Transition = (state: State, event: Event) => State;
-```
+### State tree
 
-The analyzer also reads declarative machine models — transition tables and
-MachineJSON — which describe the machine structurally but carry no execution
-semantics of their own: guard, action, and invoke names are labels, and a
-guarded target array describes several possible transitions. Both kinds go
-through the same renderers and coverage engine.
-
-Use one of these alphabets:
-
-- Tagged unions: `{ readonly _tag: 'Draft' } | { readonly _tag: 'Review' }`
-- `Schema.TaggedClass` / `TaggedRequest` / `TaggedError` unions (handlers may
-  return `new Draft()`)
-- `Schema.Schema.Type<typeof SomeTaggedUnion>`
-- Plain string-literal unions: `'Draft' | 'Review'`
-
-State payloads carry data. XState puts extended state in a separate `context`
-object; here a variant holds its fields
-(`{ _tag: 'Review'; readonly reviewer: string }`). A transition updates that
-data by returning the next state with new fields.
-
-Mark the start with an `@initial <State>` comment on the declaration, or a
-sibling declaration named `initial`, `initialState`, `startState`, or `start`.
-
-## Supported Authoring Styles
-
-### Transition Table
-
-Use a nested object where outer keys are states and inner keys are events.
-Leaves may be strings, target objects, or guarded target arrays.
+The `states:` value — either an inline literal or the `.states` of a
+`Machine.defineStates({...})` **declared in the same file**. A leaf is a tagged
+schema; a node is `{ schema, type?, initial?, states }`:
 
 ```ts
-/** @initial Draft */
-export const transitions = {
-  Draft: {
-    Submit: 'Review',
-  },
-  Review: {
-    Approve: { target: 'Published', guard: 'canPublish' },
-    Reject: [{ target: 'Draft', guard: 'needsChanges' }],
-  },
-  Published: {},
-} as const satisfies Record<State['_tag'], Partial<Record<Event['_tag'], Target>>>;
-
-type Target =
-  | State['_tag']
-  | { readonly target: State['_tag']; readonly guard?: string }
-  | { readonly to: State['_tag']; readonly guard?: string }
-  | readonly { readonly target: State['_tag']; readonly guard?: string }[];
-```
-
-A string leaf is shorthand for `{ target: string }`. `{ to }` is accepted as an
-alias of `{ target }`. An array is a guarded choice tried in order. The
-`guard` string is a label for edges and the exported config; keep the real
-check in your app code.
-
-Two inner keys are reserved for automatic transitions (same labels as
-MachineJSON):
-
-```ts
-Loading: {
-  always: { target: 'Ready', guard: 'cached' }, // eventless: fires on entry
-  'after 5000ms': 'TimedOut',                   // delayed
-},
-```
-
-These are modeling annotations. The analyzer draws them as `always` / `after`
-edges and excludes them from event-coverage accounting. Your application
-remains responsible for scheduling and dispatching delayed events (for example
-with `Effect.sleep`).
-
-#### Actions, invoke, and explicit finals
-
-Transitions take named `actions`; states take `entry` / `exit` action labels,
-an `invoke` annotation for an invoked effect with `onDone` / `onError`
-transitions, and an explicit `type: 'final'` marker:
-
-```ts
-/** @initial Draft */
-export const publishTransitions = {
-  Draft: {
-    entry: 'enterDraft',
-    exit: ['persistDraft'],
-    Submit: { target: 'Submitting', actions: ['persistDraft', 'recordSubmission'] },
-  },
-  Submitting: {
-    invoke: {
-      src: 'submitPayment',
-      onDone: 'Published',
-      onError: { target: 'Draft', guard: 'retryable' },
+export const EditorStates = Machine.defineStates({
+  workspace: {
+    schema: Workspace,
+    type: 'parallel',
+    states: {
+      document: { schema: Document, initial: 'Clean', states: { Clean, Dirty } },
+      connection: { schema: Connection, initial: 'Online', states: { Online, Offline } },
     },
   },
-  Published: { type: 'final' },
-} as const;
+})
 ```
 
-All of these are labels, not code: the analyzer prints actions on edges and
-state boxes, shows `invoke submitPayment` on the state, exports everything to
-the XState config (`actions`, `entry`/`exit`, `invoke: { src, onDone, onError }`,
-`type: 'final'`), and treats `onDone`/`onError` as automatic transitions in
-coverage. The effects themselves stay in your Effect code. An explicit
-`type: 'final'` also turns off final-state inference for the machine: only
-marked states render as final.
+Nesting becomes dotted paths (`workspace.document.Clean`) that nest in the
+mermaid diagram and the exported XState config (absolute `#id.path` targets so
+cross-level transitions resolve). A compound node's declared `initial` becomes
+an initial edge; a `type: 'parallel'` node gets one to **every** region, so all
+regions count as reachable. A state marked `type: 'final'` in either the state
+tree or its `.handle()` configuration renders as final. A leaf state with no
+outgoing handler is drawn as an ordinary state, never guessed to be terminal.
 
-### Match.when
+If the state tree lives in another file, the machine is reported as a near-miss
+rather than drawn — the analyzer never leaves the file it is given.
 
-Use a tuple pattern `[state, event]`. Return the next state as a tagged object
-or a string literal.
+### Handler tree
+
+`.handle({...})` mirrors the state tree. Per state node the analyzer reads:
+
+| Key | Becomes |
+| --- | --- |
+| `on: { Event: handler }` | one transition per resolved target |
+| `on: { Event: { reenter, transition } }` | same, reading `transition` |
+| `always` | an eventless transition (`always` in the config) |
+| `onDone` | a completion transition |
+| `entry` / `exit` | an action label on the state |
+| `invoke` | `invoke: { src, id }` on the state |
+| `type: 'final'` | an explicitly final state |
+| `states` | recursion into the children |
+
+### Targets
+
+A handler's target is read from the `target` builders, wherever they appear in
+the body — inside a `.pipe`, a ternary, or an `Option.match`. Every distinct
+target found becomes a transition, so a branching handler draws every branch.
 
 ```ts
-/** @initial Draft */
-export const transition = (state: State, event: Event): State =>
-  Match.value([state._tag, event._tag] as const).pipe(
-    Match.when(['Draft', 'Submit'], () => ({ _tag: 'Review' as const })),
-    Match.when(['Review', 'Approve'], () => ({ _tag: 'Published' as const })),
-    Match.when(['Review', 'Reject'], () => ({ _tag: 'Draft' as const })),
-    Match.orElse(() => state),
-  );
+target.full.Paying(new Paying({ amount: event.amount }))   // absolute path
+target.local.Dirty(new Dirty())                            // sibling in the nearest compound
+target.local.with(new Document({ title }), (d) => d.Dirty(new Dirty())) // re-enter, then descend
 ```
 
-When a handler returns different states under `if` branches, the analyzer emits
-one transition per target and labels each edge with the branch condition.
+Nested region builders are followed (`target.full.payment(v, (p) => p.entering(v))`
+resolves to `payment.entering`). When a builder enters several regions at once,
+the parent path is used — the sound target for a parallel entry.
 
-For a string-literal alphabet, drop `._tag` and return the string:
+## Worked example: the upstream Pokémon statechart
+
+The [Pokémon example](https://github.com/typeonce-dev/effect-machine/tree/main/examples/pokemon)
+that ships with `@typeonce/effect-machine` exercises most of the surface at once
+— a parallel root, two compound regions, an invoked search, a child machine per
+region, and `target.local.with(...)`. Pointed straight at it:
+
+```bash
+npx effect-analyze ./examples/pokemon/src/machines/selection.ts --format xstate-config
+```
 
 ```ts
-Match.when(['Red', 'Tick'], () => 'Green' as const)
+export const SelectionMachineMachine = createMachine({
+  id: 'SelectionMachine',
+  initial: 'form',
+  states: {
+    form: {
+      type: 'parallel',
+      states: {
+        search: {
+          on: { UpdateSearchText: '#SelectionMachine.form.search.Searching' },
+          initial: 'NoPokemon',
+          states: {
+            NoPokemon: {},
+            WithPokemon: { on: { ReplacePokemon: '#SelectionMachine.form' } },
+            Searching: {
+              invoke: { src: 'search', id: 'search' },
+              on: { SearchResult: [{ target: '#SelectionMachine.form.search.NoPokemon' }, { target: '#SelectionMachine.form.search.WithPokemon' }] }
+            }
+          }
+        },
+        selection: {
+          initial: 'Unselected',
+          states: {
+            Unselected: { on: { SelectPokemon: '#SelectionMachine.form.selection.Selected' } },
+            Selected: { on: { SelectPokemon: [{ target: '#SelectionMachine.form.selection.Unselected', guard: 'state.id === event.id' }, { target: '#SelectionMachine.form.selection.Selected', guard: '!(state.id === event.id)' }] } }
+          }
+        }
+      }
+    }
+  }
+});
 ```
 
-### Nested Match.tags
+Three things to note, because they are the general rules:
 
-Outer tags are source states; inner tags are events. Prefer closing the outer
-matcher with `Match.tagsExhaustive` and each inner matcher with `Match.orElse`
-so the function types as a state (a bare `Match.tags` pipe returns a
-`Matcher`). The analyzer extracts from either `tags` or `tagsExhaustive`; it
-ignores a single-level `Match.tags` and treats it as ordinary variant
-dispatch.
+- **`ReplacePokemon` targets `form`, not a leaf.** Its handler enters both
+  regions at once, so the parallel parent is the sound target — re-entering
+  `form` restores each region's declared initial, which is what the handler does.
+- **`SearchResult` yields two unguarded targets.** The handler branches with
+  `Option.match`, not an `if`/ternary, so there is no condition text to read.
+  Guards only appear where the source has a real branch condition.
+- **The invoked child is labelled with its declared id** (`search`), followed
+  through the local factory that builds it. `Machine.child('selection', M)` is
+  read the same way.
 
-```ts
-export const transition = (state: State, event: Event): State =>
-  Match.value(state).pipe(
-    Match.tagsExhaustive({
-      Draft: () =>
-        Match.value(event).pipe(
-          Match.tags({
-            Submit: (): State => ({ _tag: 'Review' as const }),
-          }),
-          Match.orElse(() => state),
-        ),
-      Review: () =>
-        Match.value(event).pipe(
-          Match.tags({
-            Approve: (): State => ({ _tag: 'Published' as const }),
-            Reject: (): State => ({ _tag: 'Draft' as const }),
-          }),
-          Match.orElse(() => state),
-        ),
-      Published: () => state,
-    }),
-  );
-```
+## MachineJSON
 
-For `Schema.TaggedClass` states, return class instances
-(`Approve: (): State => new Published()`).
-
-### MachineJSON
-
-For full statecharts, author the machine as data in the `MachineJSON` shape,
+Machines authored anywhere can be ingested as data in the `MachineJSON` shape,
 XState v6's machine-as-data format (what `serializeMachine` emits and
 `createMachineFromConfig` accepts). It is a plain object literal: no XState
 dependency, and `effect-analyzer` ships its own structural `MachineJSON` type.
 
 The analyzer ingests nested states, parent-level `on` handlers, parallel
-regions (`type: 'parallel'` — every region entered, carried through to the
-exported config), `always` / `after`, guards, `entry` / `exit` and transition
-actions, `invoke` with `onDone` / `onError`, and explicit `type: 'final'`
-states. Be precise about what that means: these are rendered, exported, and
-checked over the flattened transition graph — coverage does **not** model
-event bubbling (a parent's handler doesn't count as the child handling the
-event), and history nodes pass through as ordinary states with no restore
-semantics.
+regions, `always` / `after`, guards, `entry` / `exit` and transition actions,
+`invoke` with `onDone` / `onError`, and explicit `type: 'final'` states. Be
+precise about what that means: these are rendered, exported, and checked over
+the flattened transition graph — coverage does **not** model event bubbling (a
+parent's handler doesn't count as the child handling the event), and history
+nodes pass through as ordinary states with no restore semantics.
 
 This is a programmatic API — the CLI does not discover MachineJSON in source
 files. Pass the object to `fromMachineJSON` and use the result with the same
@@ -289,31 +240,6 @@ const diagram = renderStatechartMermaid(machine, coverage)
 const config = renderXStateConfig(machine)
 ```
 
-Your transition logic can live elsewhere; the JSON is the model the tooling
-checks and draws.
-
-## Hierarchical States
-
-Dots in state names are naming and rendering only; at runtime the machine stays
-flat. The renderers nest `'Playing.Running'` and `'Playing.Paused'` under a
-composite `Playing` state in the mermaid diagram and the exported XState config
-(absolute `#id.path` targets so cross-level transitions resolve). Target leaf
-states, and write `@initial Playing.Running` with the full path.
-
-```ts
-/** @initial Playing.Running */
-export const playerTransitions = {
-  'Playing.Running': { Pause: 'Playing.Paused', Stop: 'Stopped' },
-  'Playing.Paused': { Play: 'Playing.Running' },
-  Stopped: { type: 'final' },
-} as const;
-```
-
-There is no event bubbling. Handle each (state, event) pair explicitly;
-`Match.orElse` is your fallback. For parent-level handlers or parallel
-regions, author the machine as [MachineJSON](#machinejson); for real bubbling
-or history semantics, use a runtime library.
-
 ## Tooling Outputs
 
 ```bash
@@ -330,14 +256,14 @@ paste-ready XState config in one page. `xstate-config` is for
 
 ## Coverage Gate
 
-The analyzer compares extracted transitions with the declared state/event
-alphabet and reports:
+The state tree and the `events:` list are the declared alphabet. The analyzer
+compares extracted transitions against it and reports:
 
 - Unhandled declared events — declared events that **no** state handles
   (warning). Incomplete (state, event) cells lower the coverage %, but only
   machine-wide unused events raise this warning.
 - Unreachable states (warning)
-- Undeclared states or events used by transitions — drift from the types (warning)
+- Undeclared states or events used by transitions — drift from the tree (warning)
 - Dead-end states — no outgoing transition of any kind, treated as final (info;
   mark intentional ones `type: 'final'`)
 
@@ -348,11 +274,10 @@ alphabet and reports:
 coverage = handled pairs / (event-handling reachable states × declared events)
 ```
 
-Only explicitly extracted transitions count as handled — a
-`Match.orElse(() => state)` fallback does not. States with no event-driven
-exits (a terminal `Published: {}`, or a state whose only exits are automatic:
-`always`, `after`, or an invoke's `onDone`/`onError`) are excluded from the
-denominator, and automatic transitions are never counted as events.
+States with no event-driven exits (a final state, or a state whose only exits
+are automatic) are excluded from the denominator, and automatic transitions are
+never counted as events. A spread event list (`events: [...Child.emits]`) can't
+be resolved statically, so that machine degrades to reachability-only checks.
 
 For CI:
 
@@ -371,16 +296,14 @@ terminal state — never fail the gate.
 Statechart formats (`mermaid-statechart`, `svg-statechart`, `statechart-html`,
 `xstate-config`, `statechart-coverage`) print a header naming each machine
 found and its state and event counts. When none are found, they list
-declarations that came close and why. A `Match.when` whose handler returns a
-computed value instead of a literal state reports
-`a Match.when handler does not return a literal next state`, including the
-file, line number, and suggested fix.
+declarations that came close and why — a `Machine.make` whose state tree is
+imported, or a `Machine.defineStates` no machine in the file consumes —
+including the file, line number, and suggested fix.
 
 ## Non-Goals
 
-Keep application code as plain functions and data. The analyzer models, renders,
-and checks; it does not execute. Action names and `invoke` sources are labels —
-running the effects is your code's job. For actors, actor communication, live
-timers, history restoration, or parallel-state runtime semantics, use a runtime
-library such as XState. Dotted-name hierarchy above is naming plus rendering,
-not runtime hierarchy.
+The analyzer models, renders, and checks; it does not execute. Action and
+`invoke` labels are names, not behaviour — `@typeonce/effect-machine` runs the
+machine, `effect-analyzer` draws it. Coverage works over the flattened
+transition graph, so event bubbling from a parent handler down to a child is
+not modeled.

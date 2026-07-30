@@ -141,6 +141,24 @@ Inspect and search the deterministic rule registry (source lints, effect-lints, 
 | `--max-files <n>` | Analyze at most n files (cursor-window mode for huge repos) | unlimited |
 | `--cursor <n>` | Start from nth file in sorted file list (resumable window) | 0 |
 
+## Statechart Options
+
+These flags are used with the statechart formats (`mermaid-statechart`,
+`svg-statechart`, `statechart-html`, `xstate-config`, `statechart-coverage`),
+which read [state machines](/effect-analyzer/reference/state-machines/) instead
+of the Effect IR:
+
+| Flag | Description | Default |
+|---|---|---|
+| `--min-coverage <n>` | With `--format statechart-coverage`: exit 1 if any machine is below n% | — |
+| `--coverage-json` | With `--format statechart-coverage`: emit `{ machines, summary }` for dashboards | off |
+| `--open` | With `--format statechart-html`/`svg-statechart`: open the written page in your browser | off |
+
+```bash
+effect-analyze ./machine.ts --format statechart-html --open
+effect-analyze ./src --format statechart-coverage --min-coverage 60
+```
+
 ## Coverage Audit Options
 
 These flags are used with `--coverage-audit`:
