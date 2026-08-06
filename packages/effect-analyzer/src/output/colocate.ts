@@ -4,7 +4,7 @@
 
 import * as path from 'path';
 import * as fs from 'node:fs/promises';
-import { Effect } from 'effect';
+import { Effect, Data, DateTime } from 'effect';
 import type { StaticEffectIR, AnalysisStats, DiagramQuality, ServiceArtifact, ProjectServiceMap } from '../types';
 import { renderMermaid, renderEnhancedMermaid, renderPathsMermaid } from './mermaid';
 import { generatePaths } from '../path-generator';
@@ -12,6 +12,16 @@ import { renderExplanation } from './explain';
 import { analyzeStateMachines } from '../state-machine';
 import { computeStateMachineCoverage } from '../state-machine-coverage';
 import { renderStatechartMermaid } from './mermaid-statechart';
+
+/** Failure of a colocated-artifact write. */
+export class ColocateWriteError extends Data.TaggedError('ColocateWriteError')<{
+  readonly outputPath: string;
+  readonly cause: unknown;
+}> {
+  get message(): string {
+    return `Failed to write ${this.outputPath}: ${String(this.cause)}`;
+  }
+}
 
 /**
  * Render a "State Machines" section for a file: a coverage-annotated statechart
@@ -95,7 +105,7 @@ export const renderColocatedMarkdown = (
     sections.push('## Metadata');
     sections.push('');
     sections.push(`- **File**: \`${ir.metadata.filePath}\``);
-    sections.push(`- **Analyzed**: ${new Date(ir.metadata.analyzedAt).toISOString()}`);
+    sections.push(`- **Analyzed**: ${DateTime.formatIso(DateTime.makeUnsafe(ir.metadata.analyzedAt))}`);
     sections.push(`- **Source Type**: ${ir.root.source}`);
     if (ir.metadata.tsVersion) {
       sections.push(`- **TypeScript Version**: ${ir.metadata.tsVersion}`);
@@ -187,7 +197,7 @@ export const renderColocatedMarkdownForFile = (
 
       sections.push('## Metadata', '');
       sections.push(`- **File**: \`${ir.metadata.filePath}\``);
-      sections.push(`- **Analyzed**: ${new Date(ir.metadata.analyzedAt).toISOString()}`);
+      sections.push(`- **Analyzed**: ${DateTime.formatIso(DateTime.makeUnsafe(ir.metadata.analyzedAt))}`);
       sections.push(`- **Source Type**: ${ir.root.source}`);
       if (ir.metadata.tsVersion) {
         sections.push(`- **TypeScript Version**: ${ir.metadata.tsVersion}`);
@@ -301,7 +311,7 @@ export const writeColocatedOutputForFile = (
   useEnhanced = true,
   qualityByProgram?: ReadonlyMap<string, DiagramQuality>,
   styleGuide = false,
-): Effect.Effect<string, Error> =>
+): Effect.Effect<string, ColocateWriteError> =>
   Effect.gen(function* () {
     const outputPath = deriveOutputPath(filePath, suffix);
     const content = yield* renderColocatedMarkdownForFile(
@@ -315,7 +325,7 @@ export const writeColocatedOutputForFile = (
 
     yield* Effect.tryPromise({
       try: () => fs.writeFile(outputPath, content, 'utf-8'),
-      catch: (e) => new Error(`Failed to write ${outputPath}: ${String(e)}`),
+      catch: (cause) => new ColocateWriteError({ outputPath, cause }),
     });
 
     return outputPath;
@@ -328,14 +338,14 @@ export const writeColocatedOutput = (
   ir: StaticEffectIR,
   suffix: string,
   direction: 'TB' | 'LR' | 'BT' | 'RL' = 'TB',
-): Effect.Effect<string, Error> =>
+): Effect.Effect<string, ColocateWriteError> =>
   Effect.gen(function* () {
     const outputPath = deriveOutputPath(ir.metadata.filePath, suffix);
     const content = yield* renderColocatedMarkdown(ir, direction);
 
     yield* Effect.tryPromise({
       try: () => fs.writeFile(outputPath, content, 'utf-8'),
-      catch: (e) => new Error(`Failed to write ${outputPath}: ${String(e)}`),
+      catch: (cause) => new ColocateWriteError({ outputPath, cause }),
     });
 
     return outputPath;
@@ -446,14 +456,14 @@ export const deriveServiceOutputPath = (
  */
 export const writeServiceArtifact = (
   artifact: ServiceArtifact,
-): Effect.Effect<string, Error> =>
+): Effect.Effect<string, ColocateWriteError> =>
   Effect.gen(function* () {
     const outputPath = deriveServiceOutputPath(artifact.definitionFilePath, artifact.serviceId);
     const content = renderServiceArtifactMarkdown(artifact);
 
     yield* Effect.tryPromise({
       try: () => fs.writeFile(outputPath, content, 'utf-8'),
-      catch: (e) => new Error(`Failed to write ${outputPath}: ${String(e)}`),
+      catch: (cause) => new ColocateWriteError({ outputPath, cause }),
     });
 
     return outputPath;
@@ -464,7 +474,7 @@ export const writeServiceArtifact = (
  */
 export const writeAllServiceArtifacts = (
   serviceMap: ProjectServiceMap,
-): Effect.Effect<string[], Error> =>
+): Effect.Effect<string[], ColocateWriteError> =>
   Effect.gen(function* () {
     const writtenPaths: string[] = [];
     for (const artifact of serviceMap.services.values()) {

@@ -1,6 +1,6 @@
 /** Discover and analyze a project once so every project view uses the same facts. */
 
-import { Effect } from 'effect';
+import { Effect, Clock } from 'effect';
 import { readdir } from 'fs/promises';
 import { extname, join } from 'path';
 import { analyze } from './analyze';
@@ -70,7 +70,7 @@ export const scanProjectCorpus = (
   options: ScanProjectCorpusOptions = {},
 ): Effect.Effect<ProjectCorpus> =>
   Effect.gen(function* () {
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const files = yield* Effect.promise(() => discoverProjectFiles(
       root,
       options.extensions ?? DEFAULT_EXTENSIONS,
@@ -81,7 +81,8 @@ export const scanProjectCorpus = (
     // Analysis remains sequential until node IDs and ts-morph projects are owned
     // by the Analysis session instead of shared module globals.
     for (const file of files) {
-      const fileStartedAt = options.includePerFileTiming === true ? Date.now() : 0;
+      const fileStartedAt =
+        options.includePerFileTiming === true ? yield* Clock.currentTimeMillis : 0;
       const result = yield* analyze(file, {
         tsConfigPath: options.tsconfig,
         knownEffectInternalsRoot: options.knownEffectInternalsRoot,
@@ -92,9 +93,10 @@ export const scanProjectCorpus = (
           error: error instanceof Error ? error.message : String(error),
         })),
       );
-      const durationMs = options.includePerFileTiming === true
-        ? Date.now() - fileStartedAt
-        : undefined;
+      const durationMs =
+        options.includePerFileTiming === true
+          ? (yield* Clock.currentTimeMillis) - fileStartedAt
+          : undefined;
 
       if (result._tag === 'ok') {
         corpusFiles.push({
@@ -120,6 +122,6 @@ export const scanProjectCorpus = (
     return {
       root,
       files: corpusFiles,
-      durationMs: Date.now() - startedAt,
+      durationMs: (yield* Clock.currentTimeMillis) - startedAt,
     };
   });

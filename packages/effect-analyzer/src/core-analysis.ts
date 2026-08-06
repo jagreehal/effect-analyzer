@@ -3,7 +3,7 @@
  * analyzeGeneratorFunction, analyzeRunEntrypointExpression.
  */
 
-import { Effect, Option } from 'effect';
+import { Effect, Option, Clock } from 'effect';
 import type {
   SourceFile,
   Node,
@@ -154,7 +154,7 @@ export const analyzeProgram = (
     return {
       root,
       metadata: {
-        analyzedAt: Date.now(),
+        analyzedAt: yield* Clock.currentTimeMillis,
         filePath,
         tsVersion,
         warnings,
