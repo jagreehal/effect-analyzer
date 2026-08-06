@@ -27,66 +27,6 @@ export interface CodeFix {
 // =============================================================================
 
 /**
- * Generate a fix for effect-fail-untagged.
- * Transforms: Effect.fail(new Error("msg"))
- * Into: Effect.fail(new MyError({ message: "msg" }))
- * with a TaggedError class definition.
- */
-export const generateEffectFailUntaggedFix = (
-  finding: LintFinding,
-  sourceLine: string,
-): CodeFix | undefined => {
-  // Extract the error message from the source
-  const msgMatch = /new\s+Error\(["'](.+?)["']\)/.exec(sourceLine);
-  if (!msgMatch) return undefined;
-
-  const errorName = deriveErrorName(finding.message);
-
-  return {
-    rule: finding.rule,
-    filePath: finding.filePath,
-    line: finding.line,
-    column: finding.column,
-    description: `Replace Effect.fail(new Error(...)) with tagged error class "${errorName}"`,
-    before: sourceLine.trim(),
-    after: sourceLine
-      .replace(/new\s+Error\(["'](.+?)["']\)/, `new ${errorName}({ message: "$1" })`)
-      .replace(/new\s+TypeError\(["'](.+?)["']\)/, `new ${errorName}({ message: "$1" })`)
-      .replace(/new\s+RangeError\(["'](.+?)["']\)/, `new ${errorName}({ message: "$1" })`),
-    confidence: 'medium',
-  };
-};
-
-/**
- * Generate a fix for raw-side-effect-in-gen (process.env).
- * Transforms: process.env.MY_VAR
- * Into: yield* Config.string("MY_VAR")
- */
-export const generateRawSideEffectFix = (
-  finding: LintFinding,
-  sourceLine: string,
-): CodeFix | undefined => {
-  const envMatch = /process\.env\.([A-Za-z_][A-Za-z0-9_]*)/.exec(sourceLine);
-  if (!envMatch) return undefined;
-
-  const varName = envMatch[1];
-
-  return {
-    rule: finding.rule,
-    filePath: finding.filePath,
-    line: finding.line,
-    column: finding.column,
-    description: `Replace process.env.${varName} with Config.string("${varName}")`,
-    before: sourceLine.trim(),
-    after: sourceLine.replace(
-      /process\.env\.[A-Za-z_][A-Za-z0-9_]*/,
-      `yield* Config.string("${varName}")`,
-    ),
-    confidence: 'medium',
-  };
-};
-
-/**
  * Generate a fix for array-push-spread.
  * Transforms: arr.push(...xs)
  * Into: for (const x of xs) arr.push(x)
@@ -153,44 +93,6 @@ export const generateScheduleUnboundedFix = (
   }
 
   return undefined;
-};
-
-/**
- * Generate a fix for console-log-in-effect.
- * Transforms: console.log("msg")
- * Into: yield* Effect.log("msg")
- */
-export const generateConsoleLogFix = (
-  finding: LintFinding,
-  sourceLine: string,
-): CodeFix | undefined => {
-  const methodMatch = /console\.(log|info|warn|error|debug)\((.+)\)/.exec(sourceLine);
-  if (!methodMatch) return undefined;
-
-  const [, method, args] = methodMatch;
-  const effectLog = method === 'warn'
-    ? 'Effect.logWarning'
-    : method === 'error'
-      ? 'Effect.logError'
-      : method === 'debug'
-        ? 'Effect.logDebug'
-        : method === 'info'
-          ? 'Effect.logInfo'
-          : 'Effect.log';
-
-  return {
-    rule: finding.rule,
-    filePath: finding.filePath,
-    line: finding.line,
-    column: finding.column,
-    description: `Replace console.${method} with ${effectLog}`,
-    before: sourceLine.trim(),
-    after: sourceLine.replace(
-      /console\.(log|info|warn|error|debug)\((.+)\)/,
-      `yield* ${effectLog}(${args})`,
-    ),
-    confidence: 'high',
-  };
 };
 
 /**
@@ -357,16 +259,10 @@ export const generateFix = (
   sourceLine: string,
 ): CodeFix | undefined => {
   switch (finding.rule) {
-    case 'effect-fail-untagged':
-      return generateEffectFailUntaggedFix(finding, sourceLine);
-    case 'raw-side-effect-in-gen':
-      return generateRawSideEffectFix(finding, sourceLine);
     case 'array-push-spread':
       return generateArrayPushSpreadFix(finding, sourceLine);
     case 'schedule-unbounded':
       return generateScheduleUnboundedFix(finding, sourceLine);
-    case 'console-log-in-effect':
-      return generateConsoleLogFix(finding, sourceLine);
     case 'promise-api-in-gen':
       return generatePromiseApiFix(finding, sourceLine);
     case 'identity-catch':
@@ -404,26 +300,6 @@ export const generateAllFixes = (
   }
 
   return fixes;
-};
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-const deriveErrorName = (message: string): string => {
-  // Extract context from the message to derive a meaningful error name
-  const contextMatch = /Effect\.(fail|failSync)/.exec(message);
-  if (!contextMatch) return 'AppError';
-
-  // Look for operation context in the message
-  const opMatch = /"(.*?)"/.exec(message);
-  if (opMatch && opMatch[1]) {
-    const words = opMatch[1].split(/[\s_-]+/);
-    const name = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
-    return `${name}Error`;
-  }
-
-  return 'AppError';
 };
 
 /**

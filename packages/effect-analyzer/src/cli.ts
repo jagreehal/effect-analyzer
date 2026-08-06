@@ -230,6 +230,7 @@ interface CLIOptions {
   readonly maxFiles: number | undefined;
   readonly cursor: number;
   readonly lintSource: boolean;
+  readonly tsgoProject: string | undefined;
   readonly sarif: boolean;
   readonly baseline: string | undefined;
   readonly failOnNew: boolean;
@@ -338,6 +339,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
   let maxFiles: number | undefined;
   let cursor = 0;
   let lintSource = false;
+  let tsgoProject: string | undefined;
   let sarif = false;
   let baseline: string | undefined;
   let failOnNew = false;
@@ -607,6 +609,10 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
       if (Number.isFinite(parsed) && parsed >= 0) cursor = parsed;
     } else if (arg === '--lint-source') {
       lintSource = true;
+    } else if (arg === '--tsgo') {
+      tsgoProject = args[i + 1]?.startsWith('-') === false ? args[++i] : 'tsconfig.json';
+    } else if (arg.startsWith('--tsgo=')) {
+      tsgoProject = arg.slice('--tsgo='.length);
     } else if (arg === '--sarif') {
       sarif = true;
     } else if (arg === '--baseline') {
@@ -775,6 +781,7 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     maxFiles,
     cursor,
     lintSource,
+    tsgoProject,
     sarif,
     baseline,
     failOnNew,
@@ -870,6 +877,8 @@ Options:
   --max-files <n>          Analyze at most n files (cursor-window mode)
   --cursor <n>             Start from nth file in sorted file list (resumable window)
   --lint-source            Run deterministic source lints on a file or directory
+  --tsgo [tsconfig]        Merge type-aware Effect diagnostics from @effect/tsgo
+                           (optional dependency; skipped when not installed)
   --sarif                  Emit SARIF 2.1.0 output (for --lint-source)
   --baseline <file>        Compare findings against a baseline session/json file
   --fail-on-new            Exit non-zero when new findings exist vs baseline
@@ -904,6 +913,7 @@ Examples:
   effect-analyze ./program.ts --format mermaid-paths --style-guide
   effect-analyze ./program.ts --format json --output result.json
   effect-analyze ./program.ts --colocate   # Single file + write foo.effect-analysis.md
+  effect-analyze ./src --lint-source --tsgo tsconfig.json
   effect-analyze ./src --lint-source --sarif -o findings.sarif
   effect-analyze ./src --lint-source --baseline ./.cache/effect-lint-baseline.json --fail-on-new
   effect-analyze ./src --lint-source --scorecard
@@ -2278,7 +2288,7 @@ const main = Effect.gen(function* () {
 
   if (options.lintSource) {
     const targetPath = resolve(pathArg ?? '.');
-    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath));
+    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }));
     const scorecard = options.scorecard ? buildLintScorecard(scan.findings) : undefined;
     const timestamp = new Date().toISOString();
     let baselineSummary:
@@ -2411,7 +2421,7 @@ const main = Effect.gen(function* () {
     }
 
     // Run lint scan
-    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath));
+    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }));
 
     // Analyze project to get IRs
     const projectResult = yield* analyzeProject(targetPath, {

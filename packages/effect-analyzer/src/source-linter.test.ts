@@ -54,76 +54,6 @@ describe('source-linter: untagged-throw', () => {
   });
 });
 
-describe('source-linter: raw-side-effect-in-gen', () => {
-  it('flags bare fetch in Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         const r = fetch('/x');
-         return yield* Effect.succeed(r);
-       });`,
-    );
-    const raw = issues.filter((i) => i.rule === 'raw-side-effect-in-gen');
-    expect(raw.length).toBe(1);
-    expect(raw[0]?.message).toMatch(/fetch/);
-  });
-
-  it('flags Math.random inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         const x = Math.random();
-         return yield* Effect.succeed(x);
-       });`,
-    );
-    expect(issues.some((i) => i.rule === 'raw-side-effect-in-gen' && /Math.random/.test(i.message))).toBe(true);
-  });
-
-  it('flags process.env access inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         const k = process.env.SECRET;
-         return yield* Effect.succeed(k);
-       });`,
-    );
-    expect(issues.some((i) => i.rule === 'raw-side-effect-in-gen' && /process.env/.test(i.message))).toBe(true);
-  });
-
-  it('does not flag fetch wrapped in Effect.tryPromise', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         const r = yield* Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e });
-         return r;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'raw-side-effect-in-gen')).toEqual([]);
-  });
-
-  it('flags bare new Promise inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         const x = new Promise((resolve) => resolve(1));
-         return yield* Effect.succeed(x);
-       });`,
-    );
-    expect(issues.some((i) => i.rule === 'raw-side-effect-in-gen' && i.message.includes('new Promise'))).toBe(true);
-  });
-
-  it('flags setTimeout inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         setTimeout(() => {}, 10);
-         return yield* Effect.succeed(1);
-       });`,
-    );
-    expect(issues.some((i) => i.rule === 'raw-side-effect-in-gen' && i.message.includes('setTimeout'))).toBe(true);
-  });
-});
-
 describe('source-linter: mutable-in-concurrent', () => {
   it('flags let mutation inside Effect.all', () => {
     const { issues } = lintSourceCode(
@@ -262,16 +192,16 @@ describe('source-linter: deterministic ordering', () => {
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          const b = Math.random();
-         const a = fetch('/x');
+         const a = Date.now();
          return yield* Effect.succeed([a, b]);
        });`,
       'order.test.ts',
     );
-    const raw = issues.filter((i) => i.rule === 'raw-side-effect-in-gen');
+    const raw = issues.filter((i) => i.rule === 'nondeterministic-test-api');
     expect(raw.length).toBe(2);
     expect(raw[0]?.location?.line).toBeLessThan(raw[1]?.location?.line ?? Number.MAX_SAFE_INTEGER);
-    expect(raw[0]?.message).toMatch(/Math\.random|fetch/);
-    expect(raw[1]?.message).toMatch(/Math\.random|fetch/);
+    expect(raw[0]?.message).toMatch(/Math\.random|Date\.now/);
+    expect(raw[1]?.message).toMatch(/Math\.random|Date\.now/);
   });
 });
 
@@ -383,51 +313,6 @@ describe('source-linter: unsafe-api-usage', () => {
   });
 });
 
-describe('source-linter: console-log-in-effect', () => {
-  it('flags console.log inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         console.log('hi');
-         return yield* Effect.succeed(1);
-       });`,
-    );
-    const flagged = issues.filter((i) => i.rule === 'console-log-in-effect');
-    expect(flagged.length).toBe(1);
-    expect(flagged[0]?.message).toMatch(/Effect\.log/);
-  });
-
-  it('suggests logWarning for console.warn', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         console.warn('careful');
-         return yield* Effect.succeed(1);
-       });`,
-    );
-    const flagged = issues.find((i) => i.rule === 'console-log-in-effect');
-    expect(flagged?.message).toMatch(/Effect\.logWarning/);
-  });
-
-  it('does not flag console.log when wrapped in Effect.sync', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         yield* Effect.sync(() => console.log('ok'));
-         return yield* Effect.succeed(1);
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'console-log-in-effect')).toEqual([]);
-  });
-
-  it('does not flag console.log outside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `export const noop = () => console.log('hi');`,
-    );
-    expect(issues.filter((i) => i.rule === 'console-log-in-effect')).toEqual([]);
-  });
-});
-
 describe('source-linter: promise-api-in-gen', () => {
   it('flags Promise.all inside Effect.gen', () => {
     const { issues } = lintSourceCode(
@@ -475,84 +360,6 @@ describe('source-linter: promise-api-in-gen', () => {
        });`,
     );
     expect(issues.filter((i) => i.rule === 'promise-api-in-gen')).toEqual([]);
-  });
-});
-
-describe('source-linter: effect-fail-untagged', () => {
-  it('flags Effect.fail(new Error(...))', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.fail(new Error('boom'));`,
-    );
-    expect(issues.filter((i) => i.rule === 'effect-fail-untagged').length).toBe(1);
-  });
-
-  it('flags Effect.fail(new TypeError(...))', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.fail(new TypeError('bad'));`,
-    );
-    expect(issues.filter((i) => i.rule === 'effect-fail-untagged').length).toBe(1);
-  });
-
-  it('flags Effect.failSync(() => new Error(...))', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.failSync(() => new Error('boom'));`,
-    );
-    expect(issues.filter((i) => i.rule === 'effect-fail-untagged').length).toBe(1);
-  });
-
-  it('does not flag Effect.fail with a tagged error class', () => {
-    const { issues } = lintSourceCode(
-      `import { Data, Effect } from 'effect';
-       class MyError extends Data.TaggedError('MyError')<{ readonly cause: string }> {}
-       export const p = Effect.fail(new MyError({ cause: 'x' }));`,
-    );
-    expect(issues.filter((i) => i.rule === 'effect-fail-untagged')).toEqual([]);
-  });
-});
-
-describe('source-linter: run-effect-in-gen', () => {
-  it('flags Effect.runPromise inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         const x = Effect.runPromise(Effect.succeed(1));
-         return yield* Effect.succeed(x);
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'run-effect-in-gen').length).toBe(1);
-  });
-
-  it('flags Effect.runSync inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         const x = Effect.runSync(Effect.succeed(1));
-         return x;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'run-effect-in-gen').length).toBe(1);
-  });
-
-  it('flags Effect.runFork inside Effect.gen', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         Effect.runFork(Effect.never);
-         return yield* Effect.succeed(1);
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'run-effect-in-gen').length).toBe(1);
-  });
-
-  it('does not flag Effect.runPromise at the top level', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const main = () => Effect.runPromise(Effect.succeed(1));`,
-    );
-    expect(issues.filter((i) => i.rule === 'run-effect-in-gen')).toEqual([]);
   });
 });
 
@@ -895,24 +702,6 @@ describe('source-linter: yield-promise', () => {
   });
 });
 
-describe('source-linter: useless-pipe', () => {
-  it('flags pipe(x) with a single argument', () => {
-    const { issues } = lintSourceCode(
-      `import { pipe } from 'effect';
-       export const x = pipe(1);`,
-    );
-    expect(issues.filter((i) => i.rule === 'useless-pipe').length).toBe(1);
-  });
-
-  it('does not flag pipe(x, f)', () => {
-    const { issues } = lintSourceCode(
-      `import { pipe } from 'effect';
-       export const x = pipe(1, (n) => n + 1);`,
-    );
-    expect(issues.filter((i) => i.rule === 'useless-pipe')).toEqual([]);
-  });
-});
-
 describe('source-linter: barrel-import-from-effect', () => {
   it('flags import { Effect } from "effect"', () => {
     const { issues } = lintSourceCode(
@@ -1128,19 +917,6 @@ describe('source-linter: docs + example enrichment', () => {
     expect(flagged?.example?.good).toMatch(/Data\.TaggedError/);
   });
 
-  it('attaches docsUrl + example to console-log-in-effect', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const p = Effect.gen(function* () {
-         console.log('hi');
-         return yield* Effect.succeed(1);
-       });`,
-    );
-    const flagged = issues.find((i) => i.rule === 'console-log-in-effect');
-    expect(flagged?.docsUrl).toBe('https://effect.website/docs/observability/logging/');
-    expect(flagged?.example?.good).toMatch(/Effect\.log/);
-  });
-
   it('attaches docsUrl + example to config-secret-without-redacted', () => {
     const { issues } = lintSourceCode(
       `import { Config } from 'effect';
@@ -1259,12 +1035,12 @@ describe('source-linter: disable pragmas', () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
-         // effect-analyzer-disable-next-line console-log-in-effect
-         console.log('intentional');
+         // effect-analyzer-disable-next-line promise-api-in-gen
+         const r = Promise.all([]);
          return yield* Effect.succeed(1);
        });`,
     );
-    expect(issues.filter((i) => i.rule === 'console-log-in-effect')).toEqual([]);
+    expect(issues.filter((i) => i.rule === 'promise-api-in-gen')).toEqual([]);
   });
 
   it('honours // effect-analyzer-disable-next-line with no rule (disables all)', () => {
@@ -1272,11 +1048,11 @@ describe('source-linter: disable pragmas', () => {
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          // effect-analyzer-disable-next-line
-         console.log('intentional');
+         const r = Promise.all([]);
          return yield* Effect.succeed(1);
        });`,
     );
-    expect(issues.filter((i) => i.rule === 'console-log-in-effect')).toEqual([]);
+    expect(issues.filter((i) => i.rule === 'promise-api-in-gen')).toEqual([]);
   });
 
   it('honours trailing // eslint-disable-line', () => {
@@ -1293,10 +1069,10 @@ describe('source-linter: disable pragmas', () => {
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          // eslint-disable-next-line array-push-spread
-         console.log('still flagged');
+         const r = Promise.all([]);
          return yield* Effect.succeed(1);
        });`,
     );
-    expect(issues.filter((i) => i.rule === 'console-log-in-effect').length).toBe(1);
+    expect(issues.filter((i) => i.rule === 'promise-api-in-gen').length).toBe(1);
   });
 });

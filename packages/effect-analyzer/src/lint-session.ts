@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { LintIssue } from './effect-linter';
 import { lintSourceCode } from './source-linter';
 import { findRuleDoc } from './rule-registry';
+import { runTsgoDiagnostics } from './tsgo-diagnostics';
 
 export interface LintFinding {
   readonly filePath: string;
@@ -61,7 +62,6 @@ export const SCORECARD_WEIGHTS = {
   ruleOverrides: {
     'unsafe-api-usage': 12,
     'live-layer-in-test': 5,
-    'raw-side-effect-in-gen': 4,
     'forEach-without-concurrency': 3,
     'untagged-throw': 4,
     'sleep-without-testclock': 3,
@@ -200,7 +200,19 @@ const walk = async (path: string, depth = 0): Promise<string[]> => {
   return files;
 };
 
-export const runSourceLintScan = async (pathArg: string): Promise<LintScanResult> => {
+export interface SourceLintScanOptions {
+  /**
+   * Path to a tsconfig.json. When set and `@effect/tsgo` is installed, the
+   * official type-aware Effect diagnostics are merged into the findings.
+   * Silently skipped when the optional dependency is absent.
+   */
+  readonly tsgoProject?: string | undefined;
+}
+
+export const runSourceLintScan = async (
+  pathArg: string,
+  options: SourceLintScanOptions = {},
+): Promise<LintScanResult> => {
   const basePath = resolve(pathArg);
   const candidates = (await walk(basePath)).sort((a, b) => a.localeCompare(b));
   const findings: LintFinding[] = [];
@@ -220,6 +232,27 @@ export const runSourceLintScan = async (pathArg: string): Promise<LintScanResult
     const applied = applySuppressions(rawFindings, suppressions);
     findings.push(...applied.findings.filter((x) => !x.suppressed));
     staleSuppressions.push(...applied.stale.map((x) => ({ ...x, filePath, line: x.line })));
+  }
+
+  // Type-aware rules from the official Effect language service, when available.
+  // ponytail: tsgo diagnostics bypass our disable pragmas — tsgo has its own
+  // suppression story; wire the two together only if users actually ask.
+  if (options.tsgoProject) {
+    const scanned = new Set(candidates);
+    for (const diagnostic of runTsgoDiagnostics({ project: options.tsgoProject }) ?? []) {
+      const filePath = resolve(diagnostic.filePath);
+      if (!scanned.has(filePath)) continue;
+      const base = {
+        filePath,
+        rule: diagnostic.rule,
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        suggestion: undefined,
+        line: diagnostic.line,
+        column: diagnostic.column,
+      };
+      findings.push({ ...base, fingerprint: stableFingerprint(base) });
+    }
   }
 
   return {

@@ -33,15 +33,6 @@ Effect.gen(function* () {
 });`,
     },
   },
-  'effect-fail-untagged': {
-    docsUrl: `${D}/error-management/expected-errors/`,
-    example: {
-      bad: `Effect.fail(new Error("boom"));`,
-      good: `class Boom extends Data.TaggedError("Boom")<{ readonly cause: string }> {}
-
-Effect.fail(new Boom({ cause: "boom" }));`,
-    },
-  },
   'identity-catch': {
     docsUrl: `${D}/error-management/fallback/`,
     example: {
@@ -66,35 +57,6 @@ Effect.tryPromise({
   // -------------------------------------------------------------------------
   // Effect.gen / sync hygiene
   // -------------------------------------------------------------------------
-  'raw-side-effect-in-gen': {
-    docsUrl: `${D}/getting-started/creating-effects/`,
-    example: {
-      bad: `Effect.gen(function* () {
-  const data = fetch("/x");
-  return data;
-});`,
-      good: `Effect.gen(function* () {
-  const data = yield* Effect.tryPromise({
-    try: () => fetch("/x"),
-    catch: (e) => new FetchError({ cause: e }),
-  });
-  return data;
-});`,
-    },
-  },
-  'console-log-in-effect': {
-    docsUrl: `${D}/observability/logging/`,
-    example: {
-      bad: `Effect.gen(function* () {
-  console.log("starting");
-  return yield* work;
-});`,
-      good: `Effect.gen(function* () {
-  yield* Effect.log("starting");
-  return yield* work;
-});`,
-    },
-  },
   'promise-api-in-gen': {
     docsUrl: `${D}/getting-started/creating-effects/`,
     example: {
@@ -105,19 +67,6 @@ Effect.tryPromise({
       good: `Effect.gen(function* () {
   const results = yield* Effect.all([a, b], { concurrency: "unbounded" });
   return results;
-});`,
-    },
-  },
-  'run-effect-in-gen': {
-    docsUrl: `${D}/getting-started/running-effects/`,
-    example: {
-      bad: `Effect.gen(function* () {
-  const x = Effect.runPromise(inner); // creates nested runtime
-  return x;
-});`,
-      good: `Effect.gen(function* () {
-  const x = yield* inner; // compose, don't run
-  return x;
 });`,
     },
   },
@@ -237,17 +186,6 @@ Effect.forEach(items, processItem, { concurrency: 1 });`,
 Effect.succeed([] as const);`,
     },
   },
-  'useless-pipe': {
-    docsUrl: `${D}/getting-started/building-pipelines/`,
-    example: {
-      bad: `const x = pipe(value);`,
-      good: `const x = value;`,
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // Configuration / security
-  // -------------------------------------------------------------------------
   'config-secret-without-redacted': {
     docsUrl: `${D}/configuration/`,
     example: {
