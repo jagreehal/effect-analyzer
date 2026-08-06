@@ -9,7 +9,7 @@ import * as fs from 'node:fs/promises';
 import { Project } from 'ts-morph';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { Effect, Console, Exit, Option } from 'effect';
+import { Effect, Console, Exit, Option, Data } from 'effect';
 import { analyze } from './analyze';
 import { analyzeEffectSource, analyzeEffectFile } from './static-analyzer';
 import {
@@ -139,6 +139,28 @@ import {
 
 type MermaidDirection = 'TB' | 'LR' | 'BT' | 'RL';
 type TestRunner = 'vitest' | 'jest' | 'mocha';
+
+/**
+ * The CLI's failure channel. It terminates at the process boundary — nothing
+ * pattern-matches on it, it is rendered and the process exits — so one tag
+ * carrying a message keeps the channel typed without inventing a taxonomy that
+ * would have no consumer.
+ */
+class CliError extends Data.TaggedError('CliError')<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+const cliFail = (message: string, cause?: unknown): Effect.Effect<never, CliError> =>
+  Effect.fail(cause === undefined ? new CliError({ message }) : new CliError({ message, cause }));
+
+/** `Effect.tryPromise` with the CLI's tagged error instead of an untyped channel. */
+const cliTry = <A>(thunk: () => Promise<A>): Effect.Effect<A, CliError> =>
+  Effect.tryPromise({
+    try: thunk,
+    catch: (cause) =>
+      new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause }),
+  });
 
 /** ANSI colors for gold-tier verbose output (disabled when --no-color or not TTY). */
 function createStyle(useColor: boolean) {
@@ -939,7 +961,7 @@ const loadQualityHintsByFile = (
       return new Map<string, DiagramQualityHintInput>();
     }
     const eslintPath = resolve(options.qualityEslint);
-    const hints = yield* Effect.tryPromise(() =>
+    const hints = yield* cliTry(() =>
       loadDiagramQualityHintsFromEslintJson(eslintPath),
     ).pipe(
       Effect.catch((error) =>
@@ -976,7 +998,7 @@ const buildProgramQualities = (
 /** Diff mode: compare two versions of Effect programs and render the diff. */
 const runDiffMode = (
   options: CLIOptions,
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.gen(function* () {
     const sources = options.diffSources;
 
@@ -985,7 +1007,7 @@ const runDiffMode = (
       return;
     }
 
-    const resolveSource = (arg: ReturnType<typeof parseSourceArg>): Effect.Effect<readonly import('./types').StaticEffectIR[], unknown> => {
+    const resolveSource = (arg: ReturnType<typeof parseSourceArg>) => {
       if (arg.kind === 'git-ref' && arg.ref && arg.filePath) {
         const { ref, filePath: fp } = arg;
         return Effect.gen(function* () {
@@ -1103,7 +1125,7 @@ const runDiffMode = (
       : sections.join(separator);
     if (options.output) {
       const outputPath = options.output;
-      yield* Effect.tryPromise(() => fs.writeFile(outputPath, output, 'utf-8'));
+      yield* cliTry(() => fs.writeFile(outputPath, output, 'utf-8'));
       yield* Console.log(`Diff output written to ${outputPath}`);
     } else {
       yield* Console.log(output);
@@ -1123,7 +1145,7 @@ const writeTestStubsForFile = (
   irs: readonly StaticEffectIR[],
   testRunner: TestRunner,
   overwrite: boolean,
-): Effect.Effect<readonly { path: string; skipped: boolean }[], unknown> =>
+) =>
   Effect.gen(function* () {
     const results: { path: string; skipped: boolean }[] = [];
     const dir = dirname(sourcePath);
@@ -1138,7 +1160,7 @@ const writeTestStubsForFile = (
       }
       seen.add(target);
 
-      const exists = yield* Effect.tryPromise(() => fs.access(target)).pipe(
+      const exists = yield* cliTry(() => fs.access(target)).pipe(
         Effect.map(() => true),
         Effect.catch(() => Effect.succeed(false)),
       );
@@ -1153,7 +1175,7 @@ const writeTestStubsForFile = (
         testRunner,
         programName: ir.root.programName,
       });
-      yield* Effect.tryPromise(() => fs.writeFile(target, code, 'utf-8'));
+      yield* cliTry(() => fs.writeFile(target, code, 'utf-8'));
       results.push({ path: target, skipped: false });
     }
     return results;
@@ -1162,7 +1184,7 @@ const writeTestStubsForFile = (
 const runAnalysis = (
   resolvedPath: string,
   options: CLIOptions,
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.gen(function* () {
     const style = createStyle(options.color && process.stdout.isTTY);
 
@@ -1174,13 +1196,13 @@ const runAnalysis = (
     let irs: readonly import('./types').StaticEffectIR[];
     const useCache = options.cache && !resolvedPath.includes('*');
     if (useCache) {
-      const content = yield* Effect.tryPromise(() =>
+      const content = yield* cliTry(() =>
         fs.readFile(resolvedPath, 'utf-8'),
       ).pipe(
         Effect.catch(() => Effect.succeed(null as string | null)),
       );
       if (content !== null) {
-        const cached = yield* Effect.tryPromise(() =>
+        const cached = yield* cliTry(() =>
           getCached(resolvedPath, content),
         ).pipe(Effect.catch(() => Effect.succeed(null)));
         if (cached !== null && cached.length > 0) {
@@ -1190,7 +1212,7 @@ const runAnalysis = (
           irs = yield* analyze(resolvedPath, analyzerOptions)
             .all()
             .pipe(Effect.tapError((e) => Console.error(`Error: ${e.message}`)));
-          yield* Effect.tryPromise(() =>
+          yield* cliTry(() =>
             setCached(resolvedPath, content, irs),
           ).pipe(Effect.ignore);
           yield* Console.log(`Found ${String(irs.length)} program(s)`);
@@ -1248,9 +1270,7 @@ const runAnalysis = (
         yield* Console.log(`\n${programName}:\n${formatDiagramFidelity(report)}`);
       }
       if (reports.some(({ report }) => !report.exact)) {
-        return yield* Effect.fail(
-          new Error('Diagram fidelity assertion failed'),
-        );
+        return yield* cliFail('Diagram fidelity assertion failed');
       }
     }
 
@@ -1496,7 +1516,7 @@ const runAnalysis = (
         break;
       }
       case 'showcase': {
-        const sourceCode = yield* Effect.tryPromise(() =>
+        const sourceCode = yield* cliTry(() =>
           fs.readFile(resolvedPath, 'utf-8'),
         ).pipe(Effect.catch(() => Effect.succeed('')));
         const showcaseEntries = generateMultipleShowcase(
@@ -1531,7 +1551,7 @@ const runAnalysis = (
 
     const outputPath = options.output;
     if (outputPath) {
-      yield* Effect.tryPromise(() => fs.writeFile(outputPath, output, 'utf-8'));
+      yield* cliTry(() => fs.writeFile(outputPath, output, 'utf-8'));
       yield* Console.log(`Output written to ${outputPath}`);
     } else {
       yield* Console.log(output);
@@ -1542,7 +1562,7 @@ const runAnalysis = (
 const runCoverageAuditCli = (
   resolvedPath: string,
   options: CLIOptions,
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.gen(function* () {
     const audit = yield* runCoverageAudit(resolvedPath, {
       tsconfig: options.tsconfig,
@@ -1581,7 +1601,7 @@ const runCoverageAuditCli = (
 
     const outputPath = options.output;
     if (outputPath) {
-      yield* Effect.tryPromise(() => fs.writeFile(outputPath, render('json'), 'utf-8'));
+      yield* cliTry(() => fs.writeFile(outputPath, render('json'), 'utf-8'));
       if (!options.quiet && !options.jsonSummary) {
         yield* Console.log(`Audit written to ${outputPath}`);
       }
@@ -1595,7 +1615,7 @@ const runCoverageAuditCli = (
 const runProjectMode = (
   resolvedPath: string,
   options: CLIOptions,
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.gen(function* () {
     const useColor = options.color && process.stdout.isTTY;
     const style = createStyle(useColor);
@@ -1628,7 +1648,7 @@ const runProjectMode = (
         }
       }
       if (hasInexactDiagram) {
-        return yield* Effect.fail(new Error('Diagram fidelity assertion failed'));
+        return yield* cliFail('Diagram fidelity assertion failed');
       }
     }
     const qualityHintsByFile = yield* loadQualityHintsByFile(options, style);
@@ -1664,7 +1684,7 @@ const runProjectMode = (
           architecture!,
           resolvedPath,
         );
-        yield* Effect.tryPromise(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
+        yield* cliTry(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
           Effect.catch(() => Effect.succeed(undefined)),
         );
         if (!options.quiet) {
@@ -1760,7 +1780,7 @@ const runProjectMode = (
           const graphMd = renderServiceGraphMermaid(svcMap, { direction: options.direction });
           const graphPath = join(resolvedPath, 'service-graph.md');
           const graphContent = `# Service Dependency Graph\n\n\`\`\`mermaid\n${graphMd}\n\`\`\`\n`;
-          yield* Effect.tryPromise(() => fs.writeFile(graphPath, graphContent, 'utf-8')).pipe(
+          yield* cliTry(() => fs.writeFile(graphPath, graphContent, 'utf-8')).pipe(
             Effect.catch(() => Effect.succeed(undefined)),
           );
           if (!options.quiet) {
@@ -1780,7 +1800,7 @@ const runProjectMode = (
 
     // Write API docs if HttpApi structure found (when colocating)
     if (doColocate) {
-      const apiStructures = yield* Effect.tryPromise(() => {
+      const apiStructures = yield* cliTry(() => {
         const project = options.tsconfig
           ? new Project({ tsConfigFilePath: options.tsconfig })
           : new Project({ skipAddingFilesFromTsConfig: true });
@@ -1798,7 +1818,7 @@ const runProjectMode = (
       if (apiStructures.length > 0) {
         const apiDocsPath = join(resolvedPath, 'api-docs.md');
         const apiDocsContent = renderApiDocsMarkdown(apiStructures);
-        yield* Effect.tryPromise(() => fs.writeFile(apiDocsPath, apiDocsContent, 'utf-8')).pipe(
+        yield* cliTry(() => fs.writeFile(apiDocsPath, apiDocsContent, 'utf-8')).pipe(
           Effect.catch(() => Effect.succeed(undefined)),
         );
         if (!options.quiet) {
@@ -1815,7 +1835,7 @@ const runProjectMode = (
         architecture,
         resolvedPath,
       );
-      yield* Effect.tryPromise(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
+      yield* cliTry(() => fs.writeFile(architecturePath, architectureContent, 'utf-8')).pipe(
         Effect.catch(() => Effect.succeed(undefined)),
       );
       if (!options.quiet) {
@@ -1883,7 +1903,7 @@ const runProjectMode = (
 const runOpenApiRuntime = (
   entrypointPath: string,
   options: CLIOptions,
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.callback<undefined, Error>((resume) => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const runnerPath = join(__dirname, '..', 'scripts', 'openapi-runtime-runner.mjs');
@@ -1916,23 +1936,23 @@ const runOpenApiRuntime = (
     }
     child.on('close', (code) => {
       if (code === 0) resume(Effect.succeed(undefined));
-      else resume(Effect.fail(new Error(`OpenAPI runtime exited with code ${code}`)));
+      else resume(cliFail(`OpenAPI runtime exited with code ${code}`));
     });
-    child.on('error', (err) => { resume(Effect.fail(err)); });
+    child.on('error', (err: unknown) => { resume(cliFail('OpenAPI runtime failed to start', err)); });
   });
 
 /** Run api-docs or openapi-paths format (HttpApi extractor, not Effect analyzer). */
 const runApiDocsMode = (
   resolvedPath: string,
   options: CLIOptions,
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.gen(function* () {
     const project = options.tsconfig
       ? new Project({ tsConfigFilePath: options.tsconfig })
       : new Project({ skipAddingFilesFromTsConfig: true });
 
     let files: string[];
-    const stat = yield* Effect.tryPromise(() => fs.stat(resolvedPath)).pipe(
+    const stat = yield* cliTry(() => fs.stat(resolvedPath)).pipe(
       Effect.option,
     );
     if (Option.isSome(stat) && stat.value.isDirectory()) {
@@ -1951,7 +1971,7 @@ const runApiDocsMode = (
         }
         return result;
       };
-      files = yield* Effect.tryPromise(() => walk(resolvedPath, 0));
+      files = yield* cliTry(() => walk(resolvedPath, 0));
     } else {
       files = [resolvedPath];
     }
@@ -1973,7 +1993,7 @@ const runApiDocsMode = (
 
     const outputPath = options.output;
     if (outputPath) {
-      yield* Effect.tryPromise(() => fs.writeFile(outputPath, output, 'utf-8'));
+      yield* cliTry(() => fs.writeFile(outputPath, output, 'utf-8'));
       yield* Console.log(`Output written to ${outputPath}`);
     } else {
       yield* Console.log(output);
@@ -2010,10 +2030,10 @@ const openInBrowser = (file: string): Effect.Effect<void> =>
 const runStatechartMode = (
   resolvedPath: string,
   options: CLIOptions,
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.gen(function* () {
     let files: string[];
-    const stat = yield* Effect.tryPromise(() => fs.stat(resolvedPath)).pipe(
+    const stat = yield* cliTry(() => fs.stat(resolvedPath)).pipe(
       Effect.option,
     );
     if (Option.isSome(stat) && stat.value.isDirectory()) {
@@ -2032,7 +2052,7 @@ const runStatechartMode = (
         }
         return result;
       };
-      files = yield* Effect.tryPromise(() => walk(resolvedPath, 0));
+      files = yield* cliTry(() => walk(resolvedPath, 0));
     } else {
       files = [resolvedPath];
     }
@@ -2130,7 +2150,7 @@ const runStatechartMode = (
     const outputPath = options.output ?? (isHtml ? defaultHtmlPath : undefined);
 
     if (outputPath) {
-      yield* Effect.tryPromise(() => fs.writeFile(outputPath, output, 'utf-8'));
+      yield* cliTry(() => fs.writeFile(outputPath, output, 'utf-8'));
       yield* Console.log(
         isHtml ? `Statechart written to ${outputPath}` : `Output written to ${outputPath}`,
       );
@@ -2145,16 +2165,16 @@ const runStatechartMode = (
 
 const runMigration = (resolvedPath: string): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const s = yield* Effect.tryPromise(() => fs.stat(resolvedPath)).pipe(
+    const s = yield* cliTry(() => fs.stat(resolvedPath)).pipe(
       Effect.option,
     );
     const isDir = Option.isSome(s) && s.value.isDirectory();
     if (isDir) {
-      const report = yield* Effect.tryPromise(() =>
+      const report = yield* cliTry(() =>
         findMigrationOpportunitiesInProject(resolvedPath),
       ).pipe(
         Effect.catch((e) =>
-          Effect.fail(new Error(e instanceof Error ? e.message : String(e))),
+          cliFail(e instanceof Error ? e.message : String(e), e),
         ),
       );
       yield* Effect.sync(() => {
@@ -2163,7 +2183,8 @@ const runMigration = (resolvedPath: string): Effect.Effect<void> =>
     } else {
       const opportunities = yield* Effect.try({
         try: () => findMigrationOpportunities(resolvedPath),
-        catch: (e) => new Error(e instanceof Error ? e.message : String(e)),
+        catch: (cause) =>
+          new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause }),
       });
       yield* Effect.sync(() => {
         process.stdout.write(
@@ -2215,7 +2236,7 @@ const runExtraAnalyzers = (
 
     const text = options.pretty ? JSON.stringify(out, null, 2) : JSON.stringify(out);
     if (options.output) {
-      yield* Effect.tryPromise(() => fs.writeFile(options.output!, text, 'utf-8')).pipe(
+      yield* cliTry(() => fs.writeFile(options.output!, text, 'utf-8')).pipe(
         Effect.catch((e) =>
           Effect.sync(() => {
             console.error('Write failed:', e instanceof Error ? e.message : e);
@@ -2262,14 +2283,14 @@ const writeAnalyzerOutput = <A>(
   analysis: A,
   options: { readonly format: string; readonly pretty: boolean; readonly output: string | undefined },
   renderers: { readonly json: (a: A, pretty: boolean) => string; readonly markdown: (a: A) => string },
-): Effect.Effect<void, unknown> =>
+) =>
   Effect.gen(function* () {
     const text =
       options.format === 'json'
         ? renderers.json(analysis, options.pretty)
         : renderers.markdown(analysis);
     if (options.output) {
-      yield* Effect.tryPromise(() => fs.writeFile(resolve(options.output!), text, 'utf-8'));
+      yield* cliTry(() => fs.writeFile(resolve(options.output!), text, 'utf-8'));
     } else {
       yield* Console.log(text);
     }
@@ -2280,7 +2301,7 @@ const main = Effect.gen(function* () {
   const { pathArg, options } = parseArgs(args);
 
   if (options.importSession) {
-    const imported = yield* Effect.tryPromise(() => fs.readFile(resolve(options.importSession!), 'utf-8'));
+    const imported = yield* cliTry(() => fs.readFile(resolve(options.importSession!), 'utf-8'));
     const parsed = JSON.parse(imported);
     yield* Console.log(options.format === 'json' ? JSON.stringify(parsed, null, options.pretty ? 2 : 0) : imported);
     return Exit.succeed(undefined);
@@ -2288,7 +2309,7 @@ const main = Effect.gen(function* () {
 
   if (options.lintSource) {
     const targetPath = resolve(pathArg ?? '.');
-    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }));
+    const scan = yield* cliTry(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }));
     const scorecard = options.scorecard ? buildLintScorecard(scan.findings) : undefined;
     const timestamp = new Date().toISOString();
     let baselineSummary:
@@ -2302,14 +2323,14 @@ const main = Effect.gen(function* () {
 
     if (options.baseline) {
       const baselinePath = resolve(options.baseline);
-      const baselineRaw = yield* Effect.tryPromise(() => fs.readFile(baselinePath, 'utf-8')).pipe(
+      const baselineRaw = yield* cliTry(() => fs.readFile(baselinePath, 'utf-8')).pipe(
         Effect.catch(() =>
-          Effect.fail(new Error(`Failed to read baseline file: ${baselinePath}`)),
+          cliFail(`Failed to read baseline file: ${baselinePath}`),
         ),
       );
       const baselineJson = yield* Effect.try({
         try: () => JSON.parse(baselineRaw) as unknown,
-        catch: () => new Error(`Baseline is not valid JSON: ${baselinePath}`),
+        catch: (cause) => new CliError({ message: `Baseline is not valid JSON: ${baselinePath}`, cause }),
       });
       const baselineFindings = extractBaselineFindings(baselineJson);
       const delta = compareAgainstBaseline(scan.findings, baselineFindings);
@@ -2367,8 +2388,8 @@ const main = Effect.gen(function* () {
           : '- baseline: none',
         '',
       ];
-      yield* Effect.tryPromise(() => fs.mkdir(outDir, { recursive: true }));
-      yield* Effect.tryPromise(() =>
+      yield* cliTry(() => fs.mkdir(outDir, { recursive: true }));
+      yield* cliTry(() =>
         Promise.all([
           fs.writeFile(join(outDir, 'diagnostics.json'), JSON.stringify(scan.findings, null, 2), 'utf-8'),
           fs.writeFile(join(outDir, 'diagnostics.sarif'), JSON.stringify(sarifPayload, null, 2), 'utf-8'),
@@ -2380,7 +2401,7 @@ const main = Effect.gen(function* () {
     }
 
     if (options.output) {
-      yield* Effect.tryPromise(() =>
+      yield* cliTry(() =>
         fs.writeFile(resolve(options.output!), JSON.stringify(options.sarif ? dataPayload : envelope, null, options.pretty ? 2 : 0), 'utf-8'),
       );
     } else {
@@ -2388,24 +2409,22 @@ const main = Effect.gen(function* () {
     }
 
     if (options.exportSession) {
-      yield* Effect.tryPromise(() =>
+      yield* cliTry(() =>
         fs.writeFile(resolve(options.exportSession!), JSON.stringify(envelope, null, 2), 'utf-8'),
       );
     }
 
     if (options.failOnNew && baselineSummary && baselineSummary.new > 0) {
-      return yield* Effect.fail(new Error(`New findings detected: ${String(baselineSummary.new)}`));
+      return yield* cliFail(`New findings detected: ${String(baselineSummary.new)}`);
     }
     if (options.failOnStaleSuppressions && scan.staleSuppressions.length > 0) {
-      return yield* Effect.fail(
-        new Error(`Stale suppressions detected: ${String(scan.staleSuppressions.length)}`),
+      return yield* cliFail(
+        `Stale suppressions detected: ${String(scan.staleSuppressions.length)}`,
       );
     }
     if (options.requireSuppressionReason && scan.suppressionsMissingReason.length > 0) {
-      return yield* Effect.fail(
-        new Error(
-          `Suppressions missing reason: ${String(scan.suppressionsMissingReason.length)} (use: effect-analyzer-disable-next-line <rule> <reason>)`,
-        ),
+      return yield* cliFail(
+        `Suppressions missing reason: ${String(scan.suppressionsMissingReason.length)} (use: effect-analyzer-disable-next-line <rule> <reason>)`,
       );
     }
     return Exit.succeed(undefined);
@@ -2421,7 +2440,7 @@ const main = Effect.gen(function* () {
     }
 
     // Run lint scan
-    const scan = yield* Effect.tryPromise(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }));
+    const scan = yield* cliTry(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }));
 
     // Analyze project to get IRs
     const projectResult = yield* analyzeProject(targetPath, {
@@ -2435,7 +2454,7 @@ const main = Effect.gen(function* () {
     const sourceLinesMap = new Map<string, readonly string[]>();
     for (const [filePath] of projectResult.byFile) {
       try {
-        const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'));
+        const content = yield* cliTry(() => fs.readFile(filePath, 'utf-8'));
         sourceLinesMap.set(filePath, content.split('\n'));
       } catch {
         // Skip files we can't read
@@ -2481,7 +2500,7 @@ const main = Effect.gen(function* () {
       });
 
       if (options.output) {
-        yield* Effect.tryPromise(() =>
+        yield* cliTry(() =>
           fs.writeFile(resolve(options.output!), renderImprovePlan(plan), 'utf-8'),
         );
       } else {
@@ -2489,7 +2508,7 @@ const main = Effect.gen(function* () {
       }
 
       if (!options.improveDryRun) {
-        const result = yield* Effect.tryPromise(() => applyFixes(plan.fixes, { dryRun: false }));
+        const result = yield* cliTry(() => applyFixes(plan.fixes, { dryRun: false }));
         yield* Console.log('\n' + renderImproveResult(result));
       }
     } else if (options.agentReport) {
@@ -2497,7 +2516,7 @@ const main = Effect.gen(function* () {
         const output = options.output.endsWith('.json')
           ? renderAgentReportJson(report)
           : renderAgentReportMarkdown(report);
-        yield* Effect.tryPromise(() => fs.writeFile(resolve(options.output!), output, 'utf-8'));
+        yield* cliTry(() => fs.writeFile(resolve(options.output!), output, 'utf-8'));
       } else {
         yield* Console.log(renderAgentReportSummary(report));
         yield* Console.log('\n' + renderAgentReportMarkdown(report));
@@ -2568,7 +2587,7 @@ const main = Effect.gen(function* () {
       },
     };
     if (options.exportSession) {
-      yield* Effect.tryPromise(() =>
+      yield* cliTry(() =>
         fs.writeFile(resolve(options.exportSession!), JSON.stringify(envelope, null, 2), 'utf-8'),
       );
     }
@@ -2591,12 +2610,12 @@ const main = Effect.gen(function* () {
 
   const resolvedPath = resolveCliPath(pathArg);
 
-  const s = yield* Effect.tryPromise(() => fs.stat(resolvedPath)).pipe(
+  const s = yield* cliTry(() => fs.stat(resolvedPath)).pipe(
     Effect.option,
   );
   if (Option.isNone(s)) {
     yield* Console.error(`Error: Path not found: ${resolvedPath}`);
-    return yield* Effect.fail(Exit.fail('Path not found'));
+    return yield* cliFail('Path not found');
   }
 
   const isDir = s.value.isDirectory();
@@ -2604,7 +2623,7 @@ const main = Effect.gen(function* () {
   if (options.coverageAudit) {
     if (!isDir) {
       yield* Console.error('Error: --coverage-audit requires a directory path');
-      return yield* Effect.fail(Exit.fail('Coverage audit requires directory'));
+      return yield* cliFail('Coverage audit requires directory');
     }
     yield* runCoverageAuditCli(resolvedPath, options);
     return Exit.succeed(undefined);
@@ -2613,7 +2632,7 @@ const main = Effect.gen(function* () {
   if (options.serviceCycles) {
     if (!isDir) {
       yield* Console.error('Error: --service-cycles requires a directory path');
-      return yield* Effect.fail(Exit.fail('Service cycles requires directory'));
+      return yield* cliFail('Service cycles requires directory');
     }
     const project = yield* analyzeProject(resolvedPath, {
       tsconfig: options.tsconfig,
@@ -2639,7 +2658,7 @@ const main = Effect.gen(function* () {
               ...cycles.map((cycle, idx) => `${String(idx + 1)}. ${cycle.services.join(' -> ')} -> ${cycle.services[0]}`),
             ].join('\n');
     if (options.output) {
-      yield* Effect.tryPromise(() => fs.writeFile(resolve(options.output!), text, 'utf-8'));
+      yield* cliTry(() => fs.writeFile(resolve(options.output!), text, 'utf-8'));
     } else {
       yield* Console.log(text);
     }
@@ -2651,7 +2670,7 @@ const main = Effect.gen(function* () {
       yield* Console.error(
         'Error: --entry-points / --config-leaks / --cli-commands operate on single files, not directories.',
       );
-      return yield* Effect.fail(Exit.fail('Specific analyzer flag requires a file path'));
+      return yield* cliFail('Specific analyzer flag requires a file path');
     }
     yield* runExtraAnalyzers(resolvedPath, options);
     return Exit.succeed(undefined);
@@ -2682,7 +2701,7 @@ const main = Effect.gen(function* () {
   if (options.format === 'openapi-runtime') {
     if (isDir) {
       yield* Console.error('openapi-runtime requires a file path (entrypoint), not a directory.');
-      return Exit.fail(new Error('openapi-runtime needs entrypoint file'));
+      return yield* cliFail('openapi-runtime needs entrypoint file');
     }
     yield* runOpenApiRuntime(resolvedPath, options);
     return Exit.succeed(undefined);
@@ -2768,9 +2787,9 @@ const main = Effect.gen(function* () {
 
   return Exit.succeed(undefined);
 }).pipe(
-  Effect.catch((error) =>
+  Effect.catch((error: Error) =>
     Effect.gen(function* () {
-      yield* Console.error(`Fatal error: ${String(error)}`);
+      yield* Console.error(`Fatal error: ${error.message}`);
       return Exit.fail(error);
     }),
   ),
@@ -2800,3 +2819,5 @@ Effect.runPromise(main).then(
     process.exit(1);
   },
 );
+
+
