@@ -463,27 +463,30 @@ export function analyzeProjectCorpus(
     // Optionally build the deduplicated service map
     let serviceMap: ProjectServiceMap | undefined;
     if (options.buildServiceMap) {
-      try {
+      serviceMap = yield* Effect.try(() => {
         const { Project } = loadTsMorph();
         const project = new Project({
           skipAddingFilesFromTsConfig: true,
           compilerOptions: { allowJs: true },
         });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // oxlint-disable-next-line typescript/no-explicit-any
         const sourceFileMap = new Map<string, any>();
         for (const file of byFile.keys()) {
+          // Files that cannot be loaded are skipped, not fatal. This stays a
+          // plain try/catch: it guards one synchronous ts-morph call inside an
+          // already-suspended Effect.try, so lifting it would only add a nested
+          // runtime.
           try {
-            const sf = project.addSourceFileAtPath(file);
-            sourceFileMap.set(file, sf);
+            sourceFileMap.set(file, project.addSourceFileAtPath(file));
           } catch {
-            // skip files that can't be loaded
+            continue;
           }
         }
-        serviceMap = buildProjectServiceMap(byFile, sourceFileMap);
-      } catch {
+        return buildProjectServiceMap(byFile, sourceFileMap);
+      }).pipe(
         // Fall back to IR-only service map (no AST-level extraction)
-        serviceMap = buildProjectServiceMap(byFile);
-      }
+        Effect.orElseSucceed(() => buildProjectServiceMap(byFile)),
+      );
     }
 
     const architecture = options.buildArchitecture

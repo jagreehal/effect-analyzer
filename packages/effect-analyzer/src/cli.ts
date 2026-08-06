@@ -9,7 +9,7 @@ import * as fs from 'node:fs/promises';
 import { Project } from 'ts-morph';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { Effect, Console, Exit, Option, Data } from 'effect';
+import { Effect, Console, Exit, Option, Data, DateTime } from 'effect';
 import { analyze } from './analyze';
 import { analyzeEffectSource, analyzeEffectFile } from './static-analyzer';
 import {
@@ -1584,7 +1584,7 @@ const runCoverageAuditCli = (
           suspiciousZeros: audit.suspiciousZeros.length,
         }, policy)
       : undefined;
-    const timestamp = new Date().toISOString();
+    const timestamp = DateTime.formatIso(yield* DateTime.now);
     const render = (mode: 'human' | 'quiet' | 'json') => renderProjectCoverageReport(audit, {
       mode,
       root: resolvedPath,
@@ -1978,13 +1978,11 @@ const runApiDocsMode = (
 
     const allStructures: HttpApiStructure[] = [];
     for (const file of files) {
-      try {
-        const sf = project.addSourceFileAtPath(file);
-        const structures = extractHttpApiStructure(sf, file);
-        allStructures.push(...structures);
-      } catch {
-        // skip parse errors
-      }
+      // Unparseable files are skipped, not fatal.
+      const structures = yield* Effect.try(() =>
+        extractHttpApiStructure(project.addSourceFileAtPath(file), file),
+      ).pipe(Effect.orElseSucceed(() => [] as readonly HttpApiStructure[]));
+      allStructures.push(...structures);
     }
 
     const output = options.format === 'openapi-paths'
@@ -2059,11 +2057,12 @@ const runStatechartMode = (
 
     const machines: StateMachine[] = [];
     for (const file of files) {
-      try {
-        machines.push(...analyzeStateMachines(file).machines);
-      } catch {
-        // skip parse errors
-      }
+      // Unparseable files are skipped, not fatal.
+      machines.push(
+        ...(yield* Effect.try(() => analyzeStateMachines(file).machines).pipe(
+          Effect.orElseSucceed(() => [] as readonly StateMachine[]),
+        )),
+      );
     }
 
     if (machines.length === 0) {
@@ -2194,9 +2193,7 @@ const runMigration = (resolvedPath: string): Effect.Effect<void> =>
     }
   }).pipe(
     Effect.catch((e) =>
-      Effect.sync(() => {
-        console.error('Migration failed:', e instanceof Error ? e.message : e);
-      }),
+      Console.error(`Migration failed: ${e instanceof Error ? e.message : String(e)}`),
     ),
   );
 
@@ -2238,9 +2235,7 @@ const runExtraAnalyzers = (
     if (options.output) {
       yield* cliTry(() => fs.writeFile(options.output!, text, 'utf-8')).pipe(
         Effect.catch((e) =>
-          Effect.sync(() => {
-            console.error('Write failed:', e instanceof Error ? e.message : e);
-          }),
+          Console.error(`Write failed: ${e instanceof Error ? e.message : String(e)}`),
         ),
       );
     } else {
@@ -2311,7 +2306,7 @@ const main = Effect.gen(function* () {
     const targetPath = resolve(pathArg ?? '.');
     const scan = yield* cliTry(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }));
     const scorecard = options.scorecard ? buildLintScorecard(scan.findings) : undefined;
-    const timestamp = new Date().toISOString();
+    const timestamp = DateTime.formatIso(yield* DateTime.now);
     let baselineSummary:
       | {
           readonly new: number;
@@ -2453,11 +2448,12 @@ const main = Effect.gen(function* () {
     // Build source lines map for fix generation
     const sourceLinesMap = new Map<string, readonly string[]>();
     for (const [filePath] of projectResult.byFile) {
-      try {
-        const content = yield* cliTry(() => fs.readFile(filePath, 'utf-8'));
-        sourceLinesMap.set(filePath, content.split('\n'));
-      } catch {
-        // Skip files we can't read
+      // Unreadable files are skipped, not fatal. Note this used try/catch around
+      // a yield*, which never catches an Effect failure — it only ever caught a
+      // defect. Effect.option is the check that was intended.
+      const content = yield* cliTry(() => fs.readFile(filePath, 'utf-8')).pipe(Effect.option);
+      if (Option.isSome(content)) {
+        sourceLinesMap.set(filePath, content.value.split('\n'));
       }
     }
 
@@ -2565,7 +2561,7 @@ const main = Effect.gen(function* () {
     }
     const envelope = {
       meta: {
-        generatedAt: new Date().toISOString(),
+        generatedAt: DateTime.formatIso(yield* DateTime.now),
         command: options.listRules
           ? 'list-rules'
           : options.indexRules
