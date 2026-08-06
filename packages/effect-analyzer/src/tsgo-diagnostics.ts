@@ -6,8 +6,13 @@
  * merge the results into our findings, so effect-analyzer stays focused on the
  * things it uniquely does (structure, diagrams, IR, migration progress).
  *
- * It is an optional dependency: when it is not installed, this module returns
- * `undefined` and callers carry on with the built-in source rules only.
+ * It is an *optional peer* dependency rather than a direct one on purpose:
+ * `@effect/tsgo` picks its Go binary by resolving the consumer's `typescript`
+ * package and matching its exact `gitHead` against the builds packaged in the
+ * platform artifact. Only the consumer's own install can satisfy that, so
+ * bundling a version of our own would nest a second copy that disagrees with
+ * the one their editor runs. When it is absent, this module returns `undefined`
+ * and callers carry on with the built-in source rules only.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -32,11 +37,7 @@ interface TsgoJsonDiagnostic {
   readonly message: string;
 }
 
-/**
- * Absolute path to the `effect-tsgo` entry script, or `undefined` when the
- * optional dependency is not installed.
- */
-export const resolveTsgoBin = (from: string = import.meta.url): string | undefined => {
+const resolveTsgoBinFrom = (from: string): string | undefined => {
   try {
     const require = createRequire(from);
     const manifestPath = require.resolve('@effect/tsgo/package.json');
@@ -53,6 +54,22 @@ export const resolveTsgoBin = (from: string = import.meta.url): string | undefin
   } catch {
     return undefined;
   }
+};
+
+/**
+ * Absolute path to the `effect-tsgo` entry script, or `undefined` when the peer
+ * is not installed.
+ *
+ * Tries our own package location first, then the consumer's cwd — under `npx`
+ * the CLI runs from a temp dir that cannot see the project's node_modules.
+ */
+export const resolveTsgoBin = (from?: string): string | undefined => {
+  const roots = from ? [from] : [import.meta.url, join(process.cwd(), 'noop.js')];
+  for (const root of roots) {
+    const found = resolveTsgoBinFrom(root);
+    if (found) return found;
+  }
+  return undefined;
 };
 
 const toSeverity = (severity: TsgoJsonDiagnostic['severity']): TsgoDiagnostic['severity'] =>

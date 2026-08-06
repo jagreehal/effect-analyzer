@@ -89,9 +89,13 @@
   },
   "homepage": "https://github.com/jagreehal/effect-analyzer/tree/main/packages/effect-analyzer#readme",
   "peerDependencies": {
+    "@effect/tsgo": ">=0.33.0",
     "effect": "^4.0.0-beta.101"
   },
   "peerDependenciesMeta": {
+    "@effect/tsgo": {
+      "optional": true
+    },
     "effect": {
       "optional": false
     }
@@ -100,7 +104,6 @@
     "ts-morph": "^28.0.0"
   },
   "optionalDependencies": {
-    "@effect/tsgo": "^0.33.0",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.13"
   },

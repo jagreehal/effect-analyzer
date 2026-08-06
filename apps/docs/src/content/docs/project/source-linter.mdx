@@ -55,8 +55,13 @@ pnpm add -D @effect/tsgo
 effect-analyze ./src --lint-source --tsgo tsconfig.json
 ```
 
-`@effect/tsgo` is an optional dependency. Without it the flag is a silent no-op
-and only the rules above run.
+`@effect/tsgo` is an **optional peer dependency** — effect-analyzer never
+installs its own copy. That is deliberate: `@effect/tsgo` picks its Go binary by
+resolving *your* `typescript` package and matching its exact `gitHead` against
+the builds packaged in the platform artifact (which is why it needs TypeScript
+7+). Only your install can satisfy that, and using it means the CLI reports
+exactly what your editor reports. Without it the flag is a silent no-op and only
+the rules above run.
 
 <Aside type="note">
 Rules that duplicated a type-aware `@effect/tsgo` equivalent (`effect-fail-untagged`,
