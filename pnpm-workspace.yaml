@@ -5,3 +5,11 @@ packages:
 minimumReleaseAgeExclude:
   - effect
   - '@typeonce/effect-machine'
+  # astro pins a shiki range whose only releases are newer than the global
+  # minimumReleaseAge, so a plain `pnpm install` cannot resolve apps/docs.
+  - shiki
+  # Released in lockstep with typescript@next; a mature-only range never has a
+  # version whose packaged gitHead matches the installed TypeScript.
+  - '@effect/tsgo'
+  - oxlint
+  - oxlint-tsgolint

@@ -17,4 +17,12 @@ Delegate type-aware Effect linting to `@effect/tsgo` instead of reimplementing i
   `globalFetchInEffect` / `processEnvInEffect` / `newPromise` and friends,
   `runEffectInsideEffect`, `globalConsoleInEffect`, `unnecessaryPipe`) use the
   type checker rather than AST heuristics. The `--improve` fix generators for
-  those rules were removed with them.
+  those rules were removed with them. Note that most of these tsgo rules default
+  to `off` — enable them in your plugin options (or `.oxlintrc.json`) or you
+  will lose the coverage rather than upgrade it.
+- Toolchain: TypeScript 6 → 7. Declarations are now emitted by
+  `tsc --emitDeclarationOnly` because tsup's `dts` bundling drives the
+  TypeScript JS compiler API, which the native port no longer exposes. The four
+  aliased subpath exports therefore resolve types from `*-entry.d.ts`.
+- Toolchain: ESLint → oxlint, because `typescript-eslint` refuses TypeScript 7
+  in every published version. oxlint also hosts the `effecttsgo/*` rules.

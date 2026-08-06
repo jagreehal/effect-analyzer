@@ -63,10 +63,25 @@ the builds packaged in the platform artifact (which is why it needs TypeScript
 exactly what your editor reports. Without it the flag is a silent no-op and only
 the rules above run.
 
-<Aside type="note">
+<Aside type="caution">
 Rules that duplicated a type-aware `@effect/tsgo` equivalent (`effect-fail-untagged`,
 `raw-side-effect-in-gen`, `run-effect-in-gen`, `console-log-in-effect`, `useless-pipe`)
-were removed rather than kept as weaker heuristics.
+were removed rather than kept as weaker heuristics. Most of their replacements
+**default to `off`** upstream, so enable them explicitly or you lose the coverage
+instead of upgrading it:
+
+```jsonc
+// tsconfig.json plugin options, or .oxlintrc.json rules
+"globalErrorInEffectFailure": "warning",  // was effect-fail-untagged
+"globalConsoleInEffect":      "warning",  // was console-log-in-effect
+"runEffectInsideEffect":      "warning",  // was run-effect-in-gen
+"unnecessaryPipe":            "warning",  // was useless-pipe
+// raw-side-effect-in-gen split across seven rules:
+"globalFetchInEffect": "warning", "globalDateInEffect": "warning",
+"globalRandomInEffect": "warning", "cryptoRandomUUIDInEffect": "warning",
+"globalTimersInEffect": "warning", "processEnvInEffect": "warning",
+"newPromise": "warning"
+```
 </Aside>
 
 ## Inspect a single rule

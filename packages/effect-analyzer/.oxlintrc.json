@@ -1,23 +1,46 @@
 {
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "effecttsgo"],
+  // Scope matches the ESLint config this replaced: eslint recommended +
+  // typescript type-checked rules, plus the Effect rules that are the point of
+  // the swap. The unicorn/oxc plugins are deliberately not enabled — they were
+  // never part of this repo's lint surface.
+  "plugins": ["typescript", "effecttsgo"],
   "options": {
     "typeAware": true
   },
   "ignorePatterns": ["dist/**", "node_modules/**", "src/__fixtures__/**"],
   "categories": {
-    "correctness": "error",
-    "suspicious": "warn",
-    "perf": "warn"
+    "correctness": "error"
   },
   "rules": {
     // This repo vendors several Effect versions under ___temp/repos as analysis
     // corpora, so duplicate packages are expected here, not a defect.
     "effecttsgo/duplicate-package": "off",
+    // Replacements for the five source-linter rules deleted in favour of tsgo.
+    // These default to "off" upstream, so they must be enabled explicitly or
+    // deleting our versions would have dropped the coverage entirely.
+    "effecttsgo/global-error-in-effect-failure": "warn", // was effect-fail-untagged
+    "effecttsgo/global-console-in-effect": "warn", // was console-log-in-effect
+    "effecttsgo/run-effect-inside-effect": "warn", // was run-effect-in-gen
+    "effecttsgo/unnecessary-pipe": "warn", // was useless-pipe
+    "effecttsgo/unnecessary-pipe-chain": "warn",
+    // ...and the seven that together covered raw-side-effect-in-gen:
+    "effecttsgo/global-fetch-in-effect": "warn",
+    "effecttsgo/global-date-in-effect": "warn",
+    "effecttsgo/global-random-in-effect": "warn",
+    "effecttsgo/crypto-random-uuid-in-effect": "warn",
+    "effecttsgo/global-timers-in-effect": "warn",
+    "effecttsgo/process-env-in-effect": "warn",
+    "effecttsgo/new-promise": "warn",
+
     // Real findings in our own code; surfaced as warnings so the gate stays
     // green while they are worked through, matching the old ESLint baseline.
     "effecttsgo/any-unknown-in-error-context": "warn",
-    "oxc/only-used-in-recursion": "warn",
+    "effecttsgo/global-error-in-effect-catch": "warn",
+    "effecttsgo/try-catch-in-effect-gen": "warn",
+    "effecttsgo/lazy-effect": "warn",
+    "effecttsgo/floating-effect": "error",
+    "effecttsgo/missing-return-yield-star": "error",
 
     "eqeqeq": "error",
     "no-console": ["warn", { "allow": ["warn", "error"] }],
