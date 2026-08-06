@@ -2754,6 +2754,11 @@ const main = Effect.gen(function* () {
             process.stdout.write('\x1Bc');
             const time = new Date().toLocaleTimeString();
             process.stdout.write(`\x1b[2m👁 ${resolvedPath} — ${time} (#${runCount})\x1b[0m\n\n`);
+            // Detached on purpose: this is an fs.watch callback on a debounce
+            // timer, not a child of the surrounding fiber. There are no custom
+            // services to inherit (R is never), so runPromiseWith would only add
+            // a context capture with nothing in it.
+            // oxlint-disable-next-line effecttsgo/run-effect-inside-effect
             Effect.runPromise(
               runAnalysis(resolvedPath, watchOpts).pipe(
                 Effect.tap(() =>
