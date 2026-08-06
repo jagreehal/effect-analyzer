@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTsgoOutput, runTsgoDiagnostics } from './tsgo-diagnostics';
+import { parseTsgoOutput, resolveTsgoBin, runTsgoDiagnostics } from './tsgo-diagnostics';
 
 const SAMPLE = JSON.stringify({
   diagnostics: [
@@ -67,9 +67,22 @@ describe('tsgo-diagnostics', () => {
     expect(parseTsgoOutput('{"summary":{}}')).toBeUndefined();
   });
 
-  it('is a no-op when @effect/tsgo is not installed', () => {
-    // The optional dependency is absent in this workspace, so the bridge must
-    // degrade silently rather than break a lint run.
-    expect(runTsgoDiagnostics({ project: 'tsconfig.json' })).toBeUndefined();
+  it('resolves the effect-tsgo binary from the installed peer', () => {
+    expect(resolveTsgoBin()).toMatch(/effect-tsgo/);
   });
+
+  it('never throws when the project path is bogus', () => {
+    // tsgo exits non-zero here; a lint run must survive it.
+    expect(() => runTsgoDiagnostics({ project: 'no-such-tsconfig.json' })).not.toThrow();
+  }, 60_000);
+
+  it('runs the real binary and returns parsed diagnostics', () => {
+    const result = runTsgoDiagnostics({ project: 'tsconfig.json' });
+    expect(Array.isArray(result)).toBe(true);
+    for (const d of result ?? []) {
+      expect(d.filePath).toMatch(/\.tsx?$/);
+      expect(['error', 'warning', 'info']).toContain(d.severity);
+      expect(d.line).toBeGreaterThan(0);
+    }
+  }, 120_000);
 });

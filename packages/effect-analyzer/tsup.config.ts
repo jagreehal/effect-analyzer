@@ -1,5 +1,9 @@
 import { defineConfig } from 'tsup';
 
+// Declarations are emitted by `tsc --emitDeclarationOnly` (see the `build`
+// script), not by tsup. tsup bundles them via rollup-plugin-dts, which drives
+// the TypeScript *JS* compiler API — TypeScript 7 is the native port and no
+// longer exposes it (`ts.sys.useCaseSensitiveFileNames` is undefined).
 export default defineConfig([
   // Main library
   {
@@ -13,7 +17,7 @@ export default defineConfig([
       'effect-workflow': 'src/effect-workflow.ts',
     },
     format: ['cjs', 'esm'],
-    dts: true,
+    dts: false,
     clean: true,
     splitting: false,
     sourcemap: true,
