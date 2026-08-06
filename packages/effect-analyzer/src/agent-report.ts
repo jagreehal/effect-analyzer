@@ -329,7 +329,7 @@ export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport 
 
   const couplingPriority: Required<CouplingPriorityMap> = {
     ...DEFAULT_COUPLING_PRIORITY,
-    ...(couplingPriorityMap ?? {}),
+    ...couplingPriorityMap,
   };
 
   const grouped = groupFindingsByRule(findings);

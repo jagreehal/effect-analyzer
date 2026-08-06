@@ -61,11 +61,12 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
+    "lint": "oxlint src --tsconfig tsconfig.lint.json && node scripts/check-imports.mjs",
+    "lint:fix": "oxlint src --tsconfig tsconfig.lint.json --fix && node scripts/check-imports.mjs",
     "clean": "rm -rf dist",
     "quality": "pnpm type-check && pnpm test && pnpm lint",
-    "effect:fetch": "tsx scripts/fetch-effect-repo.ts"
+    "effect:fetch": "tsx scripts/fetch-effect-repo.ts",
+    "prepare": "effect-tsgo patch --no-typescript --oxlint"
   },
   "keywords": [
     "effect",
@@ -108,17 +109,16 @@
     "vscode-languageserver-textdocument": "^1.0.13"
   },
   "devDependencies": {
-    "@effect/eslint-plugin": "^0.3.2",
-    "@eslint/js": "^10.0.1",
+    "@effect/tsgo": "0.33.0",
     "@total-typescript/ts-reset": "^0.6.1",
     "@typeonce/effect-machine": "0.2.0",
     "@types/node": "^26.1.2",
     "effect": "4.0.0-beta.102",
-    "eslint": "^10.8.0",
+    "oxlint": "1.77.0",
+    "oxlint-tsgolint": "7.0.2001",
     "ts-morph": "^28.0.0",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
-    "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"
   }
 }

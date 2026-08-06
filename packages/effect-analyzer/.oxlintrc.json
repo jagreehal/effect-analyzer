@@ -1,0 +1,133 @@
+{
+  "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "effecttsgo"],
+  "options": {
+    "typeAware": true
+  },
+  "ignorePatterns": ["dist/**", "node_modules/**", "src/__fixtures__/**"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "rules": {
+    // This repo vendors several Effect versions under ___temp/repos as analysis
+    // corpora, so duplicate packages are expected here, not a defect.
+    "effecttsgo/duplicate-package": "off",
+    // Real findings in our own code; surfaced as warnings so the gate stays
+    // green while they are worked through, matching the old ESLint baseline.
+    "effecttsgo/any-unknown-in-error-context": "warn",
+    "oxc/only-used-in-recursion": "warn",
+
+    "eqeqeq": "error",
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "require-yield": "off",
+    "no-constant-binary-expression": "warn",
+    "no-useless-escape": "warn",
+
+    "typescript/no-explicit-any": "error",
+    "typescript/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "typescript/explicit-function-return-type": "off",
+    "typescript/no-non-null-assertion": "warn",
+
+    "typescript/no-unnecessary-type-assertion": "warn",
+    "typescript/no-unnecessary-condition": "warn",
+    "typescript/no-confusing-void-expression": "warn",
+    "typescript/no-empty-function": "warn",
+    "typescript/prefer-optional-chain": "warn",
+    "typescript/prefer-nullish-coalescing": "warn",
+    "typescript/prefer-regexp-exec": "warn",
+    "typescript/array-type": "warn",
+    "typescript/no-unsafe-argument": "warn",
+    "typescript/no-unsafe-member-access": "warn",
+    "typescript/no-unsafe-assignment": "warn",
+    "typescript/require-await": "warn",
+    "typescript/unbound-method": "warn",
+    "typescript/no-unsafe-enum-comparison": "warn",
+    "typescript/restrict-template-expressions": ["error", { "allowNumber": true }]
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.test.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unused-vars": "off",
+        "typescript/no-unnecessary-type-assertion": "off",
+        "typescript/no-non-null-assertion": "off",
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["src/ts-morph-loader.ts"],
+      "rules": {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-require-imports": "off",
+        "typescript/no-non-null-assertion": "off",
+        "typescript/consistent-type-definitions": "off"
+      }
+    },
+    {
+      "files": ["src/lsp/server.ts"],
+      "rules": {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-non-null-assertion": "off",
+        "typescript/require-await": "off",
+        "typescript/no-unnecessary-condition": "off"
+      }
+    },
+    {
+      "files": ["src/type-extractor.ts"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "typescript/no-unnecessary-condition": "off"
+      }
+    },
+    {
+      "files": [
+        "src/effect-analysis.ts",
+        "src/project-analyzer.ts",
+        "src/program-discovery.ts",
+        "src/output/mermaid.ts"
+      ],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "typescript/no-unnecessary-condition": "off",
+        "typescript/prefer-nullish-coalescing": "off"
+      }
+    },
+    {
+      "files": [
+        "src/analysis-utils.ts",
+        "src/observability.ts",
+        "src/output/json.ts",
+        "src/schema-analyzer.ts",
+        "src/service-flow.ts",
+        "src/migration-assistant.ts",
+        "src/strict-diagnostics.ts"
+      ],
+      "rules": {
+        "typescript/no-unnecessary-condition": "off",
+        "typescript/no-non-null-assertion": "off",
+        "typescript/prefer-nullish-coalescing": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/unbound-method": "off"
+      }
+    },
+    {
+      "files": ["src/project-analyzer.ts"],
+      "rules": {
+        "typescript/require-await": "off"
+      }
+    }
+  ]
+}

@@ -2763,7 +2763,7 @@ const main = Effect.gen(function* () {
         process.exit(0);
       });
     });
-    yield* Effect.never;
+    return yield* Effect.never;
   }
 
   return Exit.succeed(undefined);
