@@ -51,17 +51,18 @@ use the official [`@effect/tsgo`](https://github.com/Effect-TS/tsgo) language
 service. effect-analyzer does not reimplement them; it merges them in:
 
 ```bash
-pnpm add -D @effect/tsgo
-effect-analyze ./src --lint-source --tsgo tsconfig.json
+effect-analyze ./src --lint-source --tsgo=./tsconfig.json
 ```
 
-`@effect/tsgo` is an **optional peer dependency** — effect-analyzer never
-installs its own copy. That is deliberate: `@effect/tsgo` picks its Go binary by
-resolving *your* `typescript` package and matching its exact `gitHead` against
-the builds packaged in the platform artifact (which is why it needs TypeScript
-7+). Only your install can satisfy that, and using it means the CLI reports
-exactly what your editor reports. Without it the flag is a silent no-op and only
-the rules above run.
+Bare `--tsgo` uses `tsconfig.json`. When options come before the source path,
+use `--tsgo=path/to/tsconfig.json` to provide an explicit project without
+ambiguity.
+
+`@effect/tsgo` is a required effect-analyzer dependency, so the bridge and its
+platform binary are installed automatically. It resolves the target project's
+`typescript` package and selects the native artifact matching that exact
+version (which is why the project needs TypeScript 7+). The CLI therefore uses
+the same compiler generation and Effect language-service rules as the editor.
 
 <Aside type="caution">
 Rules that duplicated a type-aware `@effect/tsgo` equivalent (`effect-fail-untagged`,
@@ -144,10 +145,10 @@ effect-analyze ./src --lint-source --scorecard
 
 ## Suppression comments
 
-Suppress a single line with an `effect-lint-disable-next-line` comment:
+Suppress a single line with an `effect-analyzer-disable-next-line` comment:
 
 ```ts
-// effect-lint-disable-next-line runSync-on-async — initial bootstrap only
+// effect-analyzer-disable-next-line runSync-on-async — initial bootstrap only
 Effect.runSync(initEffect)
 ```
 

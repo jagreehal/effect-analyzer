@@ -100,6 +100,7 @@ import {
   toSarif,
   type LintFinding,
 } from './lint-session';
+import { parseTsgoProjectArgument } from './tsgo-diagnostics';
 import { detectServiceCycles } from './service-cycles';
 import {
   buildAgentReport,
@@ -654,7 +655,9 @@ function parseArgs(args: readonly string[]): { pathArg: string | undefined; opti
     } else if (arg === '--lint-source') {
       lintSource = true;
     } else if (arg === '--tsgo') {
-      tsgoProject = args[i + 1]?.startsWith('-') === false ? args[++i] : 'tsconfig.json';
+      const parsed = parseTsgoProjectArgument(args, i, pathArg !== undefined);
+      tsgoProject = parsed.project;
+      i += parsed.consumed;
     } else if (arg.startsWith('--tsgo=')) {
       tsgoProject = arg.slice('--tsgo='.length);
     } else if (arg === '--sarif') {
@@ -921,8 +924,8 @@ Options:
   --max-files <n>          Analyze at most n files (cursor-window mode)
   --cursor <n>             Start from nth file in sorted file list (resumable window)
   --lint-source            Run deterministic source lints on a file or directory
-  --tsgo [tsconfig]        Merge type-aware Effect diagnostics from @effect/tsgo
-                           (optional dependency; skipped when not installed)
+  --tsgo[=<tsconfig>]      Merge type-aware Effect diagnostics from @effect/tsgo
+                           using the target project's TypeScript 7 installation
   --sarif                  Emit SARIF 2.1.0 output (for --lint-source)
   --baseline <file>        Compare findings against a baseline session/json file
   --fail-on-new            Exit non-zero when new findings exist vs baseline
@@ -957,7 +960,7 @@ Examples:
   effect-analyze ./program.ts --format mermaid-paths --style-guide
   effect-analyze ./program.ts --format json --output result.json
   effect-analyze ./program.ts --colocate   # Single file + write foo.effect-analysis.md
-  effect-analyze ./src --lint-source --tsgo tsconfig.json
+  effect-analyze ./src --lint-source --tsgo=tsconfig.json
   effect-analyze ./src --lint-source --sarif -o findings.sarif
   effect-analyze ./src --lint-source --baseline ./.cache/effect-lint-baseline.json --fail-on-new
   effect-analyze ./src --lint-source --scorecard
@@ -2833,5 +2836,3 @@ Effect.runPromise(main).then(
     process.exit(1);
   },
 );
-
-

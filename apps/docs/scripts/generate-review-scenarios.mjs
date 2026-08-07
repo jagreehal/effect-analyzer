@@ -9,7 +9,7 @@ import {
   renderDiffMarkdown,
   renderExplanation,
   renderRailwayMermaid,
-} from '../../../packages/effect-analyzer/dist/index.js';
+} from '../../../packages/effect-analyzer/dist/diagram.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const docsRoot = resolve(__dirname, '..');
@@ -117,8 +117,8 @@ const buildScenario = async (scenario) => {
   const afterPath = resolve(dir, 'after.ts');
 
   const [beforeIRs, afterIRs] = await Promise.all([
-    runEffect(analyze(beforePath).all()),
-    runEffect(analyze(afterPath).all()),
+    runEffect(analyze(beforePath).all),
+    runEffect(analyze(afterPath).all),
   ]);
 
   const beforeIR = beforeIRs[0];

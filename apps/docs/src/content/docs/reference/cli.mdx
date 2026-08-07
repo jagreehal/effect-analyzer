@@ -59,11 +59,12 @@ Run deterministic source-level lints. See [Source Linter](/effect-analyzer/proje
 | Flag | Description |
 |---|---|
 | `--lint-source` | Run deterministic source lints on a file or directory |
+| `--tsgo[=<tsconfig>]` | Merge official type-aware Effect diagnostics from `@effect/tsgo`; bare `--tsgo` uses `tsconfig.json` (target project requires TypeScript 7+) |
 | `--sarif` | Emit SARIF 2.1.0 output |
 | `--scorecard` | Emit a per-file lint scorecard |
 | `--baseline <file>` | Compare findings against a baseline session/JSON file |
 | `--fail-on-new` | Exit non-zero when new findings exist vs baseline |
-| `--require-suppression-reason` | Require a reason after `effect-lint-disable-next-line` comments |
+| `--require-suppression-reason` | Require a reason after `effect-analyzer-disable-next-line` comments |
 | `--fail-on-stale-suppressions` | Exit non-zero when suppression comments are stale |
 | `--bundle-output <dir>` | Write deterministic artifact bundle (diagnostics, SARIF, summary, rules, session) |
 | `--profile <name>` | Rule profile: `strict`, `ci`, `migration`, `docs` |

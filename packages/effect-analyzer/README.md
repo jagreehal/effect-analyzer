@@ -17,6 +17,8 @@ npm install -D effect-analyzer
 ```
 
 Effect v4 is the only supported Effect release. `ts-morph` is bundled automatically.
+The official `@effect/tsgo` bridge is also installed as a direct dependency;
+projects that enable it must use native TypeScript 7.
 
 ## Quick Start
 
@@ -259,6 +261,23 @@ native audit policy flags return exit code 1 when a threshold fails.
 
 [Learn more →](https://jagreehal.github.io/effect-analyzer/project/coverage-audit/)
 
+### Source Linting + Official Effect Diagnostics
+
+Run effect-analyzer's deterministic AST checks and merge the official,
+type-aware Effect diagnostics from `@effect/tsgo` in one report:
+
+```bash
+npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json
+```
+
+`@effect/tsgo` is a production dependency of effect-analyzer, so no separate
+bridge install is needed. It selects the native compiler artifact for the
+target project's installed TypeScript version; use TypeScript 7 or newer.
+Configure upstream Effect rules in the `plugins` section of the target
+`tsconfig.json`. Bare `--tsgo` uses `tsconfig.json`.
+
+[Source-linter guide →](https://jagreehal.github.io/effect-analyzer/project/source-linter/)
+
 ### Interactive HTML Viewer
 
 Generate a self-contained HTML page with search, filtering, path explorer, complexity heatmap, and 6 color themes:
@@ -337,7 +356,8 @@ or ambiguous-span nodes.
 ## Requirements
 
 - Node.js 22+
-- TypeScript project with Effect v4
+- Effect v4
+- TypeScript 7+ when using `--tsgo`
 
 ## Documentation
 

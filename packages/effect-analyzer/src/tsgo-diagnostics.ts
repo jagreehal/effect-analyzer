@@ -6,19 +6,17 @@
  * merge the results into our findings, so effect-analyzer stays focused on the
  * things it uniquely does (structure, diagrams, IR, migration progress).
  *
- * It is an *optional peer* dependency rather than a direct one on purpose:
- * `@effect/tsgo` picks its Go binary by resolving the consumer's `typescript`
- * package and matching its exact `gitHead` against the builds packaged in the
- * platform artifact. Only the consumer's own install can satisfy that, so
- * bundling a version of our own would nest a second copy that disagrees with
- * the one their editor runs. When it is absent, this module returns `undefined`
- * and callers carry on with the built-in source rules only.
+ * It is a direct dependency so `--tsgo` is a reliable first-class capability.
+ * The target project still supplies TypeScript 7: `@effect/tsgo` discovers that
+ * installation and selects the matching native artifact, keeping diagnostics
+ * aligned with the compiler and language service used by the project.
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { nodeModuleLocation } from './register-node-ts-morph';
+import { loadTsMorph } from './ts-morph-loader';
 
 export interface TsgoDiagnostic {
   readonly filePath: string;
@@ -27,6 +25,16 @@ export interface TsgoDiagnostic {
   readonly message: string;
   readonly line: number;
   readonly column: number;
+}
+
+export class TsgoDiagnosticsError extends Error {
+  readonly cause: unknown;
+
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'TsgoDiagnosticsError';
+    this.cause = cause;
+  }
 }
 
 interface TsgoJsonDiagnostic {
@@ -65,7 +73,9 @@ const resolveTsgoBinFrom = (from: string): string | undefined => {
  * the CLI runs from a temp dir that cannot see the project's node_modules.
  */
 export const resolveTsgoBin = (from?: string): string | undefined => {
-  const roots = from ? [from] : [import.meta.url, join(process.cwd(), 'noop.js')];
+  const roots = from
+    ? [from]
+    : [nodeModuleLocation, join(process.cwd(), 'noop.js')];
   for (const root of roots) {
     const found = resolveTsgoBinFrom(root);
     if (found) return found;
@@ -83,16 +93,21 @@ const toSeverity = (severity: TsgoJsonDiagnostic['severity']): TsgoDiagnostic['s
  * `effect-tsgo diagnostics` does NOT read plugin options out of tsconfig — with
  * only a `plugins` entry it reports `filesChecked: 0` and no diagnostics at all.
  * Forwarding the options ourselves is what makes the CLI agree with the editor.
- * `{}` means "enable with rule defaults", so it is the right fallback for a
- * project with no plugin entry, an `extends` chain we do not follow, or a
- * tsconfig with comments we cannot parse.
+ * ts-morph's config loader is used because tsconfig is JSONC and plugin options
+ * may be inherited through `extends`. `{}` means "enable with rule defaults"
+ * and is used only when no plugin entry can be loaded.
  */
 export const readTsgoLspConfig = (projectPath: string): string => {
   try {
-    const parsed = JSON.parse(readFileSync(projectPath, 'utf-8')) as {
-      compilerOptions?: { plugins?: readonly Record<string, unknown>[] };
-    };
-    const plugin = parsed.compilerOptions?.plugins?.find((p) => p['name'] === '@effect/tsgo');
+    const { Project } = loadTsMorph();
+    const project = new Project({
+      tsConfigFilePath: projectPath,
+      skipAddingFilesFromTsConfig: true,
+    });
+    const plugins = project.getCompilerOptions().plugins as
+      | readonly Record<string, unknown>[]
+      | undefined;
+    const plugin = plugins?.find((p) => p['name'] === '@effect/tsgo');
     if (!plugin) return '{}';
     const { name: _name, ...options } = plugin;
     return JSON.stringify(options);
@@ -100,6 +115,32 @@ export const readTsgoLspConfig = (projectPath: string): string => {
     return '{}';
   }
 };
+
+export interface ParsedTsgoProjectArgument {
+  readonly project: string;
+  readonly consumed: 0 | 1;
+}
+
+/**
+ * Parse bare `--tsgo` without stealing a positional source path. A separated
+ * project path remains supported after the source path for compatibility;
+ * option-first callers use `--tsgo=<path>` for an explicit project.
+ */
+export const parseTsgoProjectArgument = (
+  args: readonly string[],
+  index: number,
+  hasPathArg: boolean,
+): ParsedTsgoProjectArgument => {
+  const next = args[index + 1];
+  if (hasPathArg && next !== undefined && !next.startsWith('-')) {
+    return { project: next, consumed: 1 };
+  }
+  return { project: 'tsconfig.json', consumed: 0 };
+};
+
+/** Resolve the project exactly as the child process will resolve it. */
+export const resolveTsgoProjectPath = (project: string, cwd: string): string =>
+  isAbsolute(project) ? project : resolve(cwd, project);
 
 /**
  * Parse the `--format json` payload. Tolerates leading noise on stdout and
@@ -130,17 +171,29 @@ export const parseTsgoOutput = (stdout: string): readonly TsgoDiagnostic[] | und
 /**
  * Run `effect-tsgo diagnostics --format json` over a project.
  *
- * Returns `undefined` when `@effect/tsgo` is not installed or the run failed to
- * produce parseable output — never throws, because these diagnostics are an
- * enhancement, not a hard requirement.
+ * Non-zero exits that contain valid diagnostic JSON are accepted. Missing
+ * binaries, invalid projects, and unparseable failures throw an actionable
+ * error because callers only invoke this function after explicitly requesting
+ * official type-aware diagnostics.
  */
 export const runTsgoDiagnostics = (options: {
   readonly project: string;
   readonly cwd?: string;
   readonly timeoutMs?: number;
-}): readonly TsgoDiagnostic[] | undefined => {
+}): readonly TsgoDiagnostic[] => {
   const bin = resolveTsgoBin();
-  if (!bin) return undefined;
+  if (!bin) {
+    throw new TsgoDiagnosticsError(
+      'Unable to resolve @effect/tsgo. Reinstall effect-analyzer and its platform dependencies.',
+    );
+  }
+
+  const projectResolutionCwd = options.cwd ?? process.cwd();
+  const projectPath = resolveTsgoProjectPath(options.project, projectResolutionCwd);
+  // When the caller supplies an absolute project from another cwd, execute in
+  // the project directory so effect-tsgo resolves that consumer's TypeScript
+  // and Effect packages rather than packages belonging to the host process.
+  const cwd = options.cwd ?? dirname(projectPath);
 
   let stdout: string;
   try {
@@ -150,27 +203,55 @@ export const runTsgoDiagnostics = (options: {
         bin,
         'diagnostics',
         '--project',
-        options.project,
+        projectPath,
         '--format',
         'json',
         '--lspconfig',
-        readTsgoLspConfig(options.project),
+        readTsgoLspConfig(projectPath),
       ],
       {
-        cwd: options.cwd ?? process.cwd(),
+        cwd,
         encoding: 'utf-8',
         // A non-zero exit just means diagnostics were found; the JSON is still
         // on stdout, so read it from the thrown error rather than bailing out.
         maxBuffer: 64 * 1024 * 1024,
         timeout: options.timeoutMs ?? 120_000,
-        stdio: ['ignore', 'pipe', 'ignore'],
+        stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
   } catch (error) {
-    const out = (error as { stdout?: string | Buffer }).stdout;
-    if (out === undefined) return undefined;
-    stdout = typeof out === 'string' ? out : out.toString('utf-8');
+    const processError = error as {
+      readonly stdout?: string | Buffer;
+      readonly stderr?: string | Buffer;
+    };
+    const out = processError.stdout;
+    stdout = out === undefined
+      ? ''
+      : typeof out === 'string'
+        ? out
+        : out.toString('utf-8');
+    const diagnostics = parseTsgoOutput(stdout);
+    if (diagnostics) return diagnostics;
+
+    const stderr = processError.stderr;
+    const detail = stderr === undefined
+      ? ''
+      : typeof stderr === 'string'
+        ? stderr.trim()
+        : stderr.toString('utf-8').trim();
+    throw new TsgoDiagnosticsError(
+      detail.length > 0
+        ? `@effect/tsgo diagnostics failed: ${detail}`
+        : `@effect/tsgo diagnostics failed for ${projectPath}`,
+      error,
+    );
   }
 
-  return parseTsgoOutput(stdout);
+  const diagnostics = parseTsgoOutput(stdout);
+  if (!diagnostics) {
+    throw new TsgoDiagnosticsError(
+      `@effect/tsgo returned unparseable diagnostics for ${projectPath}`,
+    );
+  }
+  return diagnostics;
 };

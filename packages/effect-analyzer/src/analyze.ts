@@ -25,6 +25,7 @@
  * ```
  */
 
+import './register-node-ts-morph';
 import { Effect, Option } from 'effect';
 import { AnalysisError } from './types';
 import type { StaticEffectIR, AnalyzerOptions } from './types';

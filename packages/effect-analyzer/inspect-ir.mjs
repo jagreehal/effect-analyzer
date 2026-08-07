@@ -22,7 +22,7 @@ export const TracingLayer = Layer.unwrapEffect(
 );`;
 
 for (const [name, src] of [['s1',src1],['s2',src2]]) {
-  const irs = await Effect.runPromise(analyze.source(src).all());
+  const irs = await Effect.runPromise(analyze.source(src).all);
   const ir = irs[0];
   console.log('\n===',name,'programs',irs.map(x=>x.root.programName));
   console.log('root source', ir.root.source, 'children', ir.root.children.map(c=>c.type+':'+(c.callee??c.name??'')));

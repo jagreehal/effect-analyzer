@@ -202,9 +202,8 @@ const walk = async (path: string, depth = 0): Promise<string[]> => {
 
 export interface SourceLintScanOptions {
   /**
-   * Path to a tsconfig.json. When set and `@effect/tsgo` is installed, the
-   * official type-aware Effect diagnostics are merged into the findings.
-   * Silently skipped when the optional dependency is absent.
+   * Path to a TypeScript 7 tsconfig.json. When set, official type-aware Effect
+   * diagnostics from the bundled `@effect/tsgo` bridge are merged in.
    */
   readonly tsgoProject?: string | undefined;
 }
@@ -239,7 +238,7 @@ export const runSourceLintScan = async (
   // suppression story; wire the two together only if users actually ask.
   if (options.tsgoProject) {
     const scanned = new Set(candidates);
-    for (const diagnostic of runTsgoDiagnostics({ project: options.tsgoProject }) ?? []) {
+    for (const diagnostic of runTsgoDiagnostics({ project: options.tsgoProject })) {
       const filePath = resolve(diagnostic.filePath);
       if (!scanned.has(filePath)) continue;
       const base = {

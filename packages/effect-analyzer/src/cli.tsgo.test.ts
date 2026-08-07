@@ -67,11 +67,7 @@ const parseFindings = (stdout: string): readonly Finding[] => {
   return parsed.data ?? [];
 };
 
-// The bridge shells out to a real Go binary; skip rather than fail when the
-// optional peer is absent.
-const describeWithTsgo = resolveTsgoBin() ? describe : describe.skip;
-
-describeWithTsgo('cli --lint-source --tsgo', () => {
+describe('cli --lint-source --tsgo', () => {
   it('merges type-aware tsgo diagnostics into the findings', () => {
     withProject((srcDir, tsconfig) => {
       const result = runLint([srcDir, '--lint-source', '--tsgo', tsconfig]);

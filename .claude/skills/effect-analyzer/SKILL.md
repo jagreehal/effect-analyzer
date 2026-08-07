@@ -154,7 +154,7 @@ effect-analyze ./src --quality --quality-eslint .cache/eslint.json  # + ESLint h
 Library API for generating test coverage matrices from program paths:
 
 ```typescript
-import { generateTestMatrix, formatTestMatrixMarkdown, formatTestMatrixAsCode, formatTestChecklist } from 'effect-analyzer';
+import { generateTestMatrix, formatTestMatrixMarkdown, formatTestMatrixAsCode, formatTestChecklist } from 'effect-analyzer/analysis';
 ```
 
 ### Watch Mode
@@ -175,6 +175,7 @@ effect-analyze ./program.ts -w --cache     # With caching for performance
 | `-c, --compact` | Compact output |
 | `--pretty` | Pretty-print (default) |
 | `--tsconfig <path>` | Custom tsconfig.json path |
+| `--tsgo[=<tsconfig>]` | Merge official `@effect/tsgo` diagnostics (TypeScript 7+) |
 | `--no-metadata` | Exclude metadata |
 | `--colocate` | Single-file: write colocated .md |
 | `--no-colocate` | Project mode: skip writing files |
@@ -210,7 +211,7 @@ effect-analyze ./program.ts -w --cache     # With caching for performance
 ### Primary Analysis
 
 ```typescript
-import { analyze } from 'effect-analyzer';
+import { analyze } from 'effect-analyzer/analysis';
 const ir = await Effect.runPromise(analyze('./program.ts').single);
 const all = await Effect.runPromise(analyze('./program.ts').all);
 const named = await Effect.runPromise(analyze('./program.ts').named('myProgram'));
@@ -218,7 +219,7 @@ const named = await Effect.runPromise(analyze('./program.ts').named('myProgram')
 
 ### Advanced Analyses
 
-All exported from `src/index.ts`:
+Exported from the focused package entry points, primarily `effect-analyzer/analysis` and `effect-analyzer/diagram`:
 
 - **Composition:** `analyzeProgramGraph()`, `analyzeProjectComposition()`
 - **Data flow:** `buildDataFlowGraph()`, `buildLayerDependencyGraph()`
@@ -253,7 +254,7 @@ import {
   renderDocumentation, renderMultiProgramDocs,
   generateShowcase,
   computeProgramDiagramQuality, buildTopOffendersReport,
-} from 'effect-analyzer';
+} from 'effect-analyzer/diagram';
 ```
 
 ## Quick Reference
@@ -261,7 +262,7 @@ import {
 ### Adding a New Analyzer
 
 1. Create `src/my-analysis.ts` with a function taking `StaticEffectIR`
-2. Export from `src/index.ts`
+2. Export from the relevant package entry (`analysis-entry.ts`, `diagram-entry.ts`, `rules-entry.ts`, or `migration-entry.ts`)
 3. Walk IR tree recursively:
    ```typescript
    import { getStaticChildren } from './analysis-utils';
@@ -276,7 +277,7 @@ import {
 ### Adding a New Output Format
 
 1. Create `src/output/my-format.ts` with render function taking `StaticEffectIR`
-2. Export from `src/index.ts`
+2. Export from `src/diagram-entry.ts`
 3. Add CLI flag in `src/cli.ts` under the `--format` option
 4. Add to `src/output/auto-diagram.ts` if it should be auto-selected
 
@@ -319,13 +320,13 @@ const [ir] = await Effect.runPromise(analyzeEffectSource(`
 ## Build
 
 ```bash
-pnpm build       # tsup: 3 entries (library, CLI, LSP)
+pnpm build       # tsup package entry points, CLI, and LSP; tsc declarations
 pnpm type-check  # tsc --noEmit
-pnpm lint        # eslint src
+pnpm lint        # oxlint src + package-boundary import checks
 pnpm quality     # type-check && test && lint
 ```
 
-**Entries:** `src/index.ts` (library), `src/cli.ts` (CLI), `src/lsp/server.ts` (LSP)
+**Entries:** root plus `analysis`, `diagram`, `rules`, `migration`, `browser`, and `effect-workflow` package exports; `src/cli.ts` (CLI); `src/lsp/server.ts` (LSP)
 
 ## Key Patterns
 
