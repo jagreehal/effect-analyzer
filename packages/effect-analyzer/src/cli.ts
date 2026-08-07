@@ -162,6 +162,28 @@ const cliTry = <A>(thunk: () => Promise<A>): Effect.Effect<A, CliError> =>
       new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause }),
   });
 
+/**
+ * Read each file into a line array for fix generation.
+ *
+ * Files that cannot be read are skipped, not fatal — a single unreadable file
+ * must not abort an `--improve` run over a whole project. Exported so that skip
+ * is testable; it previously used `try/catch` around a `yield*`, which cannot
+ * catch an Effect failure, so the guard never fired.
+ */
+export const buildSourceLinesMap = (
+  filePaths: Iterable<string>,
+): Effect.Effect<ReadonlyMap<string, readonly string[]>, never> =>
+  Effect.gen(function* () {
+    const sourceLinesMap = new Map<string, readonly string[]>();
+    for (const filePath of filePaths) {
+      const content = yield* cliTry(() => fs.readFile(filePath, 'utf-8')).pipe(Effect.option);
+      if (Option.isSome(content)) {
+        sourceLinesMap.set(filePath, content.value.split('\n'));
+      }
+    }
+    return sourceLinesMap;
+  });
+
 /** ANSI colors for gold-tier verbose output (disabled when --no-color or not TTY). */
 function createStyle(useColor: boolean) {
   const c = (code: number) => (s: string) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -2446,16 +2468,7 @@ const main = Effect.gen(function* () {
     const irs = projectResult.allPrograms;
 
     // Build source lines map for fix generation
-    const sourceLinesMap = new Map<string, readonly string[]>();
-    for (const [filePath] of projectResult.byFile) {
-      // Unreadable files are skipped, not fatal. Note this used try/catch around
-      // a yield*, which never catches an Effect failure — it only ever caught a
-      // defect. Effect.option is the check that was intended.
-      const content = yield* cliTry(() => fs.readFile(filePath, 'utf-8')).pipe(Effect.option);
-      if (Option.isSome(content)) {
-        sourceLinesMap.set(filePath, content.value.split('\n'));
-      }
-    }
+    const sourceLinesMap = yield* buildSourceLinesMap(projectResult.byFile.keys());
 
     const coverageAudit = {
       discovered: projectResult.fileCount,

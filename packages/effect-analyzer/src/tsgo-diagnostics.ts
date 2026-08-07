@@ -16,6 +16,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
@@ -76,6 +77,31 @@ const toSeverity = (severity: TsgoJsonDiagnostic['severity']): TsgoDiagnostic['s
   severity === 'message' ? 'info' : severity;
 
 /**
+ * Extract the `@effect/tsgo` plugin options from a tsconfig, as inline JSON for
+ * `--lspconfig`.
+ *
+ * `effect-tsgo diagnostics` does NOT read plugin options out of tsconfig — with
+ * only a `plugins` entry it reports `filesChecked: 0` and no diagnostics at all.
+ * Forwarding the options ourselves is what makes the CLI agree with the editor.
+ * `{}` means "enable with rule defaults", so it is the right fallback for a
+ * project with no plugin entry, an `extends` chain we do not follow, or a
+ * tsconfig with comments we cannot parse.
+ */
+export const readTsgoLspConfig = (projectPath: string): string => {
+  try {
+    const parsed = JSON.parse(readFileSync(projectPath, 'utf-8')) as {
+      compilerOptions?: { plugins?: readonly Record<string, unknown>[] };
+    };
+    const plugin = parsed.compilerOptions?.plugins?.find((p) => p['name'] === '@effect/tsgo');
+    if (!plugin) return '{}';
+    const { name: _name, ...options } = plugin;
+    return JSON.stringify(options);
+  } catch {
+    return '{}';
+  }
+};
+
+/**
  * Parse the `--format json` payload. Tolerates leading noise on stdout and
  * returns `undefined` rather than throwing on anything unexpected.
  */
@@ -120,7 +146,16 @@ export const runTsgoDiagnostics = (options: {
   try {
     stdout = execFileSync(
       process.execPath,
-      [bin, 'diagnostics', '--project', options.project, '--format', 'json'],
+      [
+        bin,
+        'diagnostics',
+        '--project',
+        options.project,
+        '--format',
+        'json',
+        '--lspconfig',
+        readTsgoLspConfig(options.project),
+      ],
       {
         cwd: options.cwd ?? process.cwd(),
         encoding: 'utf-8',

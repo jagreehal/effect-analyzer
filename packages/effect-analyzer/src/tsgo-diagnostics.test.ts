@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { parseTsgoOutput, resolveTsgoBin, runTsgoDiagnostics } from './tsgo-diagnostics';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  parseTsgoOutput,
+  readTsgoLspConfig,
+  resolveTsgoBin,
+  runTsgoDiagnostics,
+} from './tsgo-diagnostics';
 
 const SAMPLE = JSON.stringify({
   diagnostics: [
@@ -65,6 +73,50 @@ describe('tsgo-diagnostics', () => {
     expect(parseTsgoOutput('no json here')).toBeUndefined();
     expect(parseTsgoOutput('{ broken')).toBeUndefined();
     expect(parseTsgoOutput('{"summary":{}}')).toBeUndefined();
+  });
+
+  describe('readTsgoLspConfig', () => {
+    const withTsconfig = (contents: string, fn: (path: string) => void) => {
+      const root = mkdtempSync(join(tmpdir(), 'effect-analyze-lspconfig-'));
+      try {
+        const p = join(root, 'tsconfig.json');
+        writeFileSync(p, contents, 'utf8');
+        fn(p);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    };
+
+    it('forwards the plugin options, dropping the name', () => {
+      withTsconfig(
+        JSON.stringify({
+          compilerOptions: {
+            plugins: [
+              { name: 'other-plugin', diagnosticSeverity: { ignored: 'error' } },
+              { name: '@effect/tsgo', diagnosticSeverity: { floatingEffect: 'error' } },
+            ],
+          },
+        }),
+        (p) => {
+          expect(JSON.parse(readTsgoLspConfig(p))).toEqual({
+            diagnosticSeverity: { floatingEffect: 'error' },
+          });
+        },
+      );
+    });
+
+    it('falls back to rule defaults when there is no plugin entry', () => {
+      withTsconfig(JSON.stringify({ compilerOptions: {} }), (p) => {
+        expect(readTsgoLspConfig(p)).toBe('{}');
+      });
+    });
+
+    it('falls back to rule defaults on an unreadable or comment-bearing tsconfig', () => {
+      expect(readTsgoLspConfig('/nonexistent/tsconfig.json')).toBe('{}');
+      withTsconfig('{ // a comment tsc allows but JSON.parse does not\n}', (p) => {
+        expect(readTsgoLspConfig(p)).toBe('{}');
+      });
+    });
   });
 
   it('resolves the effect-tsgo binary from the installed peer', () => {
