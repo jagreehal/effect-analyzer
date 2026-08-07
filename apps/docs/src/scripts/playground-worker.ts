@@ -85,7 +85,7 @@ const renderResult = async (
   programName: string;
   programCount: number;
 }> => {
-  const programs = await Effect.runPromise(analyzeSource(code).all());
+  const programs = await Effect.runPromise(analyzeSource(code).all);
   const ir = pickPrimaryProgram(programs);
 
   switch (format) {

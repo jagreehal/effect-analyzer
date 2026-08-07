@@ -18,7 +18,7 @@ describe('observability analysis', () => {
       });
     `;
 
-    const ir = await Effect.runPromise(analyze.source(source).single());
+    const ir = await Effect.runPromise(analyze.source(source).single);
     const result = analyzeObservability(ir);
 
     expect(result.spans.map((span) => span.name)).toEqual(

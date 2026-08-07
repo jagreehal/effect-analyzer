@@ -1210,7 +1210,7 @@ const runAnalysis = (
           yield* Console.log(`(cache hit) Found ${String(irs.length)} program(s)`);
         } else {
           irs = yield* analyze(resolvedPath, analyzerOptions)
-            .all()
+            .all
             .pipe(Effect.tapError((e) => Console.error(`Error: ${e.message}`)));
           yield* cliTry(() =>
             setCached(resolvedPath, content, irs),
@@ -1219,13 +1219,13 @@ const runAnalysis = (
         }
       } else {
         irs = yield* analyze(resolvedPath, analyzerOptions)
-          .all()
+          .all
           .pipe(Effect.tapError((e) => Console.error(`Error: ${e.message}`)));
         yield* Console.log(`Found ${String(irs.length)} program(s)`);
       }
     } else {
       irs = yield* analyze(resolvedPath, analyzerOptions)
-        .all()
+        .all
         .pipe(Effect.tapError((error) => Console.error(`Error: ${error.message}`)));
       yield* Console.log(`Found ${String(irs.length)} program(s)`);
     }

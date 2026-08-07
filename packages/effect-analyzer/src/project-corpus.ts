@@ -86,7 +86,7 @@ export const scanProjectCorpus = (
       const result = yield* analyze(file, {
         tsConfigPath: options.tsconfig,
         knownEffectInternalsRoot: options.knownEffectInternalsRoot,
-      }).all().pipe(
+      }).all.pipe(
         Effect.map((programs) => ({ _tag: 'ok' as const, programs })),
         Effect.catch((error) => Effect.succeed({
           _tag: 'fail' as const,

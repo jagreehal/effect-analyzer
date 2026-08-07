@@ -33,7 +33,7 @@ describe('kitchen-sink regression (improve.md P0)', () => {
     'keeps broad pattern-family coverage for Effect.ts-style analysis',
     { timeout: 20_000 },
     async () => {
-    const irs = await Effect.runPromise(analyze(kitchenSinkPath).all());
+    const irs = await Effect.runPromise(analyze(kitchenSinkPath).all);
     expect(irs.length).toBeGreaterThanOrEqual(12);
 
     const names = new Set(irs.map((ir) => ir.root.programName));

@@ -1,8 +1,20 @@
 ---
-'effect-analyzer': minor
+'effect-analyzer': major
 ---
 
 Delegate type-aware Effect linting to `@effect/tsgo` instead of reimplementing it.
+
+- **Breaking:** the zero-argument members of the fluent `analyze()` /
+  `analyze.source()` / `analyzeSource()` results are now Effects rather than
+  functions returning Effects — Effect is already lazy, so the wrapper was
+  redundant indirection. `named(name)` takes an argument and is unchanged.
+
+  ```diff
+  - const programs = yield* analyze(file).all()
+  + const programs = yield* analyze(file).all
+  ```
+
+  Applies to `single`, `singleOption`, `all`, `first`, `firstOption`.
 
 - New `--tsgo [tsconfig]` flag merges the official Effect language service's ~95
   type-aware diagnostics into `--lint-source` findings. `@effect/tsgo` is an

@@ -346,10 +346,10 @@ describe('effect-analyzer (handler/metrics)', () => {
   describe('Acceptance checklist (improve.md)', () => {
     it('alias false-positive: ./stream and ./internal/stream do not match as Effect', async () => {
       await expect(
-        Effect.runPromise(analyze.source('import * as stream from "./stream"; const x = stream.map([1], (n) => n + 1);').all()),
+        Effect.runPromise(analyze.source('import * as stream from "./stream"; const x = stream.map([1], (n) => n + 1);').all),
       ).rejects.toThrow('No Effect programs found');
       await expect(
-        Effect.runPromise(analyze.source('import * as stream from "./internal/stream"; const x = stream.map([1], (n) => n + 1);').all()),
+        Effect.runPromise(analyze.source('import * as stream from "./internal/stream"; const x = stream.map([1], (n) => n + 1);').all),
       ).rejects.toThrow('No Effect programs found');
     });
 
@@ -364,8 +364,8 @@ describe('effect-analyzer (handler/metrics)', () => {
         'const root = Effect.succeed(1);',
         'namespace N { export class Inner { run() { return Effect.succeed(2); } } }',
       ].join('\n');
-      const nestedResults = await Effect.runPromise(analyze.source(nested).all());
-      const nsResults = await Effect.runPromise(analyze.source(ns).all());
+      const nestedResults = await Effect.runPromise(analyze.source(nested).all);
+      const nsResults = await Effect.runPromise(analyze.source(ns).all);
       expect(nestedResults.map((r) => r.root.programName)).not.toContain('Inner.run');
       expect(nsResults.map((r) => r.root.programName)).not.toContain('Inner.run');
     });
@@ -377,7 +377,7 @@ describe('effect-analyzer (handler/metrics)', () => {
         'const AppLive = Layer.empty;',
         'AppLive.pipe(Layer.launch, NodeRuntime.runMain);',
       ].join('\n');
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const entrypoint = result.find((r) => r.root.source === 'run');
       expect(entrypoint).toBeDefined();
       expect(entrypoint!.root.children.length).toBeGreaterThan(0);
@@ -449,7 +449,7 @@ describe('effect-analyzer (handler/metrics)', () => {
         'import { Channel, Effect } from "effect";',
         'export const ch = Channel.succeed(1).pipe(Channel.map((n: number) => n + 1));',
       ].join('\n');
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       expect(result.length).toBeGreaterThanOrEqual(1);
       let hasChannel = false;
       const visit = (n: import('./types').StaticFlowNode) => {
@@ -472,7 +472,7 @@ describe('effect-analyzer (handler/metrics)', () => {
         'import { Sink, Effect } from "effect";',
         'export const sink = Sink.forEach((n: number) => Effect.succeed(undefined));',
       ].join('\n');
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       expect(result.length).toBeGreaterThanOrEqual(1);
       let hasSink = false;
       const visit = (n: import('./types').StaticFlowNode) => {
@@ -489,7 +489,7 @@ describe('effect-analyzer (handler/metrics)', () => {
   describe('Item 9: Runtime family – wrapper bootstrap (improve.md §9)', () => {
     it('analyzes wrapper-bootstrap fixture without throwing', { timeout: 15_000 }, async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'wrapper-bootstrap.ts')).all(),
+        analyze(resolve(fixturesDir, 'wrapper-bootstrap.ts')).all,
       );
       expect(result.length).toBeGreaterThanOrEqual(1);
       const programNames = result.map((r) => r.root.programName);
@@ -498,7 +498,7 @@ describe('effect-analyzer (handler/metrics)', () => {
 
     it('discovers wrapper pattern runApp(Layer) as entrypoint', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'wrapper-bootstrap.ts')).all(),
+        analyze(resolve(fixturesDir, 'wrapper-bootstrap.ts')).all,
       );
       const programNames = result.map((r) => r.root.programName);
       expect(programNames).toContain('runApp');

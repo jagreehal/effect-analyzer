@@ -71,7 +71,7 @@ import { analyze } from "effect-analyzer/analysis"
 import { renderErrorsMermaid } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const diagram = renderErrorsMermaid(ir)
 
 console.log(diagram)

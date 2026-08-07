@@ -99,7 +99,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const analysis = analyzeFiberLeaks(ir);
         expect(analysis.summary.total).toBeGreaterThan(0);
@@ -122,7 +122,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const analysis = analyzeFiberLeaks(ir);
         expect(analysis.summary.potentialLeaks).toBe(0);
@@ -142,7 +142,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const analysis = analyzeFiberLeaks(ir);
         const report = formatFiberLeakReport(analysis);
@@ -165,7 +165,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const fiberNodes: import('./types').StaticFiberNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -197,7 +197,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const loopNodes: import('./types').StaticLoopNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -233,7 +233,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const nodes: import('./types').StaticConcurrencyPrimitiveNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -271,7 +271,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const nodes: import('./types').StaticConcurrencyPrimitiveNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -309,7 +309,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const nodes: import('./types').StaticConcurrencyPrimitiveNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -340,7 +340,7 @@ describe('effect-analyzer (domain)', () => {
         const prog = Effect.map(Effect.succeed(1), (n) => n + 1);
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         // Walk IR for a transform node
         const found: boolean[] = [];
@@ -373,7 +373,7 @@ describe('effect-analyzer (domain)', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const matchNodes: import('./types').StaticMatchNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -402,7 +402,7 @@ describe('effect-analyzer (domain)', () => {
         const p = Cause.pretty(c);
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         const causeNodes: import('./types').StaticCauseNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -429,7 +429,7 @@ describe('effect-analyzer (domain)', () => {
         const s = Cause.sequential(Cause.empty(), Cause.fail(new Error("x")));
       `);
       try {
-        const allIrs = await Effect.runPromise(analyze(filePath).all());
+        const allIrs = await Effect.runPromise(analyze(filePath).all);
         const causeNodes: import('./types').StaticCauseNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
           if (isStaticCauseNode(node)) causeNodes.push(node);
@@ -474,7 +474,7 @@ describe('effect-analyzer (domain)', () => {
         const f = Exit.fail(new Error("err"));
       `);
       try {
-        const allIrs = await Effect.runPromise(analyze(filePath).all());
+        const allIrs = await Effect.runPromise(analyze(filePath).all);
         const exitNodes: import('./types').StaticExitNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
           if (isStaticExitNode(node)) exitNodes.push(node);
@@ -516,7 +516,7 @@ describe('effect-analyzer (domain)', () => {
         );
       `);
       try {
-        const allIrs = await Effect.runPromise(analyze(filePath).all());
+        const allIrs = await Effect.runPromise(analyze(filePath).all);
         const scheduleNodes: import('./types').StaticScheduleNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
           if (isStaticScheduleNode(node)) scheduleNodes.push(node);
@@ -551,7 +551,7 @@ describe('effect-analyzer (domain)', () => {
         const render = Doc.text("hello");
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         if (!ir) return;
         // The file may have 0 or more programs; at minimum it should not throw
         expect(ir).toBeDefined();
@@ -564,7 +564,7 @@ describe('effect-analyzer (domain)', () => {
   describe('Service method call resolution', () => {
     it('detects repo.getById as a service call on UserRepo', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'testing-mocks.ts')).all(),
+        analyze(resolve(fixturesDir, 'testing-mocks.ts')).all,
       );
 
       const lookupIR = result.find((r) => r.root.programName === 'userLookupProgram');
@@ -668,7 +668,7 @@ export const main = Effect.gen(function* () {
       clearProjectCache();
       try {
         const result = await Effect.runPromise(
-          analyze(programPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(programPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(result.length).toBeGreaterThanOrEqual(1);
         expect(result[0]?.root.programName).toBeDefined();
@@ -710,7 +710,7 @@ export const program = E.gen(function* () {
           analyze(appPath, {
             tsConfigPath: tsconfigPath,
             knownEffectInternalsRoot: effectRoot,
-          }).all(),
+          }).all,
         );
         expect(withRoot.length).toBeGreaterThanOrEqual(1);
         expect(withRoot[0]?.root.programName).toBeDefined();
@@ -741,7 +741,7 @@ export const program = E.gen(function* () {
           analyze(appPath, {
             tsConfigPath: tsconfigPath,
             knownEffectInternalsRoot: join(tmp, 'nonexistent-effect-root'),
-          }).all().pipe(
+          }).all.pipe(
             Effect.catch(() => Effect.succeed([] as readonly import('./types').StaticEffectIR[])),
           ),
         );
@@ -760,7 +760,7 @@ export const program = E.gen(function* () {
   describe('Phase 2: Constructor subtypes and semantic upgrades', () => {
     it('should detect Effect.fn with traced name and constructor kinds', { timeout: 15_000 }, async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'effect-fn.ts')).all(),
+        analyze(resolve(fixturesDir, 'effect-fn.ts')).all,
       );
       expect(results.length).toBeGreaterThan(0);
       const allNodes: import('./types').StaticEffectNode[] = [];
@@ -786,7 +786,7 @@ export const program = E.gen(function* () {
 
     it('should analyze Effect.fn generator body children (not treat as opaque)', { timeout: 20_000 }, async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'effect-fn-toplevel.ts')).all(),
+        analyze(resolve(fixturesDir, 'effect-fn-toplevel.ts')).all,
       );
       expect(results.length).toBeGreaterThanOrEqual(1);
 
@@ -814,7 +814,7 @@ export const program = E.gen(function* () {
 
     it('should preserve Effect.fn constructor metadata for top-level Effect.fn programs', { timeout: 20_000 }, async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'effect-fn-toplevel.ts')).all(),
+        analyze(resolve(fixturesDir, 'effect-fn-toplevel.ts')).all,
       );
       const processOrder = results.find(ir => ir.root.programName === 'processOrder');
       expect(processOrder).toBeDefined();
@@ -838,7 +838,7 @@ export const program = E.gen(function* () {
 
     it('should recognize tagged template literals as side-effect nodes, not unknown', { timeout: 20_000 }, async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'tagged-template-sql.ts')).all(),
+        analyze(resolve(fixturesDir, 'tagged-template-sql.ts')).all,
       );
       expect(results.length).toBeGreaterThanOrEqual(1);
 
@@ -864,7 +864,7 @@ export const program = E.gen(function* () {
 
     it('should discover exported functions returning Effect.Effect as programs', { timeout: 20_000 }, async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'utility-effect-functions.ts')).all(),
+        analyze(resolve(fixturesDir, 'utility-effect-functions.ts')).all,
       );
       // Should find at least 2 programs (requireItem, validateInput)
       expect(results.length).toBeGreaterThanOrEqual(2);
@@ -885,7 +885,7 @@ export function lookup(id: string | number): Effect.Effect<string | number> {
 }
 `;
 
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const lookup = results.find(ir => ir.root.programName === 'lookup');
       expect(lookup).toBeDefined();
       expect(lookup!.root.children.length).toBeGreaterThan(0);
@@ -904,7 +904,7 @@ export function lookup(id: string | number): Effect.Effect<string | number> {
         '',
       ].join('\n'));
       try {
-        const results = await Effect.runPromise(analyze(fpath).all());
+        const results = await Effect.runPromise(analyze(fpath).all);
         expect(results.length).toBeGreaterThanOrEqual(1);
         expect(results[0]!.root.programName).toBe('executeTransfer');
       } finally {
@@ -922,7 +922,7 @@ export const myEnum = Data.taggedEnum<{ A: {}; B: {} }>()
       const fpath = join(tmp, 'data-tagged.ts');
       writeFileSync(fpath, source);
       try {
-        const results = await Effect.runPromise(analyze(fpath).all());
+        const results = await Effect.runPromise(analyze(fpath).all);
         const allNodes: import('./types').StaticEffectNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
           if (isStaticEffectNode(node)) allNodes.push(node);
@@ -939,7 +939,7 @@ export const myEnum = Data.taggedEnum<{ A: {}; B: {} }>()
 
     it('should detect DevTools semantic description', async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'devtools-pattern.ts')).all(),
+        analyze(resolve(fixturesDir, 'devtools-pattern.ts')).all,
       );
       const allNodes: import('./types').StaticEffectNode[] = [];
       const walk = (node: import('./types').StaticFlowNode) => {
@@ -1000,7 +1000,7 @@ export const program = Effect.gen(function* () {
       const fpath = join(tmp, 'cause-kind.ts');
       writeFileSync(fpath, source);
       try {
-        const results = await Effect.runPromise(analyze(fpath).all());
+        const results = await Effect.runPromise(analyze(fpath).all);
         const causeNodes: import('./types').StaticCauseNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
           if (isStaticCauseNode(node)) causeNodes.push(node);
@@ -1054,7 +1054,7 @@ const GetPosts = SqlResolver.grouped("GetPosts", { execute: () => sql\`SELECT * 
   describe('Phase 4: Mailbox → Stream conversion', () => {
     it('should detect Mailbox operations and toStream as stream source', async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'mailbox-stream.ts')).all(),
+        analyze(resolve(fixturesDir, 'mailbox-stream.ts')).all,
       );
       expect(results.length).toBeGreaterThan(0);
       const allConcurrency: import('./types').StaticConcurrencyPrimitiveNode[] = [];
@@ -1081,7 +1081,7 @@ const GetPosts = SqlResolver.grouped("GetPosts", { execute: () => sql\`SELECT * 
   describe('Phase 4: SubscriptionRef.changes as stream source', () => {
     it('should detect SubscriptionRef operations and changes as stream', async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'subscription-ref.ts')).all(),
+        analyze(resolve(fixturesDir, 'subscription-ref.ts')).all,
       );
       expect(results.length).toBeGreaterThan(0);
       const allConcurrency: import('./types').StaticConcurrencyPrimitiveNode[] = [];
@@ -1107,7 +1107,7 @@ const GetPosts = SqlResolver.grouped("GetPosts", { execute: () => sql\`SELECT * 
   describe('Phase 4: FiberHandle lifecycle', () => {
     it('should detect FiberHandle operations with lifecycle options', async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'fiber-handle-lifecycle.ts')).all(),
+        analyze(resolve(fixturesDir, 'fiber-handle-lifecycle.ts')).all,
       );
       expect(results.length).toBeGreaterThan(0);
       const nodes: import('./types').StaticConcurrencyPrimitiveNode[] = [];
@@ -1129,7 +1129,7 @@ const GetPosts = SqlResolver.grouped("GetPosts", { execute: () => sql\`SELECT * 
   describe('Phase 4: Channel operator category', () => {
     it('should classify pipeThroughChannel as channel category', async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'channel-patterns.ts')).all(),
+        analyze(resolve(fixturesDir, 'channel-patterns.ts')).all,
       );
       const allStreams: import('./types').StaticStreamNode[] = [];
       const walk = (node: import('./types').StaticFlowNode) => {
@@ -1150,7 +1150,7 @@ const GetPosts = SqlResolver.grouped("GetPosts", { execute: () => sql\`SELECT * 
   describe('Phase 4: Equal/Hash detection', () => {
     it('should detect custom Equal and Hash implementations', async () => {
       const results = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'equal-hash-class.ts')).all(),
+        analyze(resolve(fixturesDir, 'equal-hash-class.ts')).all,
       );
       // Equal/Hash is detected via service definitions
       expect(results.length).toBeGreaterThan(0);

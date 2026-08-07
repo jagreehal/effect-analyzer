@@ -115,7 +115,7 @@ describe('Control Flow Kitchen Sink', () => {
   let allPrograms: StaticEffectIR[];
 
   beforeAll(async () => {
-    allPrograms = await Effect.runPromise(analyze(FIXTURE_PATH).all());
+    allPrograms = await Effect.runPromise(analyze(FIXTURE_PATH).all);
     programsByName = new Map(
       allPrograms.map((ir) => [ir.root.programName, ir]),
     );

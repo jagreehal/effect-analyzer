@@ -279,7 +279,7 @@ Use the programmatic API to integrate analysis into your own tools:
 import { analyze } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 
 console.log(ir.root.programName)    // "transfer"
 console.log(ir.root.dependencies)    // [{ name: "AccountRepo", ... }, ...]
@@ -303,7 +303,7 @@ import {
 } from "effect-analyzer"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analysis.file("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analysis.file("./src/transfer.ts").single)
 const fidelity = computeDiagramFidelity(ir)
 
 if (!fidelity.exact) {

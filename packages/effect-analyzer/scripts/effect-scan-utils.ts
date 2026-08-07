@@ -173,7 +173,7 @@ export async function analyzeFileToRow(
 
   try {
     const res = await Effect.runPromiseExit(
-      analyze(filePath, { knownEffectInternalsRoot }).all(),
+      analyze(filePath, { knownEffectInternalsRoot }).all,
     );
 
     if (res._tag === 'Failure') {

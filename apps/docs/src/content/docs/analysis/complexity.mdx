@@ -67,7 +67,7 @@ This prints all six metrics along with analysis metadata (step count, service co
 import { analyze, calculateComplexity } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const metrics = calculateComplexity(ir)
 
 console.log(metrics)

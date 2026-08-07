@@ -20,7 +20,7 @@ import {
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(
-  analysis.file("./src/transfer.ts").single(),
+  analysis.file("./src/transfer.ts").single,
 )
 
 const report = computeDiagramFidelity(ir)

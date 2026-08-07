@@ -62,7 +62,7 @@ Generate service maps through the library API:
 import { analyze, renderServiceGraphMermaid } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const diagram = renderServiceGraphMermaid(ir)
 
 console.log(diagram)

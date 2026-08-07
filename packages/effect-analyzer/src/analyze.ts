@@ -12,16 +12,16 @@
  * import { analyze } from "effect-analyzer/analysis";
  *
  * // Single program file
- * const ir = await Effect.runPromise(analyze("./program.ts").single());
+ * const ir = await Effect.runPromise(analyze("./program.ts").single);
  *
  * // Multi-program file
- * const programs = await Effect.runPromise(analyze("./programs.ts").all());
+ * const programs = await Effect.runPromise(analyze("./programs.ts").all);
  *
  * // Get specific program by name
  * const program = await Effect.runPromise(analyze("./programs.ts").named("myProgram"));
  *
  * // From source string
- * const ir = await Effect.runPromise(analyze.source(code).single());
+ * const ir = await Effect.runPromise(analyze.source(code).single);
  * ```
  */
 
@@ -41,19 +41,19 @@ export interface AnalyzeResult {
   /**
    * Get single program. Fails if file has 0 or >1 programs.
    */
-  readonly single: () => Effect.Effect<StaticEffectIR, AnalysisError>;
+  readonly single: Effect.Effect<StaticEffectIR, AnalysisError>;
 
   /**
    * Get single program or None if not exactly one.
    */
-  readonly singleOption: () => Effect.Effect<
+  readonly singleOption: Effect.Effect<
     Option.Option<StaticEffectIR>
   >;
 
   /**
    * Get all programs as array.
    */
-  readonly all: () => Effect.Effect<
+  readonly all: Effect.Effect<
     readonly StaticEffectIR[],
     AnalysisError
   >;
@@ -68,12 +68,12 @@ export interface AnalyzeResult {
   /**
    * Get first program. Fails if empty.
    */
-  readonly first: () => Effect.Effect<StaticEffectIR, AnalysisError>;
+  readonly first: Effect.Effect<StaticEffectIR, AnalysisError>;
 
   /**
    * Get first program or None if empty.
    */
-  readonly firstOption: () => Effect.Effect<
+  readonly firstOption: Effect.Effect<
     Option.Option<StaticEffectIR>
   >;
 }
@@ -81,8 +81,7 @@ export interface AnalyzeResult {
 const createResult = (
   programs: readonly StaticEffectIR[],
 ): AnalyzeResult => ({
-  single: () =>
-    Effect.gen(function* () {
+  single: Effect.gen(function* () {
       if (programs.length === 1) {
         const program = programs[0];
         if (program) {
@@ -97,8 +96,7 @@ const createResult = (
       );
     }),
 
-  singleOption: () =>
-    Effect.gen(function* () {
+  singleOption: Effect.gen(function* () {
       if (programs.length === 1) {
         const program = programs[0];
         if (program) {
@@ -108,7 +106,7 @@ const createResult = (
       return Option.none<StaticEffectIR>();
     }),
 
-  all: () => Effect.succeed(programs),
+  all: Effect.succeed(programs),
 
   named: (name: string) =>
     Effect.gen(function* () {
@@ -125,8 +123,7 @@ const createResult = (
       return found;
     }),
 
-  first: () =>
-    Effect.gen(function* () {
+  first: Effect.gen(function* () {
       const program = programs[0];
       if (program) {
         return program;
@@ -136,8 +133,7 @@ const createResult = (
       );
     }),
 
-  firstOption: () =>
-    Effect.gen(function* () {
+  firstOption: Effect.gen(function* () {
       const program = programs[0];
       if (program) {
         return Option.some(program);
@@ -156,10 +152,10 @@ const createResult = (
  * @example
  * ```typescript
  * // Single program file
- * const ir = await Effect.runPromise(analyze("./program.ts").single());
+ * const ir = await Effect.runPromise(analyze("./program.ts").single);
  *
  * // Multiple programs - get all as array
- * const programs = await Effect.runPromise(analyze("./programs.ts").all());
+ * const programs = await Effect.runPromise(analyze("./programs.ts").all);
  *
  * // Get specific program by name
  * const program = await Effect.runPromise(analyze("./programs.ts").named("myProgram"));
@@ -176,19 +172,17 @@ export const analyze = (
   const programsEffect = analyzeEffectFile(filePath, options);
 
   return {
-    single: () =>
-      Effect.gen(function* () {
+    single: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).single();
+        return yield* createResult(programs).single;
       }),
 
-    singleOption: () =>
-      Effect.gen(function* () {
+    singleOption: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).singleOption();
+        return yield* createResult(programs).singleOption;
       }).pipe(Effect.orDie),
 
-    all: () => programsEffect,
+    all: programsEffect,
 
     named: (name: string) =>
       Effect.gen(function* () {
@@ -196,16 +190,14 @@ export const analyze = (
         return yield* createResult(programs).named(name);
       }),
 
-    first: () =>
-      Effect.gen(function* () {
+    first: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).first();
+        return yield* createResult(programs).first;
       }),
 
-    firstOption: () =>
-      Effect.gen(function* () {
+    firstOption: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).firstOption();
+        return yield* createResult(programs).firstOption;
       }).pipe(Effect.orDie),
   };
 };
@@ -226,7 +218,7 @@ export const analyze = (
  *   });
  * `;
  *
- * const ir = await Effect.runPromise(analyze.source(source).single());
+ * const ir = await Effect.runPromise(analyze.source(source).single);
  * ```
  */
 analyze.source = (code: string, options?: AnalyzerOptions): AnalyzeResult => {
@@ -235,19 +227,17 @@ analyze.source = (code: string, options?: AnalyzerOptions): AnalyzeResult => {
   const programsEffect = analyzeEffectSource(code, 'temp.ts', options);
 
   return {
-    single: () =>
-      Effect.gen(function* () {
+    single: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).single();
+        return yield* createResult(programs).single;
       }),
 
-    singleOption: () =>
-      Effect.gen(function* () {
+    singleOption: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).singleOption();
+        return yield* createResult(programs).singleOption;
       }).pipe(Effect.orDie),
 
-    all: () => programsEffect,
+    all: programsEffect,
 
     named: (name: string) =>
       Effect.gen(function* () {
@@ -255,16 +245,14 @@ analyze.source = (code: string, options?: AnalyzerOptions): AnalyzeResult => {
         return yield* createResult(programs).named(name);
       }),
 
-    first: () =>
-      Effect.gen(function* () {
+    first: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).first();
+        return yield* createResult(programs).first;
       }),
 
-    firstOption: () =>
-      Effect.gen(function* () {
+    firstOption: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).firstOption();
+        return yield* createResult(programs).firstOption;
       }).pipe(Effect.orDie),
   };
 };

@@ -15,7 +15,7 @@ The **data flow analyzer** builds a graph of value and service dependencies betw
 import { analyze, buildDataFlowGraph } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const graph = buildDataFlowGraph(ir)
 
 console.log(graph.nodes.length)         // Number of data flow nodes

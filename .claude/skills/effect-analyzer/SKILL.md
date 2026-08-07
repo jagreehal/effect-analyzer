@@ -11,7 +11,7 @@ Static analysis tool for Effect-TS programs. Parses TypeScript via `ts-morph`, b
 
 ```
 CLI (cli.ts)
-  → analyze.ts (fluent API: analyze(path).single() | .all() | .named())
+  → analyze.ts (fluent API: analyze(path).single | .all | .named())
     → static-analyzer.ts (analyzeEffectFile / analyzeEffectSource)
       → program-discovery.ts (find Effect programs in AST)
       → core-analysis.ts (build IR tree from AST nodes)
@@ -211,8 +211,8 @@ effect-analyze ./program.ts -w --cache     # With caching for performance
 
 ```typescript
 import { analyze } from 'effect-analyzer';
-const ir = await Effect.runPromise(analyze('./program.ts').single());
-const all = await Effect.runPromise(analyze('./program.ts').all());
+const ir = await Effect.runPromise(analyze('./program.ts').single);
+const all = await Effect.runPromise(analyze('./program.ts').all);
 const named = await Effect.runPromise(analyze('./program.ts').named('myProgram'));
 ```
 
@@ -297,7 +297,7 @@ import { analyze } from './analyze';
 import { Effect } from 'effect';
 
 it('detects parallel patterns', { timeout: 20_000 }, async () => {
-  const irs = await Effect.runPromise(analyze(fixturePath).all());
+  const irs = await Effect.runPromise(analyze(fixturePath).all);
   expect(irs.length).toBeGreaterThanOrEqual(1);
   // Check node types, diagram content, etc.
 });

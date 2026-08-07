@@ -27,7 +27,7 @@ describe('unknown node reasons', () => {
             get: () => Effect.succeed(1),
           });
         `)
-        .all(),
+        .all,
     );
 
     const reasons = programs.flatMap((ir) => collectUnknownReasons([ir.root]));

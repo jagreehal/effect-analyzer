@@ -25,7 +25,7 @@ npx effect-analyze ./src/transfer.ts --format mermaid-paths
 import { analyze, generatePaths } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const paths = generatePaths(ir)
 
 for (const path of paths) {
