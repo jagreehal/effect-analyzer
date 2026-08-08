@@ -331,8 +331,8 @@ A common pattern with AI-generated refactors is simplifying code by removing `ca
 import { analyze, diffPrograms, renderDiffMarkdown } from "effect-analyzer/migration"
 import { Effect } from "effect"
 
-const before = await Effect.runPromise(analyze("./old-version.ts").single())
-const after = await Effect.runPromise(analyze("./new-version.ts").single())
+const before = await Effect.runPromise(analyze("./old-version.ts").single)
+const after = await Effect.runPromise(analyze("./new-version.ts").single)
 
 const diff = diffPrograms(before, after)
 const report = renderDiffMarkdown(diff)

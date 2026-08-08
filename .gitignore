@@ -41,3 +41,6 @@ apps/docs/.design-screens
 *.statechart.html
 effect-statecharts.html
 .pnpm-store
+# temp projects created by the --tsgo tests (cleaned up in a finally, this is a
+# guard against a crashed run leaving one behind)
+.tmp-tsgo-*

@@ -265,7 +265,7 @@ export const analyzePipeChain = (
 
     // Extract type flow through pipe chain
     let typeFlow: EffectTypeSignature[] | undefined;
-    try {
+    yield* Effect.try(() => {
       const typeChecker = sourceFile.getProject().getTypeChecker();
       const flow: EffectTypeSignature[] = [];
       // Extract initial type
@@ -279,9 +279,8 @@ export const analyzePipeChain = (
         }
       }
       if (flow.length > 0) typeFlow = flow;
-    } catch {
-      // Type extraction can fail; skip type flow
-    }
+      // Type extraction can fail; leaving typeFlow unset is the fallback.
+    }).pipe(Effect.ignore);
 
     const pipeNode: StaticPipeNode = {
       id: generateId(),
@@ -1642,15 +1641,14 @@ const analyzeLayerCall = (
 
     // Fallback: Layer type RIn extraction when requires is empty (GAP Layer requires)
     if (requiresSet.size === 0) {
-      try {
+      // Type extraction can fail; an empty requires set is the fallback.
+      yield* Effect.try(() => {
         const layerSig = extractLayerTypeSignature(call);
         if (layerSig?.requiredType && layerSig.requiredType !== 'never') {
           const ids = parseServiceIdsFromContextType(layerSig.requiredType);
           ids.forEach((id) => requiresSet.add(id));
         }
-      } catch {
-        // type extraction can fail
-      }
+      }).pipe(Effect.ignore);
     }
 
     // Extract a semantic name for utility Layer ops

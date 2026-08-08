@@ -19,7 +19,7 @@ describe('stream callback summaries', () => {
       );
     `;
 
-    const programs = await Effect.runPromise(analyze.source(source).all());
+    const programs = await Effect.runPromise(analyze.source(source).all);
     const explanation = renderMultipleExplanations(programs);
 
     expect(explanation).toContain('map callback:');

@@ -8,19 +8,18 @@ import type { StaticEffectIR, AnalyzerOptions } from './types';
 import { analyzeEffectSource, resetIdCounter } from './static-analyzer';
 
 export interface AnalyzeSourceResult {
-  readonly single: () => Effect.Effect<StaticEffectIR, AnalysisError>;
-  readonly singleOption: () => Effect.Effect<Option.Option<StaticEffectIR>>;
-  readonly all: () => Effect.Effect<readonly StaticEffectIR[], AnalysisError>;
+  readonly single: Effect.Effect<StaticEffectIR, AnalysisError>;
+  readonly singleOption: Effect.Effect<Option.Option<StaticEffectIR>>;
+  readonly all: Effect.Effect<readonly StaticEffectIR[], AnalysisError>;
   readonly named: (name: string) => Effect.Effect<StaticEffectIR, AnalysisError>;
-  readonly first: () => Effect.Effect<StaticEffectIR, AnalysisError>;
-  readonly firstOption: () => Effect.Effect<Option.Option<StaticEffectIR>>;
+  readonly first: Effect.Effect<StaticEffectIR, AnalysisError>;
+  readonly firstOption: Effect.Effect<Option.Option<StaticEffectIR>>;
 }
 
 const createResult = (
   programs: readonly StaticEffectIR[],
 ): AnalyzeSourceResult => ({
-  single: () =>
-    Effect.gen(function* () {
+  single: Effect.gen(function* () {
       if (programs.length === 1) {
         const program = programs[0];
         if (program) {
@@ -35,8 +34,7 @@ const createResult = (
       );
     }),
 
-  singleOption: () =>
-    Effect.gen(function* () {
+  singleOption: Effect.gen(function* () {
       if (programs.length === 1) {
         const program = programs[0];
         if (program) {
@@ -46,7 +44,7 @@ const createResult = (
       return Option.none<StaticEffectIR>();
     }).pipe(Effect.orDie),
 
-  all: () => Effect.succeed(programs),
+  all: Effect.succeed(programs),
 
   named: (name: string) =>
     Effect.gen(function* () {
@@ -63,8 +61,7 @@ const createResult = (
       return found;
     }),
 
-  first: () =>
-    Effect.gen(function* () {
+  first: Effect.gen(function* () {
       const program = programs[0];
       if (program) {
         return program;
@@ -74,8 +71,7 @@ const createResult = (
       );
     }),
 
-  firstOption: () =>
-    Effect.gen(function* () {
+  firstOption: Effect.gen(function* () {
       const program = programs[0];
       if (program) {
         return Option.some(program);
@@ -93,19 +89,17 @@ export const analyzeSource = (
   const programsEffect = analyzeEffectSource(code, 'temp.ts', options);
 
   return {
-    single: () =>
-      Effect.gen(function* () {
+    single: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).single();
+        return yield* createResult(programs).single;
       }),
 
-    singleOption: () =>
-      Effect.gen(function* () {
+    singleOption: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).singleOption();
+        return yield* createResult(programs).singleOption;
       }).pipe(Effect.orDie),
 
-    all: () => programsEffect,
+    all: programsEffect,
 
     named: (name: string) =>
       Effect.gen(function* () {
@@ -113,16 +107,14 @@ export const analyzeSource = (
         return yield* createResult(programs).named(name);
       }),
 
-    first: () =>
-      Effect.gen(function* () {
+    first: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).first();
+        return yield* createResult(programs).first;
       }),
 
-    firstOption: () =>
-      Effect.gen(function* () {
+    firstOption: Effect.gen(function* () {
         const programs = yield* programsEffect;
-        return yield* createResult(programs).firstOption();
+        return yield* createResult(programs).firstOption;
       }).pipe(Effect.orDie),
   };
 };

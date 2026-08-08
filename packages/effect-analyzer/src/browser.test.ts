@@ -17,7 +17,7 @@ describe('browser entrypoint', () => {
             return 42;
           });
         `,
-      ).single(),
+      ).single,
     );
 
     expect(program.root.programName).toBe('program');

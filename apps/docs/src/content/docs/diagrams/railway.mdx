@@ -74,7 +74,7 @@ import { analyze } from "effect-analyzer/analysis"
 import { renderRailwayMermaid } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const diagram = renderRailwayMermaid(ir, { direction: "LR" })
 
 console.log(diagram)

@@ -44,7 +44,7 @@ function runTask(x: number) {
 runTask(1);
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure') {
@@ -63,7 +63,7 @@ import { succeed } from "effect/Effect";
 const program = succeed(1);
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     const program = results.find((ir) => ir.root.programName === 'program');
     expect(program).toBeDefined();
@@ -77,7 +77,7 @@ import { succeed } from "effect/Effect";
 const program = await succeed(1);
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     expect(results.map((ir) => ir.root.programName)).toContain('program');
   });
@@ -91,7 +91,7 @@ function pipeline(x: number) {
 const program = pipeline(1);
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -108,7 +108,7 @@ function pipe<A, B>(value: A, f: (a: A) => B): B {
 const result = pipe([1, 2, 3], (xs) => xs.map((x) => x + 1));
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -127,7 +127,7 @@ const service = {
 };
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -146,7 +146,7 @@ export const program = Effect.gen(function* (_) {
 });
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const program = results.find((ir) => ir.root.programName === 'program');
     expect(program).toBeDefined();
     const gen = program?.root.children.find((child) => child.type === 'generator');
@@ -174,7 +174,7 @@ export const program = Effect.gen(function* () {
 });
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const program = results.find((ir) => ir.root.programName === 'program');
     expect(program).toBeDefined();
     const gen = program?.root.children.find((child) => child.type === 'generator');
@@ -206,7 +206,7 @@ const clientLayer = Layer.succeed(RpcClient, { call: () => {} }).pipe(
 );
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const ir = results.find((x) => x.root.programName === 'clientLayer');
     expect(ir).toBeDefined();
     const layer = ir ? findFirstByType(ir.root.children, 'layer') : undefined;
@@ -228,7 +228,7 @@ export const TracingLayer = Layer.unwrapEffect(
   })
 );
 `;
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const ir = results.find((x) => x.root.programName === 'TracingLayer');
     expect(ir).toBeDefined();
     const layer = ir ? findFirstByType(ir.root.children, 'layer') : undefined;
@@ -256,7 +256,7 @@ export const clientLayer = RpcClient.layerProtocolHttp({ url: "/api/rpc/" }).pip
   ])
 );
 `;
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const ir = results.find((x) => x.root.programName === 'clientLayer');
     expect(ir).toBeDefined();
     const pipe = ir?.root.children.find((n) => n.type === 'pipe');
@@ -283,7 +283,7 @@ export const program = pipe(
 );
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const program = results.find((ir) => ir.root.programName === 'program');
 
     expect(program).toBeDefined();
@@ -301,7 +301,7 @@ const runNow = () => {
 };
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     expect(results.map((ir) => ir.root.programName)).toContain('program');
     expect(results.map((ir) => ir.root.programName)).not.toContain('runNow');
   });
@@ -316,7 +316,7 @@ const program = () => {
 };
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     expect(results.map((ir) => ir.root.programName)).toContain('program');
   });
 
@@ -333,7 +333,7 @@ const program = (flag: boolean) => {
 };
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     expect(results.map((ir) => ir.root.programName)).toContain('program');
   });
 
@@ -351,7 +351,7 @@ const program = (flag: boolean) => {
 };
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     expect(results.map((ir) => ir.root.programName)).toContain('program');
   });
 
@@ -367,7 +367,7 @@ const helper = () => {
 };
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
       expect(exit.cause.error).toMatchObject({ code: 'NO_EFFECTS_FOUND' });
@@ -388,7 +388,7 @@ export const fromCallback = dual(1, () => {
 });
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     expect(results.map((ir) => ir.root.programName)).toContain('fromCallback');
   });
 
@@ -406,7 +406,7 @@ const helper = () => {
 };
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
       expect(exit.cause.error).toMatchObject({ code: 'NO_EFFECTS_FOUND' });
@@ -425,7 +425,7 @@ const helper = () => {
 };
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
       expect(exit.cause.error).toMatchObject({ code: 'NO_EFFECTS_FOUND' });
@@ -446,7 +446,7 @@ const helper = () => {
 };
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     expect(results.map((ir) => ir.root.programName)).not.toContain('helper');
   });
 
@@ -458,7 +458,7 @@ export const logWithLevel = (level: string): Effect.Effect<void> =>
   Effect.log(level);
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const program = results.find((ir) => ir.root.programName === 'logWithLevel');
 
     expect(program).toBeDefined();
@@ -477,7 +477,7 @@ export const request: {
 } = dual(2, (_self: number, _id: string) => Effect.succeed(1));
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const program = results.find((ir) => ir.root.programName === 'request');
 
     expect(program).toBeDefined();
@@ -495,7 +495,7 @@ export const setRandom = (): Layer<never> => {
 };
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const program = results.find((ir) => ir.root.programName === 'setRandom');
 
     expect(program).toBeDefined();
@@ -512,7 +512,7 @@ export const program = Effect.succeed(2);
 `;
 
     const results = await Effect.runPromise(
-      analyze.source(source, { onlyExportedPrograms: true }).all(),
+      analyze.source(source, { onlyExportedPrograms: true }).all,
     );
 
     expect(results.map((ir) => ir.root.programName)).toEqual(['program']);
@@ -525,7 +525,7 @@ export const maybeEffect = dual(2, (_x: number) => ({ x: _x }));
 `;
 
     const exit = await Effect.runPromiseExit(
-      analyze.source(source, { minDiscoveryConfidence: 'medium' }).all(),
+      analyze.source(source, { minDiscoveryConfidence: 'medium' }).all,
     );
 
     expect(exit._tag).toBe('Failure');
@@ -548,7 +548,7 @@ export const fn:
   };
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
     const program = results.find((ir) => ir.root.programName === 'fn');
 
     expect(program).toBeDefined();
@@ -567,7 +567,7 @@ const make = (runAll: () => unknown) => ({
 export const never = make(() => Effect.never).identified("Never");
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     expect(results.map((ir) => ir.root.programName)).toContain('never');
   });
@@ -584,7 +584,7 @@ export const fromEffect = dual(1, () => {
 });
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     expect(results.map((ir) => ir.root.programName)).toContain('fromEffect');
   });
@@ -596,7 +596,7 @@ import * as Effect from "../../Effect.js";
 export const effect = Effect.void;
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     expect(results.map((ir) => ir.root.programName)).toContain('effect');
   });
@@ -611,7 +611,7 @@ export const effect = <E, R>(self: { effect: unknown }) =>
   isFromEffect(self) ? self.effect as Effect.Effect<void, E, R> : Effect.void;
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     expect(results.map((ir) => ir.root.programName)).toContain('effect');
   });
@@ -631,7 +631,7 @@ export const map = dual(2, (self: { get: unknown; changes: unknown }, f: (a: unk
   }));
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     expect(results.map((ir) => ir.root.programName)).toContain('map');
   });
@@ -650,7 +650,7 @@ export const map = dual(2, () =>
   }));
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -673,7 +673,7 @@ export const appendAll = dual(2, () => ({
 }));
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -693,7 +693,7 @@ export const test = dual(2, (self: { log: (input: unknown) => unknown }) =>
   }));
 `;
 
-    const results = await Effect.runPromise(analyze.source(source).all());
+    const results = await Effect.runPromise(analyze.source(source).all);
 
     expect(results.map((ir) => ir.root.programName)).toContain('test');
   });
@@ -705,7 +705,7 @@ import * as Option from "effect/Option";
 const value = Option.some(1);
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -720,7 +720,7 @@ import * as Chunk from "effect/Chunk";
 const value = Chunk.of(1);
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -735,7 +735,7 @@ import * as Exit from "effect/Exit";
 const value = Exit.succeed(1);
 `;
 
-    const exit = await Effect.runPromiseExit(analyze.source(source).all());
+    const exit = await Effect.runPromiseExit(analyze.source(source).all);
 
     expect(exit._tag).toBe('Failure');
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -753,7 +753,7 @@ export const build = internal.build;
     const results = await Effect.runPromise(
       analyze.source(source, {
         knownEffectInternalsRoot: '/tmp/fake-effect-root/internal',
-      }).all(),
+      }).all,
     );
 
     const program = results.find((ir) => ir.root.programName === 'build');
@@ -772,7 +772,7 @@ export const once = internal.once;
     const results = await Effect.runPromise(
       analyze.source(source, {
         knownEffectInternalsRoot: '/tmp/fake-effect-root/internal',
-      }).all(),
+      }).all,
     );
 
     expect(results.map((ir) => ir.root.programName)).toContain('once');
@@ -788,7 +788,7 @@ export const toStream = internal.toStream;
     const results = await Effect.runPromise(
       analyze.source(source, {
         knownEffectInternalsRoot: '/tmp/fake-effect-root/internal',
-      }).all(),
+      }).all,
     );
 
     expect(results.map((ir) => ir.root.programName)).toContain('toStream');
@@ -804,7 +804,7 @@ export const subscribe = internal.subscribe;
     const results = await Effect.runPromise(
       analyze.source(source, {
         knownEffectInternalsRoot: '/tmp/fake-effect-root/internal',
-      }).all(),
+      }).all,
     );
 
     expect(results.map((ir) => ir.root.programName)).toContain('subscribe');
@@ -820,7 +820,7 @@ export const bounded = internal.bounded;
     const results = await Effect.runPromise(
       analyze.source(source, {
         knownEffectInternalsRoot: '/tmp/fake-effect-root/internal',
-      }).all(),
+      }).all,
     );
 
     expect(results.map((ir) => ir.root.programName)).toContain('bounded');
@@ -830,12 +830,12 @@ export const bounded = internal.bounded;
     const topLevel = await Effect.runPromise(
       analyze.source(readFixture('regression-internal-aliases.ts'), {
         knownEffectInternalsRoot: '/tmp/fake-effect-root/internal',
-      }).all(),
+      }).all,
     );
     const nested = await Effect.runPromise(
       analyze.source(readFixture('regression-nested-internal-aliases.ts'), {
         knownEffectInternalsRoot: '/tmp/fake-effect-root/internal',
-      }).all(),
+      }).all,
     );
 
     expect(topLevel.map((ir) => ir.root.programName)).toEqual(
@@ -846,7 +846,7 @@ export const bounded = internal.bounded;
 
   it('covers regression fixture: bare named imports (direct + awaited)', async () => {
     const results = await Effect.runPromise(
-      analyze.source(readFixture('regression-bare-named-imports.ts')).all(),
+      analyze.source(readFixture('regression-bare-named-imports.ts')).all,
     );
 
     expect(results.map((ir) => ir.root.programName)).toEqual(
@@ -856,7 +856,7 @@ export const bounded = internal.bounded;
 
   it('covers regression fixture: non-Effect pipeline false positive guard', async () => {
     const exit = await Effect.runPromiseExit(
-      analyze.source(readFixture('regression-false-positive-pipeline.ts')).all(),
+      analyze.source(readFixture('regression-false-positive-pipeline.ts')).all,
     );
 
     expect(exit._tag).toBe('Failure');

@@ -40,7 +40,7 @@ describe('rule-registry', () => {
     const docs = listAllRuleDocs();
     const codes = new Set(docs.map((d) => `${d.domain}:${d.code}`));
     expect(codes.has('source:runSync-on-async')).toBe(true);
-    expect(codes.has('source:raw-side-effect-in-gen')).toBe(true);
+    expect(codes.has('source:untagged-throw')).toBe(true);
     expect(codes.has('strict:dead-code-path')).toBe(true);
     expect(codes.has('strict:unbounded-concurrency')).toBe(true);
   });

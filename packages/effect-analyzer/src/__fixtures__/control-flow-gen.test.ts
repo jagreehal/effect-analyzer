@@ -98,7 +98,7 @@ describe('Control Flow Analysis Integration', () => {
 
   beforeAll(async () => {
     const results = await Effect.runPromise(
-      analyze(FIXTURE_PATH).all(),
+      analyze(FIXTURE_PATH).all,
     );
     programsByName = new Map(
       results.map((ir) => [ir.root.programName, ir]),

@@ -5,6 +5,7 @@ export * from './complexity';
 export * from './diagram-fidelity';
 export * from './diagram-quality';
 export * from './runtime-trace';
+export * from './diff';
 export * from './output/mermaid';
 export * from './output/mermaid-railway';
 export * from './output/mermaid-services';

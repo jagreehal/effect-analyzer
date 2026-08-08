@@ -106,7 +106,7 @@ class MyService {
   readonly getValue: Effect.Effect<number> = Effect.succeed(42)
 }
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
       const sources = results.map((ir) => ir.root.source);
 
@@ -124,7 +124,7 @@ class MyService {
   }
 }
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
       const sources = results.map((ir) => ir.root.source);
 
@@ -144,7 +144,7 @@ class MyService {
   }
 }
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
 
       expect(names).toContain('MyService.compute');
@@ -162,7 +162,7 @@ class ClockLike {
   }
 }
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
 
       expect(names).toContain('ClockLike.currentTimeMillis');
@@ -181,7 +181,7 @@ class PlainService {
 // Need at least one Effect program for the file to be analyzable
 const dummy = Effect.succeed(1)
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
 
       expect(names).not.toContain('PlainService.getValue');
@@ -197,7 +197,7 @@ import * as core from "./core"
 
 const myEffect = core.sync(() => 42)
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
 
       expect(names).toContain('myEffect');
@@ -211,7 +211,7 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
 `;
 
       await expect(
-        Effect.runPromise(analyze.source(source).all()),
+        Effect.runPromise(analyze.source(source).all),
       ).rejects.toThrow('No Effect programs found');
     });
 
@@ -223,7 +223,7 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
 `;
 
       await expect(
-        Effect.runPromise(analyze.source(source).all()),
+        Effect.runPromise(analyze.source(source).all),
       ).rejects.toThrow('No Effect programs found');
     });
 
@@ -243,7 +243,7 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
       clearProjectCache();
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(results.length).toBeGreaterThanOrEqual(1);
         expect(results.map((r) => r.root.programName)).toContain('program');
@@ -275,7 +275,7 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
       clearProjectCache();
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(results.length).toBeGreaterThanOrEqual(1);
         expect(results.map((r) => r.root.programName)).toContain('program');
@@ -307,7 +307,7 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
       clearProjectCache();
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(results.length).toBeGreaterThanOrEqual(1);
         expect(results.map((r) => r.root.programName)).toContain('program');
@@ -324,7 +324,7 @@ const notAnEffect = stream.map([1, 2, 3], (n: number) => n + 1)
         'import * as E from "effect/Effect";',
         'export const program = E.succeed(42);',
       ].join('\n');
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results.map((r) => r.root.programName)).toContain('program');
     });
@@ -336,7 +336,7 @@ import * as lib from "./lib"
 const result = lib.flatMap(lib.map([1,2], (x: number) => x + 1), (x: number) => [x])
 `;
       await expect(
-        Effect.runPromise(analyze.source(source).all()),
+        Effect.runPromise(analyze.source(source).all),
       ).rejects.toThrow('No Effect programs found');
     });
 
@@ -358,7 +358,7 @@ const result = lib.flatMap(lib.map([1,2], (x: number) => x + 1), (x: number) => 
       clearProjectCache();
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         const names = results.map((r) => r.root.programName);
         expect(names).toContain('program');
@@ -387,7 +387,7 @@ function makeThing() {
 }
 `;
 
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
 
       expect(names).toContain('root');
@@ -409,7 +409,7 @@ namespace Internal {
 }
 `;
 
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
 
       expect(names).toContain('root');
@@ -428,7 +428,7 @@ import { Effect } from "effect"
 import { NodeRuntime } from "@effect/platform-node"
 NodeRuntime.runMain(Effect.succeed(42))
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       expect(results.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -438,7 +438,7 @@ import { Effect } from "effect"
 import { BunRuntime } from "@effect/platform-bun"
 BunRuntime.runMain(Effect.succeed(42))
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       expect(results.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -449,7 +449,7 @@ import { NodeRuntime } from "@effect/platform-node"
 const HttpLive = Layer.empty
 HttpLive.pipe(Layer.launch, NodeRuntime.runMain)
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
       const hasEntrypoint = names.some(
         (n) => n === 'HttpLive' || n.startsWith('entrypoint-'),
@@ -464,7 +464,7 @@ const program = Effect.gen(function*() {
   yield* Channel.succeed(42)
 })
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       expect(results.length).toBeGreaterThanOrEqual(1);
       const effectNodes: import('./types').StaticEffectNode[] = [];
       let hasChannelNode = false;
@@ -486,7 +486,7 @@ const program = Effect.gen(function*() {
 import { Effect } from "effect"
 const result = Effect.runPromise(Effect.succeed(1))
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       expect(results.length).toBe(1);
     });
   });
@@ -562,7 +562,7 @@ const result = Effect.runPromise(Effect.succeed(1))
       clearProjectCache();
       try {
         await expect(
-          Effect.runPromise(analyze(appPath, { tsConfigPath: tsconfigPath }).all()),
+          Effect.runPromise(analyze(appPath, { tsConfigPath: tsconfigPath }).all),
         ).rejects.toThrow('No Effect programs found');
       } finally {
         rmSync(tmp, { recursive: true });
@@ -590,7 +590,7 @@ const result = Effect.runPromise(Effect.succeed(1))
       clearProjectCache();
       try {
         const result = await Effect.runPromise(
-          analyze(appPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(appPath, { tsConfigPath: tsconfigPath }).all,
         );
         const names = result.map((r) => r.root.programName);
         expect(names).toContain('program');
@@ -617,7 +617,7 @@ const result = Effect.runPromise(Effect.succeed(1))
       clearProjectCache();
       try {
         const result = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(result.length).toBeGreaterThan(0);
         const entrypoint = result.find((r) => r.root.source === 'run');
@@ -640,7 +640,7 @@ const result = Effect.runPromise(Effect.succeed(1))
         'const AppLive = Layer.empty;',
         'AppLive.pipe(Layer.launch, BunRuntime.runMain);',
       ].join('\n');
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const entrypoint = result.find((r) => r.root.source === 'run');
       expect(entrypoint).toBeDefined();
     });
@@ -652,8 +652,8 @@ const result = Effect.runPromise(Effect.succeed(1))
         'const ServerLive = Layer.empty;',
         'ServerLive.pipe(Layer.launch, NodeRuntime.runMain);',
       ].join('\n');
-      const first = await Effect.runPromise(analyze.source(source).all());
-      const second = await Effect.runPromise(analyze.source(source).all());
+      const first = await Effect.runPromise(analyze.source(source).all);
+      const second = await Effect.runPromise(analyze.source(source).all);
       const firstName = first.find((r) => r.root.source === 'run')?.root.programName;
       const secondName = second.find((r) => r.root.source === 'run')?.root.programName;
       expect(firstName).toBe(secondName);
@@ -669,7 +669,7 @@ const result = Effect.runPromise(Effect.succeed(1))
         'A.pipe(Layer.launch, NodeRuntime.runMain);',
         'B.pipe(Layer.launch, NodeRuntime.runMain);',
       ].join('\n');
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const runPrograms = result.filter((r) => r.root.source === 'run');
       const names = runPrograms.map((r) => r.root.programName);
       const uniqueNames = [...new Set(names)];
@@ -684,7 +684,7 @@ const result = Effect.runPromise(Effect.succeed(1))
         'const AppLive = Layer.empty;',
         'AppLive.pipe(Layer.launch, NodeRuntime.runMain);',
       ].join('\n');
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const entrypoint = result.find((r) => r.root.source === 'run');
       expect(entrypoint).toBeDefined();
       const pipeChild = entrypoint!.root.children.find((c) => isStaticPipeNode(c));
@@ -720,7 +720,7 @@ const result = Effect.runPromise(Effect.succeed(1))
       clearProjectCache();
       try {
         const result = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         const entrypoint = result.find((r) => r.root.source === 'run');
         expect(entrypoint).toBeDefined();
@@ -754,7 +754,7 @@ const result = Effect.runPromise(Effect.succeed(1))
       clearProjectCache();
       try {
         const result = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         const entrypoint = result.find((r) => r.root.source === 'run');
         expect(entrypoint).toBeDefined();
@@ -791,7 +791,7 @@ function runApp(layer: Layer.Layer<never, never>) {
 
 runApp(AppLive);
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
       expect(names).toContain('runApp');
       expect(results.length).toBeGreaterThan(0);
@@ -808,7 +808,7 @@ const runtime = Runtime.defaultRuntime;
 const program = Effect.succeed(42);
 Runtime.runPromise(runtime)(program);
 `;
-      const results = await Effect.runPromise(analyze.source(source).all());
+      const results = await Effect.runPromise(analyze.source(source).all);
       const names = results.map((ir) => ir.root.programName);
       expect(names.some((n) => n.startsWith('run-') || n === 'program')).toBe(true);
       expect(results.length).toBeGreaterThan(0);
@@ -873,7 +873,7 @@ AppLayer.pipe(Layer.launch, NodeRuntime.runMain);
 `);
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(results.length).toBeGreaterThan(0);
         const ir = results[0];
@@ -910,7 +910,7 @@ AppLayer.pipe(Layer.launch, NodeRuntime.runMain);
 `);
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(results.length).toBeGreaterThan(0);
         const ir = results[0];
@@ -942,7 +942,7 @@ AppLayer.pipe(Layer.launch, NodeRuntime.runMain);
 `);
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(results.length).toBeGreaterThan(0);
         const ir = results[0];
@@ -973,7 +973,7 @@ AL.pipe(Layer.launch, NodeRuntime.runMain);
 `);
       try {
         const results = await Effect.runPromise(
-          analyze(mainPath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(mainPath, { tsConfigPath: tsconfigPath }).all,
         );
         expect(results.length).toBeGreaterThan(0);
         const ir = results[0];
@@ -998,7 +998,7 @@ export const AppLayer = L.succeed(MyService, { id: 42 });
 `;
       writeFileSync(layersPath, layersContent);
       try {
-        const results = await Effect.runPromise(analyze(layersPath).all());
+        const results = await Effect.runPromise(analyze(layersPath).all);
         expect(results.length).toBeGreaterThan(0);
         const hasAnyLayer = results.some((ir) => hasLayerNode(ir.root));
         expect(hasAnyLayer).toBe(true);
@@ -1016,7 +1016,7 @@ import { Context } from "effect";
 const Tag = Context.GenericTag<"Tag", number>("Tag");
 export const AppLayer = L.succeed(Tag, 42);
 `;
-      const results = await Effect.runPromise(analyze.source(layersContent).all());
+      const results = await Effect.runPromise(analyze.source(layersContent).all);
       expect(results.length).toBeGreaterThanOrEqual(1);
       const appLayerIr = results.find((ir) => ir.root.programName === 'AppLayer');
       expect(appLayerIr).toBeDefined();

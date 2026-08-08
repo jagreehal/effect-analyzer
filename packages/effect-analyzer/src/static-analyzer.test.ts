@@ -108,7 +108,7 @@ describe('effect-analyzer', () => {
 
     it('should find multiple programs in a file', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'simple-effect.ts')).all(),
+        analyze(resolve(fixturesDir, 'simple-effect.ts')).all,
       );
 
       expect(result.length).toBeGreaterThanOrEqual(2);
@@ -170,7 +170,7 @@ describe('effect-analyzer', () => {
             (acc, n) => Effect.succeed(acc + n)
           );
         `)
-          .single(),
+          .single,
       );
       const stack: import('./types').StaticFlowNode[] = [
         ...result.root.children,
@@ -272,7 +272,7 @@ describe('effect-analyzer', () => {
             Effect.succeed(1),
             () => Effect.void
           );
-        `).single(),
+        `).single,
       );
 
       const stack = [...result.root.children];
@@ -303,7 +303,7 @@ describe('effect-analyzer', () => {
         });
       `;
 
-      const result = await Effect.runPromise(analyze.source(source).single());
+      const result = await Effect.runPromise(analyze.source(source).single);
 
       expect(result.root.programName).toBe('myProgram');
       expect(result.root.source).toBe('generator');
@@ -318,7 +318,7 @@ describe('effect-analyzer', () => {
         const program3 = Effect.fail("error");
       `;
 
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
 
       expect(result.length).toBe(3);
     });
@@ -389,7 +389,7 @@ describe('effect-analyzer', () => {
   describe('Error Handling', () => {
     it('should fail for non-existent files', async () => {
       const result = await Effect.runPromise(
-        analyze('./non-existent-file.ts').single().pipe(Effect.result),
+        analyze('./non-existent-file.ts').single.pipe(Effect.result),
       );
 
       expect(result._tag).toBe('Failure');
@@ -403,7 +403,7 @@ describe('effect-analyzer', () => {
       `;
 
       const result = await Effect.runPromise(
-        analyze.source(source).single().pipe(Effect.result),
+        analyze.source(source).single.pipe(Effect.result),
       );
 
       expect(result._tag).toBe('Failure');
@@ -417,7 +417,7 @@ describe('effect-analyzer', () => {
       `;
 
       const result = await Effect.runPromise(
-        analyze.source(source).singleOption(),
+        analyze.source(source).singleOption,
       );
 
       expect(Option.isNone(result)).toBe(true);
@@ -427,7 +427,7 @@ describe('effect-analyzer', () => {
   describe('Gap 6: JavaScript/JSX support', () => {
     it('should analyze a .js file with Effect.gen when extensions include .js', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'effect-program.js')).all(),
+        analyze(resolve(fixturesDir, 'effect-program.js')).all,
       );
       expect(result.length).toBeGreaterThanOrEqual(1);
       const names = result.map((r) => r.root.programName);
@@ -750,14 +750,14 @@ describe('effect-analyzer', () => {
   describe('analyze() fluent API', () => {
     it('returns first program from single-program file', async () => {
       const ir = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'simple-effect.ts')).first(),
+        analyze(resolve(fixturesDir, 'simple-effect.ts')).first,
       );
       expect(ir.root.programName).toBeDefined();
     });
 
     it('returns first program from multi-program file', async () => {
       const ir = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'simple-effect.ts')).first(),
+        analyze(resolve(fixturesDir, 'simple-effect.ts')).first,
       );
       expect(ir.root).toBeDefined();
     });
@@ -767,14 +767,14 @@ describe('effect-analyzer', () => {
         const x = 1;
       `;
       const result = await Effect.runPromise(
-        analyze.source(source).first().pipe(Effect.result),
+        analyze.source(source).first.pipe(Effect.result),
       );
       expect(result._tag).toBe('Failure');
     });
 
     it('returns Some(first) from firstOption when programs exist', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'simple-effect.ts')).firstOption(),
+        analyze(resolve(fixturesDir, 'simple-effect.ts')).firstOption,
       );
       expect(Option.isSome(result)).toBe(true);
       const ir = Option.getOrThrow(result);
@@ -786,7 +786,7 @@ describe('effect-analyzer', () => {
         const x = 1;
       `;
       await expect(
-        Effect.runPromise(analyze.source(source).firstOption()),
+        Effect.runPromise(analyze.source(source).firstOption),
       ).rejects.toThrow('No Effect programs found');
     });
 
@@ -830,7 +830,7 @@ describe('effect-analyzer', () => {
     it('should fail all() when source has no programs', async () => {
       const source = '';
       const result = await Effect.runPromise(
-        analyze.source(source).all().pipe(Effect.result),
+        analyze.source(source).all.pipe(Effect.result),
       );
       expect(result._tag).toBe('Failure');
     });
@@ -842,7 +842,7 @@ describe('effect-analyzer', () => {
         console.log(x + y);
       `;
       const result = await Effect.runPromise(
-        analyze.source(source).all().pipe(Effect.result),
+        analyze.source(source).all.pipe(Effect.result),
       );
       expect(result._tag).toBe('Failure');
     });
@@ -850,7 +850,7 @@ describe('effect-analyzer', () => {
     it('should fail single() when no programs in source', async () => {
       const source = `const a = 1;`;
       const result = await Effect.runPromise(
-        analyze.source(source).single().pipe(Effect.result),
+        analyze.source(source).single.pipe(Effect.result),
       );
       expect(result._tag).toBe('Failure');
     });
@@ -862,7 +862,7 @@ describe('effect-analyzer', () => {
         const p2 = Effect.succeed(2);
       `;
       const result = await Effect.runPromise(
-        analyze.source(source).single().pipe(Effect.result),
+        analyze.source(source).single.pipe(Effect.result),
       );
       expect(result._tag).toBe('Failure');
     });
@@ -878,7 +878,7 @@ describe('effect-analyzer', () => {
         return; // skip when sibling project not present
       }
       const result = await Effect.runPromise(
-        analyze(externalEffectFile).all().pipe(Effect.result),
+        analyze(externalEffectFile).all.pipe(Effect.result),
       );
       expect(result._tag).toBe('Success');
       if (result._tag === 'Success') {
@@ -894,7 +894,7 @@ describe('effect-analyzer', () => {
         return;
       }
       const ir = await Effect.runPromise(
-        analyze(externalEffectFile).first().pipe(Effect.result),
+        analyze(externalEffectFile).first.pipe(Effect.result),
       );
       expect(ir._tag).toBe('Success');
       if (ir._tag !== 'Success') return;
@@ -911,7 +911,7 @@ describe('effect-analyzer', () => {
         return;
       }
       const result = await Effect.runPromise(
-        analyze(externalApiComparisonFile).all().pipe(Effect.result),
+        analyze(externalApiComparisonFile).all.pipe(Effect.result),
       );
       expect(result._tag).toBe('Success');
       if (result._tag === 'Success') {
@@ -954,7 +954,7 @@ describe('effect-analyzer', () => {
     describe('renderColocatedMarkdown', () => {
       it('should render markdown with all sections', async () => {
         const ir = await Effect.runPromise(
-          analyze(resolve(fixturesDir, 'simple-effect.ts')).first(),
+          analyze(resolve(fixturesDir, 'simple-effect.ts')).first,
         );
 
         const markdown = await Effect.runPromise(renderColocatedMarkdown(ir));
@@ -968,7 +968,7 @@ describe('effect-analyzer', () => {
 
       it('should include file path in metadata', async () => {
         const ir = await Effect.runPromise(
-          analyze(resolve(fixturesDir, 'simple-effect.ts')).first(),
+          analyze(resolve(fixturesDir, 'simple-effect.ts')).first,
         );
 
         const markdown = await Effect.runPromise(renderColocatedMarkdown(ir));
@@ -978,7 +978,7 @@ describe('effect-analyzer', () => {
 
       it('should respect direction option', async () => {
         const ir = await Effect.runPromise(
-          analyze(resolve(fixturesDir, 'simple-effect.ts')).first(),
+          analyze(resolve(fixturesDir, 'simple-effect.ts')).first,
         );
 
         const markdownLR = await Effect.runPromise(
@@ -1019,7 +1019,7 @@ describe('effect-analyzer', () => {
         });
       `);
       try {
-        const [ir] = await Effect.runPromise(analyze(filePath).all());
+        const [ir] = await Effect.runPromise(analyze(filePath).all);
         expect(ir).toBeDefined();
         if (!ir) return;
         const effectNodes: import('./types').StaticEffectNode[] = [];
@@ -1150,7 +1150,7 @@ describe('effect-analyzer', () => {
 
     it('should find multiple programs in context-services file', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'context-services.ts')).all(),
+        analyze(resolve(fixturesDir, 'context-services.ts')).all,
       );
 
       expect(result.length).toBeGreaterThanOrEqual(5);
@@ -1177,7 +1177,7 @@ describe('effect-analyzer', () => {
       clearProjectCache();
       try {
         const allIrs = await Effect.runPromise(
-          analyze(filePath, { tsConfigPath: tsconfigPath }).all(),
+          analyze(filePath, { tsConfigPath: tsconfigPath }).all,
         );
         const layerNodes: import('./types').StaticLayerNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
@@ -1343,7 +1343,7 @@ describe('effect-analyzer', () => {
 
     it('should find multiple schema programs', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'schema-patterns.ts')).all(),
+        analyze(resolve(fixturesDir, 'schema-patterns.ts')).all,
       );
 
       expect(result.length).toBeGreaterThanOrEqual(3);
@@ -1418,7 +1418,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('should find multiple stream programs', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'stream-patterns.ts')).all(),
+        analyze(resolve(fixturesDir, 'stream-patterns.ts')).all,
       );
 
       expect(result.length).toBeGreaterThanOrEqual(5);
@@ -1530,7 +1530,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('should find multiple composition programs', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'complex-composition.ts')).all(),
+        analyze(resolve(fixturesDir, 'complex-composition.ts')).all,
       );
 
       expect(result.length).toBeGreaterThanOrEqual(8);
@@ -1575,7 +1575,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('should find multiple real-world programs', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'real-world-patterns.ts')).all(),
+        analyze(resolve(fixturesDir, 'real-world-patterns.ts')).all,
       );
 
       expect(result.length).toBeGreaterThanOrEqual(4);
@@ -1665,7 +1665,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('should generate diagram for complex composition', async () => {
       const ir = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'complex-composition.ts')).first(),
+        analyze(resolve(fixturesDir, 'complex-composition.ts')).first,
       );
 
       const diagram = await Effect.runPromise(renderMermaid(ir));
@@ -1800,7 +1800,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('should render markdown for real-world patterns', async () => {
       const ir = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'real-world-patterns.ts')).first(),
+        analyze(resolve(fixturesDir, 'real-world-patterns.ts')).first,
       );
 
       const markdown = await Effect.runPromise(renderColocatedMarkdown(ir));
@@ -1966,7 +1966,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         ');',
       ].join('\n');
 
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const names = result.map((ir) => ir.root.programName);
 
       expect(names).toContain('program');
@@ -1984,7 +1984,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         '});',
       ].join('\n');
 
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const names = result.map((ir) => ir.root.programName);
 
       expect(names).toContain('program');
@@ -2003,7 +2003,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         'utf-8',
       );
 
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
 
       const names = result.map((r) => r.root.programName);
       expect(names).toContain('simpleProgram');
@@ -2021,7 +2021,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
   describe('Fixture: parallel-effect.ts', () => {
     it('should detect parallel and race programs', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'parallel-effect.ts')).all(),
+        analyze(resolve(fixturesDir, 'parallel-effect.ts')).all,
       );
 
       const names = result.map((r) => r.root.programName);
@@ -2044,7 +2044,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
   describe('Fixture: error-handling.ts', () => {
     it('should detect programs with error handling', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'error-handling.ts')).all(),
+        analyze(resolve(fixturesDir, 'error-handling.ts')).all,
       );
 
       expect(result.length).toBeGreaterThan(0);
@@ -2084,7 +2084,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         });
       `);
       try {
-        const allIrs = await Effect.runPromise(analyze(filePath).all());
+        const allIrs = await Effect.runPromise(analyze(filePath).all);
         const effectNodes: import('./types').StaticEffectNode[] = [];
         const walk = (node: import('./types').StaticFlowNode) => {
           if (isStaticEffectNode(node)) effectNodes.push(node);
@@ -2181,7 +2181,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
   describe('Fixture: complex-composition.ts', () => {
     it('should detect complex layer compositions', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'complex-composition.ts')).all(),
+        analyze(resolve(fixturesDir, 'complex-composition.ts')).all,
       );
 
       const names = result.map((r) => r.root.programName);
@@ -2193,7 +2193,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
   describe('Fixture: real-world-patterns.ts', () => {
     it('should detect multiple real-world API programs', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'real-world-patterns.ts')).all(),
+        analyze(resolve(fixturesDir, 'real-world-patterns.ts')).all,
       );
 
       const names = result.map((r) => r.root.programName);
@@ -2229,7 +2229,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('analyzes match-and-branching fixture', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'match-and-branching.ts')).all(),
+        analyze(resolve(fixturesDir, 'match-and-branching.ts')).all,
       );
 
       const names = result.map((r) => r.root.programName);
@@ -2240,7 +2240,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('analyzes testing-mocks fixture', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'testing-mocks.ts')).all(),
+        analyze(resolve(fixturesDir, 'testing-mocks.ts')).all,
       );
 
       const names = result.map((r) => r.root.programName);
@@ -2250,7 +2250,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('analyzes nested-helpers fixture', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'nested-helpers.ts')).all(),
+        analyze(resolve(fixturesDir, 'nested-helpers.ts')).all,
       );
 
       const names = result.map((r) => r.root.programName);
@@ -2271,7 +2271,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
     it('analyzes effect-kitchen-sink fixture and discovers diverse entrypoints', async () => {
       const result = await Effect.runPromise(
-        analyze(resolve(fixturesDir, 'effect-kitchen-sink.ts')).all(),
+        analyze(resolve(fixturesDir, 'effect-kitchen-sink.ts')).all,
       );
 
       const names = result.map((r) => r.root.programName);
@@ -2348,7 +2348,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         };
       `;
 
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       expect(result).toHaveLength(1);
       expect(result[0]?.root.programName).toBe('exit');
       expect(result[0]?.root.source).toBe('run');
@@ -2365,7 +2365,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         });
       `;
 
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const names = result.map((r) => r.root.programName);
       expect(names).toContain('program');
       expect(names).not.toContain('response');
@@ -2381,7 +2381,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         });
       `;
 
-      const result = await Effect.runPromise(analyze.source(source).all());
+      const result = await Effect.runPromise(analyze.source(source).all);
       const names = result.map((r) => r.root.programName);
       expect(names).not.toContain('makeDeps');
       expect(names.some((name) => name.includes('send'))).toBe(true);
@@ -2397,7 +2397,7 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
 
         for (const fixtureFile of fixtureFiles) {
           const result = await Effect.runPromise(
-            analyze(fixtureFile).all().pipe(Effect.result),
+            analyze(fixtureFile).all.pipe(Effect.result),
           );
           expect(result._tag).toBe('Success');
         }

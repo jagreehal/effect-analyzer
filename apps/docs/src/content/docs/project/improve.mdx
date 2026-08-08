@@ -41,7 +41,7 @@ Each improvement carries:
 
 The agent report aggregates findings from:
 
-- **Source lints** ([18 rules](/effect-analyzer/project/source-linter/))
+- **Source lints** ([15 rules](/effect-analyzer/project/source-linter/))
 - **Coverage audit** ([analyzable-coverage gaps](/effect-analyzer/project/coverage-audit/))
 - **Error-channel analysis** ([generic errors, unhandled types](/effect-analyzer/project/health/#error-channel))
 - **Service health** ([unsatisfied / dead services, layer waste](/effect-analyzer/project/health/#service-health))
@@ -75,7 +75,7 @@ effect-analyze ./src --improve              # dry-run by default; preview the pa
 effect-analyze ./src --improve --improve-max-fixes 20   # apply, capped at 20 fixes
 ```
 
-`--improve` only operates on rules with **registered fix generators**. The rest are reported but left for human review. Fixable rules today include `effect-fail-untagged` (replaces `new Error(...)` with a tagged error class) and `raw-side-effect-in-gen` for the `process.env` case (replaces with `yield* Config.string("…")`).
+`--improve` only operates on rules with **registered fix generators**. The rest are reported but left for human review. Fixable rules today include `identity-catch`, `promise-api-in-gen`, `schedule-unbounded`, `config-secret-without-redacted`, `forEach-without-concurrency`, and `array-push-spread`.
 
 ### Control which fixes run
 
@@ -96,7 +96,7 @@ effect-analyze ./src --improve --improve-max-fixes 20   # apply, capped at 20 fi
 2. **Review the diff** — agents and humans should both eyeball this before applying.
 3. **Apply a bounded batch** so the PR stays reviewable:
    ```bash
-   effect-analyze ./src --improve --improve-max-fixes 25 --improve-rule effect-fail-untagged
+   effect-analyze ./src --improve --improve-max-fixes 25 --improve-rule identity-catch
    ```
 4. **Commit and run tests**. Repeat per category until the backlog is drained.
 

@@ -123,10 +123,7 @@ const severityToPriority = (severity: 'error' | 'warning' | 'info'): AgentPriori
 
 const ruleToEffort = (rule: string): 'trivial' | 'low' | 'medium' | 'high' => {
   const trivial = new Set([
-    'effect-fail-untagged',
-    'raw-side-effect-in-gen',
     'array-push-spread',
-    'console-log-in-effect',
     'promise-api-in-gen',
     'identity-catch',
     'empty-effect-all',
@@ -140,7 +137,6 @@ const ruleToEffort = (rule: string): 'trivial' | 'low' | 'medium' | 'high' => {
   ]);
   const low = new Set([
     'schedule-unbounded',
-    'run-effect-in-gen',
     'return-effect-from-sync',
     'runPromise-then-chain',
     'runSync-on-async',
@@ -157,10 +153,7 @@ const ruleToEffort = (rule: string): 'trivial' | 'low' | 'medium' | 'high' => {
 
 const ruleToCategory = (rule: string): string => {
   const categories: Record<string, string> = {
-    'effect-fail-untagged': 'error-handling',
     'untagged-throw': 'error-handling',
-    'raw-side-effect-in-gen': 'side-effects',
-    'console-log-in-effect': 'observability',
     'promise-api-in-gen': 'side-effects',
     'array-push-spread': 'performance',
     'schedule-unbounded': 'resilience',
@@ -173,7 +166,6 @@ const ruleToCategory = (rule: string): string => {
     'redundant-pipe': 'code-quality',
     'dead-code': 'dead-code',
     'untagged-yield': 'code-quality',
-    'run-effect-in-gen': 'architecture',
     'return-effect-from-sync': 'architecture',
     'runPromise-then-chain': 'architecture',
     'runSync-on-async': 'correctness',
@@ -200,10 +192,7 @@ const ruleToCategory = (rule: string): string => {
 
 const ruleToTitle = (rule: string): string => {
   const titles: Record<string, string> = {
-    'effect-fail-untagged': 'Replace Effect.fail(new Error(...)) with tagged errors',
     'untagged-throw': 'Replace throw new Error with Effect.fail(tagged error)',
-    'raw-side-effect-in-gen': 'Wrap raw side effects in Effect.sync or use services',
-    'console-log-in-effect': 'Replace console.* with Effect.log*',
     'promise-api-in-gen': 'Replace Promise.* with Effect.*',
     'array-push-spread': 'Replace arr.push(...xs) with loop or concat',
     'schedule-unbounded': 'Bound Schedule.forever/spaced with recurs or upTo',
@@ -216,7 +205,6 @@ const ruleToTitle = (rule: string): string => {
     'redundant-pipe': 'Remove redundant pipe with no transformations',
     'dead-code': 'Remove unused yield assignments',
     'untagged-yield': 'Assign yield results or use Effect.tap',
-    'run-effect-in-gen': 'Compose with yield* instead of run* inside gen',
     'return-effect-from-sync': 'Use Effect.suspend or flatMap instead of sync returning Effect',
     'runPromise-then-chain': 'Use Effect combinators before runPromise',
     'runSync-on-async': 'Use runPromise for async effects',
@@ -341,7 +329,7 @@ export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport 
 
   const couplingPriority: Required<CouplingPriorityMap> = {
     ...DEFAULT_COUPLING_PRIORITY,
-    ...(couplingPriorityMap ?? {}),
+    ...couplingPriorityMap,
   };
 
   const grouped = groupFindingsByRule(findings);

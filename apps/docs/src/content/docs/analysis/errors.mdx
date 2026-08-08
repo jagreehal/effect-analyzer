@@ -17,7 +17,7 @@ The `analyzeErrorFlow` function extracts all error types, maps them to the steps
 import { analyze, analyzeErrorFlow } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const flow = analyzeErrorFlow(ir)
 
 console.log(flow.allErrors)             // ["AccountNotFound", "InsufficientFunds"]

@@ -27,7 +27,7 @@ async function auditModule(
   knownEffectInternalsRoot: string,
 ): Promise<unknown> {
   const base = await Effect.runPromise(
-    analyze(filePath, { knownEffectInternalsRoot }).all().pipe(Effect.result),
+    analyze(filePath, { knownEffectInternalsRoot }).all.pipe(Effect.result),
   );
   if (base._tag === 'Failure') {
     return { file: filePath, error: base.failure.code };
@@ -43,7 +43,7 @@ async function auditModule(
       knownEffectInternalsRoot,
       onlyExportedPrograms: true,
       minDiscoveryConfidence: 'high',
-    }).all().pipe(Effect.result),
+    }).all.pipe(Effect.result),
   );
 
   const exportedAll = await Effect.runPromise(
@@ -51,7 +51,7 @@ async function auditModule(
       knownEffectInternalsRoot,
       onlyExportedPrograms: true,
       minDiscoveryConfidence: 'low',
-    }).all().pipe(Effect.result),
+    }).all.pipe(Effect.result),
   );
 
   const exportedLowNames =

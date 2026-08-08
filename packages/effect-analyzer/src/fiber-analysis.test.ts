@@ -16,7 +16,7 @@ describe('fiber leak analysis', () => {
       });
     `;
 
-    const ir = await Effect.runPromise(analyze.source(source).single());
+    const ir = await Effect.runPromise(analyze.source(source).single);
     const result = analyzeFiberLeaks(ir);
 
     expect(result.summary.total).toBe(2);

@@ -15,7 +15,7 @@ The **strict diagnostics** module validates your Effect programs against a set o
 import { analyze, validateStrict, formatDiagnostics } from "effect-analyzer/rules"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./src/transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 const result = validateStrict(ir)
 
 console.log(result.valid)       // true if no errors

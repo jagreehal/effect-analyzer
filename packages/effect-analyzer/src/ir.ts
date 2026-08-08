@@ -84,11 +84,9 @@ export const indexIR = (ir: StaticEffectIR): IRIndex => {
 
     const ownNames = runtimeSpanNames(node);
     if (ownNames.length === 0) return;
-    const ancestorPath = [
-      ...ancestors.flatMap((ancestor) => {
-        return runtimeSpanNames(ancestor);
-      }),
-    ];
+    const ancestorPath = ancestors.flatMap((ancestor) => {
+      return runtimeSpanNames(ancestor);
+    });
     const path = [...ancestorPath, ...ownNames];
     spanPathById.set(node.id, path);
     for (let i = 1; i <= ownNames.length; i++) {

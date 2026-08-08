@@ -38,8 +38,8 @@ The root package exports a configured Node analysis session. It initializes `ts-
 import { analysis } from "effect-analyzer"
 import { Effect } from "effect"
 
-const one = await Effect.runPromise(analysis.file("./src/program.ts").single())
-const fromSource = await Effect.runPromise(analysis.source(source).all())
+const one = await Effect.runPromise(analysis.file("./src/program.ts").single)
+const fromSource = await Effect.runPromise(analysis.source(source).all)
 const project = await Effect.runPromise(analysis.project("./src"))
 const audit = await Effect.runPromise(analysis.audit("./src"))
 
@@ -57,10 +57,10 @@ import { analyze } from "effect-analyzer/analysis"
 import { Effect } from "effect"
 
 // Get a single program (throws if file has zero or multiple)
-const ir = await Effect.runPromise(analyze("./src/program.ts").single())
+const ir = await Effect.runPromise(analyze("./src/program.ts").single)
 
 // Get all programs in a file
-const irs = await Effect.runPromise(analyze("./src/program.ts").all())
+const irs = await Effect.runPromise(analyze("./src/program.ts").all)
 
 // Get a program by name
 const named = await Effect.runPromise(analyze("./src/program.ts").named("transfer"))
@@ -94,19 +94,19 @@ import { Effect } from "effect"
 const ir = await Effect.runPromise(analyze.source(`
   import { Effect } from 'effect';
   export const hello = Effect.succeed('world');
-`).single())
+`).single)
 ```
 
 The fluent API methods available on `analyze(path)` and `analyze.source(code)`:
 
 | Method | Description |
 |---|---|
-| `.single()` | Returns exactly one program (fails if zero or multiple) |
-| `.singleOption()` | Returns `Option<IR>` - `None` if zero programs, fails if multiple |
-| `.all()` | Returns all programs as an array |
+| `.single` | Returns exactly one program (fails if zero or multiple) |
+| `.singleOption` | Returns `Option<IR>` - `None` if zero programs, fails if multiple |
+| `.all` | Returns all programs as an array |
 | `.named(name)` | Returns the program matching the given name |
-| `.first()` | Returns the first program (fails if zero programs) |
-| `.firstOption()` | Returns `Option<IR>` - the first program or `None` |
+| `.first` | Returns the first program (fails if zero programs) |
+| `.firstOption` | Returns `Option<IR>` - the first program or `None` |
 
 ### `analyzeProject(dirPath, options?)`
 

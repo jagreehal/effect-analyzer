@@ -409,14 +409,19 @@ effect-analyze ./app \
 On 205 analyzed files, 949 programs, 0.0% unknown node rate, the analyzer surfaced **34 prioritized improvements** in the snapshot below. The top P1 findings are concrete and actionable:
 
 <Aside type="note">
-The exact numbers were captured during analyzer development before tsconfig path-alias resolution and transitive coupling were available — see the [foldkit case study](/effect-analyzer/case-studies/foldkit/) for examples with both features wired in. The categories of finding and the workflow shown here are unchanged; re-running today produces a fuller picture because `@/...` aliases now resolve to their targets.
+The exact numbers were captured during analyzer development before tsconfig
+path-alias resolution, transitive coupling, and the `@effect/tsgo` bridge were
+available. The two upstream rule rows below show the current equivalents of the
+older raw-side-effect category; re-run with `--tsgo=./tsconfig.json` for current
+diagnostics. See the [foldkit case study](/effect-analyzer/case-studies/foldkit/)
+for examples with both coupling features wired in.
 </Aside>
 
 | Rule | Count | Example |
 |---|---|---|
 | `nondeterministic-test-api` | 14 | `new Date()` inside test code — flakes waiting to happen |
-| `raw-side-effect-in-gen` (Date.now) | 6 | Bare `Date.now()` in `Effect.gen` body — bypasses `Clock` service |
-| `raw-side-effect-in-gen` (process.env) | 5 | `process.env.X` in `Effect.gen` — should use `Config.string(...)` |
+| `globalDateInEffect` (`@effect/tsgo`) | 6 | Bare `Date.now()` in Effect code — bypasses the `Clock` service |
+| `processEnvInEffect` (`@effect/tsgo`) | 5 | `process.env.X` in Effect code — should use `Config.string(...)` |
 | `promise-api-in-gen` | 2 | `Promise.resolve(...)` inside Effect.gen — bypasses interruption |
 | `config-secret-without-redacted` | 2 | `Config.string("GOOGLE_CLIENT_SECRET")` reads a secret as plain text |
 | `array-push-spread` | 1 | `arr.push(...xs)` — V8 stack-overflow on large arrays |

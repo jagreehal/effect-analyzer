@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2022"],
-    "baseUrl": ".",
+    // No `baseUrl` — removed in TypeScript 7; `paths` below already resolve
+    // relative to this config file.
     "typeRoots": ["../../packages/effect-analyzer/node_modules/@types"],
     "types": ["node"],
     // This example is not a workspace package (keeps the lockfile untouched), so

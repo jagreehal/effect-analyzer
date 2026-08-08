@@ -2,7 +2,7 @@ import { Effect, Option } from 'effect';
 import { analyze } from './dist/analysis.js';
 import { resolve } from 'node:path';
 const p=resolve('./src/__fixtures__/effect-kitchen-sink.ts');
-const irs=await Effect.runPromise(analyze(p).all());
+const irs=await Effect.runPromise(analyze(p).all);
 let count=0;
 for (const ir of irs){
   const stack=[...ir.root.children];

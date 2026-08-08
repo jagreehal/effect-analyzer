@@ -155,6 +155,10 @@ effect-analyze ./packages/alchemy/src \
   -o backlog.md
 ```
 
+The lint totals below are a historical analyzer snapshot. For a current run,
+add `--tsgo=./packages/alchemy/tsconfig.json`; the former analyzer-only lint
+categories are now reported by the official `@effect/tsgo` rules named below.
+
 | Metric | Value |
 |---|---|
 | Files analyzed | 510 |
@@ -172,8 +176,8 @@ Notable P1 findings include:
 
 - `config-secret-without-redacted` — `Config.string("AWS_ACCESS_KEY_ID")` in `AWS/Environment.ts:22` reads a credential as plain text instead of `Config.redacted`. This is the kind of finding security review would catch — except the analyzer caught it first, with the file:line attached.
 - `untagged-throw` — `throw new Error(...)` inside `Effect.sync` blocks, escaping the typed error channel.
-- `effect-fail-untagged` — `Effect.fail(new Error(...))` instead of tagged errors.
-- `raw-side-effect-in-gen` — `process.env` or `Date.now()` access inside `Effect.gen` bodies; should go through `Config` or `Clock`.
+- `globalErrorInEffectFailure` (official `@effect/tsgo`) — `Effect.fail(new Error(...))` instead of tagged errors.
+- `processEnvInEffect` / `globalDateInEffect` (official `@effect/tsgo`) — `process.env` or `Date.now()` access inside Effect code; these should go through `Config` or `Clock`.
 - 17 `service-health` findings — likely a mix of optional dependency wiring and legitimate "this service is now only used in one branch" cleanups.
 
 ## Not every finding is a bug
@@ -182,7 +186,7 @@ The same four-category triage that applies everywhere, applied to this specific 
 
 - **Intentional hubs worth documenting with `@known-hub`** — every one of the 14 critical-fan-in files in `alchemy`. The framework's central abstractions deserve annotations, not splits.
 - **Accidental god modules worth splitting** — the high-fan-out side is more interesting here. A file importing >20 internal modules in a library is unusual; the 7 high-fan-out files in the report are the legitimate refactor candidates.
-- **Real issues worth fixing** — the single `config-secret-without-redacted` finding in `AWS/Environment.ts:22` is unambiguous. Same for the `untagged-throw` and `effect-fail-untagged` lints.
+- **Real issues worth fixing** — the single `config-secret-without-redacted` finding in `AWS/Environment.ts:22` is unambiguous. Same for `untagged-throw` and the official `globalErrorInEffectFailure` diagnostic.
 - **Analyzer noise worth ignoring** — and feeding back as bug reports. The 17 service-health findings deserve manual review; some will be real, some will be analyzer artefacts on a codebase this large.
 
 The point is to make that triage explicit. The agent report does not assume every line in it is a bug; it assumes the reader is going to decide.
@@ -192,6 +196,7 @@ The point is to make that triage explicit. The agent report does not assume ever
 | Feature | How it shows up here |
 |---|---|
 | `--tsconfig` | `alchemy/src` uses `@/*` aliases; without `--tsconfig` they're silently dropped |
+| `--tsgo` | Adds the official Effect language-service diagnostics using the project's TypeScript 7 compiler |
 | `--coupling-transitive` | Idempotent here (no barrels); the absence of change is itself a finding |
 | Workspace-aware resolution | `packages/alchemy` imports from `packages/better-auth` via package name in some entry points; `workspacePackages` resolves those cross-package edges |
 | `@known-hub` at scale | 14 critical-fan-in files in a single library; the annotation pattern was specifically designed for this scenario |

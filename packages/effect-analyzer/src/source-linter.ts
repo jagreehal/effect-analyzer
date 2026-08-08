@@ -187,101 +187,6 @@ const checkUntaggedThrow = (
 };
 
 // ===========================================================================
-// raw-side-effect-in-gen
-// ===========================================================================
-
-const RAW_SIDE_EFFECT_CALLEES = new Set<string>([
-  'fetch',
-  'Math.random',
-  'Date.now',
-  'crypto.randomUUID',
-  'crypto.randomBytes',
-  'setTimeout',
-  'setInterval',
-]);
-
-const RAW_SIDE_EFFECT_ACCESSES = new Set<string>([
-  'process.env',
-]);
-
-const checkRawSideEffectInGen = (
-  sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
-
-  // CallExpressions: fetch(...), Math.random(), Date.now(), crypto.randomUUID()
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (!RAW_SIDE_EFFECT_CALLEES.has(name)) continue;
-    if (!isInsideEffectGen(call)) continue;
-    // Skip if already wrapped in Effect.sync/try/tryPromise/promise
-    if (isInsideEffectSyncOrTry(call)) continue;
-    issues.push({
-      rule: 'raw-side-effect-in-gen',
-      message: `Bare ${name}(...) inside Effect.gen body — should be wrapped (Effect.sync / tryPromise) or behind a service.`,
-      severity: 'warning',
-      location: makeLocation(call, ctx.filePath),
-      suggestion:
-        name === 'fetch'
-          ? 'Wrap in Effect.tryPromise({ try: () => fetch(...), catch: ... }) or use HttpClient.'
-          : `Wrap in Effect.sync(() => ${name}()) or inject a service (e.g. Random, Clock).`,
-    });
-  }
-
-  // PropertyAccessExpressions: process.env.X
-  for (const pa of sf.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
-    const head = pa.getText();
-    if (!head.startsWith('process.env')) continue;
-    if (!isInsideEffectGen(pa)) continue;
-    if (isInsideEffectSyncOrTry(pa)) continue;
-    issues.push({
-      rule: 'raw-side-effect-in-gen',
-      message: 'process.env access inside Effect.gen body — should use Config.string / Config.redacted.',
-      severity: 'warning',
-      location: makeLocation(pa, ctx.filePath),
-      suggestion:
-        'Use Config.string("MY_VAR") (or Config.redacted for secrets) to read environment variables.',
-    });
-  }
-  // Also flag bare ElementAccess: process.env["X"]
-  for (const ea of sf.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
-    const ex = ea.getExpression().getText();
-    if (ex !== 'process.env') continue;
-    if (!isInsideEffectGen(ea)) continue;
-    if (isInsideEffectSyncOrTry(ea)) continue;
-    issues.push({
-      rule: 'raw-side-effect-in-gen',
-      message: 'process.env[...] access inside Effect.gen body — should use Config.string / Config.redacted.',
-      severity: 'warning',
-      location: makeLocation(ea, ctx.filePath),
-      suggestion:
-        'Use Config.string("MY_VAR") (or Config.redacted for secrets) to read environment variables.',
-    });
-  }
-  // NewExpression: new Promise(...)
-  for (const ne of sf.getDescendantsOfKind(SyntaxKind.NewExpression)) {
-    const ctor = ne.getExpression().getText();
-    if (ctor !== 'Promise') continue;
-    if (!isInsideEffectGen(ne)) continue;
-    if (isInsideEffectSyncOrTry(ne)) continue;
-    issues.push({
-      rule: 'raw-side-effect-in-gen',
-      message: 'Bare new Promise(...) inside Effect.gen body — should use Effect.promise/Effect.callback.',
-      severity: 'warning',
-      location: makeLocation(ne, ctx.filePath),
-      suggestion:
-        'Use Effect.promise(() => ...) or Effect.callback(...) so interruption/error handling remain in Effect.',
-    });
-  }
-  // Be aware that RAW_SIDE_EFFECT_ACCESSES is reserved for future patterns.
-  RAW_SIDE_EFFECT_ACCESSES.has('process.env');
-
-  return issues;
-};
-
-// ===========================================================================
 // mutable-in-concurrent
 // ===========================================================================
 
@@ -648,52 +553,6 @@ const checkSleepWithoutTestClockInTest = (
 };
 
 // ===========================================================================
-// console-log-in-effect
-// ===========================================================================
-
-const CONSOLE_METHODS = new Set<string>([
-  'console.log',
-  'console.info',
-  'console.warn',
-  'console.error',
-  'console.debug',
-  'console.trace',
-]);
-
-const checkConsoleInEffect = (
-  sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (!CONSOLE_METHODS.has(name)) continue;
-    if (!isInsideEffectGen(call)) continue;
-    if (isInsideEffectSyncOrTry(call)) continue;
-    const method = name.split('.')[1] ?? 'log';
-    const effectFn =
-      method === 'warn'
-        ? 'Effect.logWarning'
-        : method === 'error'
-          ? 'Effect.logError'
-          : method === 'debug'
-            ? 'Effect.logDebug'
-            : method === 'info'
-              ? 'Effect.logInfo'
-              : 'Effect.log';
-    issues.push({
-      rule: 'console-log-in-effect',
-      message: `${name}(...) inside Effect.gen body — loses span/fiber context; use ${effectFn}.`,
-      severity: 'info',
-      location: makeLocation(call, ctx.filePath),
-      suggestion: `Use yield* ${effectFn}(...) so the message participates in Effect's logger and tracing.`,
-    });
-  }
-  return issues;
-};
-
-// ===========================================================================
 // promise-api-in-gen
 // ===========================================================================
 
@@ -724,107 +583,6 @@ const checkPromiseApiInGen = (
       severity: 'warning',
       location: makeLocation(call, ctx.filePath),
       suggestion: `Replace ${name}(...) with ${replacement}(...) so Effect can manage concurrency and interruption.`,
-    });
-  }
-  return issues;
-};
-
-// ===========================================================================
-// effect-fail-untagged
-// ===========================================================================
-
-const BUILTIN_ERROR_CTORS = new Set<string>([
-  'Error',
-  'TypeError',
-  'RangeError',
-  'SyntaxError',
-  'ReferenceError',
-  'URIError',
-  'EvalError',
-]);
-
-const checkEffectFailUntagged = (
-  sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Effect.fail' && name !== 'Effect.failSync') continue;
-    const args = call.getArguments();
-    const first = args[0];
-    if (!first) continue;
-    // Direct: Effect.fail(new Error("..."))
-    if (first.getKindName() === 'NewExpression') {
-      const newExpr = first.asKindOrThrow(SyntaxKind.NewExpression);
-      const ctor = newExpr.getExpression().getText();
-      if (BUILTIN_ERROR_CTORS.has(ctor)) {
-        issues.push({
-          rule: 'effect-fail-untagged',
-          message: `${name}(new ${ctor}(...)) — error channel becomes a built-in Error; downstream catchTag cannot discriminate.`,
-          severity: 'warning',
-          location: makeLocation(call, ctx.filePath),
-          suggestion:
-            'Define a Data.TaggedError class (e.g. class FetchError extends Data.TaggedError("FetchError")<{ ... }>{}) and fail with that.',
-        });
-        continue;
-      }
-    }
-    // Effect.failSync(() => new Error("..."))
-    if (
-      name === 'Effect.failSync' &&
-      (first.getKindName() === 'ArrowFunction' || first.getKindName() === 'FunctionExpression')
-    ) {
-      const text = first.getText();
-      // Look for `new <BuiltinError>(` inside the arrow body.
-      const m = /new\s+(Error|TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError)\b/.exec(text);
-      if (m) {
-        issues.push({
-          rule: 'effect-fail-untagged',
-          message: `${name}(() => new ${m[1]}(...)) — error channel becomes a built-in Error; downstream catchTag cannot discriminate.`,
-          severity: 'warning',
-          location: makeLocation(call, ctx.filePath),
-          suggestion:
-            'Return a Data.TaggedError instance instead of a built-in Error so the typed error channel stays discriminable.',
-        });
-      }
-    }
-  }
-  return issues;
-};
-
-// ===========================================================================
-// run-effect-in-gen
-// ===========================================================================
-
-const EFFECT_RUNNERS = new Set<string>([
-  'Effect.runPromise',
-  'Effect.runPromiseExit',
-  'Effect.runSync',
-  'Effect.runSyncExit',
-  'Effect.runFork',
-  'Effect.runForkExit',
-  'Effect.runCallback',
-]);
-
-const checkRunEffectInGen = (
-  sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (!EFFECT_RUNNERS.has(name)) continue;
-    if (!isInsideEffectGen(call)) continue;
-    issues.push({
-      rule: 'run-effect-in-gen',
-      message: `${name}(...) inside Effect.gen — creates a nested runtime and breaks fiber/tracing context.`,
-      severity: 'warning',
-      location: makeLocation(call, ctx.filePath),
-      suggestion:
-        'Compose with yield* on the inner effect instead of calling a runner. Reserve run* for program entry points.',
     });
   }
   return issues;
@@ -1413,41 +1171,6 @@ const checkYieldPromise = (
 };
 
 // ===========================================================================
-// useless-pipe
-// ===========================================================================
-
-const checkUselessPipe = (
-  sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
-  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'pipe') continue;
-    const args = call.getArguments();
-    if (args.length === 1) {
-      issues.push({
-        rule: 'useless-pipe',
-        message: 'pipe(x) with a single argument is a no-op — drop the pipe.',
-        severity: 'info',
-        location: makeLocation(call, ctx.filePath),
-        suggestion: 'Replace pipe(x) with x. Use pipe(x, f, g, ...) only when you actually chain transforms.',
-      });
-    } else if (args.length === 0) {
-      issues.push({
-        rule: 'useless-pipe',
-        message: 'pipe() with no arguments is a no-op.',
-        severity: 'info',
-        location: makeLocation(call, ctx.filePath),
-        suggestion: 'Remove the empty pipe() call.',
-      });
-    }
-  }
-  return issues;
-};
-
-// ===========================================================================
 // barrel-import-from-effect
 // ===========================================================================
 
@@ -1657,7 +1380,6 @@ export const lintSourceFile = (
   const ctx: SourceLintContext = { filePath: fp };
   const issues: LintIssue[] = [];
   issues.push(...checkUntaggedThrow(sf, ctx));
-  issues.push(...checkRawSideEffectInGen(sf, ctx));
   issues.push(...checkMutableInConcurrent(sf, ctx));
   issues.push(...checkRunPromiseThenChain(sf, ctx));
   issues.push(...checkRunSyncOnAsync(sf, ctx));
@@ -1665,10 +1387,7 @@ export const lintSourceFile = (
   issues.push(...checkNondeterministicTestApi(sf, ctx));
   issues.push(...checkDetachedFiberInTest(sf, ctx));
   issues.push(...checkSleepWithoutTestClockInTest(sf, ctx));
-  issues.push(...checkConsoleInEffect(sf, ctx));
   issues.push(...checkPromiseApiInGen(sf, ctx));
-  issues.push(...checkEffectFailUntagged(sf, ctx));
-  issues.push(...checkRunEffectInGen(sf, ctx));
   issues.push(...checkForEachWithoutConcurrency(sf, ctx));
   issues.push(...checkIdentityCatch(sf, ctx));
   issues.push(...checkEmptyEffectAll(sf, ctx));
@@ -1677,7 +1396,6 @@ export const lintSourceFile = (
   issues.push(...checkConfigSecretWithoutRedacted(sf, ctx));
   issues.push(...checkReturnEffectFromSync(sf, ctx));
   issues.push(...checkYieldPromise(sf, ctx));
-  issues.push(...checkUselessPipe(sf, ctx));
   issues.push(...checkBarrelImportFromEffect(sf, ctx));
   issues.push(...checkArrayPushSpread(sf, ctx));
   issues.push(...checkTryPromiseWithoutCatch(sf, ctx));

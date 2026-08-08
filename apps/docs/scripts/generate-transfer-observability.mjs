@@ -7,7 +7,7 @@ import {
   renderExplanation,
   renderRailwayMermaid,
   renderStaticMermaid,
-} from '../../../packages/effect-analyzer/dist/index.js';
+} from '../../../packages/effect-analyzer/dist/diagram.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const docsRoot = resolve(__dirname, '..');
@@ -64,7 +64,7 @@ const formatStatsJson = (programName, stats) =>
   `${JSON.stringify([{ program: programName, stats }], null, 2)}\n`;
 
 const renderProgramSection = async (filePath) => {
-  const programs = await runEffect(analyze(filePath).all());
+  const programs = await runEffect(analyze(filePath).all);
   const fileName = basename(filePath);
 
   if (programs.length === 0) {
@@ -258,7 +258,7 @@ const generateTopLevelAnalyses = async () => {
 
 const analyzeEvolutionStep = async (step) => {
   const filePath = join(evolutionDir, step.file);
-  const program = await runEffect(analyze(filePath).first());
+  const program = await runEffect(analyze(filePath).first);
   return {
     title: step.title,
     desc: step.desc,

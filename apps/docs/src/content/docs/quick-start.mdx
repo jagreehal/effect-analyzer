@@ -138,7 +138,7 @@ Import analysis and rendering functions from their task-specific entry points:
 import { analyze, renderMermaid, calculateComplexity } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analyze("./transfer.ts").single())
+const ir = await Effect.runPromise(analyze("./transfer.ts").single)
 
 // Generate a Mermaid diagram
 const diagram = await Effect.runPromise(renderMermaid(ir))
@@ -154,7 +154,7 @@ Use the root interface when you need a reusable analysis session or want to comp
 import { analysis, computeDiagramFidelity } from "effect-analyzer"
 import { Effect } from "effect"
 
-const ir = await Effect.runPromise(analysis.file("./transfer.ts").single())
+const ir = await Effect.runPromise(analysis.file("./transfer.ts").single)
 const fidelity = computeDiagramFidelity(ir)
 
 console.log(fidelity.exact, fidelity.score)

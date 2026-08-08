@@ -79,7 +79,7 @@ describe('workflow pattern analysis (effect-workflow)', () => {
     `;
 
     const exit = await Effect.runPromiseExit(
-      analyze.source(source).all(),
+      analyze.source(source).all,
     );
     // Either discovers programs or NO_EFFECTS_FOUND — both valid
     expect(exit._tag).toMatch(/^(Success|Failure)$/);
@@ -94,7 +94,7 @@ describe('workflow pattern analysis (effect-workflow)', () => {
     `;
 
     const exit = await Effect.runPromiseExit(
-      analyze.source(source).all(),
+      analyze.source(source).all,
     );
 
     if (exit._tag === 'Failure' && exit.cause._tag === 'Fail') {
@@ -173,10 +173,10 @@ describe('workflow pattern analysis (effect-workflow)', () => {
     `;
 
     const exitIndex = await Effect.runPromiseExit(
-      analyze.source(indexSource).all(),
+      analyze.source(indexSource).all,
     );
     const exitWorkflow = await Effect.runPromiseExit(
-      analyze.source(workflowSource).all(),
+      analyze.source(workflowSource).all,
     );
     expect(exitIndex._tag).toMatch(/^(Success|Failure)$/);
     expect(exitWorkflow._tag).toMatch(/^(Success|Failure)$/);
