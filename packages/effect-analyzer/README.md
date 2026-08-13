@@ -1,14 +1,14 @@
 # effect-analyzer
 
-Static analysis for [Effect](https://effect.website/) programs. Visualize service dependencies, error channels, concurrency, and control flow as Mermaid diagrams - without running your code.
+Static analysis for [Effect](https://effect.website/) programs. It reads the shape of a program (services, error channel, retries, concurrency), reports when that shape changes, and draws it as Mermaid diagrams. Your code never runs.
 
 > **[Documentation](https://jagreehal.github.io/effect-analyzer/)** · **[Getting Started](https://jagreehal.github.io/effect-analyzer/quick-start/)** · **[Playground](https://jagreehal.github.io/effect-analyzer/playground/)** · **[CLI Reference](https://jagreehal.github.io/effect-analyzer/reference/cli/)** · **[API Reference](https://jagreehal.github.io/effect-analyzer/reference/api/)**
 
 ## Why
 
-Effect programs are powerful, but their structure - service dependencies, error topology, concurrency patterns - is hard to see in source. effect-analyzer parses your code with [ts-morph](https://ts-morph.com/) and the TypeScript type checker, then produces semantic diagrams and structured analysis. No runtime, no instrumentation.
+An agent edits an Effect program and widens its error channel from a tagged error to `Error`. TypeScript compiles it, `oxlint` passes, and the PR reads as a small change. The error channel is a property of the whole program, so a check that looks at one expression at a time has nothing to complain about.
 
-Use it for **code review**, **onboarding**, **architecture docs**, and **CI** to catch regressions in program shape.
+effect-analyzer parses your source with [ts-morph](https://ts-morph.com/) and the TypeScript type checker, builds a typed IR of every program it finds, and compares that IR against the version you approved last. Your agent consumes the JSON and the prioritized backlog. You read the diagram before merging.
 
 ## Install
 
@@ -43,6 +43,83 @@ npx effect-analyze ./src --coverage-audit --quiet \
   --max-audit-failed-files 0 \
   --max-audit-suspicious-zeros 0 \
   --min-audit-source-resolution 98
+```
+
+## Guardrails for Coding Agents
+
+Three commands cover the generate-check loop: one gives the agent a backlog to work
+from, one blocks new lint findings at the gate, and one puts the shape change in front
+of a reviewer. The full walkthrough is in
+[Guardrails for Coding Agents](https://jagreehal.github.io/effect-analyzer/agent-guardrails/).
+
+### 1. Hand the agent a prioritized backlog
+
+```bash
+npx effect-analyze ./src --agent-report
+```
+
+The report merges lint findings, error channel analysis, service health, performance
+anti-patterns, and coupling into one P0-P3 list. Each entry carries a file and line, a
+suggestion, and an effort estimate, so an agent picks up the top item and works down
+instead of guessing at priorities. Add `--improve` to apply the fixes the analyzer makes
+on its own, or `--improve-dry-run` to read them first.
+
+### 2. Gate the build on new findings
+
+Record a baseline on `main`:
+
+```bash
+npx effect-analyze ./src --lint-source -o .cache/effect-baseline.json
+```
+
+Then check every branch against it:
+
+```bash
+npx effect-analyze ./src --lint-source --baseline .cache/effect-baseline.json --fail-on-new
+```
+
+The analyzer fingerprints each finding, so moving code between files does not trip the
+gate. It exits `1` when a finding appears that your baseline does not contain, and your
+agent can read that failure and regenerate against it. Findings your team fixes drop out
+of the report, so the baseline shrinks as the codebase improves.
+
+### 3. Show the reviewer what moved
+
+```bash
+npx effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff
+```
+
+```
+# Effect Program Diff: sendMoney → sendMoney
+
+| Metric | Count |
+|--------|-------|
+| Added | 6 |
+| Renamed | 1 |
+| Unchanged | 7 |
+| Structural changes | 2 |
+
++ **FraudScreening** (added)
++ **fraud.screen** (added)
+
+## Structural Changes
+- + pipe block added
+- + retry block added
+```
+
+`--diff` reports and always exits `0`. Pipe it into a PR comment for a human, or into
+an agent that needs to know what its last edit did. Use `--format json` for machine
+consumption, `--format mermaid` for a diagram, and `--regression` to flag removed
+programs. For gating, reach for `--fail-on-new` above, `--assert-diagram-fidelity`,
+or the [audit policy flags](#coverage-audit).
+
+### In GitHub Actions
+
+```yaml
+- run: npx effect-analyze ./src --lint-source --baseline .cache/effect-baseline.json --fail-on-new
+- run: npx effect-analyze ./src --coverage-audit --quiet --max-audit-failed-files 0
+- if: always()
+  run: npx effect-analyze "origin/main:src/transfer.ts" src/transfer.ts --diff >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ## What You Get

@@ -7,11 +7,11 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-**effect-analyzer** is a static analysis toolkit for [Effect](https://effect.website/) programs. It parses your TypeScript source code using [ts-morph](https://ts-morph.com/), extracts a typed **intermediate representation** (IR) of every Effect program it finds, and renders that IR into diagrams, metrics, reports, and structured data - all without executing your code.
+**effect-analyzer** is a static analysis toolkit for [Effect](https://effect.website/) programs. It parses your TypeScript source with [ts-morph](https://ts-morph.com/), extracts a typed **intermediate representation** (IR) of every Effect program it finds, and renders that IR into diagrams, metrics, reports, and structured data. Your code never runs.
 
-Think of it as a compiler front-end for Effect workflows. Where a compiler turns source into machine code, effect-analyzer turns source into understanding.
+A compiler front-end reads source and hands the compiler a structure to work on. This does the same for Effect workflows, then hands the structure to you and to your tooling.
 
-The fastest way to see that value is not the CLI output. It is the [live browser playground](/effect-analyzer/playground/) and the [interactive HTML viewer](/effect-analyzer/reference/html-viewer/). Those are the strongest product demos because they let people see the structure immediately and share it with others.
+Your CI can compare today's IR against the one you approved last week and fail the build when a program's shape moves, which gives a coding agent a failure it can read and act on. See [Guardrails for Coding Agents](/effect-analyzer/agent-guardrails/). You can also look at the structure yourself: the [live browser playground](/effect-analyzer/playground/) and the [interactive HTML viewer](/effect-analyzer/reference/html-viewer/) put the services, error paths, and concurrency of a function on one page you can share.
 
 ## What It Detects
 
@@ -45,6 +45,7 @@ Because the IR is a plain data structure, you can also consume it directly in yo
 ## Who It Is For
 
 - **Developers** exploring unfamiliar Effect codebases or reviewing pull requests
+- **Coding agents** that need a machine-readable failure to regenerate against, and a backlog to work down
 - **Teams** generating living documentation for complex workflows
 - **CI/CD pipelines** tracking complexity regressions and structural changes over time
 - **Tooling authors** building custom analysis, linting, or visualization on top of the structured IR
