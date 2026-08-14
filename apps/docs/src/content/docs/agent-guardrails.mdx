@@ -1,0 +1,150 @@
+---
+title: Guardrails for Coding Agents
+description: Wire effect-analyzer into the generate-check loop so your agent gets a failure it can read, and you get a diagram you can review.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+An agent edits an Effect program and widens its error channel from a tagged error to
+`Error`. TypeScript compiles it, `oxlint` passes, and the PR reads as a small change. The
+error channel is a property of the whole program, so a check that looks at one expression
+at a time has nothing to complain about.
+
+## Where this sits
+
+The official Effect diagnostics from `@effect/tsgo` cover the expression scope. They
+report an unused floating effect, or an `R` that still needs `UserRepository`, in a
+sentence the agent can act on. Turn them on. This page covers the layer above: what a
+program requires, what it can fail with, how it retries, and which services it reaches.
+
+<Aside type="tip">
+Run both. `--tsgo` merges the official type-aware Effect diagnostics into the same
+report as the analyzer's AST checks: `effect-analyze ./src --lint-source --tsgo=./tsconfig.json`.
+</Aside>
+
+## 1. Hand the agent a prioritized backlog
+
+```bash
+npx effect-analyze ./src --agent-report
+```
+
+```text
+Agent Report Summary
+====================
+Files: 52 | Programs: 345 | Unknown: 0.0%
+Lint: 0 errors, 37 warnings, 111 infos
+Error channel: 0 | Service health: 4 | Performance: 0 | Coupling: 0
+Total improvements: 36
+
+  P1 (Important): 5
+  P2 (Recommended): 31
+
+Top improvements:
+  [P1] Replace throw new Error with Effect.fail(tagged error) (3x, medium)
+  [P1] Use Ref or Atomic for shared state in concurrent code (2x, medium)
+  [P1] Use Effect.suspend or flatMap instead of sync returning Effect (1x, low)
+```
+
+Each entry carries a file and line, a suggestion, and an effort estimate, so an agent
+picks up the top item and works down instead of guessing at priorities. Point your agent
+at the markdown report, or parse the JSON.
+
+Add `--improve` to apply the fixes the analyzer makes on its own, and
+`--improve-dry-run` to read them first. See [Improve Mode & Agent
+Report](/effect-analyzer/project/improve/).
+
+## 2. Gate the build on new findings
+
+Record a baseline once, on `main`:
+
+```bash
+npx effect-analyze ./src --lint-source -o .cache/effect-baseline.json
+```
+
+Check every branch against it:
+
+```bash
+npx effect-analyze ./src --lint-source --baseline .cache/effect-baseline.json --fail-on-new
+```
+
+```json
+"baseline": {
+  "new": 0,
+  "resolved": 0,
+  "unchanged": 148
+}
+```
+
+The analyzer fingerprints each finding, so moving code between files does not trip the
+gate. It exits `1` when a finding appears that your baseline does not contain, and your
+agent can read that failure and regenerate against it rather than waiting for you to
+repeat the same correction. Findings your team fixes drop out of the report, so the
+baseline shrinks as the codebase improves.
+
+See the [Source Linter](/effect-analyzer/project/source-linter/) for the rule list and
+SARIF output.
+
+## 3. Show the reviewer what moved
+
+```bash
+npx effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff
+```
+
+```text
+# Effect Program Diff: sendMoney → sendMoney
+
+| Metric | Count |
+|--------|-------|
+| Added | 6 |
+| Renamed | 1 |
+| Unchanged | 7 |
+| Structural changes | 2 |
+
++ **FraudScreening** (added)
++ **fraud.screen** (added)
++ **notifications.sendConfirmation** (added)
+
+## Structural Changes
+- + pipe block added
+- + retry block added
+```
+
+The text diff for that change reports 45 added lines and leaves you to work out what they
+do. The semantic diff names the services that arrived and the retry block that wrapped
+the transfer.
+
+`--diff` reports and always exits `0`. Post it as a PR comment for a human, or pipe it
+back to an agent that needs to know what its last edit did. Use `--format json` for
+machine consumption, `--format mermaid` for a diagram, and `--regression` to flag
+removed programs.
+
+For gates that fail a build, use `--fail-on-new` above, `--assert-diagram-fidelity`, the
+[audit policy flags](/effect-analyzer/project/coverage-audit/), or
+`--format statechart-coverage --min-coverage`.
+
+See [Semantic Diff](/effect-analyzer/project/diff/) and [What a text diff
+misses](/effect-analyzer/case-studies/review-scenarios/).
+
+## Putting it in CI
+
+```yaml
+- run: npx effect-analyze ./src --lint-source --baseline .cache/effect-baseline.json --fail-on-new
+- run: npx effect-analyze ./src --coverage-audit --quiet --max-audit-failed-files 0
+- if: always()
+  run: |
+    npx effect-analyze "origin/main:src/transfer.ts" src/transfer.ts --diff \
+      >> "$GITHUB_STEP_SUMMARY"
+```
+
+The first two steps fail the build and give your agent something to fix. The third runs
+either way and puts the shape change in the job summary, where you read it before
+approving.
+
+## What this does not do
+
+The analyzer reads source. It sees the retry policy you wrote, not how often that policy
+fired last night, and it cannot tell you which of the paths in a diagram production
+traffic reaches. Pass OpenTelemetry spans to `renderMermaidWithRuntimeTrace` to overlay a
+real trace onto a static diagram. Your observability stack still owns the rest.
