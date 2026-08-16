@@ -107,7 +107,7 @@
   },
   "devDependencies": {
     "@total-typescript/ts-reset": "^0.6.1",
-    "@typeonce/effect-machine": "0.3.0",
+    "@typeonce/effect-machine": "0.5.1",
     "@types/node": "^26.1.2",
     "effect": "4.0.0-beta.102",
     "oxlint": "1.77.0",
