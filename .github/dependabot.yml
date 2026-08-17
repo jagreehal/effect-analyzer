@@ -8,6 +8,14 @@ updates:
     versioning-strategy: 'auto'
     allow:
       - dependency-type: 'all'
+    # @effect/tsgo ships prebuilt artifacts for specific oxlint versions;
+    # bumping oxlint alone breaks the `effect-tsgo patch` prepare step.
+    groups:
+      tsgo-toolchain:
+        patterns:
+          - '@effect/tsgo'
+          - 'oxlint'
+          - 'oxlint-tsgolint'
     labels:
       - 'dependencies'
       - 'automerge'
