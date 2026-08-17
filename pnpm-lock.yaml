@@ -27,8 +27,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@typeonce/effect-machine':
-        specifier: 0.5.1
-        version: 0.5.1(effect@4.0.0-rc.109)
+        specifier: 0.7.0
+        version: 0.7.0(effect@4.0.0-rc.109)
       astro:
         specifier: ^7.2.2
         version: 7.2.2(@astrojs/markdown-remark@7.2.2)(@emnapi/core@2.0.0-alpha.3)(@emnapi/runtime@2.0.0-alpha.3)(@types/node@26.2.0)(yaml@2.9.0)
@@ -61,8 +61,8 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1
       '@typeonce/effect-machine':
-        specifier: 0.5.1
-        version: 0.5.1(effect@4.0.0-rc.109)
+        specifier: 0.7.0
+        version: 0.7.0(effect@4.0.0-rc.109)
       '@types/node':
         specifier: ^26.2.0
         version: 26.2.0
@@ -1445,11 +1445,11 @@ packages:
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
 
-  '@typeonce/effect-machine@0.5.1':
-    resolution: {integrity: sha512-yj+aeaEx4tko6cKKwMJ+7CsLpLa0kh7XIiJI+hq8JLi06MXdoINs+84WRN+e0oc9v/O6qXrZvXmJNcRJmYCVAg==}
+  '@typeonce/effect-machine@0.7.0':
+    resolution: {integrity: sha512-0CzSuC20oih/vbU0piqgmfC1EsmWGm/jY5Az0P3ns26twE+sXSBOUeUM+HPVAoq833njBo9tLfHTuBiO6RzRSg==}
     engines: {node: '>=20'}
     peerDependencies:
-      effect: 4.0.0-beta.107
+      effect: 4.0.0-rc.108
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -4972,7 +4972,7 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@typeonce/effect-machine@0.5.1(effect@4.0.0-rc.109)':
+  '@typeonce/effect-machine@0.7.0(effect@4.0.0-rc.109)':
     dependencies:
       effect: 4.0.0-rc.109
 
