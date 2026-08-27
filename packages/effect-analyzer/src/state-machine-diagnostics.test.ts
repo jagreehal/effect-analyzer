@@ -84,3 +84,39 @@ describe('diagnoseStateMachines', () => {
     expect(names.has('CheckoutStates')).toBe(false);
   });
 });
+
+describe('diagnoseStateMachines — Machine.states descriptor API', () => {
+  it('does not reject a definition that is implemented separately', () => {
+    const { machines, rejected } = diagnoseStateMachines(
+      join(__dirname, '__fixtures__', 'effect-machine-v25.ts'),
+    );
+    expect(machines.map((m) => m.name)).toContain('ProductionToggle');
+    expect(rejected).toEqual([]);
+  });
+});
+
+describe('diagnoseStateMachines — unused Machine.states tree', () => {
+  it('reports a Machine.states tree that no machine consumes', () => {
+    const { rejected } = diagnose(`
+      import { Machine } from '@typeonce/effect-machine';
+      export const Orphan = Machine.states({ Idle: {}, Busy: {} });
+    `);
+    const r = rejected.find((x) => x.name === 'Orphan');
+    expect(r?.reason).toMatch(/no Machine\.make in this file uses them/);
+  });
+
+  it('names the current state-tree API in the missing-tree hint', () => {
+    const { rejected } = diagnose(`
+      import { Machine } from '@typeonce/effect-machine';
+      import { States } from './states';
+      export const Gate = Machine.make({
+        states: States.states,
+        events: Machine.events(),
+        initial: (to) => to.Open(),
+      }).handle({ Open: {} });
+    `);
+    expect(rejected.find((x) => x.name === 'Gate')?.hint).toMatch(
+      /Machine\.states/,
+    );
+  });
+});

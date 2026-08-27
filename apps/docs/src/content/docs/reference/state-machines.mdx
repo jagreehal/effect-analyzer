@@ -31,21 +31,26 @@ invoked children, and entry/exit actions.
 import { Machine } from '@typeonce/effect-machine'
 import { Schema } from 'effect'
 
-class Closed extends Schema.TaggedClass<Closed>('Closed')('Closed', {}) {}
-class Open extends Schema.TaggedClass<Open>('Open')('Open', {}) {}
-class Toggle extends Schema.TaggedClass<Toggle>('Toggle')('Toggle', {}) {}
-
-const DoorStates = Machine.defineStates({ Closed, Open })
+const DoorStates = Machine.states({ Closed: {}, Open: {} })
+const DoorEvents = Machine.events(Schema.TaggedUnion({ Toggle: {} }))
 
 export const DoorMachine = Machine.make({
   states: DoorStates.states,
-  events: [Toggle],
-  initial: () => DoorStates.initial.Closed(new Closed()),
+  events: DoorEvents,
+  initial: (to) => to.Closed(),
 }).handle({
-  Closed: { on: { Toggle: ({ target }) => target.full.Open(new Open()) } },
-  Open: { on: { Toggle: ({ target }) => target.full.Closed(new Closed()) } },
+  Closed: { on: { Toggle: (to) => to.full.Open() } },
+  Open: { on: { Toggle: (to) => to.full.Closed() } },
 })
 ```
+
+<Aside type="note" title="Both API generations are read">
+The examples here use the `Machine.states` / `Machine.events` descriptors
+introduced in effect-machine 0.6. The 0.5-era spellings — `Machine.defineStates`,
+an `events: [Event]` array, `({ target }) => target.full.X(new X())` handlers and
+`Machine.invoke({...})` — are still recognized, so a repo on either version
+analyzes without changes.
+</Aside>
 
 Machine-only files have no Effect programs, so use a statechart format. These
 skip the Effect IR path and extract machines directly:
@@ -76,17 +81,21 @@ is the variable it is assigned to.
 ### State tree
 
 The `states:` value — either an inline literal or the `.states` of a
-`Machine.defineStates({...})` **declared in the same file**. A leaf is a tagged
-schema; a node is `{ schema, type?, initial?, states }`:
+`Machine.states({...})` (or 0.5's `Machine.defineStates({...})`) **declared in
+the same file**. A leaf is a schema or the schema-less `{}`; a node is
+`{ schema?, type?, initial?, states }`:
 
 ```ts
-export const EditorStates = Machine.defineStates({
+export const EditorStates = Machine.states({
   workspace: {
-    schema: Workspace,
     type: 'parallel',
     states: {
-      document: { schema: Document, initial: 'Clean', states: { Clean, Dirty } },
-      connection: { schema: Connection, initial: 'Online', states: { Online, Offline } },
+      document: {
+        schema: EditorState.cases.Document,
+        initial: 'Clean',
+        states: { Clean: {}, Dirty: {} },
+      },
+      connection: { initial: 'Online', states: { Online: {}, Offline: {} } },
     },
   },
 })
@@ -114,23 +123,29 @@ rather than drawn — the analyzer never leaves the file it is given.
 | `always` | an eventless transition (`always` in the config) |
 | `onDone` | a completion transition |
 | `entry` / `exit` | an action label on the state |
-| `invoke` | `invoke: { src, id }` on the state |
+| `invoke` | `invoke: { src, id }` on the state; a 0.6+ `from.effect('id', …)` builder's `.onDone` / `.onFailure` also become completion transitions |
 | `type: 'final'` | an explicitly final state |
 | `states` | recursion into the children |
 
 ### Targets
 
-A handler's target is read from the `target` builders, wherever they appear in
-the body — inside a `.pipe`, a ternary, or an `Option.match`. Every distinct
-target found becomes a transition, so a branching handler draws every branch.
+A handler's target is read from the target builder — the handler's own parameter
+in 0.6+ (`(to) => ...`), or the destructured `target` in 0.5 — wherever it
+appears in the body, including inside a `.pipe`, a ternary, or an `Option.match`.
+Every distinct target found becomes a transition, so a branching handler draws
+every branch.
 
 ```ts
-target.full.Paying(new Paying({ amount: event.amount }))   // absolute path
-target.local.Dirty(new Dirty())                            // sibling in the nearest compound
-target.local.with(new Document({ title }), (d) => d.Dirty(new Dirty())) // re-enter, then descend
+to.full.Paying().resolve(({ event, target }) => target.from({ amount: event.amount }))
+to.local.Dirty()                                           // sibling in the nearest compound
+to.local.update(({ owner }) => owner.from({ dirty: true })) // re-enter the compound scope
 ```
 
-Nested region builders are followed (`target.full.payment(v, (p) => p.entering(v))`
+`to.branches({ name: { target } })` is read too, and each branch name becomes
+that transition's guard label — the analyzer prefers it over any surrounding
+`if` or ternary, which it falls back to when a handler chooses targets that way.
+
+Nested region builders are followed (`to.full.payment(v, (p) => p.entering(v))`
 resolves to `payment.entering`). When a builder enters several regions at once,
 the parent path is used — the sound target for a parallel entry.
 
@@ -297,7 +312,8 @@ Statechart formats (`mermaid-statechart`, `svg-statechart`, `statechart-html`,
 `xstate-config`, `statechart-coverage`) print a header naming each machine
 found and its state and event counts. When none are found, they list
 declarations that came close and why — a `Machine.make` whose state tree is
-imported, or a `Machine.defineStates` no machine in the file consumes —
+imported, or a `Machine.states` / `Machine.defineStates` tree no machine in the
+file consumes —
 including the file, line number, and suggested fix.
 
 ## Non-Goals

@@ -4,64 +4,63 @@
  */
 
 import { Machine } from '@typeonce/effect-machine'
-import {
-  Advance,
-  Confirming,
-  Converting,
-  Done,
-  ExecuteTransfer,
-  Executed,
-  Executing,
-  Fail,
-  Failed,
-  FetchingRate,
-  Validating,
-} from '../transfer-lifecycle'
+import { Schema } from 'effect'
+import { TransferState, executeTransfer } from '../transfer-lifecycle'
 
-const States = Machine.defineStates({
-  Validating,
-  FetchingRate,
-  Converting,
-  Executing,
-  Confirming,
-  Done: { schema: Done, type: 'final' },
-  Failed: { schema: Failed, type: 'final' },
+const States = Machine.states({
+  Validating: {},
+  FetchingRate: {},
+  Converting: TransferState.cases.Converting,
+  Executing: {},
+  Confirming: TransferState.cases.Confirming,
+  Done: { type: 'final' },
+  Failed: { type: 'final' },
 })
+
+// Declared here rather than imported: the analyzer reads one file at a time, so
+// a seed's alphabet has to be visible in the seed.
+const Events = Machine.events(Schema.TaggedUnion({ Advance: {}, Fail: {} }))
 
 export const transferLifecycleMissingAdvance = Machine.make({
   states: States.states,
-  events: [Advance, Fail, Executed],
-  initial: () => States.initial.Validating(new Validating()),
+  events: Events,
+  initial: (to) => to.Validating(),
 }).handle({
   // Advance removed — Validating can only Fail.
   Validating: {
-    on: { Fail: ({ target }) => target.full.Failed(new Failed()) },
+    on: { Fail: (to) => to.full.Failed() },
   },
   FetchingRate: {
     on: {
-      Advance: ({ target }) =>
-        target.full.Converting(new Converting({ sufficientFunds: true })),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Advance: (to) =>
+        to.full.Converting().resolve(({ target }) => target.from({ sufficientFunds: true })),
+      Fail: (to) => to.full.Failed(),
     },
   },
   Converting: {
     on: {
-      Advance: ({ target }) => target.full.Executing(new Executing()),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Advance: (to) => to.full.Executing(),
+      Fail: (to) => to.full.Failed(),
     },
   },
   Executing: {
-    invoke: () => ExecuteTransfer,
+    invoke: (from) =>
+      from
+        .effect('executeTransfer', () => executeTransfer)
+        .onDone((to) =>
+          to.full.Confirming().resolve(({ target }) => target.from({ retryable: true })),
+        )
+        .onFailure((to) => to.full.Failed()),
     on: {
-      Executed: ({ target }) =>
-        target.full.Confirming(new Confirming({ retryable: true })),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Fail: (to) => to.full.Failed(),
     },
   },
   Confirming: {
     on: {
-      Advance: ({ target }) => target.full.Done(new Done()),
-      Fail: ({ target }) => target.full.Done(new Done()),
+      Advance: (to) => to.full.Done(),
+      Fail: (to) => to.full.Done(),
     },
   },
+  Done: {},
+  Failed: {},
 })

@@ -7,141 +7,96 @@
 
 import {
   SyntaxKind,
-  type SourceFile,
   type Node,
   type CallExpression,
   type ObjectLiteralExpression,
-  type Project,
   type Identifier,
   type VariableDeclaration,
   type PropertyAssignment,
-  type ImportSpecifier,
 } from 'ts-morph';
-import { resolveModulePath } from './alias-resolution';
 
 export type JsonSchemaObject = Record<string, unknown>;
 
 /**
- * Resolve a node (identifier or expression) to the Schema definition.
- * Handles: Schema.Struct(...), variable references, imported names.
+ * Resolve a node to the Schema definition behind it: a `Schema.*` expression is
+ * already one, an identifier is followed to its declaration — local or imported.
  */
-function resolveSchemaNode(
-  node: Node,
-  sf: SourceFile,
-  project: Project,
-): Node | undefined {
-  const text = node.getText();
-  // Direct Schema.* call
-  if (text.includes('Schema.')) return node;
-  // Identifier - resolve to declaration (handles local vars and imports)
-  if (node.getKind() === SyntaxKind.Identifier) {
-    const ident = node as Identifier;
-    const symbol = ident.getSymbol();
-    const aliased = symbol?.getAliasedSymbol() ?? symbol;
-    const decls = aliased?.getDeclarations() ?? [];
-    for (const decl of decls) {
-      if (decl.getKind() === SyntaxKind.VariableDeclaration) {
-        const init = (decl as VariableDeclaration).getInitializer();
-        if (init?.getText().includes('Schema.')) return init;
-      }
-      if (decl.getKind() === SyntaxKind.ImportSpecifier) {
-        const exportName = (decl as ImportSpecifier).getName();
-        const importDecl = decl.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-        if (importDecl) {
-          const spec = importDecl.getModuleSpecifierValue();
-          const currentPath = sf.getFilePath();
-          const resolvedPath = spec.startsWith('.') ? resolveModulePath(currentPath, spec) : undefined;
-          const targetSf = resolvedPath ? project.getSourceFile(resolvedPath) : undefined;
-          if (targetSf) {
-            const expDecls = targetSf.getExportedDeclarations().get(exportName) ?? [];
-            for (const ed of expDecls) {
-              if (ed.getKind() === SyntaxKind.VariableDeclaration) {
-                const init = (ed as VariableDeclaration).getInitializer();
-                if (init?.getText().includes('Schema.')) return init;
-              }
-            }
-          }
-        }
-      }
-    }
-    // Fallback: search in same file for const/export const
-    const name = ident.getText();
-    const vars = sf.getVariableDeclarations();
-    for (const v of vars) {
-      if (v.getName() === name) {
-        const init = v.getInitializer();
-        if (init?.getText().includes('Schema.')) return init;
-      }
-    }
+function resolveSchemaNode(node: Node): Node | undefined {
+  if (node.getText().includes('Schema.')) return node;
+  if (node.getKind() !== SyntaxKind.Identifier) return undefined;
+
+  // `getAliasedSymbol` follows an import through to the declaration it names,
+  // so a local const and an imported one resolve the same way.
+  const symbol = (node as Identifier).getSymbol();
+  const aliased = symbol?.getAliasedSymbol() ?? symbol;
+  for (const declaration of aliased?.getDeclarations() ?? []) {
+    if (declaration.getKind() !== SyntaxKind.VariableDeclaration) continue;
+    const init = (declaration as VariableDeclaration).getInitializer();
+    if (init?.getText().includes('Schema.')) return init;
   }
-  return node.getText().includes('Schema.') ? node : undefined;
+
+  return undefined;
 }
 
 /**
  * Extract OpenAPI JSON Schema from an Effect Schema AST node.
  */
-export function schemaToJsonSchema(
-  node: Node,
-  sf: SourceFile,
-  project: Project,
-  defs?: Map<string, JsonSchemaObject>,
-): JsonSchemaObject | undefined {
-  const resolved = resolveSchemaNode(node, sf, project);
+export function schemaToJsonSchema(node: Node): JsonSchemaObject | undefined {
+  const resolved = resolveSchemaNode(node);
   if (!resolved) return undefined;
-  return walkSchema(resolved, sf, project, defs ?? new Map<string, JsonSchemaObject>());
+  return walkSchema(resolved);
 }
 
-function walkSchema(
-  node: Node,
-  sf: SourceFile,
-  project: Project,
-  defs: Map<string, JsonSchemaObject>,
-): JsonSchemaObject | undefined {
-  const text = node.getText();
+/**
+ * The name in a direct `Schema.<name>(...)` call.
+ *
+ * This is the whole reason the dispatch below is keyed on calls: matching
+ * `node.getText().includes('Schema.Array')` also matches anything nested in the
+ * arguments, so `Schema.Struct({ tags: Schema.Array(...) })` reads as an array.
+ * Only the callee identifies the construct.
+ */
+function schemaCallName(node: Node): string | undefined {
+  if (node.getKind() !== SyntaxKind.CallExpression) return undefined;
+  const callee = (node as CallExpression).getExpression().getText();
+  return /(?:^|\.)Schema\.([A-Za-z]+)$/.exec(callee)?.[1];
+}
 
-  // Check composite types first (they contain primitive names)
-  // Schema.Array
-  if (text.includes('Schema.Array')) {
-    const call =
-      node.getKind() === SyntaxKind.CallExpression
-        ? (node as CallExpression)
-        : node.getFirstDescendantByKind(SyntaxKind.CallExpression);
-    if (call) {
-      const args = call.getArguments();
-      const itemSchema = args[0] ? walkSchema(args[0], sf, project, defs) : undefined;
-      return {
-        type: 'array',
-        items: itemSchema ?? {},
-      };
-    }
-  }
+const NUMBER: JsonSchemaObject = { type: 'number' };
+const DATE_TIME: JsonSchemaObject = { type: 'string', format: 'date-time' };
 
-  // Schema.Struct
-  if (text.includes('Schema.Struct')) {
-    const call =
-      node.getKind() === SyntaxKind.CallExpression
-        ? (node as CallExpression)
-        : node.getFirstDescendantByKind(SyntaxKind.CallExpression);
-    if (!call) return { type: 'object' };
-    const args = call.getArguments();
-    const objArg = args[0];
+/**
+ * One entry per `Schema.<name>(...)` construct. A name that is absent is a
+ * construct this converter does not model — it yields `undefined` rather than
+ * being guessed at from surrounding text.
+ */
+const CALL_CONSTRUCTS: Record<
+  string,
+  (call: CallExpression) => JsonSchemaObject | undefined
+> = {
+  Array: (call) => {
+    const [items] = call.getArguments();
+    return { type: 'array', items: (items && walkSchema(items)) ?? {} };
+  },
+
+  Struct: (call) => {
+    const [objArg] = call.getArguments();
     if (objArg?.getKind() !== SyntaxKind.ObjectLiteralExpression) {
       return { type: 'object' };
     }
-    const obj = objArg as ObjectLiteralExpression;
     const properties: Record<string, JsonSchemaObject> = {};
     const required: string[] = [];
-    for (const prop of obj.getProperties()) {
+    for (const prop of (objArg as ObjectLiteralExpression).getProperties()) {
       if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue;
-      const pa = prop as PropertyAssignment;
-      const name = (pa.getNameNode() as Identifier).getText();
-      const init = pa.getInitializer();
+      const assignment = prop as PropertyAssignment;
+      const name = (assignment.getNameNode() as Identifier).getText();
+      const init = assignment.getInitializer();
       if (!init) continue;
-      const propText = init.getText();
-      const isOptional = propText.includes('Schema.optional') || propText.includes('.optional');
-      if (!isOptional) required.push(name);
-      const propSchema = walkSchema(init, sf, project, defs);
-      if (propSchema) properties[name] = propSchema;
+      const initText = init.getText();
+      if (!initText.includes('Schema.optional') && !initText.includes('.optional')) {
+        required.push(name);
+      }
+      const propertySchema = walkSchema(init);
+      if (propertySchema) properties[name] = propertySchema;
     }
     const result: JsonSchemaObject = {
       type: 'object',
@@ -150,75 +105,77 @@ function walkSchema(
     };
     if (required.length) result.required = required;
     return result;
-  }
+  },
 
-  // Schema.Union
-  if (text.includes('Schema.Union')) {
-    const call =
-      node.getKind() === SyntaxKind.CallExpression
-        ? (node as CallExpression)
-        : node.getFirstDescendantByKind(SyntaxKind.CallExpression);
-    if (call) {
-      const args = call.getArguments();
-      const oneOf = args
-        .map((a) => walkSchema(a, sf, project, defs))
-        .filter((s): s is JsonSchemaObject => s !== undefined);
-      if (oneOf.length) return { oneOf };
+  Union: (call) => {
+    const oneOf = call
+      .getArguments()
+      .map((argument) => walkSchema(argument))
+      .filter((schema): schema is JsonSchemaObject => schema !== undefined);
+    return oneOf.length ? { oneOf } : undefined;
+  },
+
+  optional: (call) => {
+    const [inner] = call.getArguments();
+    const schema = inner ? walkSchema(inner) : undefined;
+    return schema ? { ...schema, nullable: true } : undefined;
+  },
+
+  Record: (call) => {
+    const value = call.getArguments()[1];
+    return {
+      type: 'object',
+      additionalProperties: (value && walkSchema(value)) ?? true,
+    };
+  },
+
+  Tuple: (call) => ({
+    type: 'array',
+    items: call
+      .getArguments()
+      .map((argument) => walkSchema(argument))
+      .filter(Boolean),
+  }),
+
+  Literal: (call) => {
+    const [literal] = call.getArguments();
+    const text = literal?.getText() ?? '';
+    const quoted = /^(["'])([\s\S]*)\1$/.exec(text);
+    if (quoted) return { type: 'string', enum: [quoted[2]] };
+    if (/^\d+$/.test(text)) return { type: 'number', enum: [Number(text)] };
+    if (text === 'true' || text === 'false') {
+      return { type: 'boolean', enum: [text === 'true'] };
     }
+    return undefined;
+  },
+
+  Date: () => DATE_TIME,
+  DateTimeUtc: () => DATE_TIME,
+  Instant: () => DATE_TIME,
+  Number: () => NUMBER,
+  Int: () => NUMBER,
+  Positive: () => NUMBER,
+  NonNegative: () => NUMBER,
+  Finite: () => NUMBER,
+  Boolean: () => ({ type: 'boolean' }),
+  Null: () => ({ type: 'null' }),
+};
+
+/**
+ * A node that is not itself a `Schema.<name>(...)` call: a bare `Schema.String`,
+ * an identifier, or a call chain like `Schema.Array(...).annotations({...})`.
+ *
+ * Reading the source text is only sound here, where no callee contradicts it.
+ */
+function walkNonCall(node: Node): JsonSchemaObject | undefined {
+  // A chain wrapping a construct — find the construct and dispatch to it.
+  for (const inner of node.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const name = schemaCallName(inner);
+    const construct = name === undefined ? undefined : CALL_CONSTRUCTS[name];
+    if (construct) return construct(inner);
   }
 
-  // Schema.optional
-  if (text.includes('Schema.optional') || text.includes('.pipe(Schema.optional')) {
-    const call =
-      node.getKind() === SyntaxKind.CallExpression
-        ? (node as CallExpression)
-        : node.getFirstDescendantByKind(SyntaxKind.CallExpression);
-    if (call) {
-      const args = call.getArguments();
-      const inner = args[0] ? walkSchema(args[0], sf, project, defs) : undefined;
-      if (inner) return { ...inner, nullable: true };
-    }
-  }
-
-  // Schema.Record
-  if (text.includes('Schema.Record')) {
-    const call =
-      node.getKind() === SyntaxKind.CallExpression
-        ? (node as CallExpression)
-        : node.getFirstDescendantByKind(SyntaxKind.CallExpression);
-    if (call) {
-      const args = call.getArguments();
-      const valueSchema = args[1] ? walkSchema(args[1], sf, project, defs) : undefined;
-      return {
-        type: 'object',
-        additionalProperties: valueSchema ?? true,
-      };
-    }
-  }
-
-  // Schema.Tuple
-  if (text.includes('Schema.Tuple')) {
-    const call =
-      node.getKind() === SyntaxKind.CallExpression
-        ? (node as CallExpression)
-        : node.getFirstDescendantByKind(SyntaxKind.CallExpression);
-    if (call) {
-      const args = call.getArguments();
-      const items = args.map((a) => walkSchema(a, sf, project, defs)).filter(Boolean);
-      return { type: 'array', items: items };
-    }
-  }
-
-  // Schema.DateFromString, Schema.DateTimeUtc, etc.
-  if (
-    text.includes('Schema.Date') ||
-    text.includes('Schema.DateTimeUtc') ||
-    text.includes('Schema.Instant')
-  ) {
-    return { type: 'string', format: 'date-time' };
-  }
-
-  // Primitives (check after composites)
+  const text = node.getText();
   if (text.includes('Schema.String') && !text.includes('Schema.Struct')) {
     return { type: 'string' };
   }
@@ -229,24 +186,25 @@ function walkSchema(
     text.includes('Schema.NonNegative') ||
     text.includes('Schema.Finite')
   ) {
-    return { type: 'number' };
+    return NUMBER;
   }
   if (text.includes('Schema.Boolean')) return { type: 'boolean' };
   if (text.includes('Schema.Null')) return { type: 'null' };
-  const literalMatch = /Schema\.Literal\s*\(\s*(["'])([^"']*)\1\s*\)/.exec(text);
-  if (literalMatch) return { type: 'string', enum: [literalMatch[2]] };
-  const literalNumMatch = /Schema\.Literal\s*\(\s*(\d+)\s*\)/.exec(text);
-  if (literalNumMatch) return { type: 'number', enum: [Number(literalNumMatch[1])] };
-  const literalBoolMatch = /Schema\.Literal\s*\(\s*(true|false)\s*\)/.exec(text);
-  if (literalBoolMatch) return { type: 'boolean', enum: [literalBoolMatch[1] === 'true'] };
+  if (text.includes('Schema.Date') || text.includes('Schema.Instant')) return DATE_TIME;
 
-  // Variable reference - already resolved by resolveSchemaNode, recurse
+  // A variable reference `resolveSchemaNode` could not follow.
   if (node.getKind() === SyntaxKind.Identifier) {
-    const symbol = (node as Identifier).getSymbol();
-    const decl = symbol?.getDeclarations()[0];
-    const init = (decl as VariableDeclaration).getInitializer();
-    if (init) return walkSchema(init, sf, project, defs);
+    const declaration = (node as Identifier).getSymbol()?.getDeclarations()[0];
+    const init = (declaration as VariableDeclaration | undefined)?.getInitializer();
+    if (init) return walkSchema(init);
   }
 
   return undefined;
+}
+
+function walkSchema(node: Node): JsonSchemaObject | undefined {
+  const name = schemaCallName(node);
+  if (name === undefined) return walkNonCall(node);
+  const construct = CALL_CONSTRUCTS[name];
+  return construct ? construct(node as CallExpression) : undefined;
 }

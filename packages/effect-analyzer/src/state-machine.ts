@@ -27,11 +27,20 @@ import {
   Node,
   Project,
   SyntaxKind,
-  type ArrowFunction,
   type CallExpression,
-  type FunctionExpression,
   type ObjectLiteralExpression,
 } from 'ts-morph';
+import {
+  isFunctionLike,
+  isMachineCall,
+  join,
+  locOf,
+  propEntries,
+  propValue,
+  stringValue,
+  unwrap,
+  type SourceFile,
+} from './state-machine-ast';
 import type { SourceLocation } from './types';
 
 // =============================================================================
@@ -109,122 +118,6 @@ export interface StateMachineAnalysis {
   readonly machines: readonly StateMachine[];
 }
 
-// =============================================================================
-// AST helpers
-// =============================================================================
-
-type SourceFile = ReturnType<Project['createSourceFile']>;
-
-/** Strip `as const`, `satisfies`, parentheses and `<T>` assertions. */
-function unwrap(node: Node): Node {
-  let cur = node;
-  for (;;) {
-    const k = cur.getKind();
-    if (
-      k === SyntaxKind.AsExpression ||
-      k === SyntaxKind.SatisfiesExpression ||
-      k === SyntaxKind.ParenthesizedExpression ||
-      k === SyntaxKind.TypeAssertionExpression
-    ) {
-      cur = (cur as unknown as { getExpression(): Node }).getExpression();
-      continue;
-    }
-    return cur;
-  }
-}
-
-/** Read a string-literal value (after unwrapping `as const`), or undefined. */
-function stringValue(node: Node | undefined): string | undefined {
-  if (!node) return undefined;
-  const u = unwrap(node);
-  if (Node.isStringLiteral(u)) return u.getLiteralValue();
-  if (Node.isNoSubstitutionTemplateLiteral(u)) return u.getLiteralText();
-  return undefined;
-}
-
-interface PropEntry {
-  readonly name: string;
-  /** `undefined` for a shorthand property (`{ Idle }`). */
-  readonly value: Node | undefined;
-}
-
-/** Named properties of an object literal, shorthand included. */
-function propEntries(obj: ObjectLiteralExpression): PropEntry[] {
-  const out: PropEntry[] = [];
-  for (const prop of obj.getProperties()) {
-    if (Node.isShorthandPropertyAssignment(prop)) {
-      out.push({ name: prop.getName(), value: undefined });
-      continue;
-    }
-    if (!Node.isPropertyAssignment(prop)) continue;
-    const nameNode = prop.getNameNode();
-    const name = Node.isStringLiteral(nameNode)
-      ? nameNode.getLiteralValue()
-      : Node.isIdentifier(nameNode)
-        ? nameNode.getText()
-        : undefined;
-    if (name !== undefined) out.push({ name, value: prop.getInitializer() });
-  }
-  return out;
-}
-
-function propValue(obj: ObjectLiteralExpression, name: string): Node | undefined {
-  return obj.getProperty(name)?.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
-}
-
-function locOf(node: Node, filePath: string): SourceLocation {
-  const sf = node.getSourceFile();
-  const offset = node.getStart();
-  const { line, column } = sf.getLineAndColumnAtPos(offset);
-  return { filePath, line, column, offset };
-}
-
-const join = (parent: string, child: string): string =>
-  parent === '' ? child : `${parent}.${child}`;
-
-function isFunctionLike(node: Node): node is ArrowFunction | FunctionExpression {
-  return Node.isArrowFunction(node) || Node.isFunctionExpression(node);
-}
-
-function isEffectMachineBinding(name: string, sf: SourceFile): boolean {
-  return sf.getImportDeclarations().some((declaration) => {
-    if (declaration.getModuleSpecifierValue() !== '@typeonce/effect-machine') {
-      return false;
-    }
-    return declaration.getNamedImports().some((namedImport) => {
-      if (namedImport.getName() !== 'Machine') return false;
-      return (namedImport.getAliasNode()?.getText() ?? 'Machine') === name;
-    });
-  });
-}
-
-function isEffectMachineNamespace(name: string, sf: SourceFile): boolean {
-  return sf.getImportDeclarations().some(
-    (declaration) =>
-      declaration.getModuleSpecifierValue() === '@typeonce/effect-machine' &&
-      declaration.getNamespaceImport()?.getText() === name,
-  );
-}
-
-/** A call to a method on the imported `Machine` namespace. */
-function isMachineCall(node: Node, name: string): node is CallExpression {
-  if (!Node.isCallExpression(node)) return false;
-  const expr = node.getExpression();
-  if (!Node.isPropertyAccessExpression(expr) || expr.getName() !== name) {
-    return false;
-  }
-  const owner = expr.getExpression();
-  if (Node.isIdentifier(owner)) {
-    return isEffectMachineBinding(owner.getText(), node.getSourceFile());
-  }
-  return (
-    Node.isPropertyAccessExpression(owner) &&
-    owner.getName() === 'Machine' &&
-    Node.isIdentifier(owner.getExpression()) &&
-    isEffectMachineNamespace(owner.getExpression().getText(), node.getSourceFile())
-  );
-}
-
 /**
  * The object literal behind a value, following a local `const` binding.
  * `undefined` when the value is imported or computed.
@@ -245,7 +138,8 @@ function objectLiteral(
 
 /**
  * The object literal behind a `states:` value: an inline tree, a
- * `Machine.defineStates({...})` call, or the `.states` of one. `undefined` when
+ * `Machine.defineStates({...})` / `Machine.states({...})` call, or the `.states`
+ * of one. `undefined` when
  * the tree is declared in another file.
  */
 function stateTree(
@@ -255,7 +149,9 @@ function stateTree(
 ): ObjectLiteralExpression | undefined {
   if (!node || depth > 8) return undefined;
   const u = unwrap(node);
-  if (isMachineCall(u, 'defineStates')) {
+  // `Machine.defineStates` (<= 0.5) and `Machine.states` (>= 0.6) both take the
+  // tree as their sole argument.
+  if (isMachineCall(u, 'defineStates') || isMachineCall(u, 'states')) {
     return objectLiteral(u.getArguments()[0], sf);
   }
   if (Node.isPropertyAccessExpression(u) && u.getName() === 'states') {
@@ -295,12 +191,22 @@ interface TreeNode {
   readonly children: string[];
 }
 
+const NODE_CONFIG_KEYS = ['schema', 'type', 'initial', 'states'] as const;
+
+/**
+ * The node config behind a state tree entry. A schema (an identifier, or a
+ * `Union.cases.X` access) and the schema-less `{}` leaf of the 0.6+ API are
+ * atomic; an object carrying any of `schema` / `type` / `initial` / `states`
+ * configures a node.
+ */
+function nodeConfig(node: Node | undefined): ObjectLiteralExpression | undefined {
+  if (!node || !Node.isObjectLiteralExpression(node)) return undefined;
+  return NODE_CONFIG_KEYS.some((key) => node.getProperty(key)) ? node : undefined;
+}
+
 /**
  * Flatten a state tree literal into dotted paths, keeping the parent/child
  * links so nothing downstream has to re-derive them from the path strings.
- * A property whose value is an identifier (a tagged schema) is atomic; an
- * object with a `schema` property is a node config carrying
- * `type` / `initial` / `states`.
  */
 function readStateTree(
   obj: ObjectLiteralExpression,
@@ -310,10 +216,7 @@ function readStateTree(
 ): void {
   for (const { name: key, value } of propEntries(obj)) {
     const inner = value ? unwrap(value) : undefined;
-    const config =
-      inner && Node.isObjectLiteralExpression(inner) && inner.getProperty('schema')
-        ? inner
-        : undefined;
+    const config = nodeConfig(inner);
     const type = config ? stringValue(propValue(config, 'type')) : undefined;
     const children = config ? stateTree(propValue(config, 'states'), sf) : undefined;
     const node: TreeNode = {
@@ -372,7 +275,11 @@ function descendBuilder(call: CallExpression, path: string, depth = 0): string {
 }
 
 /**
- * Resolve one `target.<mode>.<state>(...)` call to a full state path.
+ * Resolve one `<builder>.<mode>.<state>(...)` call to a full state path.
+ * The builder is `target` in the 0.5-era destructured handler
+ * (`({ target }) => target.full.X()`) and the handler's own parameter in the
+ * 0.6+ shape (`(to) => to.full.X()`), so `builders` carries the parameter
+ * names bound inside the handler.
  * `full` and `branch` are absolute; `local` is relative to the nearest
  * compound ancestor, and `local.with(...)` re-enters that scope itself.
  */
@@ -380,6 +287,7 @@ function targetPath(
   call: CallExpression,
   from: string,
   tree: ReadonlyMap<string, TreeNode>,
+  builders: ReadonlySet<string> = new Set(),
 ): string | undefined {
   const expr = call.getExpression();
   if (!Node.isPropertyAccessExpression(expr)) return undefined;
@@ -389,13 +297,21 @@ function targetPath(
   if (modeName !== 'full' && modeName !== 'local' && modeName !== 'branch') {
     return undefined;
   }
-  if (!/(^|\.)target$/.test(mode.getExpression().getText())) return undefined;
+  const receiver = mode.getExpression().getText();
+  if (!/(^|\.)target$/.test(receiver) && !builders.has(receiver)) return undefined;
 
   const segment = expr.getName();
   const base = modeName === 'local' ? localScope(from, tree) : '';
   const start =
     modeName === 'local' && segment === 'with' ? base : join(base, segment);
   return descendBuilder(call, start);
+}
+
+/** A call to `<anything>.<name>(...)` — a builder step, whatever the receiver. */
+function isCallTo(node: Node | undefined, name: string): boolean {
+  if (!node || !Node.isCallExpression(node)) return false;
+  const expr = node.getExpression();
+  return Node.isPropertyAccessExpression(expr) && expr.getName() === name;
 }
 
 /**
@@ -407,6 +323,15 @@ function guardOf(call: Node, handler: Node): string | undefined {
   let child = call;
   let cur: Node | undefined = call.getParent();
   while (cur && cur !== handler) {
+    // `to.branches({ accepted: { target: ... } })` names its own conditions, so
+    // the branch key is a better label than any surrounding expression.
+    if (
+      Node.isPropertyAssignment(cur) &&
+      Node.isObjectLiteralExpression(cur.getParent()) &&
+      isCallTo(cur.getParent().getParent(), 'branches')
+    ) {
+      return cur.getName();
+    }
     if (Node.isConditionalExpression(cur)) {
       const cond = cur.getCondition().getText();
       return cur.getWhenTrue() === child ? cond : `!(${cond})`;
@@ -429,6 +354,27 @@ interface HandlerTarget {
   readonly guard?: string;
 }
 
+/**
+ * Identifier parameters bound anywhere inside a handler. In the 0.6+ API the
+ * target builder arrives as the handler's own parameter (`(to) => ...`), so its
+ * name is whatever the author picked and has to be read from the source.
+ */
+function builderNames(handler: Node): Set<string> {
+  const names = new Set<string>();
+  const fns = [
+    ...(isFunctionLike(handler) ? [handler] : []),
+    ...handler.getDescendantsOfKind(SyntaxKind.ArrowFunction),
+    ...handler.getDescendantsOfKind(SyntaxKind.FunctionExpression),
+  ];
+  for (const fn of fns) {
+    for (const param of fn.getParameters()) {
+      const nameNode = param.getNameNode();
+      if (Node.isIdentifier(nameNode)) names.add(nameNode.getText());
+    }
+  }
+  return names;
+}
+
 /** Every distinct state path a handler body can transition to. */
 function targetsOf(
   handler: Node,
@@ -437,12 +383,13 @@ function targetsOf(
 ): HandlerTarget[] {
   const out: HandlerTarget[] = [];
   const seen = new Set<string>();
+  const builders = builderNames(handler);
   const calls = [
     ...(Node.isCallExpression(handler) ? [handler] : []),
     ...handler.getDescendantsOfKind(SyntaxKind.CallExpression),
   ];
   for (const call of calls) {
-    const to = targetPath(call, from, tree);
+    const to = targetPath(call, from, tree, builders);
     if (to === undefined) continue;
     const guard = guardOf(call, handler);
     const key = `${to}|${guard ?? ''}`;
@@ -474,8 +421,65 @@ function childId(node: Node | undefined, sf: SourceFile): string | undefined {
   );
 }
 
-/** Label invoked children by their `id`, `child`, or called function. */
-function invokesOf(node: Node | undefined, sf: SourceFile, depth = 0): StateInvoke[] {
+/**
+ * Completion handlers on a 0.6+ invoke builder, mapped onto the IR triggers the
+ * XState exporter already understands.
+ */
+const INVOKE_COMPLETIONS: Readonly<Record<string, 'done' | 'error'>> = {
+  onDone: 'done',
+  onFailure: 'error',
+  onError: 'error',
+};
+
+/** Verbs that start a 0.6+ invoke builder chain — the root of the chain. */
+const INVOKE_SOURCES = new Set(['effect', 'stream', 'timer', 'logic', 'child']);
+
+interface InvokeBuilder {
+  readonly invoke: StateInvoke;
+  /** Completion handlers in source order, for `trigger` + `invokeIndex`. */
+  readonly completions: readonly {
+    readonly trigger: 'done' | 'error';
+    readonly handler: Node;
+  }[];
+}
+
+/**
+ * Read a 0.6+ invoke builder chain:
+ * `from.effect('load', ...).onDone(to => ...).onFailure(to => ...)`.
+ * `undefined` when the node is not such a chain — the 0.5 `Machine.invoke({...})`
+ * object form is read by `invokesOf` instead.
+ */
+function invokeBuilder(node: Node, sf: SourceFile): InvokeBuilder | undefined {
+  const completions: { trigger: 'done' | 'error'; handler: Node }[] = [];
+  let cur: Node = unwrap(node);
+  for (let depth = 0; Node.isCallExpression(cur) && depth <= 8; depth += 1) {
+    const expr = cur.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return undefined;
+    const name = expr.getName();
+    const trigger = INVOKE_COMPLETIONS[name];
+    if (trigger !== undefined) {
+      const handler = cur.getArguments()[0];
+      if (handler) completions.unshift({ trigger, handler: unwrap(handler) });
+      cur = expr.getExpression();
+      continue;
+    }
+    if (!INVOKE_SOURCES.has(name)) return undefined;
+    const first = cur.getArguments()[0];
+    const id = stringValue(first) ?? (name === 'child' ? childId(first, sf) : undefined);
+    return {
+      invoke: { src: id ?? name, ...(id !== undefined ? { id } : {}) },
+      completions,
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Every invoke declared on a state, in source order. The 0.5 forms
+ * (`Machine.invoke({...})`, a factory call) carry no completion handlers; the
+ * 0.6+ builder chain carries its `onDone` / `onFailure` targets with it.
+ */
+function invokesOf(node: Node | undefined, sf: SourceFile, depth = 0): InvokeBuilder[] {
   if (!node || depth > 8) return [];
   const u = unwrap(node);
   if (isFunctionLike(u)) return invokesOf(u.getBody(), sf, depth + 1);
@@ -490,12 +494,16 @@ function invokesOf(node: Node | undefined, sf: SourceFile, depth = 0): StateInvo
     );
   }
   if (!Node.isCallExpression(u)) return [];
+  const builder = invokeBuilder(u, sf);
+  if (builder) return [builder];
   const callee = u.getExpression().getText();
   if (isMachineCall(u, 'invoke') || isMachineCall(u, 'invokeMachine')) {
     const config = objectLiteral(u.getArguments()[0], sf);
     const id = config ? stringValue(propValue(config, 'id')) : undefined;
     const src = id ?? childId(config ? propValue(config, 'child') : undefined, sf);
-    return src === undefined ? [] : [{ src, ...(id !== undefined ? { id } : {}) }];
+    return src === undefined
+      ? []
+      : [{ invoke: { src, ...(id !== undefined ? { id } : {}) }, completions: [] }];
   }
   // `invoke: () => SearchMachine({...})` — a local factory whose body builds the
   // invoke, so the declared id is one hop away.
@@ -503,7 +511,7 @@ function invokesOf(node: Node | undefined, sf: SourceFile, depth = 0): StateInvo
   if (factory && isFunctionLike(unwrap(factory))) {
     return invokesOf(factory, sf, depth + 1);
   }
-  return [{ src: callee.split('.').pop() ?? callee }];
+  return [{ invoke: { src: callee.split('.').pop() ?? callee }, completions: [] }];
 }
 
 /**
@@ -536,6 +544,7 @@ function readHandlerNode(
     event: string,
     handler: Node,
     trigger?: StateTransition['trigger'],
+    invokeIndex?: number,
   ): void => {
     for (const { to, guard } of targetsOf(handler, path, tree)) {
       out.transitions.push({
@@ -544,6 +553,7 @@ function readHandlerNode(
         to,
         ...(guard !== undefined ? { guard } : {}),
         ...(trigger !== undefined ? { trigger } : {}),
+        ...(invokeIndex !== undefined ? { invokeIndex } : {}),
       });
     }
   };
@@ -579,7 +589,17 @@ function readHandlerNode(
   const invoke = propValue(config, 'invoke');
   if (invoke) {
     const found = invokesOf(invoke, sf);
-    if (found.length > 0) out.invokes[path] = found;
+    if (found.length > 0) out.invokes[path] = found.map((f) => f.invoke);
+    for (const [invokeIndex, { completions }] of found.entries()) {
+      for (const { trigger, handler } of completions) {
+        push(
+          trigger === 'done' ? 'onDone' : 'onError',
+          handler,
+          trigger,
+          invokeIndex,
+        );
+      }
+    }
   }
 
   const children = objectLiteral(propValue(config, 'states'), sf);
@@ -593,17 +613,50 @@ function readHandlerNode(
 // Machine assembly
 // =============================================================================
 
-/** The `.handle({...})` object chained onto a `Machine.make(...)` call. */
-function handleObject(
-  makeCall: CallExpression,
-  sf: SourceFile,
-): ObjectLiteralExpression | undefined {
-  const parent = makeCall.getParent();
+/** One `.handle({...})` implementation of a machine definition. */
+interface Implementation {
+  readonly handlers: ObjectLiteralExpression | undefined;
+  /** The `.handle(...)` call itself, or the `make` call when unimplemented. */
+  readonly anchor: Node;
+}
+
+/** The `.handle({...})` call chained directly onto an expression, if any. */
+function handleCallOn(node: Node): CallExpression | undefined {
+  const parent = node.getParent();
   if (!parent || !Node.isPropertyAccessExpression(parent)) return undefined;
   if (parent.getName() !== 'handle') return undefined;
   const call = parent.getParent();
-  if (!call || !Node.isCallExpression(call)) return undefined;
-  return objectLiteral(call.getArguments()[0], sf);
+  return call && Node.isCallExpression(call) ? call : undefined;
+}
+
+/**
+ * Every implementation of a `Machine.make(...)` definition. Usually one, chained
+ * directly. A definition stored in a `const` can be handled more than once —
+ * production and testing variants of the same model — and each is its own
+ * machine.
+ */
+function implementationsOf(
+  makeCall: CallExpression,
+  sf: SourceFile,
+): Implementation[] {
+  const asImplementation = (call: CallExpression): Implementation => ({
+    handlers: objectLiteral(call.getArguments()[0], sf),
+    anchor: call,
+  });
+
+  const chained = handleCallOn(makeCall);
+  if (chained) return [asImplementation(chained)];
+
+  const definition = ownerOf(makeCall)?.name;
+  const found: Implementation[] = [];
+  if (definition !== undefined) {
+    for (const identifier of sf.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      if (identifier.getText() !== definition) continue;
+      const call = handleCallOn(identifier);
+      if (call) found.push(asImplementation(call));
+    }
+  }
+  return found.length > 0 ? found : [{ handlers: undefined, anchor: makeCall }];
 }
 
 /** `{ path, state: { path, ... } }` — the deepest path of a snapshot literal. */
@@ -619,18 +672,59 @@ function snapshotPath(
 }
 
 /**
- * The initial state path from the `initial:` value — either a
- * `States.initial.<state>(...)` builder chain or a `{ path }` snapshot literal.
+ * The longest prefix of a `to.a.b.c` property chain that names a real state.
+ * The 0.6+ initial builder mixes state segments with verbs
+ * (`to.workspace.initial.resolve(...)`, `to.Idle()`), and only the tree can say
+ * where the path stops.
  */
-function initialPath(node: Node | undefined): string | undefined {
+function chainPath(
+  node: Node,
+  tree: ReadonlyMap<string, TreeNode>,
+): string | undefined {
+  const segments: string[] = [];
+  let cur: Node = node;
+  while (Node.isPropertyAccessExpression(cur)) {
+    segments.unshift(cur.getName());
+    cur = cur.getExpression();
+  }
+  if (!Node.isIdentifier(cur)) return undefined;
+  let path = '';
+  for (const segment of segments) {
+    const next = join(path, segment);
+    if (!tree.has(next)) break;
+    path = next;
+  }
+  return path === '' ? undefined : path;
+}
+
+/**
+ * The initial state path from the `initial:` value — a
+ * `States.initial.<state>(...)` builder chain (<= 0.5), a `(to) => to.<state>`
+ * builder chain (>= 0.6), or a `{ path }` snapshot literal.
+ */
+function initialPath(
+  node: Node | undefined,
+  tree: ReadonlyMap<string, TreeNode>,
+): string | undefined {
   if (!node) return undefined;
   for (const call of node.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expr = call.getExpression();
     if (!Node.isPropertyAccessExpression(expr)) continue;
     const owner = expr.getExpression();
-    if (Node.isPropertyAccessExpression(owner) && owner.getName() === 'initial') {
+    // `States.initial.<state>(...)`. The 0.6+ builder also has an `initial`
+    // segment (`to.workspace.initial.resolve(...)`), so the name after it only
+    // counts when the tree agrees it is a state.
+    if (
+      Node.isPropertyAccessExpression(owner) &&
+      owner.getName() === 'initial' &&
+      tree.has(expr.getName())
+    ) {
       return descendBuilder(call, expr.getName());
     }
+  }
+  for (const access of node.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+    const path = chainPath(access, tree);
+    if (path !== undefined) return path;
   }
   for (const obj of node.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
     const path = snapshotPath(obj);
@@ -669,13 +763,54 @@ function arrayLiteral(
   return undefined;
 }
 
-/** Tags of the `events: [A, B]` array — the declared event alphabet. */
+/**
+ * Tags of a `Machine.events(...)` descriptor — the 0.6+ event alphabet. The
+ * argument is a `Schema.TaggedUnion({ Tag: {...} })` whose keys are the tags, or
+ * tagged classes passed directly. `Machine.events()` declares an empty alphabet.
+ */
+function eventsDescriptor(
+  node: Node | undefined,
+  sf: SourceFile,
+  depth = 0,
+): string[] | undefined {
+  if (!node || depth > 8) return undefined;
+  const u = unwrap(node);
+  if (Node.isIdentifier(u)) {
+    return eventsDescriptor(
+      sf.getVariableDeclaration(u.getText())?.getInitializer(),
+      sf,
+      depth + 1,
+    );
+  }
+  if (!isMachineCall(u, 'events')) return undefined;
+  const tags: string[] = [];
+  for (const argument of u.getArguments().map(unwrap)) {
+    const union = Node.isCallExpression(argument)
+      ? objectLiteral(argument.getArguments()[0], sf)
+      : undefined;
+    if (union) {
+      tags.push(...propEntries(union).map(({ name }) => name));
+      continue;
+    }
+    if (!Node.isIdentifier(argument)) return undefined;
+    tags.push(classTag(argument.getText(), sf) ?? argument.getText());
+  }
+  return tags;
+}
+
+/**
+ * The declared event alphabet: an `events: [A, B]` array (<= 0.5) or a
+ * `Machine.events(...)` descriptor (>= 0.6).
+ */
 function declaredEventsOf(
   config: ObjectLiteralExpression,
   sf: SourceFile,
 ): string[] | undefined {
-  const array = arrayLiteral(propValue(config, 'events'), sf);
-  if (!array || !Node.isArrayLiteralExpression(array)) return undefined;
+  const events = propValue(config, 'events');
+  const array = arrayLiteral(events, sf);
+  if (!array || !Node.isArrayLiteralExpression(array)) {
+    return eventsDescriptor(events, sf);
+  }
   const elements = array.getElements().map(unwrap);
   if (!elements.every(Node.isIdentifier)) return undefined;
   return elements.map((element) => classTag(element.getText(), sf) ?? element.getText());
@@ -683,6 +818,7 @@ function declaredEventsOf(
 
 function extractMachine(
   makeCall: CallExpression,
+  implementation: Implementation,
   filePath: string,
   sf: SourceFile,
 ): StateMachine | undefined {
@@ -702,7 +838,7 @@ function extractMachine(
     exit: {},
     invokes: {},
   };
-  const handlers = handleObject(makeCall, sf);
+  const { handlers } = implementation;
   for (const { name: key, value } of handlers ? propEntries(handlers) : []) {
     const nodeConfig = objectLiteral(value, sf);
     if (nodeConfig) readHandlerNode(nodeConfig, key, tree, sf, scan);
@@ -737,12 +873,12 @@ function extractMachine(
   // not to `defineStates`) still gets drawn, and coverage flags it as undeclared.
   const states = [...new Set([...declaredStates, ...transitions.map((t) => t.to)])];
   const declaredEvents = declaredEventsOf(config, sf);
-  const owner = ownerOf(makeCall);
+  const owner = ownerOf(implementation.anchor) ?? ownerOf(makeCall);
 
   return {
     name: owner?.name ?? stringValue(propValue(config, 'id')) ?? 'Machine',
     source: 'effect-machine',
-    initial: initialPath(propValue(config, 'initial')) ?? declaredStates[0],
+    initial: initialPath(propValue(config, 'initial'), tree) ?? declaredStates[0],
     states,
     transitions,
     location: locOf(owner?.anchor ?? makeCall, filePath),
@@ -762,6 +898,24 @@ function extractMachine(
 // =============================================================================
 // Entry point
 // =============================================================================
+
+/**
+ * State and event counts for a one-line summary. Events are the declared
+ * alphabet — automatic triggers (`initial`, `always`, an invoke's `onDone` /
+ * `onError`) are not events anyone can send, so they must not inflate it.
+ */
+export function summarizeAlphabet(machine: StateMachine): {
+  readonly states: number;
+  readonly events: number;
+} {
+  const observed = new Set(
+    machine.transitions.filter((t) => t.trigger === undefined).map((t) => t.event),
+  );
+  return {
+    states: machine.states.length,
+    events: machine.declaredEvents?.length ?? observed.size,
+  };
+}
 
 const analysisCache = new Map<
   string,
@@ -795,8 +949,10 @@ export function analyzeStateMachines(
   const machines: StateMachine[] = [];
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!isMachineCall(call, 'make')) continue;
-    const machine = extractMachine(call, filePath, sf);
-    if (machine) machines.push(machine);
+    for (const implementation of implementationsOf(call, sf)) {
+      const machine = extractMachine(call, implementation, filePath, sf);
+      if (machine) machines.push(machine);
+    }
   }
 
   const analysis = { machines };

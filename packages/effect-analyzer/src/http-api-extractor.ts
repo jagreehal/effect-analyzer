@@ -123,16 +123,12 @@ function extractAnnotations(node: CallExpression, _sf: SourceFile, _filePath: st
   return result;
 }
 
-function extractEndpointSchemas(
-  endpointBase: CallExpression,
-  sf: SourceFile,
-): { requestSchema?: JsonSchemaObject; responseSchema?: JsonSchemaObject; urlParamsSchema?: JsonSchemaObject } {
+function extractEndpointSchemas(endpointBase: CallExpression): { requestSchema?: JsonSchemaObject; responseSchema?: JsonSchemaObject; urlParamsSchema?: JsonSchemaObject } {
   const result: {
     requestSchema?: JsonSchemaObject;
     responseSchema?: JsonSchemaObject;
     urlParamsSchema?: JsonSchemaObject;
   } = {};
-  const project = sf.getProject();
   let current: Node | undefined = endpointBase;
   for (let i = 0; i < 40 && current; i++) {
     const parent = current.getParent();
@@ -149,17 +145,17 @@ function extractEndpointSchemas(
     }
     const schemaArg = args[0];
     if (callee.endsWith('.addSuccess') && schemaArg && !result.responseSchema) {
-      const json = schemaToJsonSchema(schemaArg, sf, project);
+      const json = schemaToJsonSchema(schemaArg);
       if (json) result.responseSchema = json;
     } else if (callee.endsWith('.setPayload') && schemaArg && !result.requestSchema) {
-      const json = schemaToJsonSchema(schemaArg, sf, project);
+      const json = schemaToJsonSchema(schemaArg);
       if (json) result.requestSchema = json;
     } else if (
       (callee.endsWith('.setUrlParams') || callee.endsWith('.setQueryParams')) &&
       schemaArg &&
       !result.urlParamsSchema
     ) {
-      const json = schemaToJsonSchema(schemaArg, sf, project);
+      const json = schemaToJsonSchema(schemaArg);
       if (json) result.urlParamsSchema = json;
     }
     current = parent;
@@ -188,7 +184,7 @@ function extractEndpoint(
   }
   const annotations = extractAnnotations(node, sf, filePath);
   if (annotations.excluded) return null;
-  const schemas = extractEndpointSchemas(node, sf);
+  const schemas = extractEndpointSchemas(node);
   return {
     name,
     method: method.toUpperCase(),

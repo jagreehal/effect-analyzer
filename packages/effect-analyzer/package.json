@@ -66,7 +66,10 @@
     "clean": "rm -rf dist",
     "quality": "pnpm type-check && pnpm test && pnpm lint",
     "effect:fetch": "tsx scripts/fetch-effect-repo.ts",
-    "prepare": "effect-tsgo patch --no-typescript --oxlint"
+    "prepare": "effect-tsgo patch --no-typescript --oxlint",
+    "mutation": "stryker run",
+    "mutation:incremental": "stryker run --incremental",
+    "test:mutation-sandbox": "node scripts/test-mutation-sandbox.mjs"
   },
   "keywords": [
     "effect",
@@ -98,14 +101,17 @@
     }
   },
   "dependencies": {
-    "@effect/tsgo": "0.36.5",
-    "ts-morph": "^28.0.0"
+    "@effect/tsgo": "0.37.0",
+    "ts-morph": "^28.0.0",
+    "tsx": "4.23.12"
   },
   "optionalDependencies": {
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.13"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "9.6.1",
+    "@stryker-mutator/vitest-runner": "9.6.1",
     "@total-typescript/ts-reset": "^0.6.1",
     "@typeonce/effect-machine": "0.7.0",
     "@types/node": "^26.2.0",

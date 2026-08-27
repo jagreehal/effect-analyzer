@@ -3,7 +3,7 @@
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/send-money-workflow.ts`
-- **Analyzed**: 2026-04-01T19:18:09.605Z
+- **Analyzed**: 2026-08-26T06:24:25.559Z
 - **Source Type**: generator
 
 ## Effect Flow
@@ -16,52 +16,84 @@ flowchart TB
   start((Start))
   end_node((End))
 
-  n2["validated <- deps.validateTransfer <ValidatedTransfer, ValidationError, never> (service-call)"]
-  n3["rate <- deps       .fetchRate(( from: validated.fromCurrency… <ExchangeRate, RateUnavailableError, never> (service-call)"]
-  n4["balance <- deps.getBalance <number, never, never> (service-call)"]
-  n5["converted <- deps       .convertCurrency((         amount: v… <ConvertedAmount, InsufficientFundsError, never> (service-call)"]
-  n6["transfer <- deps       .executeTransfer((         recipientI… <( transferId: string; ), TransferRejectedError &#124; ProviderUnavailableError, never> (service-call)"]
-  n7["deps       .sendConfirmation((         transferId: transfer.… <void, ConfirmationFailedError, never> (service-call)"]
+  n2["Pipe (0 steps)"]
+  n3["deps.validateTransfer <never, ValidationError, never> (side-effect)"]
+  n4["Pipe (0 steps)"]
+  n5["deps       .fetchRate <ExchangeRate, RateUnavailableError, never> (side-effect)"]
+  n6["Pipe (0 steps)"]
+  n7["deps.getBalance <number, never, never> (side-effect)"]
+  n8["Pipe (0 steps)"]
+  n9["deps       .convertCurrency <ConvertedAmount, InsufficientFundsError, never> (side-effect)"]
+  n10["Pipe (0 steps)"]
+  n11["deps       .executeTransfer <( transferId: string; ), TransferRejectedError &#124; ProviderUnavailableError, never> (side-effect)"]
+  n12["Pipe (0 steps)"]
+  n13["deps       .sendConfirmation <void, ConfirmationFailedError, never> (side-effect)"]
 
   %% Edges
   n2 --> n3
-  n3 --> n4
   n4 --> n5
-  n5 --> n6
+  n3 --> n4
   n6 --> n7
+  n5 --> n6
+  n8 --> n9
+  n7 --> n8
+  n10 --> n11
+  n9 --> n10
+  n12 --> n13
+  n11 --> n12
   start --> n2
-  n7 --> end_node
+  n13 --> end_node
 
   %% Styles
   classDef startStyle fill:#c8e6c9,stroke:#2e7d32
   classDef endStyle fill:#ffcdd2,stroke:#c62828
   classDef effectStyle fill:#90EE90,stroke:#333,stroke-width:2px
+  classDef pipeStyle fill:#ADD8E6,stroke:#333,stroke-width:2px
   class start startStyle
   class end_node endStyle
-  class n2 effectStyle
+  class n2 pipeStyle
   class n3 effectStyle
-  class n4 effectStyle
+  class n4 pipeStyle
   class n5 effectStyle
-  class n6 effectStyle
+  class n6 pipeStyle
   class n7 effectStyle
+  class n8 pipeStyle
+  class n9 effectStyle
+  class n10 pipeStyle
+  class n11 effectStyle
+  class n12 pipeStyle
+  class n13 effectStyle
 ```
 
 ## Statistics
 
-- **Total Effects**: 6
+- **Total Effects**: 13
 
 ## Explanation
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Effect.pipe — service-call
-  2. rate = Effect.pipe — service-call
-  3. balance = Effect.pipe — service-call
-  4. converted = Effect.pipe — service-call
-  5. transfer = Effect.pipe — service-call
-  6. Calls Effect.pipe — service-call
+  1. validated = Pipes deps.validateTransfer through:
+    Calls deps.validateTransfer — collection
+  2. rate = Pipes deps
+      .fetchRate through:
+    Calls deps
+      .fetchRate
+  3. balance = Pipes deps.getBalance through:
+    Calls deps.getBalance
+  4. converted = Pipes deps
+      .convertCurrency through:
+    Calls deps
+      .convertCurrency
+  5. transfer = Pipes deps
+      .executeTransfer through:
+    Calls deps
+      .executeTransfer
+  6. Pipes deps
+      .sendConfirmation through:
+    Calls deps
+      .sendConfirmation
 
-  Services required: Effect
   Error paths: ConfirmationFailedError, InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
   Concurrency: sequential (no parallelism)
 ```

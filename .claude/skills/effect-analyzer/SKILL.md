@@ -10,7 +10,11 @@ Static analysis tool for Effect-TS programs. Parses TypeScript via `ts-morph`, b
 ## Architecture
 
 ```
-CLI (cli.ts)
+CLI (cli.ts — dispatch only)
+  → cli-options.ts (parseArgs → CLIOptions), cli-help.ts (--help text)
+  → cli-support.ts (CliError, styling, path + output helpers)
+  → cli-mode-*.ts (one module per mode: analysis, project, api, statechart,
+    reports, extras) + watch-mode.ts
   → analyze.ts (fluent API: analyze(path).single | .all | .named())
     → static-analyzer.ts (analyzeEffectFile / analyzeEffectSource)
       → program-discovery.ts (find Effect programs in AST)
@@ -231,7 +235,7 @@ Exported from the focused package entry points, primarily `effect-analyzer/analy
 - **DI completeness:** `checkDICompleteness()` — Service satisfaction
 - **Strict diagnostics:** `validateStrict()` — Strict mode validation
 - **Match analysis:** `analyzeMatch()` — Match statement patterns
-- **State machines:** `analyzeStateMachines(filePath)` — extracts `@typeonce/effect-machine` machines (`Machine.make({...}).handle({...})`): the state tree from `Machine.defineStates` (dotted paths, `type: 'parallel'`/`'final'`, compound `initial`), transitions from the handler tree (`on` / `always` / `onDone`) with targets resolved off the `target.full` / `target.local` / `target.branch` builders. Declared alphabet is the state tree + the `events:` array (`alphabetSource: 'config'`). `fromMachineJSON()` ingests XState `MachineJSON` into the same IR. `computeStateMachineCoverage()` flags unhandled events / unreachable states / undeclared symbols. Renderers: `renderStatechartMermaid`, `renderStatechartSVG`, `renderStatechartVisualizerHTML`, `renderXStateConfig`, `renderCoverageReport`, `hasCoverageWarnings`. CLI handled by `runStatechartMode` (early dispatch, not the IR pipeline).
+- **State machines:** `analyzeStateMachines(filePath)` — extracts `@typeonce/effect-machine` machines (`Machine.make({...}).handle({...})`, plus a stored definition handled more than once, which yields one machine per `.handle`): the state tree from `Machine.states` (>= 0.6) or `Machine.defineStates` (<= 0.5) — dotted paths, `type: 'parallel'`/`'final'`, compound `initial` — and transitions from the handler tree (`on` / `always` / `onDone`, plus an invoke builder's `.onDone` / `.onFailure` as `trigger: 'done'`/`'error'`) with targets resolved off the `full` / `local` / `branch` builders on either the handler's own parameter (`(to) => to.full.X()`) or the destructured `target`. `to.branches({ name: { target } })` supplies the guard label. Declared alphabet is the state tree + the `events:` array or `Machine.events(...)` descriptor (`alphabetSource: 'config'`); `summarizeAlphabet(machine)` gives the state/event counts for a summary line. `fromMachineJSON()` ingests XState `MachineJSON` into the same IR. `computeStateMachineCoverage()` flags unhandled events / unreachable states / undeclared symbols. Renderers: `renderStatechartMermaid`, `renderStatechartSVG`, `renderStatechartVisualizerHTML`, `renderXStateConfig`, `renderCoverageReport`, `hasCoverageWarnings`. CLI handled by `runStatechartMode` (early dispatch, not the IR pipeline).
   - Convention guide: `apps/docs/src/content/docs/reference/state-machines.mdx` (https://jagreehal.github.io/effect-analyzer/reference/state-machines/)
 - **Platform:** `analyzePlatformUsage()` — Platform detection
 - **Testing:** `analyzeTestingPatterns()` — Test pattern detection
@@ -278,7 +282,7 @@ import {
 
 1. Create `src/output/my-format.ts` with render function taking `StaticEffectIR`
 2. Export from `src/diagram-entry.ts`
-3. Add CLI flag in `src/cli.ts` under the `--format` option
+3. Add the `--format` value in `src/cli-options.ts`, list it in `src/cli-help.ts`, and dispatch it from `main` in `src/cli.ts` (mode bodies live in `src/cli-mode-*.ts`, never inline in `main`)
 4. Add to `src/output/auto-diagram.ts` if it should be auto-selected
 
 ### Adding a New Node Type

@@ -13,83 +13,99 @@
 import { Machine } from '@typeonce/effect-machine'
 import { Effect, Schema } from 'effect'
 
-export class Validating extends Schema.TaggedClass<Validating>('Validating')('Validating', {}) {}
-export class FetchingRate extends Schema.TaggedClass<FetchingRate>('FetchingRate')('FetchingRate', {}) {}
-export class Converting extends Schema.TaggedClass<Converting>('Converting')('Converting', {
-  sufficientFunds: Schema.Boolean,
-}) {}
-export class Executing extends Schema.TaggedClass<Executing>('Executing')('Executing', {}) {}
-export class Confirming extends Schema.TaggedClass<Confirming>('Confirming')('Confirming', {
-  retryable: Schema.Boolean,
-}) {}
-export class Done extends Schema.TaggedClass<Done>('Done')('Done', {}) {}
-export class Failed extends Schema.TaggedClass<Failed>('Failed')('Failed', {}) {}
-
-export class Advance extends Schema.TaggedClass<Advance>('Advance')('Advance', {}) {}
-export class Fail extends Schema.TaggedClass<Fail>('Fail')('Fail', {}) {}
-export class Executed extends Schema.TaggedClass<Executed>('Executed')('Executed', {}) {}
-
-/** The provider call. Its source is a label to the analyzer; Effect runs it. */
-export const ExecuteTransfer = Machine.invoke({
-  id: 'executeTransfer',
-  src: () => Machine.effect(Effect.succeed(new Executed())),
+/** Data owned by the stages that carry a decision into their next transition. */
+export const TransferState = Schema.TaggedUnion({
+  Converting: { sufficientFunds: Schema.Boolean },
+  Confirming: { retryable: Schema.Boolean },
 })
 
-export const TransferStates = Machine.defineStates({
-  Validating,
-  FetchingRate,
-  Converting,
-  Executing,
-  Confirming,
-  Done: { schema: Done, type: 'final' },
-  Failed: { schema: Failed, type: 'final' },
+export const TransferStates = Machine.states({
+  Validating: {},
+  FetchingRate: {},
+  Converting: TransferState.cases.Converting,
+  Executing: {},
+  Confirming: TransferState.cases.Confirming,
+  Done: { type: 'final' },
+  Failed: { type: 'final' },
 })
+
+export const TransferEvents = Machine.events(
+  Schema.TaggedUnion({
+    Advance: {},
+    Fail: {},
+  }),
+)
+
+/** The provider call. Its id is a label to the analyzer; Effect runs it. */
+export const executeTransfer: Effect.Effect<void, Error> = Effect.void
 
 export const TransferLifecycle = Machine.make({
   states: TransferStates.states,
-  events: [Advance, Fail, Executed],
-  initial: () => TransferStates.initial.Validating(new Validating()),
+  events: TransferEvents,
+  initial: (to) => to.Validating(),
 }).handle({
   Validating: {
     on: {
-      Advance: ({ target }) => target.full.FetchingRate(new FetchingRate()),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Advance: (to) => to.full.FetchingRate(),
+      Fail: (to) => to.full.Failed(),
     },
   },
   FetchingRate: {
     on: {
-      Advance: ({ target }) =>
-        target.full.Converting(new Converting({ sufficientFunds: true })),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Advance: (to) =>
+        to.full.Converting().resolve(({ target }) => target.from({ sufficientFunds: true })),
+      Fail: (to) => to.full.Failed(),
     },
   },
   Converting: {
     on: {
-      // Balance check lives in convertCurrency; the branch is the guard label.
-      Advance: ({ state, target }) =>
-        state.sufficientFunds
-          ? target.full.Executing(new Executing())
-          : target.full.Failed(new Failed()),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      // Balance check lives in convertCurrency; the branch names are the guards.
+      Advance: (to) =>
+        to
+          .branches({
+            sufficientFunds: { target: to.full.Executing() },
+            insufficientFunds: { target: to.full.Failed() },
+          })
+          .resolve(({ state, select }) =>
+            state.sufficientFunds
+              ? select.sufficientFunds.from()
+              : select.insufficientFunds.from(),
+          ),
+      Fail: (to) => to.full.Failed(),
     },
   },
   Executing: {
-    invoke: () => ExecuteTransfer,
+    // The provider call is owned by the state: entering starts it, leaving
+    // interrupts it, and its outcome is a transition rather than an event.
+    invoke: (from) =>
+      from
+        .effect('executeTransfer', () => executeTransfer)
+        .onDone((to) =>
+          to.full.Confirming().resolve(({ target }) => target.from({ retryable: true })),
+        )
+        .onFailure((to) => to.full.Failed()),
     on: {
-      Executed: ({ target }) =>
-        target.full.Confirming(new Confirming({ retryable: true })),
       // Provider can still fail after invoke starts; keep an explicit Fail edge.
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Fail: (to) => to.full.Failed(),
     },
   },
   Confirming: {
     on: {
-      Advance: ({ target }) => target.full.Done(new Done()),
+      Advance: (to) => to.full.Done(),
       // Confirmation is best-effort in the Effect program; retry vs give up.
-      Fail: ({ state, target }) =>
-        state.retryable
-          ? target.full.Confirming(new Confirming({ retryable: false }))
-          : target.full.Done(new Done()),
+      Fail: (to) =>
+        to
+          .branches({
+            retry: { target: to.full.Confirming() },
+            giveUp: { target: to.full.Done() },
+          })
+          .resolve(({ state, select }) =>
+            state.retryable
+              ? select.retry.from({ retryable: false })
+              : select.giveUp.from(),
+          ),
     },
   },
+  Done: {},
+  Failed: {},
 })

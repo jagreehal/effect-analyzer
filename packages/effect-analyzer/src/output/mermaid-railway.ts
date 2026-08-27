@@ -73,8 +73,12 @@ function collectErrorTypes(node: StaticFlowNode): readonly string[] {
   return errors;
 }
 
-/** Compute a display label for a flow node. */
-function computeLabel(node: StaticFlowNode): string {
+/**
+ * Compute a display label for a flow node. `binding` is the generator variable
+ * the step's result was yielded into — it lives on the yield, not on the node,
+ * so it has to be threaded in.
+ */
+function computeLabel(node: StaticFlowNode, binding?: string): string {
   const raw = ((): string => {
     if (node.displayName) return node.displayName;
     if (node.type === 'effect') {
@@ -92,7 +96,8 @@ function computeLabel(node: StaticFlowNode): string {
     if (node.type === 'conditional') return 'Conditional';
     return node.type;
   })();
-  return truncateDisplayText(raw, DEFAULT_LABEL_MAX);
+  const labelled = binding === undefined ? raw : `${binding} <- ${raw}`;
+  return truncateDisplayText(labelled, DEFAULT_LABEL_MAX);
 }
 
 /** Transparent: recurse into children, don't show this node itself. */
@@ -144,72 +149,108 @@ function isSkippedRailwayNode(node: StaticFlowNode): boolean {
 }
 
 /**
- * Check if an effect node is a definition/constructor that shouldn't appear
- * as a step in the railway view. These are service method definitions,
- * constructors, and other non-workflow nodes.
+ * A declaration rather than a step: a service method definition or a type
+ * declaration. Never appears in the railway however it was reached.
  */
-function isSkippableEffectNode(node: StaticFlowNode): boolean {
+function isDefinitionNode(node: StaticFlowNode): boolean {
   if (node.type !== 'effect') return false;
   const callee = (node as { callee?: string }).callee ?? '';
+  return (
+    callee === 'Effect.fn' ||
+    callee.startsWith('Effect.fn(') ||
+    callee.startsWith('Schema.') ||
+    callee.startsWith('Data.')
+  );
+}
 
-  // Effect.fn / Effect.fn("name") — service method definitions
-  if (callee === 'Effect.fn' || callee.startsWith('Effect.fn(')) return true;
+/**
+ * An effect node the source never named — no display name and no variable. On
+ * its own that is setup plumbing, not a step the reader cares about.
+ */
+function isAnonymousEffect(node: StaticFlowNode): boolean {
+  if (node.type !== 'effect') return false;
+  const name = node.displayName ?? node.name ?? '';
+  return !name || name === node.type;
+}
 
-  // Pure constructors without a meaningful display name (anonymous yields in service setup)
-  // A node is "anonymous" if it has no meaningful display name —
-  // displayName is either absent, equals the raw callee, or is a generic type name
-  const displayName = node.displayName ?? '';
-  const hasExplicitName = displayName && displayName !== callee && displayName !== node.type;
-  const isAnonymous = !hasExplicitName;
-  // Anonymous effect nodes (no variable binding) are infrastructure/plumbing — skip
-  if (isAnonymous) return true;
+/**
+ * How the walk reached a node. A generator `yield*` is the program awaiting a
+ * step, so it counts whether or not its result was bound to a name; anything
+ * else is only a step if the source named it.
+ */
+type Arrival =
+  | { readonly kind: 'yielded'; readonly binding: string | undefined }
+  | { readonly kind: 'nested' };
 
-  // Schema/Data definitions are type declarations, not workflow steps
-  if (callee.startsWith('Schema.') || callee.startsWith('Data.')) return true;
+const NESTED: Arrival = { kind: 'nested' };
 
-  return false;
+const bindingOf = (arrival: Arrival): string | undefined =>
+  arrival.kind === 'yielded' ? arrival.binding : undefined;
+
+/** A concrete railway step and the generator binding that named it, if any. */
+interface FlatStep {
+  readonly node: StaticFlowNode;
+  readonly binding?: string;
 }
 
 /** Flatten IR children to a linear list of concrete steps for the railway diagram. */
-function flattenNodesToSteps(nodes: readonly StaticFlowNode[]): readonly StaticFlowNode[] {
-  const steps: StaticFlowNode[] = [];
+function flattenNodesToSteps(nodes: readonly StaticFlowNode[]): readonly FlatStep[] {
+  const steps: FlatStep[] = [];
 
-  const visit = (node: StaticFlowNode): void => {
-    // Transparent: recurse into children (generator, pipe wrappers)
+  const visit = (node: StaticFlowNode, arrival: Arrival): void => {
+    // A generator's bindings live on its yields, so recurse over those directly
+    // rather than through `getStaticChildren`, which drops the variable name.
+    if (node.type === 'generator') {
+      for (const yielded of node.yields) {
+        visit(yielded.effect, { kind: 'yielded', binding: yielded.variableName });
+      }
+      return;
+    }
+
+    // Transparent: recurse into children (pipe wrappers). The arrival belongs to
+    // the pipe's subject — its first child — not to its transformations.
     if (isTransparentRailwayNode(node)) {
       const children = Option.getOrElse(getStaticChildren(node), () => []);
-      for (const child of children) {
-        visit(child);
-      }
+      children.forEach((child, index) => {
+        visit(child, index === 0 ? arrival : NESTED);
+      });
       return;
     }
 
     // Skip entirely: error handlers, transforms, streams, etc.
     if (isSkippedRailwayNode(node)) return;
 
-    // Opaque: show as single box, don't recurse (loops, conditionals, parallel, etc.)
+    const binding = bindingOf(arrival);
+    const push = (): void => {
+      steps.push({ node, ...(binding !== undefined ? { binding } : {}) });
+    };
+
+    // Opaque: shown as a single box, never recursed into (loops, conditionals,
+    // parallel, race, retry, timeout, resource).
     if (isOpaqueRailwayStep(node)) {
-      steps.push(node);
+      push();
       return;
     }
 
-    // Effect nodes: skip method definitions and anonymous constructors
-    if (isSkippableEffectNode(node)) return;
+    // Declarations are never steps; unnamed effects are steps only when a
+    // generator awaited them.
+    if (isDefinitionNode(node)) return;
+    if (arrival.kind === 'nested' && isAnonymousEffect(node)) return;
 
-    steps.push(node);
+    push();
   };
 
   for (const node of nodes) {
-    visit(node);
+    visit(node, NESTED);
   }
 
   return steps;
 }
 
 /** Build railway step descriptors from flow nodes. */
-function buildSteps(nodes: readonly StaticFlowNode[]): readonly RailwayStep[] {
-  return nodes.map(node => ({
-    label: computeLabel(node),
+function buildSteps(flat: readonly FlatStep[]): readonly RailwayStep[] {
+  return flat.map(({ node, binding }) => ({
+    label: computeLabel(node, binding),
     errorTypes: collectErrorTypes(node),
   }));
 }

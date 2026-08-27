@@ -13,6 +13,7 @@ export default defineConfig({
       ...configDefaults.exclude,
       '**/.analysis-output/**',
       '.analysis-output/**',
+      '**/.stryker-tmp/**',
     ],
   },
 });

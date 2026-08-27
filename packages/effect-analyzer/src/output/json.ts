@@ -5,6 +5,15 @@
 import { Effect } from 'effect';
 import type { StaticEffectIR, JSONRenderOptions } from '../types';
 
+/**
+ * Version of the emitted IR document.
+ *
+ * Stamped on every JSON document so a consumer can validate what it received
+ * and migrate across analyzer releases instead of guessing from the shape.
+ * Bump it whenever the emitted structure changes incompatibly.
+ */
+export const IR_SCHEMA_VERSION = 1 as const;
+
 const DEFAULT_OPTIONS: JSONRenderOptions = {
   pretty: true,
   includeMetadata: true,
@@ -24,6 +33,7 @@ export const renderJSON = (
 
     const data = opts.includeMetadata
       ? {
+          schemaVersion: IR_SCHEMA_VERSION,
           root: ir.root,
           metadata: ir.metadata,
           references:
@@ -50,6 +60,7 @@ export const renderMultipleJSON = (
     const data = irs.map((ir) =>
       opts.includeMetadata
         ? {
+            schemaVersion: IR_SCHEMA_VERSION,
             root: ir.root,
             metadata: ir.metadata,
             references:
@@ -80,12 +91,6 @@ const replacer = (_key: string, value: unknown): unknown => {
   // Handle BigInt
   if (typeof value === 'bigint') {
     return value.toString();
-  }
-
-  // Handle Option
-  if (value && typeof value === 'object' && '_tag' in value) {
-    // This is likely an Option
-    return value;
   }
 
   return value;
