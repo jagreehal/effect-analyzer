@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import {
   parseTsgoProjectArgument,
   parseTsgoOutput,
@@ -212,7 +213,7 @@ describe('tsgo-diagnostics', () => {
   it('resolves the peer and consumer TypeScript when invoked from another cwd', () => {
     const packageRoot = resolve(__dirname, '..');
     const root = mkdtempSync(join(packageRoot, '.tmp-tsgo-cwd-'));
-    const previousCwd = process.cwd();
+    let shortTmp: string | undefined;
     try {
       mkdirSync(join(root, 'src'));
       writeFileSync(
@@ -243,12 +244,43 @@ export const program = Effect.gen(function* () {
         'utf8',
       );
 
-      process.chdir(tmpdir());
-      const result = runTsgoDiagnostics({ project });
-      expect(result?.some((diagnostic) => diagnostic.rule === 'floatingEffect')).toBe(true);
+      // Run in a child process rooted somewhere unrelated rather than calling
+      // `process.chdir()`. The point of the test is that the *host* process's
+      // cwd is nowhere near the consumer project, so `@effect/tsgo` has to
+      // resolve that consumer's TypeScript instead of falling back on this
+      // package's own. `process.chdir()` expressed that but mutates global
+      // state, and it throws outright under a worker-based runner — which is
+      // how Stryker executes the suite, so it blocked mutation testing
+      // entirely.
+      const helper = join(root, 'run-diagnostics.mts');
+      writeFileSync(
+        helper,
+        `import { runTsgoDiagnostics } from ${JSON.stringify(join(__dirname, 'tsgo-diagnostics.ts'))};\n` +
+          `const result = runTsgoDiagnostics({ project: ${JSON.stringify(project)} });\n` +
+          `process.stdout.write(JSON.stringify(result ?? []));\n`,
+        'utf8',
+      );
+
+      // `tsx` opens a unix socket under TMPDIR and the socket path limit is
+      // ~104 bytes, but `vitest.setup.ts` points TMPDIR at a long repo-local
+      // path — so the child gets a short one, and uses it as the unrelated cwd
+      // too. Same constraint the runtime-probe tests work around.
+      shortTmp = mkdtempSync(join(sep, 'tmp', 'tsgo-cwd-'));
+      const tsxCli = join(packageRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      const run = spawnSync(process.execPath, [tsxCli, helper], {
+        cwd: shortTmp,
+        encoding: 'utf8',
+        timeout: 110_000,
+        env: { ...process.env, TMPDIR: shortTmp, TMP: shortTmp, TEMP: shortTmp },
+      });
+
+      expect(run.stderr).not.toContain('Unable to resolve @effect/tsgo');
+      expect(run.status).toBe(0);
+      const result = JSON.parse(run.stdout) as readonly { rule: string }[];
+      expect(result.some((diagnostic) => diagnostic.rule === 'floatingEffect')).toBe(true);
     } finally {
-      process.chdir(previousCwd);
       rmSync(root, { recursive: true, force: true });
+      if (shortTmp) rmSync(shortTmp, { recursive: true, force: true });
     }
   }, 120_000);
 });

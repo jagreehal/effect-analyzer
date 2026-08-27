@@ -8,12 +8,17 @@
  *
  * This scanner is intentionally independent of the extraction code: it
  * re-derives near-miss candidates with its own light AST checks so it stays
- * stable while the extractor evolves.
+ * stable while the extractor evolves. It shares only `isMachineCall`, which
+ * answers whether an identifier really is the package's `Machine` — a fact
+ * about the file's imports, not an extraction heuristic.
  */
 
 import { Node, Project, SyntaxKind, type CallExpression } from 'ts-morph';
 import type { SourceLocation } from './types';
 import { analyzeStateMachines, type StateMachine } from './state-machine';
+// Import resolution only. The near-miss heuristics below stay this module's
+// own, so it keeps reporting sensibly as the extractor evolves.
+import { isMachineCall } from './state-machine-ast';
 
 export interface StateMachineRejection {
   readonly name: string;
@@ -33,48 +38,6 @@ function locOf(node: Node, filePath: string): SourceLocation {
   const offset = node.getStart();
   const { line, column } = sf.getLineAndColumnAtPos(offset);
   return { filePath, line, column, offset };
-}
-
-function isEffectMachineBinding(name: string, sf: ReturnType<Project['createSourceFile']>): boolean {
-  return sf.getImportDeclarations().some((declaration) => {
-    if (declaration.getModuleSpecifierValue() !== '@typeonce/effect-machine') {
-      return false;
-    }
-    return declaration.getNamedImports().some((namedImport) => {
-      if (namedImport.getName() !== 'Machine') return false;
-      return (namedImport.getAliasNode()?.getText() ?? 'Machine') === name;
-    });
-  });
-}
-
-function isEffectMachineNamespace(
-  name: string,
-  sf: ReturnType<Project['createSourceFile']>,
-): boolean {
-  return sf.getImportDeclarations().some(
-    (declaration) =>
-      declaration.getModuleSpecifierValue() === '@typeonce/effect-machine' &&
-      declaration.getNamespaceImport()?.getText() === name,
-  );
-}
-
-/** A call to a method on the imported `Machine` namespace. */
-function isMachineCall(node: Node, name: string): node is CallExpression {
-  if (!Node.isCallExpression(node)) return false;
-  const expr = node.getExpression();
-  if (!Node.isPropertyAccessExpression(expr) || expr.getName() !== name) {
-    return false;
-  }
-  const owner = expr.getExpression();
-  if (Node.isIdentifier(owner)) {
-    return isEffectMachineBinding(owner.getText(), node.getSourceFile());
-  }
-  return (
-    Node.isPropertyAccessExpression(owner) &&
-    owner.getName() === 'Machine' &&
-    Node.isIdentifier(owner.getExpression()) &&
-    isEffectMachineNamespace(owner.getExpression().getText(), node.getSourceFile())
-  );
 }
 
 function ownerOf(node: Node): { name: string; nameNode: Node } | undefined {
@@ -103,18 +66,28 @@ function receiverOf(call: CallExpression): string {
     : '';
 }
 
-/**
- * Is `.handle({...})` chained onto this call? It is the signature that
- * separates a real machine from an unrelated `make` — worth reporting even
- * when the receiver is not a recognized `Machine` binding.
- */
-function hasHandleChain(call: CallExpression): boolean {
-  const parent = call.getParent();
+/** Is `X.handle(...)` chained onto this node? */
+function hasHandleChain(node: Node): boolean {
+  const parent = node.getParent();
   return (
     !!parent &&
     Node.isPropertyAccessExpression(parent) &&
     parent.getName() === 'handle'
   );
+}
+
+/**
+ * Is a stored definition implemented elsewhere in the file? Each
+ * `Definition.handle({...})` is extracted as its own machine, named after the
+ * implementation, so the definition itself is not a near miss.
+ */
+function isImplementedElsewhere(
+  name: string,
+  sf: ReturnType<Project['createSourceFile']>,
+): boolean {
+  return sf
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some((identifier) => identifier.getText() === name && hasHandleChain(identifier));
 }
 
 const unresolvedBindingReason = (call: CallExpression): string =>
@@ -190,28 +163,36 @@ export function diagnoseStateMachines(
 
     const states = statesArgument(call);
     if (states) {
-      // `MyStates.states` — remember the tree so an unused defineStates is not
-      // also reported.
+      // `MyStates.states` — remember the tree so an unused state descriptor is
+      // not also reported.
       const root = states.getText().split('.')[0];
       if (root) usedStateTrees.add(root);
     }
+
+    if (owner && isImplementedElsewhere(owner.name, sf)) continue;
 
     add(
       name,
       states
         ? 'the state tree is not declared in this file, so its states cannot be read'
         : 'the machine config has no `states` property',
-      'declare `Machine.defineStates({...})` in this file and pass its `.states`',
+      'declare `Machine.states({...})` in this file and pass its `.states`'
+        + ' (`Machine.defineStates` on effect-machine <= 0.5)',
       anchor,
     );
   }
 
   // A state tree that no machine in this file consumes.
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!isMachineCall(call, 'defineStates')) {
-      // A barrel-imported `defineStates`. Same root cause as an unresolved
+    if (!isMachineCall(call, 'defineStates') && !isMachineCall(call, 'states')) {
+      // A barrel-imported state descriptor. Same root cause as an unresolved
       // `.make(...)` chain, so only speak when that has not already said it.
-      if (bindingReported || !isNamedCall(call, 'defineStates')) continue;
+      if (
+        bindingReported ||
+        (!isNamedCall(call, 'defineStates') && !isNamedCall(call, 'states'))
+      ) {
+        continue;
+      }
       const unresolved = ownerOf(call);
       if (!unresolved) continue;
       add(

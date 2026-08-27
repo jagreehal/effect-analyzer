@@ -11,5 +11,10 @@ minimumReleaseAgeExclude:
   # Released in lockstep with typescript@next; a mature-only range never has a
   # version whose packaged gitHead matches the installed TypeScript.
   - '@effect/tsgo'
+  # The platform artifact packages are published alongside @effect/tsgo itself;
+  # excluding only the wrapper leaves the install failing on whichever
+  # @effect/tsgo-<platform> package the host needs.
+  - '@effect/tsgo-*'
   - oxlint
+  - '@oxlint/*'
   - oxlint-tsgolint

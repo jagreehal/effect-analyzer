@@ -32,41 +32,56 @@ The machine lives next to the Effect pipeline it models:
 
 [`apps/docs/samples/observability-transfer/transfer-lifecycle.ts`](https://github.com/jagreehal/effect-analyzer/blob/main/apps/docs/samples/observability-transfer/transfer-lifecycle.ts)
 
-Dense `Advance` / `Fail` events at every active stage, branch conditions the
-analyzer reads as guards, an invoked child, and two explicit finals:
+Dense `Advance` / `Fail` events at every active stage, named branches the
+analyzer reads as guards, state-owned work, and two explicit finals:
 
 ```ts
-export const TransferStates = Machine.defineStates({
-  Validating,
-  FetchingRate,
-  Converting,
-  Executing,
-  Confirming,
-  Done: { schema: Done, type: 'final' },
-  Failed: { schema: Failed, type: 'final' },
+export const TransferStates = Machine.states({
+  Validating: {},
+  FetchingRate: {},
+  Converting: TransferState.cases.Converting,
+  Executing: {},
+  Confirming: TransferState.cases.Confirming,
+  Done: { type: 'final' },
+  Failed: { type: 'final' },
 })
+
+export const TransferEvents = Machine.events(
+  Schema.TaggedUnion({ Advance: {}, Fail: {} }),
+)
 
 export const TransferLifecycle = Machine.make({
   states: TransferStates.states,
-  events: [Advance, Fail, Executed],
-  initial: () => TransferStates.initial.Validating(new Validating()),
+  events: TransferEvents,
+  initial: (to) => to.Validating(),
 }).handle({
   // …
   Converting: {
     on: {
-      Advance: ({ state, target }) =>
-        state.sufficientFunds
-          ? target.full.Executing(new Executing())
-          : target.full.Failed(new Failed()),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Advance: (to) =>
+        to
+          .branches({
+            sufficientFunds: { target: to.full.Executing() },
+            insufficientFunds: { target: to.full.Failed() },
+          })
+          .resolve(({ state, select }) =>
+            state.sufficientFunds
+              ? select.sufficientFunds.from()
+              : select.insufficientFunds.from(),
+          ),
+      Fail: (to) => to.full.Failed(),
     },
   },
   Executing: {
-    invoke: () => ExecuteTransfer,
+    invoke: (from) =>
+      from
+        .effect('executeTransfer', () => executeTransfer)
+        .onDone((to) =>
+          to.full.Confirming().resolve(({ target }) => target.from({ retryable: true })),
+        )
+        .onFailure((to) => to.full.Failed()),
     on: {
-      Executed: ({ target }) =>
-        target.full.Confirming(new Confirming({ retryable: true })),
-      Fail: ({ target }) => target.full.Failed(new Failed()),
+      Fail: (to) => to.full.Failed(),
     },
   },
   // …
@@ -110,9 +125,9 @@ export const TransferLifecycleMachine = createMachine({
   states: {
     Validating: { on: { Advance: 'FetchingRate', Fail: 'Failed' } },
     FetchingRate: { on: { Advance: 'Converting', Fail: 'Failed' } },
-    Converting: { on: { Advance: [{ target: 'Executing', guard: 'state.sufficientFunds' }, { target: 'Failed', guard: '!(state.sufficientFunds)' }], Fail: 'Failed' } },
-    Executing: { invoke: { src: 'executeTransfer', id: 'executeTransfer' }, on: { Executed: 'Confirming', Fail: 'Failed' } },
-    Confirming: { on: { Advance: 'Done', Fail: [{ target: 'Confirming', guard: 'state.retryable' }, { target: 'Done', guard: '!(state.retryable)' }] } },
+    Converting: { on: { Advance: [{ target: 'Executing', guard: 'sufficientFunds' }, { target: 'Failed', guard: 'insufficientFunds' }], Fail: 'Failed' } },
+    Executing: { invoke: { src: 'executeTransfer', id: 'executeTransfer', onDone: 'Confirming', onError: 'Failed' }, on: { Fail: 'Failed' } },
+    Confirming: { on: { Advance: 'Done', Fail: [{ target: 'Confirming', guard: 'retry' }, { target: 'Done', guard: 'giveUp' }] } },
     Done: { type: 'final' },
     Failed: { type: 'final' }
   }
@@ -127,8 +142,8 @@ In the diagram:
 
 - **Happy path** — `Validating` → `FetchingRate` → `Converting` → `Executing` → `Confirming` → `Done`
 - **Fail sinks** — `Fail` from active stages into the `Failed` final
-- **Invoke** — `Executing` shows `INVOKE / executeTransfer`, with the child's
-  `Executed` event carrying the machine forward
+- **Invoke** — `Executing` shows `INVOKE / executeTransfer`, with `onDone`
+  carrying the machine to `Confirming` and `onError` to `Failed`
 - **Guarded choices** — `Converting` has two `Advance` edges and `Confirming`
   two `Fail` edges, one per branch (the legacy visualizer draws the alternatives
   but does not print the guard text; it is in the config)

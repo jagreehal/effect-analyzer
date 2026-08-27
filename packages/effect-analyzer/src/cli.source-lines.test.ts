@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Effect } from 'effect';
-import { buildSourceLinesMap } from './cli';
+import { buildSourceLinesMap } from './cli-support';
 
 describe('buildSourceLinesMap', () => {
   it('skips unreadable files instead of failing the run', async () => {

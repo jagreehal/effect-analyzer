@@ -1,11 +1,16 @@
 createSendMoneyWorkflow (generator):
-  1. validated = Effect.pipe — service-call
-  2. rate = Effect.pipe — service-call
-  3. balance = Effect.pipe — service-call
-  4. converted = Effect.pipe — service-call
-  5. transfer = Effect.pipe — service-call
-  6. Calls Effect.pipe — service-call
+  1. validated = Pipes deps.validateTransfer through:
+    Calls deps.validateTransfer — collection
+  2. rate = Pipes deps.fetchRate through:
+    Calls deps.fetchRate
+  3. balance = Pipes deps.getBalance through:
+    Calls deps.getBalance
+  4. converted = Pipes deps.convertCurrency through:
+    Calls deps.convertCurrency
+  5. transfer = Pipes deps.executeTransfer through:
+    Calls deps.executeTransfer
+  6. Pipes deps.sendConfirmation through:
+    Calls deps.sendConfirmation
 
-  Services required: Effect
   Error paths: ConfirmationFailedError, InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
   Concurrency: sequential (no parallelism)

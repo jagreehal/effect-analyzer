@@ -37,6 +37,17 @@ export {
   type RuntimeOverlayResult,
 } from './output/mermaid';
 
+export {
+  advance,
+  advanceWhileLinear,
+  beginWalkthrough,
+  rewind,
+  type ChoiceKind,
+  type WalkChoice,
+  type WalkStep,
+  type Walkthrough,
+} from './walkthrough';
+
 export type {
   AnalyzerOptions,
   StaticEffectIR,

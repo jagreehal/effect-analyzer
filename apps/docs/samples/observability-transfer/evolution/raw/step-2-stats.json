@@ -2,7 +2,7 @@
   {
     "program": "createSendMoneyWorkflow",
     "stats": {
-      "totalEffects": 2,
+      "totalEffects": 5,
       "parallelCount": 0,
       "raceCount": 0,
       "errorHandlerCount": 0,

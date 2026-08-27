@@ -235,41 +235,58 @@ npx effect-analyze ./workflow.ts
 The recognized shape is `Machine.make({...}).handle({...})`:
 
 ```ts
-const CheckoutStates = Machine.defineStates({
-  Idle,
-  Paying,
-  Paid: { schema: Paid, type: 'final' },
+const CheckoutStates = Machine.states({
+  Idle: {},
+  Paying: CheckoutState.cases.Paying,
+  Paid: { type: 'final' },
+  Failed: {},
 });
+
+const CheckoutEvents = Machine.events(
+  Schema.TaggedUnion({ Pay: { amount: Schema.Number }, Cancel: {} }),
+);
 
 export const CheckoutMachine = Machine.make({
   states: CheckoutStates.states,
-  events: [Pay, Settled],
-  initial: () => CheckoutStates.initial.Idle(new Idle()),
+  events: CheckoutEvents,
+  initial: (to) => to.Idle(),
 }).handle({
   Idle: {
     on: {
-      Pay: ({ event, target }) =>
-        target.full.Paying(new Paying({ amount: event.amount })),
+      Pay: (to) =>
+        to.full.Paying().resolve(({ event, target }) => target.from({ amount: event.amount })),
     },
   },
   Paying: {
-    entry: () => Machine.action(Effect.log('charging')),
-    invoke: () => ChargeCard,
-    on: { Settled: ({ target }) => target.full.Paid(new Paid()) },
+    entry: logCharge,
+    invoke: (from) =>
+      from
+        .effect('charge-card', ({ state }) => chargeCard(state.amount))
+        .onDone((to) => to.full.Paid())
+        .onFailure((to) => to.full.Failed()),
+    on: { Cancel: (to) => to.full.Failed() },
   },
 });
 ```
 
+Both API generations are read: the `Machine.states` / `Machine.events`
+descriptors above (effect-machine >= 0.6) and the 0.5-era `Machine.defineStates`,
+`events: [Event]` array, `({ target }) => target.full.X(new X())` handlers and
+`Machine.invoke({...})`. A definition stored in a `const` and implemented by more
+than one `.handle({...})` yields one machine per implementation.
+
 A nested state tree becomes dotted paths (`workspace.document.Clean`) that nest
 in the diagrams and the exported config, and a `type: 'parallel'` node enters
-every region. Targets are read from the `target.full`, `target.local` and
-`target.branch` builders, including `target.local.with(value, child => ...)`.
+every region. Targets are read from the `full`, `local` and `branch` builders;
+`to.branches({ name: { target } })` contributes the branch name as the guard
+label, and an invoke's `.onDone` / `.onFailure` become completion transitions.
 XState `MachineJSON` (from Stately or any tool that emits it) can be ingested
 too, and runs through the same renderers and coverage engine.
 
 #### Completeness checking
 
-The state tree and the `events:` list are the machine's **declared alphabet**,
+The state tree and the `events:` descriptor are the machine's **declared
+alphabet**,
 so the analyzer can check the machine against it — turning the statechart from a
 drawing into a verified machine:
 
@@ -429,6 +446,42 @@ or ambiguous-span nodes.
 | **Control flow** | `if/else`, `for..of`, `while`, `try/catch`, `switch` inside generators |
 | **Schedules** | `Schedule.recurs`, `Schedule.exponential` |
 | **Aliases** | `const E = Effect`, destructured imports, renamed imports |
+
+## Mutation Testing
+
+Line coverage says a line ran, not that a test would notice if it changed.
+Mutation testing changes the code on purpose and reports which edits no test
+objected to.
+
+```bash
+pnpm mutation              # full run
+pnpm mutation:incremental  # only what changed since the last run
+```
+
+Runs happen in a Stryker **sandbox** — a copy of the project. Do not set
+`inPlace: true`: that rewrites the real source files and restores them at the
+end, so an interrupted run leaves the tree full of instrumentation and
+`// @ts-nocheck`, taking any uncommitted edits with it.
+`pnpm test:mutation-sandbox` is the regression test for that, and fails if a
+run rewrites tracked source, fails to restore it, or leaves `stryker-setup-*.js`
+behind.
+
+**Why `tsconfigFile` names a file that does not exist.** Stryker's
+`TSConfigPreprocessor` rewrites relative paths in the tsconfig when it copies
+the project into the sandbox, and calls `ts.parseConfigFileTextToJson` to do it.
+This package is on TypeScript 7, whose main entry point exports only
+`{ version, versionMajorMinor }` — the classic JS compiler API moved to
+`typescript/unstable/*` — so the preprocessor dies with:
+
+```
+TypeError: ts.parseConfigFileTextToJson is not a function
+```
+
+Pointing `tsconfigFile` at `.stryker-no-tsconfig.json`, which is deliberately
+absent, makes Stryker skip the preprocessor. Nothing in a mutation run
+type-checks, so there is nothing to lose. **Do not "fix" this to a real
+tsconfig** — that reintroduces the crash. Remove it only when Stryker supports
+the TypeScript 7 API, or if this package moves back to TypeScript 6.
 
 ## Requirements
 

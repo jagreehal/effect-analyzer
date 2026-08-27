@@ -17,9 +17,9 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Effect.pipe — service-call
+  1. validated = Pipes deps.validateTransfer through:
+    Calls deps.validateTransfer — collection
 
-  Services required: Effect
   Error paths: ValidationError
   Concurrency: sequential (no parallelism)
 ```
@@ -29,7 +29,7 @@ createSendMoneyWorkflow (generator):
   {
     "program": "createSendMoneyWorkflow",
     "stats": {
-      "totalEffects": 1,
+      "totalEffects": 3,
       "parallelCount": 0,
       "raceCount": 0,
       "errorHandlerCount": 0,
@@ -67,129 +67,12 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Effect.pipe — service-call
-  2. rate = Effect.pipe — service-call
+  1. validated = Pipes deps.validateTransfer through:
+    Calls deps.validateTransfer — collection
+  2. rate = Pipes deps.fetchRate through:
+    Calls deps.fetchRate
 
-  Services required: Effect
   Error paths: RateUnavailableError, ValidationError
-  Concurrency: sequential (no parallelism)
-```
-
-```json
-[
-  {
-    "program": "createSendMoneyWorkflow",
-    "stats": {
-      "totalEffects": 2,
-      "parallelCount": 0,
-      "raceCount": 0,
-      "errorHandlerCount": 0,
-      "retryCount": 0,
-      "timeoutCount": 0,
-      "resourceCount": 0,
-      "loopCount": 0,
-      "conditionalCount": 0,
-      "layerCount": 0,
-      "interruptionCount": 0,
-      "unknownCount": 0,
-      "decisionCount": 0,
-      "switchCount": 0,
-      "tryCatchCount": 0,
-      "terminalCount": 0,
-      "opaqueCount": 0
-    }
-  }
-]
-```
-
-</details>
-
-## Step 3: + Check balance & convert
-
-```mermaid
-flowchart LR
-  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
-  B -->|ok| C["balance #lt;- deps.getBalance"]
-  C -->|ok| D["converted #lt;- deps.convertCurrency#lpar;{
-      amount: validated.…"]
-  D -->|ok| Done((Success))
-  A -->|err| AE["Validation"]
-  B -->|err| BE["RateUnavailable"]
-  D -->|err| DE["InsufficientFunds"]
-```
-
-<details><summary>Analysis</summary>
-
-```
-createSendMoneyWorkflow (generator):
-  1. validated = Effect.pipe — service-call
-  2. rate = Effect.pipe — service-call
-  3. balance = Effect.pipe — service-call
-  4. converted = Effect.pipe — service-call
-
-  Services required: Effect
-  Error paths: InsufficientFundsError, RateUnavailableError, ValidationError
-  Concurrency: sequential (no parallelism)
-```
-
-```json
-[
-  {
-    "program": "createSendMoneyWorkflow",
-    "stats": {
-      "totalEffects": 4,
-      "parallelCount": 0,
-      "raceCount": 0,
-      "errorHandlerCount": 0,
-      "retryCount": 0,
-      "timeoutCount": 0,
-      "resourceCount": 0,
-      "loopCount": 0,
-      "conditionalCount": 0,
-      "layerCount": 0,
-      "interruptionCount": 0,
-      "unknownCount": 0,
-      "decisionCount": 0,
-      "switchCount": 0,
-      "tryCatchCount": 0,
-      "terminalCount": 0,
-      "opaqueCount": 0
-    }
-  }
-]
-```
-
-</details>
-
-## Step 4: + Execute transfer
-
-```mermaid
-flowchart LR
-  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
-  B -->|ok| C["balance #lt;- deps.getBalance"]
-  C -->|ok| D["converted #lt;- deps.convertCurrency#lpar;{
-      amount: validated.…"]
-  D -->|ok| E["transfer #lt;- deps.executeTransfer#lpar;{
-      recipientIban: vali…"]
-  E -->|ok| Done((Success))
-  A -->|err| AE["Validation"]
-  B -->|err| BE["RateUnavailable"]
-  D -->|err| DE["InsufficientFunds"]
-  E -->|err| EE["TransferRejected / ProviderUnavailable"]
-```
-
-<details><summary>Analysis</summary>
-
-```
-createSendMoneyWorkflow (generator):
-  1. validated = Effect.pipe — service-call
-  2. rate = Effect.pipe — service-call
-  3. balance = Effect.pipe — service-call
-  4. converted = Effect.pipe — service-call
-  5. transfer = Effect.pipe — service-call
-
-  Services required: Effect
-  Error paths: InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
   Concurrency: sequential (no parallelism)
 ```
 
@@ -222,18 +105,137 @@ createSendMoneyWorkflow (generator):
 
 </details>
 
+## Step 3: + Check balance & convert
+
+```mermaid
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| C["balance #lt;- deps.getBalance"]
+  C -->|ok| D["converted #lt;- deps.convertCurrency"]
+  D -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]
+  D -->|err| DE["InsufficientFunds"]
+```
+
+<details><summary>Analysis</summary>
+
+```
+createSendMoneyWorkflow (generator):
+  1. validated = Pipes deps.validateTransfer through:
+    Calls deps.validateTransfer — collection
+  2. rate = Pipes deps.fetchRate through:
+    Calls deps.fetchRate
+  3. balance = Pipes deps.getBalance through:
+    Calls deps.getBalance
+  4. converted = Pipes deps.convertCurrency through:
+    Calls deps.convertCurrency
+
+  Error paths: InsufficientFundsError, RateUnavailableError, ValidationError
+  Concurrency: sequential (no parallelism)
+```
+
+```json
+[
+  {
+    "program": "createSendMoneyWorkflow",
+    "stats": {
+      "totalEffects": 9,
+      "parallelCount": 0,
+      "raceCount": 0,
+      "errorHandlerCount": 0,
+      "retryCount": 0,
+      "timeoutCount": 0,
+      "resourceCount": 0,
+      "loopCount": 0,
+      "conditionalCount": 0,
+      "layerCount": 0,
+      "interruptionCount": 0,
+      "unknownCount": 0,
+      "decisionCount": 0,
+      "switchCount": 0,
+      "tryCatchCount": 0,
+      "terminalCount": 0,
+      "opaqueCount": 0
+    }
+  }
+]
+```
+
+</details>
+
+## Step 4: + Execute transfer
+
+```mermaid
+flowchart LR
+  A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
+  B -->|ok| C["balance #lt;- deps.getBalance"]
+  C -->|ok| D["converted #lt;- deps.convertCurrency"]
+  D -->|ok| E["transfer #lt;- deps.executeTransfer"]
+  E -->|ok| Done((Success))
+  A -->|err| AE["Validation"]
+  B -->|err| BE["RateUnavailable"]
+  D -->|err| DE["InsufficientFunds"]
+  E -->|err| EE["TransferRejected / ProviderUnavailable"]
+```
+
+<details><summary>Analysis</summary>
+
+```
+createSendMoneyWorkflow (generator):
+  1. validated = Pipes deps.validateTransfer through:
+    Calls deps.validateTransfer — collection
+  2. rate = Pipes deps.fetchRate through:
+    Calls deps.fetchRate
+  3. balance = Pipes deps.getBalance through:
+    Calls deps.getBalance
+  4. converted = Pipes deps.convertCurrency through:
+    Calls deps.convertCurrency
+  5. transfer = Pipes deps.executeTransfer through:
+    Calls deps.executeTransfer
+
+  Error paths: InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
+  Concurrency: sequential (no parallelism)
+```
+
+```json
+[
+  {
+    "program": "createSendMoneyWorkflow",
+    "stats": {
+      "totalEffects": 11,
+      "parallelCount": 0,
+      "raceCount": 0,
+      "errorHandlerCount": 0,
+      "retryCount": 0,
+      "timeoutCount": 0,
+      "resourceCount": 0,
+      "loopCount": 0,
+      "conditionalCount": 0,
+      "layerCount": 0,
+      "interruptionCount": 0,
+      "unknownCount": 0,
+      "decisionCount": 0,
+      "switchCount": 0,
+      "tryCatchCount": 0,
+      "terminalCount": 0,
+      "opaqueCount": 0
+    }
+  }
+]
+```
+
+</details>
+
 ## Step 5: + Send confirmation (complete)
 
 ```mermaid
 flowchart LR
   A["validated #lt;- deps.validateTransfer"] -->|ok| B["rate #lt;- deps.fetchRate"]
   B -->|ok| C["balance #lt;- deps.getBalance"]
-  C -->|ok| D["converted #lt;- deps.convertCurrency#lpar;{
-      amount: validated.…"]
-  D -->|ok| E["transfer #lt;- deps.executeTransfer#lpar;{
-      recipientIban: vali…"]
-  E -->|ok| F["deps.sendConfirmation#lpar;{
-      transferId: transfer.transferI…"]
+  C -->|ok| D["converted #lt;- deps.convertCurrency"]
+  D -->|ok| E["transfer #lt;- deps.executeTransfer"]
+  E -->|ok| F["deps.sendConfirmation"]
   F -->|ok| Done((Success))
   A -->|err| AE["Validation"]
   B -->|err| BE["RateUnavailable"]
@@ -246,14 +248,19 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Effect.pipe — service-call
-  2. rate = Effect.pipe — service-call
-  3. balance = Effect.pipe — service-call
-  4. converted = Effect.pipe — service-call
-  5. transfer = Effect.pipe — service-call
-  6. Calls Effect.pipe — service-call
+  1. validated = Pipes deps.validateTransfer through:
+    Calls deps.validateTransfer — collection
+  2. rate = Pipes deps.fetchRate through:
+    Calls deps.fetchRate
+  3. balance = Pipes deps.getBalance through:
+    Calls deps.getBalance
+  4. converted = Pipes deps.convertCurrency through:
+    Calls deps.convertCurrency
+  5. transfer = Pipes deps.executeTransfer through:
+    Calls deps.executeTransfer
+  6. Pipes deps.sendConfirmation through:
+    Calls deps.sendConfirmation
 
-  Services required: Effect
   Error paths: ConfirmationFailedError, InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
   Concurrency: sequential (no parallelism)
 ```
@@ -263,7 +270,7 @@ createSendMoneyWorkflow (generator):
   {
     "program": "createSendMoneyWorkflow",
     "stats": {
-      "totalEffects": 6,
+      "totalEffects": 13,
       "parallelCount": 0,
       "raceCount": 0,
       "errorHandlerCount": 0,

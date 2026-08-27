@@ -333,4 +333,58 @@ describe('renderRailwayMermaid', () => {
     expect(result).toContain('A["Do Thing"] -->|ok| Done((Success))');
     expect(result).toContain('A -->|err| AE["Some"]');
   });
+
+  // Real analyzer output for `const x = yield* deps.call(...).pipe(Effect.withSpan(...))`
+  // is a pipe-wrapped effect node with a callee but no name or displayName: the
+  // binding lives on the yield, not on the node.
+  it('keeps a pipe-wrapped service call as a step, labelled by its binding', () => {
+    const ir = makeGeneratorIR([
+      {
+        variableName: 'validated',
+        effect: {
+          id: 'p1',
+          type: 'pipe',
+          displayName: 'Pipe (0 steps)',
+          initial: { id: 'n1', type: 'effect', callee: 'deps.validateTransfer', typeSignature: makeSig('ValidationError') },
+          transformations: [],
+        } as unknown as StaticEffectNode,
+      },
+      {
+        variableName: 'rate',
+        effect: {
+          id: 'p2',
+          type: 'pipe',
+          displayName: 'Pipe (0 steps)',
+          initial: { id: 'n2', type: 'effect', callee: 'deps.fetchRate', typeSignature: makeSig('RateUnavailableError') },
+          transformations: [],
+        } as unknown as StaticEffectNode,
+      },
+    ]);
+
+    const result = renderRailwayMermaid(ir);
+
+    expect(result).not.toContain('No steps');
+    expect(result).toContain('validated #lt;- deps.validateTransfer');
+    expect(result).toContain('rate #lt;- deps.fetchRate');
+    expect(result).toContain('Validation');
+    expect(result).toContain('RateUnavailable');
+    expect(result).toContain('Done((Success))');
+  });
+
+  it('keeps an unbound pipe-wrapped call as a step', () => {
+    const ir = makeGeneratorIR([
+      {
+        effect: {
+          id: 'p1',
+          type: 'pipe',
+          displayName: 'Pipe (0 steps)',
+          initial: { id: 'n1', type: 'effect', callee: 'deps.sendConfirmation', typeSignature: makeSig('ConfirmationFailedError') },
+          transformations: [],
+        } as unknown as StaticEffectNode,
+      },
+    ]);
+    const result = renderRailwayMermaid(ir);
+    expect(result).not.toContain('No steps');
+    expect(result).toContain('deps.sendConfirmation');
+  });
 });

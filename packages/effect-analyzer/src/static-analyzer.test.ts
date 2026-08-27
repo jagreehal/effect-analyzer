@@ -2393,6 +2393,11 @@ const WithResult = Schema.SerializableWithResult({ id: Schema.Number });
         const fixtureFiles = readdirSync(fixturesDir)
           .filter((file) => file.endsWith('.ts'))
           .filter((file) => !file.startsWith('regression-'))
+          // `probe-*` fixtures are targets for the runtime probe, not the
+          // analyzer: they deliberately contain no Effect code at all, so
+          // `NO_EFFECTS_FOUND` is the correct answer for them rather than a
+          // failure this sweep should catch.
+          .filter((file) => !file.startsWith('probe-'))
           .map((file) => resolve(fixturesDir, file));
 
         for (const fixtureFile of fixtureFiles) {
