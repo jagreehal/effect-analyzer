@@ -1,5 +1,246 @@
 # effect-analyzer
 
+## 3.1.0
+
+### Minor Changes
+
+- 92987ac: Recognize the `@typeonce/effect-machine` 0.6+ API alongside the 0.5 one.
+
+  `Machine.states({...})` is read as a state tree, `Machine.events(...)` as the
+  declared alphabet, and target builders are resolved off the handler's own
+  parameter (`(to) => to.full.X()`) as well as the destructured `target`. Also new:
+  `to.branches({ name: { target } })` contributes the branch name as the guard
+  label, an invoke builder's `.onDone` / `.onFailure` become `done` / `error`
+  completion transitions, schema-less state nodes (`Idle: {}`, `{ type: 'final' }`)
+  are read, and a definition stored in a `const` and implemented by more than one
+  `.handle({...})` yields one machine per implementation.
+
+  Fixes the statechart summary line, which counted automatic triggers (`initial`,
+  `always`, an invoke's `onDone` / `onError`) as declared events.
+
+- 92987ac: Four additions drawn from the effect-machine devtools, aimed at Effect in
+  general rather than any one library.
+
+  **Isolated runtime probes** (`runtime-probe.ts`). Static analysis has to
+  re-derive what Effect already knows exactly. A probe asks the real value
+  instead, importing one module in a separate short-lived process so a target that
+  throws, hangs, or calls `process.exit` cannot take the analyzer with it. Every
+  failure comes back as a typed `RuntimeProbeError`. Importing a module runs its
+  top-level code, so probing is opt-in and says so — see `SECURITY_NOTE`.
+
+  **Exact JSON Schema** — `--format json-schema --export <Name>` returns what
+  `Schema.toJsonSchemaDocument` produces, including refinements, annotations and
+  transformations that no AST walker can see.
+
+  **Last-good retention** (`analysis-retention.ts`). A file saved mid-edit does not
+  parse. `--watch` used to clear the screen before every run, so each keystroke
+  blanked the diagram and left a bare error. The render is now buffered
+  (`captureStdout`) and the screen is cleared only once a run succeeds; a failure
+  that follows a success keeps the last valid analysis on screen and marks it
+  `partial`.
+
+  **Walkthroughs** (`walkthrough.ts`). `generatePaths` enumerates every path at
+  once, which explodes combinatorially and cannot be steered. A walkthrough is the
+  other half: one step at a time, every branch offered as an explicit choice
+  rather than guessed, an immutable timeline, and `rewind` to truncate the future
+  and explore a different branch. Nodes the IR cannot see into are reported as
+  `opaque` instead of invented.
+
+  **Versioned JSON.** `--format json` now stamps `schemaVersion` so consumers can
+  validate and migrate. Additive: the document shape is otherwise unchanged.
+
+### Patch Changes
+
+- 92987ac: Decompose `cli.ts`.
+
+  It had reached 2838 lines: argument parsing, help text, shared plumbing, ten
+  analysis modes and the dispatcher in one file, with three more modes written
+  inline inside `main`. Adding anything meant reading past all of it.
+
+  It is now dispatch only, at 274 lines:
+
+  - `cli-options.ts` — `CLIOptions` and `parseArgs`, pure
+  - `cli-help.ts` — the `--help` text
+  - `cli-support.ts` — `CliError`, styling, path resolution, output helpers
+  - `cli-mode-analysis.ts` / `-project` / `-api` / `-statechart` / `-reports` /
+    `-extras` — one module per mode, each under 550 lines
+  - `watch-mode.ts` — extracted earlier
+
+  No behaviour change: seventeen representative CLI invocations produce
+  byte-identical output before and after, apart from a timestamp in `--format
+json`.
+
+- 92987ac: Add mutation testing (Stryker), and close the gaps it found.
+
+  `parseArgs` — the entire CLI flag surface, 654 lines — had no in-process test at
+  all. Every CLI test spawns a subprocess, so the flag table itself was never
+  checked: mutation testing scored it 0%, with 1245 mutants surviving. It now has
+  a table-driven test covering every flag, both `--flag value` and `--flag=value`
+  forms, the inclusive ends of every numeric range, and each error path's message.
+  Score: 98.5%, with the remainder verified as equivalent mutants.
+
+  Two smaller gaps: `makeRetainer().latest()` was never called by a test, and
+  `captureStdout` was never given a `Uint8Array` chunk nor checked for the `true`
+  that `write` must return.
+
+  Also removes five `if (value !== undefined)` guards in `parseArgs` that could
+  not change the outcome — `Number.parseInt(undefined, 10)` is already `NaN`, and
+  the range check that follows rejects it.
+
+  `stryker run` runs in place (`inPlace: true`): the sandbox copy rewrites
+  `tsconfig.json` through `ts.parseConfigFileTextToJson`, which the TypeScript 7
+  native preview this package builds against does not expose.
+
+- 92987ac: Fixes from a review of the probe, watch and mutation-testing work.
+
+  **Watch mode serializes its refreshes.** Rendering runs through `captureStdout`,
+  which swaps the global `process.stdout.write`. Only the debounce stood between
+  two analyses, so an analysis slower than the 300ms window overlapped the next
+  one — and overlapping captures restore in the order they _finish_, leaving
+  stdout pointing at a buffer nobody reads. The watcher stayed alive and went
+  permanently silent. Refreshes now run one at a time, with a burst arriving
+  mid-run collapsing into a single follow-up rather than a queue of redundant
+  analyses.
+
+  **Probing no longer shells out to `npx tsx`.** `tsx` was undeclared and
+  unpinned, so a clean or offline install had nothing to fall back on and an
+  online one would download and execute whatever `tsx@latest` was that day —
+  arbitrary code chosen at run time, around a feature whose whole point is
+  isolation. It is now a pinned runtime dependency, resolved from this package
+  and spawned via `process.execPath`, so probing no longer depends on `PATH`
+  resolving anything.
+
+  **Probe timeouts kill the module, not just the process they spawned.** `tsx`
+  re-spawns node to install its loaders, so the probed module is a grandchild.
+  Killing the direct child left it running — still burning a core, still holding
+  the pipes, so `close` never arrived and the timeout never surfaced. The probe
+  now runs in its own process group and kills the group.
+
+  **Walkthroughs are reachable.** `beginWalkthrough`, `advance` and `rewind` were
+  described in a minor changeset but exported from no entry point. They are now
+  exported from the package root.
+
+  **Mutation testing runs in a sandbox.** `inPlace: true` rewrote the real source
+  files, so an interrupted run left the tree full of instrumentation and
+  `// @ts-nocheck` and took any uncommitted edits with it. It now runs in
+  Stryker's sandbox, with `pnpm test:mutation-sandbox` as the regression test.
+
+  The config is otherwise back on Stryker's defaults: always-on `incremental`,
+  `timeoutMS` and `concurrency` overrides are gone, since a real run needs none of
+  them (0 timeouts, and the auto-picked concurrency is higher than the 4 that was
+  pinned). The one setting that remains non-obvious is `tsconfigFile`, which names
+  a deliberately absent file so Stryker skips a preprocessor that calls
+  `ts.parseConfigFileTextToJson` — an API TypeScript 7 no longer exposes from its
+  main entry point. That is documented in the README's Mutation Testing section.
+
+  Mutation testing of the new refresh queue found two gaps its tests had missed: a
+  lone change running twice, and — worse — a `running` flag that never cleared,
+  which would leave the watcher alive but permanently idle. Both are now covered.
+
+  **`--quiet` applies to every progress line.** The program count ignored the
+  flag while the line explaining that count respected it, so `--quiet` reported
+  `Found 2 program(s)` above a single diagram with nothing saying that the other
+  was filtered as trivial. All progress output now routes through one
+  quiet-aware helper, so a new line cannot forget the flag. Watch-mode frames,
+  which render with `quiet`, lose the stray count line as a result.
+
+  **The probe could load a second `effect` and silently drop constraints.** The
+  runner resolved `effect/Schema` from the working directory while the probed
+  module resolved its own `effect` through tsx. When those differed — easily, in a
+  pnpm workspace where `NODE_PATH` points at a hoisted store holding a different
+  release — `toJsonSchemaDocument` did not recognise the refinements the other
+  instance had created and left them out. The result was a schema that looked
+  right and quietly lacked its bounds, which is worse than a failure, and it
+  defeats the one thing runtime probing exists to do. The runner now resolves
+  `effect` from the probed module itself, so it is always the same instance the
+  module imported, whatever the cwd or `NODE_PATH`.
+
+  **The full mutation run works now, which it never did.** Sandboxing exposed two
+  suite problems that `inPlace: true` had hidden by running tests in the real
+  tree. `tsgo-diagnostics` proved cwd-independent resolution with
+  `process.chdir()`, which throws under the worker-based runner Stryker uses; it
+  now runs that check in a child process rooted elsewhere, which is what the test
+  meant and drops a global mutation from the suite. And the analyzer's
+  fixture sweep asserted that every `__fixtures__` file yields Effect programs,
+  which the deliberately non-Effect `probe-*` fixtures do not — they are excluded
+  the same way `regression-*` already was.
+
+  Note that `tsx` is now a runtime dependency of the package, not a devDependency,
+  because runtime probing needs it at run time in a consumer's install.
+
+  **A clean install on main was failing, and the exclusion list was why.** A
+  dependabot bump moved `oxlint` to 1.79.0 while `@effect/tsgo` stayed on 0.36.5,
+  which supports only 1.77.0/1.78.0, so `prepare` died with
+  `UnsupportedTargetPackageVersionError`. The `tsgo-toolchain` dependabot group
+  exists to keep those in lockstep, but grouping cannot bump a package that a
+  policy is holding back: `@effect/tsgo` was in `minimumReleaseAgeExclude` while
+  the platform artifacts it depends on — `@effect/tsgo-<platform>` — were not, so
+  the wrapper was exempt and the binary it needs was still age-gated. The
+  artifacts (and `@oxlint/*`) are excluded now, and `@effect/tsgo` moves to 0.37.0
+  alongside oxlint 1.79.0.
+
+- 92987ac: Fix the railway diagram collapsing to `Empty((No steps))` for generator programs.
+
+  `renderRailwayMermaid` recursed into a generator through `getStaticChildren`,
+  which maps yields to their effect nodes and drops each yield's variable name. A
+  `const x = yield* deps.call(...).pipe(...)` therefore reached the step filter as
+  an unnamed node inside a pipe wrapper, was judged "anonymous plumbing", and was
+  skipped — taking every step of the workflow with it.
+
+  The generator's yields are now walked directly so the binding survives, steps are
+  labelled `x <- deps.call`, and anything a generator awaited counts as a step
+  whether or not it was bound.
+
+- 92987ac: Structural cleanups from a maintainability review of the state-machine, railway
+  and probe work.
+
+  - `schema-to-json-schema.ts`: the converter dispatched through a predicate that
+    meant "callee is X" for calls and "the source text mentions X anywhere" for
+    everything else, at nine call sites. Constructs now live in one table keyed by
+    the call's own name, and the text heuristics exist in exactly one function
+    used only where there is no callee to read.
+  - `state-machine.ts` was pushed to 1070 lines. The generic ts-morph plumbing
+    moved to `state-machine-ast.ts`, which the diagnostics scanner now shares for
+    import resolution instead of keeping a second copy of it.
+  - Watch mode moved out of `cli.ts` into `watch-mode.ts`, with the decision of
+    what a refresh shows extracted as a pure `frameFor` and tested directly.
+    `cli.ts` is now smaller than before this work began.
+  - `walkthrough.ts` used `as unknown as` to read error-handler nodes that already
+    have a type and a guard (`isStaticErrorHandlerNode`), and exposed its cursor
+    on the public `Walkthrough` type. Both fixed.
+  - `probeRuntime` returned a caller-chosen type for unvalidated JSON that crossed
+    a process boundary. It returns `unknown`; `probeJsonSchema` decodes it and
+    fails with a typed error when the shape is wrong.
+  - The railway walker threaded a `binding` and a `yielded` boolean through every
+    step. Both collapse into one `Arrival` value, and the skip predicate splits
+    into `isDefinitionNode` and `isAnonymousEffect`.
+
+- 92987ac: Remove dead plumbing from the Effect Schema → JSON Schema converter, found by
+  mutation testing.
+
+  `WalkContext` carried `sf`, `project` and a `defs` map through every construct
+  in the dispatch table. Nothing ever read them, and no caller ever passed `defs`.
+  Both are gone, along with `schemaToJsonSchema`'s `sf` and `project` parameters.
+
+  `resolveSchemaNode` had two branches that cannot run: an import-specifier walk
+  that `getAliasedSymbol()` already subsumes, and a same-file fallback search
+  reached only when symbol resolution has already failed, in which case the search
+  fails too. 56 lines become 15.
+
+  Coverage of the module went from a 29% mutation score to 95%: every entry in the
+  construct table now has a test, including the ones that were silently returning
+  `undefined`.
+
+- 92987ac: Fix `Schema.Struct` with an array field being converted to an array instead of
+  an object in `api-docs` / `openapi-paths` output.
+
+  The Effect Schema → JSON Schema walker dispatched on
+  `node.getText().includes('Schema.Array')`, which matches anything nested in the
+  arguments too, so `Schema.Struct({ tags: Schema.Array(Schema.String) })` was
+  read as an array of arrays and lost every property. Dispatch now reads the
+  construct's own callee, so a nested `Schema.Array` no longer captures its
+  parent. The same bug applied to `Schema.Union` with an array member.
+
 ## 3.0.0
 
 ### Major Changes
