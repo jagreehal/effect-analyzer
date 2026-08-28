@@ -54,6 +54,22 @@ export const setupPlayground = (): void => {
   let requestId = 0;
   let worker: Worker | null = null;
   let diagramId = 0;
+  let watchdog: ReturnType<typeof setTimeout> | null = null;
+
+  // A worker that never answers is indistinguishable from a slow one, and it
+  // has a real cause: an empty or broken worker chunk still loads as a valid
+  // module, so it fires no `error` event and simply never replies. Without a
+  // deadline the page sits on "Analyzing in worker..." forever, which is how
+  // this shipped unnoticed. Analysis of a large program is legitimately slow,
+  // hence a generous bound rather than a tight one.
+  const ANALYSIS_TIMEOUT_MS = 60_000;
+
+  const clearWatchdog = (): void => {
+    if (watchdog) {
+      clearTimeout(watchdog);
+      watchdog = null;
+    }
+  };
 
   mermaid.initialize({
     startOnLoad: false,
@@ -115,6 +131,7 @@ export const setupPlayground = (): void => {
           return;
         }
 
+        clearWatchdog();
         analyzeButton.disabled = false;
 
         if (event.data.type === 'success') {
@@ -152,6 +169,7 @@ export const setupPlayground = (): void => {
       };
 
       worker.addEventListener('error', (event) => {
+        clearWatchdog();
         analyzeButton.disabled = false;
         status.textContent = 'Worker failed.';
         showText(event.message);
@@ -176,6 +194,21 @@ export const setupPlayground = (): void => {
         : 'Running sample',
     );
     resetOutput();
+    clearWatchdog();
+    const pending = requestId;
+    watchdog = setTimeout(() => {
+      if (pending !== requestId) return;
+      analyzeButton.disabled = false;
+      status.textContent = 'Analysis timed out.';
+      sampleBadge?.replaceChildren();
+      sampleBadge?.append('Timed out');
+      showText(
+        'The analyzer worker did not respond within 60 seconds.\n\n' +
+          'This usually means the worker failed to start rather than that the ' +
+          'program was too large. Reload the page to try again, and check the ' +
+          'browser console for a failed request to the worker script.',
+      );
+    }, ANALYSIS_TIMEOUT_MS);
     getWorker().postMessage({
       type: 'analyze',
       requestId,

@@ -614,8 +614,8 @@ export function renderInteractiveHTML(
       var pre = document.getElementById('ir-json');
       if (!q) { pre.innerHTML = JSON.stringify(IR_DATA, null, 2); return; }
       var text = JSON.stringify(IR_DATA, null, 2);
-      var escaped = q.replace(/[.*+?^$` + `{}()|\\[\\]\\\\]/g, '\\\\$` + `&');
-      pre.innerHTML = text.replace(new RegExp(escaped, 'gi'), '<mark>$` + `&</mark>');
+      var escaped = q.replace(/[.*+?^\${}()|\\[\\]\\\\]/g, '\\\\$&');
+      pre.innerHTML = text.replace(new RegExp(escaped, 'gi'), '<mark>$&</mark>');
     }
 
     function handleTypeFilter(type) {
