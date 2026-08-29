@@ -3,10 +3,13 @@
  *
  * Lives apart from the CLI itself: it is a long literal that changes whenever a
  * flag is added, and it has no dependency on anything the CLI does.
+ *
+ * Exported as a value so `cli-help.test.ts` can hold it against the parser's
+ * own flag table. Being a separate literal from the parser is what let the two
+ * drift apart in the first place.
  */
 
-export const printHelp = (): void => {
-  process.stdout.write(`
+export const HELP_TEXT = `
 effect-analyzer - Static analysis for Effect-TS
 
 Usage: effect-analyze [PATH] [options]
@@ -17,7 +20,7 @@ Usage: effect-analyze [PATH] [options]
   verbose output, enhanced Mermaid, colors). Use --no-colocate to skip writing files.
 
 Options:
-  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | mermaid-statechart | svg-statechart | statechart-html | xstate-config | statechart-coverage | stats | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime | json-schema (default: auto)
+  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | mermaid-statechart | svg-statechart | statechart-html | xstate-config | statechart-coverage | stats | migration | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime | json-schema (default: auto)
   --export <name>          For openapi-runtime: export name of HttpApi (default: first/default)
                            For json-schema: export name of the Schema to convert (required)
   -o, --output <file>      Output file (default: stdout)
@@ -36,6 +39,14 @@ Options:
   --no-color               Disable colored output
   -w, --watch              Watch mode: re-analyze on file change
   -m, --migration          Run migration assistant (report try/catch, Promise.*, etc.)
+  --include-trivial        Keep trivial programs that are filtered from diagrams by default
+  --diff                   Compare two sources and report the structural change between them.
+                           Each source is <git-ref>:<path> or a plain path:
+                           effect-analyze --diff HEAD:./src/a.ts main:./src/a.ts
+  --regression             With --diff: mark structural changes as regressions in the report
+  --entry-points           (Single file) Report the program entry points the analyzer found
+  --config-leaks           (Single file) Report configuration read outside a Config boundary
+  --cli-commands           (Single file) Report the CLI command surface the file defines
   --coverage-audit         Run coverage audit on a directory (discovered/analyzed/failed, %%)
   --show-suspicious-zeros  With --coverage-audit: list files that import Effect but have 0 programs
   --show-top-unknown       With --coverage-audit: list top files by unknown node rate (default: on)
@@ -65,6 +76,7 @@ Options:
   --test                   Write a {programName}.test.ts stub next to each source file (skips existing files unless --test-overwrite)
   --test-runner <runner>   Test runner for --test: vitest (default) | jest | mocha
   --test-overwrite         With --test: overwrite existing test files instead of skipping
+  --no-test                Disable an earlier --test (e.g. from a shared alias or script)
   --cache                  Use cache for watch (future: persist IR)
   --list-rules             Print deterministic rule registry docs (source/effect-lint/strict)
   --index-rules            Print deterministic searchable rule index entries
@@ -92,7 +104,7 @@ Options:
   --performance            Detect performance anti-patterns (sequential could be parallel, unbounded concurrency, etc.) — supports --format json
   --coupling               Analyze module coupling (fan-in/fan-out; annotate intentional hubs with // effect-analyzer-known-hub or @known-hub JSDoc tag; supports --format json)
   --coupling-transitive    With --coupling: compute fan-in transitively through re-exports (consumer of barrel also counted as consumer of barrel's internal modules)
-  --coupling-priority <map>  Override agent-report priority for coupling issue types (comma-separated). Example: --coupling-priority critical-fanin=P0,high-fanout=P2. Valid types: critical-fanin, high-fanin, high-fanout, hub-without-annotation. Valid priorities: P0-P3.
+  --coupling-priority <map>  Override agent-report priority for coupling issue types (comma-separated). Example: --coupling-priority critical-fanin=P0,high-fanout=P2. Valid types: critical-fanin, high-fanin, high-fanout, accidental-hub, hub-without-annotation. Valid priorities: P0-P3.
   --improve                Apply automated fixes for fixable lint issues (use --improve-dry-run to preview)
   --improve-dry-run        Preview fixes without applying (default for --improve)
   --improve-max-fixes <n>  Limit number of fixes to apply
@@ -127,5 +139,9 @@ Examples:
   effect-analyze ./src --format openapi-paths -o paths.json  # Emit OpenAPI paths JSON
   effect-analyze ./src/types.ts --format json-schema --export User  # Exact JSON Schema, from Effect itself
   effect-analyze ./src/api.ts --format openapi-runtime --export TodoApi -o openapi.json  # Runtime OpenApi.fromApi
-` + '\n');
+  effect-analyze --diff HEAD:./src/checkout.ts main:./src/checkout.ts  # Structural diff between two git refs
+`;
+
+export const printHelp = (): void => {
+  process.stdout.write(HELP_TEXT + '\n');
 };

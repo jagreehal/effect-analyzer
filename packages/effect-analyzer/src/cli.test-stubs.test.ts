@@ -109,7 +109,9 @@ describe('cli --test stub generation', () => {
 
       const result = runCli(repoRoot, [sourceFile, '--test', '--test-runner=ava']);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('Unknown test runner: ava');
+      // Same rejection, now worded like every other bad enum value and raised
+      // by the CLI rather than by `process.exit` inside the parser.
+      expect(result.stderr).toContain('Unknown value for --test-runner: ava');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

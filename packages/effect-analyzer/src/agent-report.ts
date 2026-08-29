@@ -64,7 +64,12 @@ export interface AgentPerformanceIssue {
 }
 
 export interface AgentCouplingIssue {
-  readonly type: 'high-fanin' | 'critical-fanin' | 'high-fanout' | 'hub-without-annotation';
+  readonly type:
+    | 'high-fanin'
+    | 'critical-fanin'
+    | 'high-fanout'
+    | 'accidental-hub'
+    | 'hub-without-annotation';
   readonly filePath: string;
   readonly projectFilePath: string;
   readonly metric: string;
@@ -289,6 +294,7 @@ export interface CouplingPriorityMap {
   readonly 'critical-fanin'?: AgentImprovement['priority'];
   readonly 'high-fanin'?: AgentImprovement['priority'];
   readonly 'high-fanout'?: AgentImprovement['priority'];
+  readonly 'accidental-hub'?: AgentImprovement['priority'];
   readonly 'hub-without-annotation'?: AgentImprovement['priority'];
 }
 
@@ -296,6 +302,8 @@ const DEFAULT_COUPLING_PRIORITY: Required<CouplingPriorityMap> = {
   'critical-fanin': 'P1',
   'high-fanin': 'P2',
   'high-fanout': 'P3',
+  // Above both of the issues it replaces: the pair is the signal.
+  'accidental-hub': 'P1',
   'hub-without-annotation': 'P3',
 };
 
@@ -396,6 +404,7 @@ export const buildAgentReport = (options: BuildAgentReportOptions): AgentReport 
     'critical-fanin': 'Critical fan-in',
     'high-fanin': 'High fan-in',
     'high-fanout': 'High fan-out',
+    'accidental-hub': 'Accidental hub (high fan-in and fan-out)',
     'hub-without-annotation': 'Hub without annotation',
   };
   for (const cp of couplingIssues) {

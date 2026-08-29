@@ -890,3 +890,31 @@ export function computeSemanticRole(node: StaticFlowNode): SemanticRole {
       return 'unknown';
   }
 }
+
+/**
+ * Unwrap TypeScript expression wrappers: parenthesized, as, non-null,
+ * satisfies, type assertion.
+ *
+ * A type assertion is not a program. `Effect.succeed(1) as Effect.Effect<number>`
+ * is the same effect as `Effect.succeed(1)`, and every analyzer that reads an
+ * expression needs to look through the wrapper before deciding what it is.
+ *
+ * Lives here rather than in `core-analysis.ts`, where it started, because
+ * `effect-analysis.ts` needs the same rule and `core-analysis` already imports
+ * from it. Both import this module, and this module imports neither.
+ */
+export function unwrapExpression(expr: Node): Node {
+  const { SyntaxKind } = loadTsMorph();
+  switch (expr.getKind()) {
+    case SyntaxKind.ParenthesizedExpression:
+    case SyntaxKind.AsExpression:
+    case SyntaxKind.TypeAssertionExpression:
+    case SyntaxKind.NonNullExpression:
+    case SyntaxKind.SatisfiesExpression:
+      return unwrapExpression(
+        (expr as unknown as { getExpression(): Node }).getExpression(),
+      );
+    default:
+      return expr;
+  }
+}
