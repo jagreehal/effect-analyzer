@@ -55,6 +55,52 @@ describe('effect-analyze --watch', () => {
     expect(currentFrame).toContain('Showing the last valid analysis');
   }, 20_000);
 
+  // `fs.watch` on a file watches that inode. When an editor saves by writing a
+  // temp file and renaming it over the original — Vim with `backupcopy=no`,
+  // and most "atomic save" implementations — the original inode is unlinked
+  // and the watch dies with it. Node delivers one `rename` and then nothing,
+  // for the rest of the process: no error, no exit, a watcher that is still
+  // "running" and permanently deaf.
+  //
+  // The previous test only proves the unlink is noticed. This one proves the
+  // watcher is still alive afterwards, which is the half that was broken.
+  it('keeps watching after the file is replaced rather than modified', async () => {
+    root = mkdtempSync(join(tmpdir(), 'effect-analyzer-atomic-save-'));
+    const source = join(root, 'checkout.ts');
+    writeFileSync(source, VALID_SOURCE, 'utf8');
+
+    child = spawn(
+      process.execPath,
+      [resolve(__dirname, '..', 'dist', 'cli.js'), source, '--watch', '--format', 'mermaid', '--quiet'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let stdout = '';
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr.resume();
+
+    await waitFor(() => stdout, 'flowchart');
+
+    // Replace the file the way an editor does: unlink, then write anew.
+    rmSync(source);
+    writeFileSync(
+      source,
+      VALID_SOURCE.replace('checkout', 'refundOrder').replace("'paid'", "'refunded'"),
+      'utf8',
+    );
+    // The unlink's own event is enough to carry this one, so it proves nothing
+    // about the watcher's health. Wait for it to be spent.
+    await waitFor(() => stdout, 'refundOrder');
+
+    // This is the assertion that matters: an ordinary save, after the replace,
+    // on a watcher whose original inode is gone.
+    writeFileSync(
+      source,
+      VALID_SOURCE.replace('checkout', 'settleInvoice').replace("'paid'", "'settled'"),
+      'utf8',
+    );
+    await waitFor(() => stdout, 'settleInvoice');
+  }, 20_000);
+
   // Watch mode renders through `captureStdout`, which swaps the global
   // `process.stdout.write`. Overlapping analyses restore it in the order they
   // finish, so a burst of saves used to be able to leave stdout pointing at a

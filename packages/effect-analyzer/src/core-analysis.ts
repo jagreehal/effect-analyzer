@@ -18,7 +18,6 @@ import type {
   GetAccessorDeclaration,
   StringLiteral,
   NumericLiteral,
-  ParenthesizedExpression,
   ObjectLiteralExpression,
   PropertyAssignment,
   PropertyAccessExpression,
@@ -71,6 +70,7 @@ import {
   extractServiceRequirements,
 } from './type-extractor';
 import type { EffectProgram } from './analysis-utils';
+import { unwrapExpression } from './analysis-utils';
 import {
   createEmptyStats,
   generateId,
@@ -570,26 +570,6 @@ function simplifyBooleanExpression(expr: string): string {
   // true || X → true
   result = result.replace(/\btrue\b\s*\|\|\s*[^|&]+/g, 'true');
   return result.trim();
-}
-
-/**
- * Unwrap TypeScript expression wrappers: parenthesized, as, non-null, satisfies, type assertion.
- */
-function unwrapExpression(expr: Node): Node {
-  const { SyntaxKind } = loadTsMorph();
-  const kind = expr.getKind();
-  switch (kind) {
-    case SyntaxKind.ParenthesizedExpression:
-    case SyntaxKind.AsExpression:
-    case SyntaxKind.TypeAssertionExpression:
-    case SyntaxKind.NonNullExpression:
-    case SyntaxKind.SatisfiesExpression: {
-      const inner = (expr as ParenthesizedExpression).getExpression();
-      return unwrapExpression(inner);
-    }
-    default:
-      return expr;
-  }
 }
 
 /**

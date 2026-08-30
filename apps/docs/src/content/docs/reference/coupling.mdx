@@ -33,6 +33,7 @@ The same `--tsconfig` flag is honored by `--coverage-audit`, `--format architect
 | `high-fanin` | fan-in ≥ 15 (default) | Changes to this file ripple to many dependents |
 | `critical-fanin` | fan-in ≥ 30 (default) | True hub; refactor is expensive and may not be desirable |
 | `high-fanout` | fan-out ≥ 20 (default) | File imports many internal modules — broad scope, hard to test in isolation |
+| `accidental-hub` | fan-in ≥ 15 and fan-out ≥ 20, below critical fan-in (defaults) | Unannotated junction with both many dependents and broad dependency scope |
 
 When a file with `critical-fanin` is annotated as a known hub, it is still surfaced under "Known Hubs (at scale)" as low-impact monitoring info. Growth past the annotated baseline is visible in subsequent reports.
 
@@ -126,6 +127,7 @@ Coupling issues fold into `--agent-report` under `category: 'architecture'`. By 
 | Issue type | Priority |
 |---|---|
 | `critical-fanin` (unannotated) | P1 |
+| `accidental-hub` | P1 |
 | `high-fanin` (unannotated) | P2 |
 | `high-fanout` | P3 |
 | `hub-without-annotation` | P3 |

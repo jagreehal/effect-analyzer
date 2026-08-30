@@ -187,7 +187,7 @@ effect-analyze ./program.ts -w --cache     # With caching for performance
 | `--colocate-suffix <s>` | Custom suffix (default: `effect-analysis`) |
 | `-q, --quiet` | Minimal output |
 | `--no-color` | Disable colors |
-| `-w, --watch` | Watch mode |
+| `-w, --watch` | Watch mode (watches the containing directory, so atomic saves survive) |
 | `--cache` | Cache for watch |
 | `-m, --migration` | Migration assistant |
 | `--diff` | Semantic diff mode |
@@ -282,7 +282,9 @@ import {
 
 1. Create `src/output/my-format.ts` with render function taking `StaticEffectIR`
 2. Export from `src/diagram-entry.ts`
-3. Add the `--format` value in `src/cli-options.ts`, list it in `src/cli-help.ts`, and dispatch it from `main` in `src/cli.ts` (mode bodies live in `src/cli-mode-*.ts`, never inline in `main`)
+3. Add the `--format` value in `src/cli-options.ts`, list it in `src/cli-help.ts`, and dispatch it from `main` in `src/cli.ts` (mode bodies live in `src/cli-mode-*.ts`, never inline in `main`).
+   `cli-help.test.ts` reads the parser's source and fails the build if a flag or `--format` value is missing from `HELP_TEXT`.
+   Enum flags reject unknown and missing values: `parseArgs` is pure and returns `{ pathArg, options, errors }`, leaving the option at its default and pushing a message; `cli.ts` prints the errors and exits 1. Never `process.exit` from the parser
 4. Add to `src/output/auto-diagram.ts` if it should be auto-selected
 
 ### Adding a New Node Type
@@ -338,6 +340,7 @@ pnpm quality     # type-check && test && lint
 - **Visitor pattern:** Recursive walks via `getStaticChildren(node)`
 - **WeakMap caching:** `effectAliasCache`, `nodeTextCache` keyed by SourceFile/Node
 - **Pattern maps:** `ERROR_HANDLER_PATTERNS`, `CONDITIONAL_PATTERNS`, `TRANSFORM_OPS` in `analysis-patterns.ts`
+- **Unwrap before reading an expression:** `unwrapExpression(node)` from `analysis-utils.ts` strips `as`, `satisfies`, `!`, `<T>` and parens. `analysis-utils.ts` imports nothing local, which is what keeps `core-analysis` ↔ `effect-analysis` acyclic
 - **Typed errors:** `AnalysisError` with codes (`NO_EFFECTS_FOUND`, `FILE_NOT_FOUND`)
 - **Semantic roles:** Nodes tagged with `SemanticRole` for filtering/styling
 

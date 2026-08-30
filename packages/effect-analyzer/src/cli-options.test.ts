@@ -281,11 +281,13 @@ describe('parseArgs', () => {
       expect(parseArgs(['src', '--tsgo', 'custom.json'])).toEqual({
         pathArg: 'src',
         options: expect.objectContaining({ tsgoProject: 'custom.json' }),
+        errors: [],
       });
       // No path yet, so `other.ts` stays the path argument rather than the project.
       expect(parseArgs(['--tsgo', 'other.ts'])).toEqual({
         pathArg: 'other.ts',
         options: expect.objectContaining({ tsgoProject: 'tsconfig.json' }),
+        errors: [],
       });
     });
   });
@@ -350,19 +352,21 @@ describe('parseArgs', () => {
       expect(opts('--test-runner=  jest  ').testRunner).toBe('jest');
     });
 
+    // Was `process.exit(1)` from inside the parser. It now reports through the
+    // same channel as every other bad enum value, so the caller decides.
     it.each([
       ['--test-runner', 'gradle'],
       ['--test-runner=gradle'],
-    ])('exits naming the unknown runner (%s)', (...argv) => {
+    ])('reports the unknown runner without exiting (%s)', (...argv) => {
       const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
         throw new Error('exit');
       }) as never);
-      const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      expect(() => opts(...argv)).toThrow('exit');
-      expect(exit).toHaveBeenCalledWith(1);
-      expect(write.mock.calls.at(0)?.at(0)).toBe(
-        'Unknown test runner: gradle. Use vitest, jest, or mocha.\n',
-      );
+      const { errors, options } = parseArgs(argv);
+      expect(exit).not.toHaveBeenCalled();
+      expect(errors).toEqual([
+        'Unknown value for --test-runner: gradle. Accepted: vitest, jest, mocha.',
+      ]);
+      expect(options.testRunner).toBe('vitest');
     });
   });
 
@@ -432,6 +436,7 @@ describe('parseArgs', () => {
           improveDryRun: true,
           diffSources: [],
         }),
+        errors: [],
       });
     });
 

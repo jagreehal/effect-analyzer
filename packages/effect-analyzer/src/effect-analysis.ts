@@ -46,6 +46,7 @@ import {
   extractJSDocTags,
   computeDisplayName,
   computeSemanticRole,
+  unwrapExpression,
 } from './analysis-utils';
 import {
   ERROR_HANDLER_PATTERNS,
@@ -316,6 +317,17 @@ export const analyzeEffectExpression = (
 ): Effect.Effect<StaticFlowNode, AnalysisError> =>
   Effect.gen(function* () {
     const { SyntaxKind } = loadTsMorph();
+
+    /**
+     * A type assertion is not a program. Look through `as`, `satisfies`, `!`,
+     * `<T>` and parentheses before deciding what this expression is, or the
+     * walker stops at the wrapper and reports an unknown node.
+     *
+     * Auditing Effect's own source found this was the analyzer's single
+     * largest resolution gap: 108 of the 141 nodes in the `Could not determine
+     * effect type` bucket were `AsExpression`.
+     */
+    node = unwrapExpression(node);
 
     // Handle function wrappers that return an Effect (common in workflow APIs)
     if (

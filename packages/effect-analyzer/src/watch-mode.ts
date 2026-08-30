@@ -10,6 +10,7 @@
  */
 
 import { watch } from 'fs';
+import { basename, dirname } from 'path';
 import { Console, Effect } from 'effect';
 import { makeRetainer, type RetainedAnalysis } from './analysis-retention';
 import { captureStdout } from './capture-stdout';
@@ -145,7 +146,16 @@ export const runWatchMode = <O>(
         ).catch(() => undefined),
       );
 
-      const watcher = watch(path, { persistent: true }, () => {
+      /**
+       * The directory, not the file. `fs.watch` on a file watches that inode,
+       * and an editor saving by rename unlinks it: Node then delivers one
+       * `rename` and nothing ever again, leaving a registered, permanently deaf
+       * watcher. A directory inode outlives its children. A null `filename` is
+       * documented as possible, so it refreshes rather than being dropped.
+       */
+      const watched = basename(path);
+      const watcher = watch(dirname(path), { persistent: true }, (_event, filename) => {
+        if (filename !== null && basename(filename) !== watched) return;
         if (debounce) clearTimeout(debounce);
         debounce = setTimeout(refresh, DEBOUNCE_MS);
       });

@@ -20,23 +20,14 @@ import type { SourceLocation } from './types';
 
 export type SourceFile = ReturnType<Project['createSourceFile']>;
 
-/** Strip `as const`, `satisfies`, parentheses and `<T>` assertions. */
-export function unwrap(node: Node): Node {
-  let cur = node;
-  for (;;) {
-    const k = cur.getKind();
-    if (
-      k === SyntaxKind.AsExpression ||
-      k === SyntaxKind.SatisfiesExpression ||
-      k === SyntaxKind.ParenthesizedExpression ||
-      k === SyntaxKind.TypeAssertionExpression
-    ) {
-      cur = (cur as unknown as { getExpression(): Node }).getExpression();
-      continue;
-    }
-    return cur;
-  }
-}
+/**
+ * Strip `as const`, `satisfies`, parentheses, `!` and `<T>` assertions.
+ *
+ * The same rule the program walker uses, so a wrapper cannot be transparent in
+ * one analyzer and opaque in the other. This copy also missed `!`.
+ */
+import { unwrapExpression as unwrap } from './analysis-utils';
+export { unwrap };
 
 /** Read a string-literal value (after unwrapping `as const`), or undefined. */
 export function stringValue(node: Node | undefined): string | undefined {

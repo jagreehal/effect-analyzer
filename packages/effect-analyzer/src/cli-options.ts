@@ -101,6 +101,7 @@ const VALID_COUPLING_TYPES: ReadonlySet<CouplingIssueType> = new Set([
   'critical-fanin',
   'high-fanin',
   'high-fanout',
+  'accidental-hub',
   'hub-without-annotation',
 ]);
 const VALID_PRIORITIES = new Set(['P0', 'P1', 'P2', 'P3'] as const);
@@ -119,9 +120,38 @@ function parseCouplingPriority(raw: string): CouplingPriorityMap | null {
   return Object.keys(map).length > 0 ? (map) : null;
 }
 
-export function parseArgs(args: readonly string[]): { pathArg: string | undefined; options: CLIOptions } {
+/** Spelled out for the error messages; the parser still matches on literals. */
+const DIRECTION_VALUES = ['TB', 'LR', 'BT', 'RL'] as const;
+const DETAIL_VALUES = ['compact', 'standard', 'verbose'] as const;
+const PROFILE_VALUES = ['strict', 'ci', 'migration', 'docs'] as const;
+const TEST_RUNNER_VALUES = ['vitest', 'jest', 'mocha'] as const;
+
+export function parseArgs(args: readonly string[]): {
+  pathArg: string | undefined;
+  options: CLIOptions;
+  errors: readonly string[];
+} {
+  // Records the typo and leaves the option at its default, so the caller can
+  // refuse to run instead of analyzing with something the user did not ask for.
+  // Omit `accepted` when the list is too long to print (`--format` has 32).
+  const errors: string[] = [];
+  const rejectValue = (
+    flag: string,
+    value: string | undefined,
+    accepted?: readonly string[],
+  ): void => {
+    const hint = accepted
+      ? `Accepted: ${accepted.join(', ')}.`
+      : 'See --help for accepted values.';
+    errors.push(
+      value === undefined
+        ? `Missing value for ${flag}. ${hint}`
+        : `Unknown value for ${flag}: ${value}. ${hint}`,
+    );
+  };
+
   let pathArg: string | undefined;
-      let format: CLIOptions['format'] = 'auto';
+  let format: CLIOptions['format'] = 'auto';
   let output: string | undefined;
   let pretty = true;
   let includeMetadata = true;
@@ -258,6 +288,8 @@ export function parseArgs(args: readonly string[]): { pathArg: string | undefine
         value === 'openapi-runtime'
       ) {
         format = value;
+      } else {
+        rejectValue('--format', value);
       }
     } else if (arg === '--export') {
       openapiExport = args[++i];
@@ -278,11 +310,15 @@ export function parseArgs(args: readonly string[]): { pathArg: string | undefine
         value === 'RL'
       ) {
         direction = value;
+      } else {
+        rejectValue('--direction', value, DIRECTION_VALUES);
       }
     } else if (arg === '--detail') {
       const value = args[++i];
       if (value === 'compact' || value === 'standard' || value === 'verbose') {
         detail = value;
+      } else {
+        rejectValue('--detail', value, DETAIL_VALUES);
       }
     } else if (arg === '--tsconfig') {
       tsconfig = args[++i];
@@ -407,11 +443,15 @@ export function parseArgs(args: readonly string[]): { pathArg: string | undefine
       const value = args[++i];
       if (value === 'strict' || value === 'ci' || value === 'migration' || value === 'docs') {
         profile = value;
+      } else {
+        rejectValue('--profile', value, PROFILE_VALUES);
       }
     } else if (arg.startsWith('--profile=')) {
       const value = arg.slice('--profile='.length);
       if (value === 'strict' || value === 'ci' || value === 'migration' || value === 'docs') {
         profile = value;
+      } else {
+        rejectValue('--profile', value, PROFILE_VALUES);
       }
     } else if (arg === '--export-session') {
       exportSession = args[++i];
@@ -483,7 +523,7 @@ export function parseArgs(args: readonly string[]): { pathArg: string | undefine
       }
       const parsed = parseCouplingPriority(raw);
       if (!parsed) {
-        console.error(`--coupling-priority: invalid value "${raw}". Expected pairs like "critical-fanin=P0,high-fanin=P1". Valid types: critical-fanin, high-fanin, high-fanout, hub-without-annotation. Valid priorities: P0, P1, P2, P3.`);
+        console.error(`--coupling-priority: invalid value "${raw}". Expected pairs like "critical-fanin=P0,high-fanin=P1". Valid types: critical-fanin, high-fanin, high-fanout, accidental-hub, hub-without-annotation. Valid priorities: P0, P1, P2, P3.`);
         process.exit(2);
       }
       couplingPriority = parsed;
@@ -506,6 +546,8 @@ export function parseArgs(args: readonly string[]): { pathArg: string | undefine
       const value = args[++i];
       if (value === 'P0' || value === 'P1' || value === 'P2' || value === 'P3') {
         improveMinPriority = value;
+      } else {
+        rejectValue('--improve-min-priority', value, [...VALID_PRIORITIES]);
       }
     } else if (arg === '--test') {
       test = true;
@@ -517,17 +559,18 @@ export function parseArgs(args: readonly string[]): { pathArg: string | undefine
       const value = args[++i];
       if (value === 'vitest' || value === 'jest' || value === 'mocha') {
         testRunner = value;
-      } else if (value !== undefined) {
-        process.stderr.write(`Unknown test runner: ${value}. Use vitest, jest, or mocha.\n`);
-        process.exit(1);
+      } else {
+        // Was `process.stderr.write` + `process.exit(1)` from inside the
+        // parser, which made this branch untestable and killed the process
+        // before the caller could decide anything.
+        rejectValue('--test-runner', value, TEST_RUNNER_VALUES);
       }
     } else if (arg.startsWith('--test-runner=')) {
       const value = arg.slice('--test-runner='.length).trim();
       if (value === 'vitest' || value === 'jest' || value === 'mocha') {
         testRunner = value;
       } else {
-        process.stderr.write(`Unknown test runner: ${value}. Use vitest, jest, or mocha.\n`);
-        process.exit(1);
+        rejectValue('--test-runner', value, TEST_RUNNER_VALUES);
       }
     }
   }
@@ -631,5 +674,5 @@ export function parseArgs(args: readonly string[]): { pathArg: string | undefine
     improveExcludeRules: improveExcludeRules.length > 0 ? improveExcludeRules : undefined,
     improveMinPriority,
   };
-  return { pathArg, options };
+  return { pathArg, options, errors };
 }

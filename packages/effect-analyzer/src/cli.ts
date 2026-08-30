@@ -53,7 +53,11 @@ import { detectServiceCycles } from './service-cycles';
 
 const main = Effect.gen(function* () {
   const args = process.argv.slice(2);
-  const { pathArg, options } = parseArgs(args);
+  const { pathArg, options, errors: argErrors } = parseArgs(args);
+
+  if (argErrors.length > 0) {
+    return yield* cliFail(argErrors.join('\n'));
+  }
 
   if (options.importSession) {
     const imported = yield* cliTry(() => fs.readFile(resolve(options.importSession!), 'utf-8'));
@@ -91,16 +95,14 @@ const main = Effect.gen(function* () {
     Effect.option,
   );
   if (Option.isNone(s)) {
-    yield* Console.error(`Error: Path not found: ${resolvedPath}`);
-    return yield* cliFail('Path not found');
+    return yield* cliFail(`Path not found: ${resolvedPath}`);
   }
 
   const isDir = s.value.isDirectory();
 
   if (options.coverageAudit) {
     if (!isDir) {
-      yield* Console.error('Error: --coverage-audit requires a directory path');
-      return yield* cliFail('Coverage audit requires directory');
+      return yield* cliFail('--coverage-audit requires a directory path');
     }
     yield* runCoverageAuditCli(resolvedPath, options);
     return Exit.succeed(undefined);
@@ -108,8 +110,7 @@ const main = Effect.gen(function* () {
 
   if (options.serviceCycles) {
     if (!isDir) {
-      yield* Console.error('Error: --service-cycles requires a directory path');
-      return yield* cliFail('Service cycles requires directory');
+      return yield* cliFail('--service-cycles requires a directory path');
     }
     const project = yield* analyzeProject(resolvedPath, {
       tsconfig: options.tsconfig,
@@ -177,8 +178,9 @@ const main = Effect.gen(function* () {
 
   if (options.format === 'openapi-runtime') {
     if (isDir) {
-      yield* Console.error('openapi-runtime requires a file path (entrypoint), not a directory.');
-      return yield* cliFail('openapi-runtime needs entrypoint file');
+      return yield* cliFail(
+        'openapi-runtime requires a file path (entrypoint), not a directory.',
+      );
     }
     yield* runOpenApiRuntime(resolvedPath, options);
     return Exit.succeed(undefined);
@@ -186,8 +188,7 @@ const main = Effect.gen(function* () {
 
   if (options.format === 'json-schema') {
     if (isDir) {
-      yield* Console.error('json-schema requires a file path, not a directory.');
-      return yield* cliFail('json-schema needs a file');
+      return yield* cliFail('json-schema requires a file path, not a directory.');
     }
     yield* runJsonSchemaMode(resolvedPath, options);
     return Exit.succeed(undefined);
@@ -238,7 +239,10 @@ const main = Effect.gen(function* () {
 }).pipe(
   Effect.catch((error: Error) =>
     Effect.gen(function* () {
-      yield* Console.error(`Fatal error: ${error.message}`);
+      // The only place a failed run is reported. Modes carry their detail in
+      // the error itself, so nothing prints ahead of this and nothing needs to
+      // render the Cause behind it.
+      yield* Console.error(`Error: ${error.message}`);
       return Exit.fail(error);
     }),
   ),
@@ -248,11 +252,9 @@ const main = Effect.gen(function* () {
 Effect.runPromise(main).then(
   (exit) => {
     if (Exit.isFailure(exit)) {
-      const cause = exit.cause;
-      const rendered = JSON.stringify(cause);
-      if (rendered) {
-        console.error(`Error: ${rendered}`);
-      }
+      // Already reported by the handler above. Stringifying the Cause here put
+      // `{"_id":"Cause","failures":[...]}` in front of users who have no reason
+      // to know the CLI is written in Effect.
       process.exit(1);
       return;
     }

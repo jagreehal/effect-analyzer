@@ -78,8 +78,9 @@ export const runJsonSchemaMode = (resolvedPath: string, options: CLIOptions) =>
   Effect.gen(function* () {
     const exportName = options.openapiExport;
     if (exportName === undefined) {
-      yield* Console.error('json-schema requires --export <name> naming the Schema to convert.');
-      return yield* cliFail('json-schema needs --export');
+      return yield* cliFail(
+        'json-schema requires --export <name> naming the Schema to convert.',
+      );
     }
     if (!options.quiet) yield* Console.error(SECURITY_NOTE);
 

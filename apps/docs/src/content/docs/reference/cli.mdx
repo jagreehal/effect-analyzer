@@ -32,6 +32,16 @@ When `path` is a file, the analyzer processes that file. When it is a directory,
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
 | `-h, --help` | Print help and exit | — |
 
+An unrecognised value for a flag with a fixed set of choices (`--format`, `--direction`, `--detail`, `--profile`, `--test-runner`, `--improve-min-priority`) is an error, not a fallback to the default:
+
+```bash
+$ effect-analyze ./src --format nosuchformat --direction sideways
+Error: Unknown value for --format: nosuchformat. See --help for accepted values.
+Error: Unknown value for --direction: sideways. Accepted: TB, LR, BT, RL.
+```
+
+Every error is reported, then the CLI exits 1 without running. A missing value (the flag last in `argv`) is reported the same way.
+
 ## Diagram Options
 
 | Flag | Description | Default |
@@ -128,6 +138,7 @@ Inspect and search the deterministic rule registry (source lints, effect-lints, 
 | `--test` | Write a `{programName}.test.ts` stub next to each source file |
 | `--test-runner <runner>` | Test runner: `vitest` (default), `jest`, `mocha` |
 | `--test-overwrite` | Overwrite existing test files instead of skipping |
+| `--no-test` | Disable an earlier `--test` (e.g. from a shared alias or script) |
 
 ## Directory Mode Options
 

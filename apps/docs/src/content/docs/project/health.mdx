@@ -95,6 +95,7 @@ Per-file dependency-graph metrics. Computes fan-in (how many files import this o
 | `high-fanin` | A file with fan-in ≥ 15 — changes to it ripple to many dependents |
 | `critical-fanin` | A file with fan-in ≥ 30 — a true hub; refactoring is expensive |
 | `high-fanout` | A file importing ≥ 20 internal modules — broad scope, hard to test in isolation |
+| `accidental-hub` | A file that is high on both at once — many dependents *and* broad dependency scope; replaces the `high-fanin` + `high-fanout` pair for that file |
 
 Imports are parsed via the TypeScript AST, so `import X`, `import type X`, `export { x } from`, `import('…')` dynamic imports, and side-effect `import './foo'` are all counted; node_modules and `node:` imports are skipped.
 

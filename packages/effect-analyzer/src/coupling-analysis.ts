@@ -35,7 +35,12 @@ export interface FileCouplingMetrics {
 }
 
 export interface CouplingIssue {
-  readonly type: 'high-fanin' | 'critical-fanin' | 'high-fanout' | 'hub-without-annotation';
+  readonly type:
+    | 'high-fanin'
+    | 'critical-fanin'
+    | 'high-fanout'
+    | 'accidental-hub'
+    | 'hub-without-annotation';
   readonly filePath: string;
   readonly projectFilePath: string;
   readonly metric: string;
@@ -61,6 +66,8 @@ export interface CouplingSummary {
   readonly highFanInFiles: number;
   readonly criticalFanInFiles: number;
   readonly highFanOutFiles: number;
+  /** High on fan-in and fan-out at once; see the detection site for why. */
+  readonly accidentalHubs: number;
   readonly knownHubs: number;
   readonly unannotatedHubs: number;
   readonly parseFailures: number;
@@ -430,9 +437,44 @@ export function analyzeCoupling(
   let highFanInFiles = 0;
   let criticalFanInFiles = 0;
   let highFanOutFiles = 0;
+  let accidentalHubFiles = 0;
   let unannotatedHubs = 0;
 
   for (const m of metrics) {
+    /**
+     * High on both axes at once. Reported as one issue rather than a
+     * `high-fanin` and a `high-fanout` sitting apart in the list, because the
+     * combination is what makes it a rewrite candidate: dependents above it,
+     * a broad reach below it, and every change travelling between the two.
+     *
+     * Bounded below `criticalFanIn`, which is already the loudest single
+     * signal a file can raise and does not need folding into another.
+     */
+    if (
+      !m.knownHub &&
+      m.fanIn >= highFanIn &&
+      m.fanIn < criticalFanIn &&
+      m.fanOut >= highFanOut
+    ) {
+      issues.push({
+        type: 'accidental-hub',
+        filePath: m.filePath,
+        projectFilePath: m.projectFilePath,
+        metric: 'fan-in',
+        value: m.fanIn,
+        threshold: highFanIn,
+        description: `File "${m.projectFilePath}" has fan-in ${m.fanIn} and fan-out ${m.fanOut} — ${m.fanIn} files depend on it while it reaches into ${m.fanOut} others`,
+        suggestion:
+          'Split the parts dependents actually use from the parts that pull in the rest of the codebase. Add a `// effect-analyzer-known-hub <reason>` comment or `@known-hub <reason>` JSDoc tag if this junction is intentional.',
+        estimatedImpact: 'high',
+        knownHub: false,
+        knownHubReason: '',
+      });
+      accidentalHubFiles++;
+      unannotatedHubs++;
+      continue;
+    }
+
     if (m.fanIn >= criticalFanIn) {
       if (m.knownHub) {
         issues.push({
@@ -506,9 +548,10 @@ export function analyzeCoupling(
 
   const typeOrder: Record<CouplingIssue['type'], number> = {
     'critical-fanin': 0,
-    'high-fanin': 1,
-    'hub-without-annotation': 2,
-    'high-fanout': 3,
+    'accidental-hub': 1,
+    'high-fanin': 2,
+    'hub-without-annotation': 3,
+    'high-fanout': 4,
   };
   const sortedIssues = [...issues].sort((a, b) => {
     const cmp = typeOrder[a.type] - typeOrder[b.type];
@@ -531,6 +574,7 @@ export function analyzeCoupling(
       highFanInFiles,
       criticalFanInFiles,
       highFanOutFiles,
+      accidentalHubs: accidentalHubFiles,
       knownHubs: thresholdKnownHubs.length,
       unannotatedHubs,
       parseFailures,
@@ -735,6 +779,7 @@ export const renderCouplingReport = (analysis: CouplingAnalysis): string => {
   lines.push(`- High fan-in files: ${s.highFanInFiles}`);
   lines.push(`- Critical fan-in files: ${s.criticalFanInFiles}`);
   lines.push(`- High fan-out files: ${s.highFanOutFiles}`);
+  lines.push(`- Accidental hubs (high fan-in and fan-out): ${s.accidentalHubs}`);
   lines.push(`- Known hubs (annotated at scale): ${s.knownHubs}`);
   lines.push(`- Unannotated hubs: ${s.unannotatedHubs}`);
   if (s.parseFailures > 0) {
