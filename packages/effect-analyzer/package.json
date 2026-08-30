@@ -113,7 +113,7 @@
     "@stryker-mutator/core": "9.6.1",
     "@stryker-mutator/vitest-runner": "9.6.1",
     "@total-typescript/ts-reset": "^0.6.1",
-    "@typeonce/effect-machine": "0.7.0",
+    "@typeonce/effect-machine": "0.26.2",
     "@types/node": "^26.2.0",
     "effect": "4.0.0-rc.112",
     "oxlint": "1.80.0",
