@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import type { LintIssue } from './effect-linter';
 import { lintSourceCode } from './source-linter';
 import { findRuleDoc } from './rule-registry';
-import { runTsgoDiagnostics } from './tsgo-diagnostics';
+import { readTsgoProjectFiles, runTsgoDiagnostics } from './tsgo-diagnostics';
 
 export interface LintFinding {
   readonly filePath: string;
@@ -14,10 +14,46 @@ export interface LintFinding {
   readonly suggestion?: string | undefined;
   readonly line: number;
   readonly column: number;
+  /**
+   * Which checker produced this finding. `tsgo` findings are type-aware Effect
+   * language service diagnostics; `analyzer` findings are our own AST rules.
+   * Consumers gate on this instead of guessing from the rule name.
+   */
+  readonly source: 'analyzer' | 'tsgo';
+  /** The 377xxx Effect language service code. Only present on `tsgo` findings. */
+  readonly code?: number | undefined;
+  readonly endLine?: number | undefined;
+  readonly endColumn?: number | undefined;
   readonly fingerprint: string;
   readonly suppressed?: boolean | undefined;
   readonly suppressionReason?: string | undefined;
 }
+
+/**
+ * Severity gate for the process exit status. `undefined` means advisory-only:
+ * findings are reported but never change the exit code, so a consumer can tell
+ * an advisory run apart from a failed one without re-checking anything.
+ */
+export type FailOnSeverity = LintFinding['severity'];
+
+const SEVERITY_ORDER: Record<LintFinding['severity'], number> = {
+  error: 3,
+  warning: 2,
+  info: 1,
+};
+
+/**
+ * Exit code for a scan under a severity gate: 1 when any finding is at or above
+ * `failOn`, 0 otherwise.
+ */
+export const exitCodeFor = (
+  findings: readonly LintFinding[],
+  failOn: FailOnSeverity | undefined,
+): 0 | 1 => {
+  if (failOn === undefined) return 0;
+  const threshold = SEVERITY_ORDER[failOn];
+  return findings.some((f) => SEVERITY_ORDER[f.severity] >= threshold) ? 1 : 0;
+};
 
 export interface Suppression {
   readonly filePath?: string | undefined;
@@ -26,11 +62,24 @@ export interface Suppression {
   readonly reason?: string | undefined;
 }
 
+/**
+ * What the Effect language service actually covered. Without this a run where
+ * tsgo checked nothing — a stale or mistargeted tsconfig — is indistinguishable
+ * from a genuinely clean one.
+ */
+export interface TsgoCoverage {
+  readonly filesChecked: number;
+  readonly totalFiles: number;
+  /** Scanned files the language service never checked, sorted. */
+  readonly unchecked: readonly string[];
+}
+
 export interface LintScanResult {
   readonly findings: readonly LintFinding[];
   readonly staleSuppressions: readonly Suppression[];
   readonly suppressionsMissingReason: readonly Suppression[];
   readonly filesScanned: number;
+  readonly tsgo?: TsgoCoverage | undefined;
 }
 
 export interface BaselineComparison {
@@ -84,7 +133,21 @@ const canonicalSort = (a: LintFinding, b: LintFinding): number => {
   return (a.suggestion ?? '').localeCompare(b.suggestion ?? '');
 };
 
-const stableFingerprint = (finding: Omit<LintFinding, 'fingerprint'>): string => {
+/**
+ * A finding's stable identity across runs and releases.
+ *
+ * The key is frozen: baselines written by earlier releases carry these
+ * fingerprints, and `--fail-on-new` compares against them. Adding a field here
+ * renumbers every existing finding and reports the whole backlog as new, so
+ * `source` is deliberately excluded — the same defect found by either checker
+ * is the same defect.
+ */
+export const fingerprintOf = (
+  finding: Pick<
+    LintFinding,
+    'filePath' | 'line' | 'column' | 'rule' | 'severity' | 'message' | 'suggestion'
+  >,
+): string => {
   const key = [
     finding.filePath,
     String(finding.line),
@@ -96,6 +159,8 @@ const stableFingerprint = (finding: Omit<LintFinding, 'fingerprint'>): string =>
   ].join('|');
   return createHash('sha256').update(key).digest('hex').slice(0, 20);
 };
+
+const stableFingerprint = fingerprintOf;
 
 const parseSuppressions = (source: string): readonly Suppression[] => {
   const lines = source.split(/\r?\n/);
@@ -172,6 +237,7 @@ const toFinding = (filePath: string, issue: LintIssue): LintFinding => {
     suggestion: issue.suggestion,
     line,
     column,
+    source: 'analyzer' as const,
   };
   return {
     ...base,
@@ -236,9 +302,12 @@ export const runSourceLintScan = async (
   // Type-aware rules from the official Effect language service, when available.
   // ponytail: tsgo diagnostics bypass our disable pragmas — tsgo has its own
   // suppression story; wire the two together only if users actually ask.
+  let tsgo: TsgoCoverage | undefined;
   if (options.tsgoProject) {
     const scanned = new Set(candidates);
-    for (const diagnostic of runTsgoDiagnostics({ project: options.tsgoProject })) {
+    const result = runTsgoDiagnostics({ project: options.tsgoProject });
+    const inProject = new Set(readTsgoProjectFiles(options.tsgoProject));
+    for (const diagnostic of result.diagnostics) {
       const filePath = resolve(diagnostic.filePath);
       if (!scanned.has(filePath)) continue;
       const base = {
@@ -249,9 +318,19 @@ export const runSourceLintScan = async (
         suggestion: undefined,
         line: diagnostic.line,
         column: diagnostic.column,
+        source: diagnostic.source,
+        code: diagnostic.code,
+        endLine: diagnostic.endLine,
+        endColumn: diagnostic.endColumn,
       };
       findings.push({ ...base, fingerprint: stableFingerprint(base) });
     }
+    const unchecked = candidates.filter((c) => !inProject.has(c));
+    tsgo = {
+      filesChecked: result.summary.filesChecked,
+      totalFiles: result.summary.totalFiles,
+      unchecked,
+    };
   }
 
   return {
@@ -259,6 +338,7 @@ export const runSourceLintScan = async (
     staleSuppressions,
     suppressionsMissingReason,
     filesScanned: candidates.length,
+    tsgo,
   };
 };
 

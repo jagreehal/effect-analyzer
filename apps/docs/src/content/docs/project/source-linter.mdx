@@ -54,9 +54,47 @@ service. effect-analyzer does not reimplement them; it merges them in:
 effect-analyze ./src --lint-source --tsgo=./tsconfig.json
 ```
 
+Every merged finding carries a `source` field (`tsgo` or `analyzer`) and, for
+language service diagnostics, the `code` in the `377xxx` range. Gate on those
+rather than on the rule name or the message text.
+
+The run summary also reports what the language service actually covered:
+
+```json
+"summary": {
+  "filesScanned": 12,
+  "tsgo": { "filesChecked": 11, "totalFiles": 11, "unchecked": ["src/scripts/one-off.ts"] }
+}
+```
+
+`unchecked` lists files the linter scanned that the tsconfig does not include,
+so a partially checked run cannot be mistaken for a clean one.
+
 Bare `--tsgo` uses `tsconfig.json`. When options come before the source path,
 use `--tsgo=path/to/tsconfig.json` to provide an explicit project without
 ambiguity.
+
+### Exit codes
+
+A `--lint-source` run is advisory by default: it reports every finding and
+leaves the exit status alone, so a caller can tell an advisory run apart from a
+broken one. `--fail-on` turns findings into a gate:
+
+```bash
+effect-analyze ./src --lint-source --tsgo=./tsconfig.json              # always exit 0
+effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=error
+effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=warning
+```
+
+`--fail-on=<severity>` exits 1 when any finding is at or above that severity.
+It is independent of `--fail-on-new`, which gates on the baseline diff instead.
+
+### Or run them as one command
+
+`effect-analyze diagnostics` is a drop-in replacement for
+`effect-tsgo diagnostics` — same flags, same output, same exit codes — that
+reports the analyzer's rules in the same stream. See the
+[CLI reference](/effect-analyzer/reference/cli/#diagnostics).
 
 `@effect/tsgo` is a required effect-analyzer dependency, so the bridge and its
 platform binary are installed automatically. It resolves the target project's

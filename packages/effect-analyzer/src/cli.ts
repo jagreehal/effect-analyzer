@@ -20,6 +20,11 @@ import { analyzeStateMachines } from './state-machine';
 import { runWatchMode } from './watch-mode';
 import { cliFail, cliTry, resolveCliPath } from './cli-support';
 import { parseArgs } from './cli-options';
+import {
+  isProxiedTsgoCommand,
+  proxyTsgoCommand,
+  runDiagnosticsCommand,
+} from './cli-diagnostics';
 import { computeStateMachineCoverage } from './state-machine-coverage';
 import { renderStatechartsMermaid } from './output/mermaid-statechart';
 import { analyzeProject } from './project-analyzer';
@@ -53,6 +58,26 @@ import { detectServiceCycles } from './service-cycles';
 
 const main = Effect.gen(function* () {
   const args = process.argv.slice(2);
+
+  // Subcommands are matched before flag parsing so `effect-analyze` can stand in
+  // for `effect-tsgo` one-for-one.
+  const [subcommand, ...subcommandArgs] = args;
+  if (subcommand !== undefined && isProxiedTsgoCommand(subcommand)) {
+    process.exitCode = yield* cliTry(() => Promise.resolve(proxyTsgoCommand(subcommand, subcommandArgs)));
+    return Exit.succeed(undefined);
+  }
+  if (subcommand === 'diagnostics') {
+    const result = yield* cliTry(() => runDiagnosticsCommand(subcommandArgs));
+    // Written raw: this is effect-tsgo's own output, and Console.log would add
+    // a newline it did not emit.
+    yield* Effect.sync(() => {
+      process.stdout.write(result.output);
+      if (result.stderr.length > 0) process.stderr.write(result.stderr);
+    });
+    process.exitCode = result.exitCode;
+    return Exit.succeed(undefined);
+  }
+
   const { pathArg, options, errors: argErrors } = parseArgs(args);
 
   if (argErrors.length > 0) {
@@ -248,6 +273,21 @@ const main = Effect.gen(function* () {
   ),
 );
 
+/**
+ * Exit once stdout has drained.
+ *
+ * `process.exit` discards data still queued on a pipe, which silently truncated
+ * every JSON report larger than the pipe buffer. Writing to a file hid it
+ * because file writes complete synchronously.
+ */
+const exitWhenFlushed = (code: number): void => {
+  process.exitCode = code;
+  if (process.stdout.writableLength === 0) {
+    process.exit(code);
+  }
+  process.stdout.once('drain', () => process.exit(code));
+};
+
 // Run the program
 Effect.runPromise(main).then(
   (exit) => {
@@ -255,11 +295,11 @@ Effect.runPromise(main).then(
       // Already reported by the handler above. Stringifying the Cause here put
       // `{"_id":"Cause","failures":[...]}` in front of users who have no reason
       // to know the CLI is written in Effect.
-      process.exit(1);
+      exitWhenFlushed(1);
       return;
     }
     // Respect an exit code set during the run (e.g. coverage CI gate).
-    process.exit(process.exitCode ?? 0);
+    exitWhenFlushed(Number(process.exitCode ?? 0));
   },
   (err: unknown) => {
     const message =
@@ -267,6 +307,6 @@ Effect.runPromise(main).then(
     if (message) {
       console.error(`Error: ${message}`);
     }
-    process.exit(1);
+    exitWhenFlushed(1);
   },
 );

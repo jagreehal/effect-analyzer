@@ -1,5 +1,79 @@
 import { describe, expect, it } from 'vitest';
-import { buildLintScorecard, compareAgainstBaseline, toSarif } from './lint-session';
+import {
+  buildLintScorecard,
+  compareAgainstBaseline,
+  exitCodeFor,
+  fingerprintOf,
+  toSarif,
+} from './lint-session';
+
+describe('finding fingerprints', () => {
+  it('matches the fingerprint earlier releases wrote into baselines', () => {
+    // Captured from the pre-`source` implementation: sha256 of
+    // filePath|line|column|rule|severity|message|suggestion, first 20 chars.
+    // A baseline written by an earlier release must still match, or --fail-on-new
+    // reports every existing finding as new after an upgrade.
+    expect(
+      fingerprintOf({
+        filePath: '/tmp/a.ts',
+        line: 7,
+        column: 3,
+        rule: 'floatingEffect',
+        severity: 'error',
+        message: 'This Effect is neither yielded nor assigned.',
+        suggestion: undefined,
+        source: 'tsgo',
+      }),
+    ).toBe('6bf628ba0d41a61c62c9');
+  });
+
+  it('does not let the reporting checker change a finding’s identity', () => {
+    const base = {
+      filePath: '/tmp/a.ts',
+      line: 7,
+      column: 3,
+      rule: 'floatingEffect',
+      severity: 'error' as const,
+      message: 'm',
+      suggestion: undefined,
+    };
+    expect(fingerprintOf({ ...base, source: 'tsgo' })).toBe(
+      fingerprintOf({ ...base, source: 'analyzer' }),
+    );
+  });
+});
+
+describe('exitCodeFor', () => {
+  const at = (severity: 'error' | 'warning' | 'info') => ({
+    filePath: '/tmp/a.ts',
+    rule: 'r',
+    severity,
+    message: 'm',
+    line: 1,
+    column: 1,
+    source: 'analyzer' as const,
+    fingerprint: 'fp',
+  });
+
+  it('never fails an advisory run', () => {
+    expect(exitCodeFor([at('error')], undefined)).toBe(0);
+  });
+
+  it('fails on findings at or above the gate', () => {
+    expect(exitCodeFor([at('error')], 'error')).toBe(1);
+    expect(exitCodeFor([at('error')], 'warning')).toBe(1);
+    expect(exitCodeFor([at('warning')], 'info')).toBe(1);
+  });
+
+  it('passes when every finding is below the gate', () => {
+    expect(exitCodeFor([at('warning'), at('info')], 'error')).toBe(0);
+    expect(exitCodeFor([at('info')], 'warning')).toBe(0);
+  });
+
+  it('passes on an empty scan', () => {
+    expect(exitCodeFor([], 'info')).toBe(0);
+  });
+});
 
 describe('lint-session baseline diff', () => {
   it('detects new/resolved/unchanged deterministically by fingerprint', () => {

@@ -20,8 +20,48 @@ sentence the agent can act on. Turn them on. This page covers the layer above: w
 program requires, what it can fail with, how it retries, and which services it reaches.
 
 <Aside type="tip">
-Run both. `--tsgo` merges the official type-aware Effect diagnostics into the same
-report as the analyzer's AST checks: `effect-analyze ./src --lint-source --tsgo=./tsconfig.json`.
+Run both, from one command. `effect-analyze diagnostics` is a drop-in replacement for
+`effect-tsgo diagnostics` that reports the analyzer's AST rules in the same stream:
+
+```bash
+npx effect-analyze diagnostics --project tsconfig.json --format json
+```
+
+Or merge them into a lint-source run: `effect-analyze ./src --lint-source --tsgo=./tsconfig.json`.
+</Aside>
+
+## What an agent can gate on
+
+An agent needs to answer two questions from a check: *is this mine to fix*, and *did
+this run actually pass*. Both are answerable without parsing message text.
+
+Every diagnostic carries a `source` — `tsgo` for a type-aware Effect language service
+diagnostic, `analyzer` for one of ours — and language service entries carry their `code`
+in the `377xxx` range. An entry outside that range is not an Effect advisory, and none of
+these are TypeScript compiler errors, which neither tool emits. Analyzer rules carry
+`code: 0`.
+
+The exit status is a deliberate contract, not a side effect:
+
+```bash
+# Advisory: reports everything, never changes the exit status.
+npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json
+
+# Gated: exit 1 when any finding is at or above the given severity.
+npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=error
+```
+
+For `diagnostics`, the exit code is `effect-tsgo`'s own — `1` on any error, and with
+`--strict` on any warning — and `--fail-on` overrides it, with `--fail-on=none` for a
+purely advisory run.
+
+<Aside type="caution">
+A clean report is only meaningful if something was checked. The language service runs
+only where your tsconfig enables it, via an `@effect/language-service` plugin entry; a
+project without one reports `filesChecked: 0` and exits 0. Have the agent read
+`summary.filesChecked` rather than trust a green exit. `--lint-source --tsgo`
+additionally reports `summary.tsgo.unchecked` — the files it scanned that the tsconfig
+does not include, such as tests excluded from the project.
 </Aside>
 
 ## 1. Hand the agent a prioritized backlog
