@@ -26,7 +26,7 @@ const TSCONFIG = {
     strict: true,
     skipLibCheck: true,
     noEmit: true,
-    plugins: [{ name: '@effect/tsgo' }],
+    plugins: [{ name: '@effect/language-service' }],
   },
   include: ['src/**/*.ts'],
 };
@@ -35,19 +35,36 @@ interface Finding {
   readonly rule: string;
   readonly filePath: string;
   readonly line: number;
+  readonly code?: number;
+  readonly source?: string;
+  readonly severity?: string;
 }
 
 /**
  * The temp project lives inside the package so `effect`, `typescript` and
  * `@effect/tsgo` resolve through the normal parent-directory walk.
  */
-const withProject = (fn: (dir: string, tsconfig: string) => void) => {
+const withProject = (
+  fn: (dir: string, tsconfig: string) => void,
+  diagnosticSeverity?: Record<string, string>,
+) => {
   const root = mkdtempSync(join(REPO_ROOT, '.tmp-tsgo-cli-'));
   try {
     mkdirSync(join(root, 'src'), { recursive: true });
     writeFileSync(join(root, 'src', 'program.ts'), SOURCE, 'utf8');
     const tsconfig = join(root, 'tsconfig.json');
-    writeFileSync(tsconfig, JSON.stringify(TSCONFIG, null, 2), 'utf8');
+    const plugin = diagnosticSeverity
+      ? { name: '@effect/language-service', diagnosticSeverity }
+      : { name: '@effect/language-service' };
+    writeFileSync(
+      tsconfig,
+      JSON.stringify(
+        { ...TSCONFIG, compilerOptions: { ...TSCONFIG.compilerOptions, plugins: [plugin] } },
+        null,
+        2,
+      ),
+      'utf8',
+    );
     fn(join(root, 'src'), tsconfig);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -85,6 +102,25 @@ describe('cli --lint-source --tsgo', () => {
     });
   });
 
+  it('tells language-service findings apart from the analyzer’s own', () => {
+    withProject((srcDir, tsconfig) => {
+      const findings = parseFindings(
+        runLint([srcDir, '--lint-source', '--tsgo', tsconfig]).stdout,
+      );
+
+      const floating = findings.find((f) => f.rule === 'floatingEffect');
+      expect(floating?.source).toBe('tsgo');
+      // Effect language service diagnostics occupy the 377xxx code range, so an
+      // agent can prove a finding is advisory rather than a type-checker error.
+      expect(floating?.code).toBeGreaterThanOrEqual(377_000);
+      expect(floating?.code).toBeLessThan(378_000);
+
+      const builtIn = findings.find((f) => f.rule === 'barrel-import-from-effect');
+      expect(builtIn?.source).toBe('analyzer');
+      expect(builtIn?.code).toBeUndefined();
+    });
+  });
+
   it('reports only the built-in rules without --tsgo', () => {
     withProject((srcDir) => {
       const result = runLint([srcDir, '--lint-source']);
@@ -94,6 +130,79 @@ describe('cli --lint-source --tsgo', () => {
       expect(rules.has('floatingEffect')).toBe(false);
       // ...but the source linter still runs.
       expect(rules.has('barrel-import-from-effect')).toBe(true);
+    });
+  });
+});
+
+describe('cli --lint-source --fail-on', () => {
+  it('leaves the exit status alone when no gate is requested', () => {
+    withProject(
+      (srcDir, tsconfig) => {
+        const result = runLint([srcDir, '--lint-source', '--tsgo', tsconfig]);
+        // Advisory-only runs must not change the exit status, even with an
+        // error-severity diagnostic present, or agents cannot tell an advisory
+        // run apart from a broken one.
+        expect(result.status).toBe(0);
+        const severities = parseFindings(result.stdout).map((f) => f.severity);
+        expect(severities).toContain('error');
+      },
+      { floatingEffect: 'error' },
+    );
+  });
+
+  it('exits 1 when a finding reaches the requested severity', () => {
+    withProject(
+      (srcDir, tsconfig) => {
+        const result = runLint([srcDir, '--lint-source', '--tsgo', tsconfig, '--fail-on=error']);
+        expect(result.status).toBe(1);
+      },
+      { floatingEffect: 'error' },
+    );
+  });
+
+  it('exits 0 when every finding is below the requested severity', () => {
+    withProject(
+      (srcDir, tsconfig) => {
+        const result = runLint([srcDir, '--lint-source', '--tsgo', tsconfig, '--fail-on=error']);
+        expect(result.status).toBe(0);
+      },
+      { floatingEffect: 'warning' },
+    );
+  });
+});
+
+describe('cli --lint-source --tsgo coverage', () => {
+  /** A project where the tsconfig covers `src/` but not `extra/`. */
+  const withPartialProject = (fn: (root: string, tsconfig: string) => void) => {
+    const root = mkdtempSync(join(REPO_ROOT, '.tmp-tsgo-cov-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(root, 'extra'), { recursive: true });
+      writeFileSync(join(root, 'src', 'program.ts'), SOURCE, 'utf8');
+      writeFileSync(join(root, 'extra', 'other.ts'), SOURCE, 'utf8');
+      const tsconfig = join(root, 'tsconfig.json');
+      writeFileSync(tsconfig, JSON.stringify(TSCONFIG, null, 2), 'utf8');
+      fn(root, tsconfig);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  it('reports which scanned files the language service never checked', () => {
+    withPartialProject((root, tsconfig) => {
+      const result = runLint([root, '--lint-source', '--tsgo', tsconfig]);
+      const start = result.stdout.indexOf('{');
+      const envelope = JSON.parse(result.stdout.slice(start)) as {
+        summary?: { tsgo?: { filesChecked?: number; unchecked?: readonly string[] } };
+      };
+
+      // extra/other.ts is linted by our AST rules but outside the tsconfig, so
+      // its tsgo diagnostics silently never existed. A partial check must not
+      // be reportable as a full one.
+      expect(envelope.summary?.tsgo?.filesChecked).toBe(1);
+      expect(envelope.summary?.tsgo?.unchecked).toEqual([
+        join(root, 'extra', 'other.ts'),
+      ]);
     });
   });
 });

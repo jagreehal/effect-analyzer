@@ -9,6 +9,7 @@
 import { parseTsgoProjectArgument } from './tsgo-diagnostics';
 import { printHelp } from './cli-help';
 import type { CouplingIssueType, CouplingPriorityMap } from './agent-report';
+import type { FailOnSeverity } from './lint-session';
 
 export type MermaidDirection = 'TB' | 'LR' | 'BT' | 'RL';
 export type TestRunner = 'vitest' | 'jest' | 'mocha';
@@ -79,6 +80,7 @@ export interface CLIOptions {
   readonly failOnNew: boolean;
   readonly requireSuppressionReason: boolean;
   readonly failOnStaleSuppressions: boolean;
+  readonly failOn: FailOnSeverity | undefined;
   readonly serviceCycles: boolean;
   readonly bundleOutput: string | undefined;
   readonly scorecard: boolean;
@@ -218,6 +220,7 @@ export function parseArgs(args: readonly string[]): {
   let failOnNew = false;
   let requireSuppressionReason = false;
   let failOnStaleSuppressions = false;
+  let failOn: FailOnSeverity | undefined;
   let serviceCycles = false;
   let bundleOutput: string | undefined;
   let scorecard = false;
@@ -495,6 +498,13 @@ export function parseArgs(args: readonly string[]): {
       requireSuppressionReason = true;
     } else if (arg === '--fail-on-stale-suppressions') {
       failOnStaleSuppressions = true;
+    } else if (arg === '--fail-on' || arg.startsWith('--fail-on=')) {
+      const value = arg === '--fail-on' ? args[++i] : arg.slice('--fail-on='.length);
+      if (value === 'error' || value === 'warning' || value === 'info') {
+        failOn = value;
+      } else {
+        rejectValue('--fail-on', value);
+      }
     } else if (arg === '--service-cycles') {
       serviceCycles = true;
     } else if (arg === '--bundle-output') {
@@ -657,6 +667,7 @@ export function parseArgs(args: readonly string[]): {
     failOnNew,
     requireSuppressionReason,
     failOnStaleSuppressions,
+    failOn,
     serviceCycles,
     bundleOutput,
     scorecard,

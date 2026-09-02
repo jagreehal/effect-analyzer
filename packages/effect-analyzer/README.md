@@ -20,6 +20,10 @@ Effect v4 is the only supported Effect release. `ts-morph` is bundled automatica
 The official `@effect/tsgo` bridge is also installed as a direct dependency;
 projects that enable it must use native TypeScript 7.
 
+`effect-analyze` is also a drop-in replacement for the `effect-tsgo` CLI, so one
+command covers both toolchain configuration and diagnostics — see
+[below](#a-drop-in-replacement-for-the-effect-tsgo-cli).
+
 ## Quick Start
 
 ```bash
@@ -355,6 +359,34 @@ native audit policy flags return exit code 1 when a threshold fails.
 
 [Learn more →](https://jagreehal.github.io/effect-analyzer/project/coverage-audit/)
 
+### A drop-in replacement for the `effect-tsgo` CLI
+
+`effect-analyze` takes the `effect-tsgo` subcommands and forwards them, so one
+CLI covers configuration and diagnostics:
+
+```bash
+npx effect-analyze diagnostics --project tsconfig.json --format json
+npx effect-analyze setup        # guided @effect/tsgo setup
+npx effect-analyze config       # interactive diagnostic severity picker
+npx effect-analyze patch | unpatch | get-exe-path
+```
+
+`diagnostics` passes its flags to `@effect/tsgo` untouched and passes its
+output back, so `text`, `pretty` and `github-actions` are byte-identical to the
+native binary and its exit codes are unchanged. What it adds is the analyzer's
+own AST rules in the same stream, and a `source` field (`tsgo` or `analyzer`)
+on every JSON entry — alongside the `377xxx` `code` — so a consumer can tell an
+Effect advisory from one of our rules, and both from a compiler error. Analyzer
+rules carry `code: 0`, outside the Effect range. `--no-analyzer` reports only
+the language service; `--fail-on=none` makes a run advisory.
+
+Configuration is read by `@effect/tsgo` itself from the
+`@effect/language-service` plugin entry in your tsconfig — the same entry your
+editor uses — so configured severities are honoured exactly and nothing is
+synthesised on your behalf. A project without that plugin entry has the language
+service disabled and reports `filesChecked: 0`; check that field if you need to
+know whether a clean report examined anything.
+
 ### Source Linting + Official Effect Diagnostics
 
 Run effect-analyzer's deterministic AST checks and merge the official,
@@ -362,7 +394,14 @@ type-aware Effect diagnostics from `@effect/tsgo` in one report:
 
 ```bash
 npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json
+npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=error
 ```
+
+Every finding carries `source` and, for language service diagnostics, the
+`377xxx` `code`. `--fail-on` gates the exit status on severity; without it a run
+is advisory and never changes the exit code. The run summary also reports what
+the language service covered (`summary.tsgo.filesChecked` and `unchecked`), so a
+partially checked run cannot be mistaken for a clean one.
 
 `@effect/tsgo` is a production dependency of effect-analyzer, so no separate
 bridge install is needed. It selects the native compiler artifact for the
@@ -487,7 +526,7 @@ the TypeScript 7 API, or if this package moves back to TypeScript 6.
 
 - Node.js 22+
 - Effect v4
-- TypeScript 7+ when using `--tsgo`
+- TypeScript 7+ when using `--tsgo` or the `diagnostics` command
 
 ## Documentation
 

@@ -37,6 +37,7 @@ import {
 import {
   buildLintScorecard,
   compareAgainstBaseline,
+  exitCodeFor,
   runSourceLintScan,
   toSarif,
   type LintFinding,
@@ -137,6 +138,7 @@ export const runLintSourceMode = (
         staleSuppressions: scan.staleSuppressions.length,
         suppressionsMissingReason: scan.suppressionsMissingReason.length,
         baseline: baselineSummary,
+        tsgo: scan.tsgo,
       },
       data: dataPayload,
       findings: scan.findings,
@@ -190,6 +192,14 @@ export const runLintSourceMode = (
       );
     }
 
+    if (exitCodeFor(scan.findings, options.failOn) === 1) {
+      const gated = scan.findings.filter(
+        (f) => exitCodeFor([f], options.failOn) === 1,
+      );
+      return yield* cliFail(
+        `Findings at or above ${String(options.failOn)}: ${String(gated.length)}`,
+      );
+    }
     if (options.failOnNew && baselineSummary && baselineSummary.new > 0) {
       return yield* cliFail(`New findings detected: ${String(baselineSummary.new)}`);
     }

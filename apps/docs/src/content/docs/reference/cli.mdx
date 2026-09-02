@@ -62,6 +62,93 @@ Every error is reported, then the CLI exits 1 without running. A missing value (
 | `--coverage-audit` | Run a project-wide coverage audit (see [Coverage Audit](/effect-analyzer/project/coverage-audit/)) |
 | `--migration` | Alias for `--format migration` |
 
+## Commands
+
+`effect-analyze` is a drop-in replacement for the `effect-tsgo` CLI: the same
+subcommands, the same flags, the same exit codes.
+
+| Command | Description |
+|---|---|
+| `diagnostics` | Effect language service diagnostics **plus** the analyzer's own rules, in one stream. Superset of `effect-tsgo diagnostics` |
+| `setup` | Guided `@effect/tsgo` setup (forwarded verbatim) |
+| `config` | Interactive diagnostic severity picker (forwarded verbatim) |
+| `patch` / `unpatch` | Manage the patched TypeScript/Oxlint binaries (forwarded verbatim) |
+| `get-exe-path` | Print the Effect language service executable path (forwarded verbatim) |
+
+### `diagnostics`
+
+| Flag | Description |
+|---|---|
+| `--project <tsconfig>` | Project to check |
+| `--file <path>` | Check a single file |
+| `--progress` | Narrate progress on stderr |
+| `--list-files` | Report detected/supported Effect versions per file |
+| `--format <fmt>` | `json` \| `pretty` \| `text` \| `github-actions` (default: `pretty`) |
+| `--severity <list>` | Filter by comma-separated `error,warning,message` |
+| `--strict` | Also fail the exit code on warnings |
+| `--fail-on <severity>` | Override the gate: `error`, `warning`, `message` or `none` |
+| `--lspconfig <json>` | Inline JSON replacing the project's plugin options |
+| `--no-analyzer` | Language service diagnostics only, omitting the analyzer's rules |
+
+Flags are forwarded to `@effect/tsgo` untouched — it validates them, applies its
+own `--severity` semantics and picks its own exit code — and its output is
+passed through. Only `--fail-on` and `--no-analyzer` are ours. A run with no
+analyzer findings to add is literally the upstream run: `text`, `pretty` and
+`github-actions` output is byte-identical, including the summary trailer and the
+order upstream emitted its diagnostics in.
+
+`--format json` is re-serialised so that every entry carries `source` (`tsgo` or
+`analyzer`), whether or not the analyzer contributed any. Upstream's
+`diagnostics` array is preserved entry for entry and in its original order, with
+analyzer findings appended after it. Analyzer rules carry `code: 0`, outside the
+`377xxx` Effect range, so a consumer that filters on that range sees exactly
+what it saw before.
+
+Your project's configuration is read by `@effect/tsgo` itself, from the
+`@effect/language-service` plugin entry in the tsconfig it is given — the same
+entry your editor uses, so the CLI and the editor agree. Nothing is synthesised
+on your behalf, and configured severities (including turning a rule `off`) are
+honoured exactly.
+
+```jsonc
+// tsconfig.json
+{
+  "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": { "floatingEffect": "warning" }
+      }
+    ]
+  }
+}
+```
+
+A project with no such plugin entry has the language service disabled, and
+`filesChecked` will be `0`. That is upstream's behaviour, and it is reported
+rather than worked around: check `summary.filesChecked` if you need to know
+whether a clean report actually examined anything.
+
+```bash
+effect-analyze diagnostics --project tsconfig.json --format json
+effect-analyze diagnostics --project tsconfig.json --format github-actions --strict
+effect-analyze diagnostics --project tsconfig.json --severity error --fail-on=none
+```
+
+Whenever `@effect/tsgo` does not produce a diagnostics report, its output and
+its exit status are passed through untouched, and neither `--fail-on` nor
+analyzer findings are applied to it. That covers failed invocations — a missing
+target, an unsupported flag, unparseable `--lspconfig` — which exit `1` exactly
+as a run that found errors does, so the status alone cannot tell them apart. It
+equally covers `--help`, which prints upstream's help and exits `0`.
+
+`--project` and `--file` given together are a union, as upstream treats them.
+
+Exit codes come from `effect-tsgo diagnostics` itself; analyzer findings can
+only add a failure it would not have seen, under the same rule (`1` when any
+error is present, and with `--strict` also when any warning is). `--fail-on`
+overrides that gate, and `--fail-on=none` makes a run purely advisory.
+
 ## Source Linting
 
 Run deterministic source-level lints. See [Source Linter](/effect-analyzer/project/source-linter/) for the full rule list and workflow.
@@ -73,6 +160,7 @@ Run deterministic source-level lints. See [Source Linter](/effect-analyzer/proje
 | `--sarif` | Emit SARIF 2.1.0 output |
 | `--scorecard` | Emit a per-file lint scorecard |
 | `--baseline <file>` | Compare findings against a baseline session/JSON file |
+| `--fail-on <severity>` | Exit 1 when a finding is at or above `error`, `warning` or `info`. Omit for an advisory run that never changes the exit status |
 | `--fail-on-new` | Exit non-zero when new findings exist vs baseline |
 | `--require-suppression-reason` | Require a reason after `effect-analyzer-disable-next-line` comments |
 | `--fail-on-stale-suppressions` | Exit non-zero when suppression comments are stale |

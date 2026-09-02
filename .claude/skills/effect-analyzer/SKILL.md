@@ -11,6 +11,7 @@ Static analysis tool for Effect-TS programs. Parses TypeScript via `ts-morph`, b
 
 ```
 CLI (cli.ts — dispatch only)
+  → cli-diagnostics.ts (the `diagnostics` subcommand + `@effect/tsgo` proxying)
   → cli-options.ts (parseArgs → CLIOptions), cli-help.ts (--help text)
   → cli-support.ts (CliError, styling, path + output helpers)
   → cli-mode-*.ts (one module per mode: analysis, project, api, statechart,
@@ -168,6 +169,49 @@ effect-analyze ./program.ts --watch        # Re-analyze on file change
 effect-analyze ./program.ts -w --cache     # With caching for performance
 ```
 
+### `@effect/tsgo` relationship
+
+`effect-analyze` is a drop-in replacement for the `effect-tsgo` CLI, and the
+rule that keeps it one is: **never reimplement what `@effect/tsgo` already
+does.**
+
+- `effect-analyze setup | config | patch | unpatch | get-exe-path` spawn the
+  installed `@effect/tsgo` binary verbatim (`cli-diagnostics.ts`,
+  `PROXIED_TSGO_COMMANDS`). Do not reimplement these — the interactive rule
+  picker and the binary patcher move on upstream's release cadence.
+- `effect-analyze diagnostics` forwards argv untouched, so upstream validates
+  its own flags, applies its own `--severity` semantics and picks its own exit
+  code. Only `--fail-on` and `--no-analyzer` are consumed by us
+  (`splitDiagnosticsArgs`). A flag of our own is added there and nowhere else.
+- Upstream's stdout is passed through. `text`, `pretty` and `github-actions`
+  are byte-identical when the analyzer has nothing to add; `--format json` is
+  re-serialised only to attach `source` to every entry, preserving upstream's
+  `diagnostics` array entry for entry and in order.
+- When upstream produces no report — a failed invocation, or `--help` — its
+  stdout, stderr and status pass through untouched and no gating is applied
+  (`producedReport`). Upstream exits 1 for failed invocations exactly as it does
+  for a run that found errors, so status alone cannot tell them apart; `--help`
+  exits 0.
+- `--project` and `--file` together are a union, as upstream treats them.
+
+No `--lspconfig` is ever synthesised. `@effect/tsgo` reads the project's own
+plugin entry, whose canonical name is **`@effect/language-service`** (upstream
+`etscore.EffectPluginName`), not `@effect/tsgo`. Getting that name wrong once
+cost real user configuration: the lookup missed, fell back to `{}`, and passing
+that as `--lspconfig` silently replaced every configured severity with the rule
+defaults. Fixtures that also used the wrong name hid it. If a project has no
+plugin entry the language service is off and `filesChecked` is `0` — that is
+upstream's behaviour, to be reported, not worked around.
+
+Parity is enforced by tests that run both binaries and compare
+(`cli.diagnostics.test.ts`). Changing rendering, ordering or exit codes here
+means changing those tests, which is the signal to ask whether the change
+belongs upstream instead.
+
+Diagnostic identity: `LintFinding.fingerprint` (`fingerprintOf`) is frozen —
+baselines from earlier releases carry it and `--fail-on-new` compares against
+it. Adding a field to that key renumbers every existing finding.
+
 ### All CLI Flags
 
 | Flag | Description |
@@ -180,6 +224,7 @@ effect-analyze ./program.ts -w --cache     # With caching for performance
 | `--pretty` | Pretty-print (default) |
 | `--tsconfig <path>` | Custom tsconfig.json path |
 | `--tsgo[=<tsconfig>]` | Merge official `@effect/tsgo` diagnostics (TypeScript 7+) |
+| `--fail-on <severity>` | Exit 1 on a finding at or above `error`/`warning`/`info` (for `--lint-source`; omit for an advisory run) |
 | `--no-metadata` | Exclude metadata |
 | `--colocate` | Single-file: write colocated .md |
 | `--no-colocate` | Project mode: skip writing files |

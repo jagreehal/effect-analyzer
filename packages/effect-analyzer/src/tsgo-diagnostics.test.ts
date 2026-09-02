@@ -6,7 +6,6 @@ import { spawnSync } from 'node:child_process';
 import {
   parseTsgoProjectArgument,
   parseTsgoOutput,
-  readTsgoLspConfig,
   resolveTsgoBin,
   resolveTsgoProjectPath,
   runTsgoDiagnostics,
@@ -46,7 +45,7 @@ const SAMPLE = JSON.stringify({
 
 describe('tsgo-diagnostics', () => {
   it('maps diagnostics and downgrades "message" to info', () => {
-    const parsed = parseTsgoOutput(SAMPLE);
+    const parsed = parseTsgoOutput(SAMPLE)?.diagnostics;
     expect(parsed).toEqual([
       {
         filePath: '/repo/src/a.ts',
@@ -55,6 +54,12 @@ describe('tsgo-diagnostics', () => {
         message: 'This Effect is neither yielded nor assigned.',
         line: 3,
         column: 7,
+        endLine: 3,
+        endColumn: 12,
+        start: 10,
+        length: 5,
+        code: 377024,
+        source: 'tsgo',
       },
       {
         filePath: '/repo/src/b.ts',
@@ -63,12 +68,28 @@ describe('tsgo-diagnostics', () => {
         message: 'Use Effect.log.',
         line: 1,
         column: 1,
+        endLine: 1,
+        endColumn: 2,
+        start: 1,
+        length: 1,
+        code: 377065,
+        source: 'tsgo',
       },
     ]);
   });
 
+  it('carries the summary so a zero-file run is distinguishable from a clean one', () => {
+    expect(parseTsgoOutput(SAMPLE)?.summary).toEqual({
+      filesChecked: 2,
+      totalFiles: 2,
+      errors: 1,
+      warnings: 0,
+      messages: 1,
+    });
+  });
+
   it('tolerates leading noise on stdout', () => {
-    expect(parseTsgoOutput(`Checking project...\n${SAMPLE}`)).toHaveLength(2);
+    expect(parseTsgoOutput(`Checking project...\n${SAMPLE}`)?.diagnostics).toHaveLength(2);
   });
 
   it('returns undefined instead of throwing on unusable output', () => {
@@ -76,94 +97,6 @@ describe('tsgo-diagnostics', () => {
     expect(parseTsgoOutput('no json here')).toBeUndefined();
     expect(parseTsgoOutput('{ broken')).toBeUndefined();
     expect(parseTsgoOutput('{"summary":{}}')).toBeUndefined();
-  });
-
-  describe('readTsgoLspConfig', () => {
-    const withTsconfig = (contents: string, fn: (path: string) => void) => {
-      const root = mkdtempSync(join(tmpdir(), 'effect-analyze-lspconfig-'));
-      try {
-        const p = join(root, 'tsconfig.json');
-        writeFileSync(p, contents, 'utf8');
-        fn(p);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    };
-
-    it('forwards the plugin options, dropping the name', () => {
-      withTsconfig(
-        JSON.stringify({
-          compilerOptions: {
-            plugins: [
-              { name: 'other-plugin', diagnosticSeverity: { ignored: 'error' } },
-              { name: '@effect/tsgo', diagnosticSeverity: { floatingEffect: 'error' } },
-            ],
-          },
-        }),
-        (p) => {
-          expect(JSON.parse(readTsgoLspConfig(p))).toEqual({
-            diagnosticSeverity: { floatingEffect: 'error' },
-          });
-        },
-      );
-    });
-
-    it('falls back to rule defaults when there is no plugin entry', () => {
-      withTsconfig(JSON.stringify({ compilerOptions: {} }), (p) => {
-        expect(readTsgoLspConfig(p)).toBe('{}');
-      });
-    });
-
-    it('parses comments and trailing commas accepted by tsconfig', () => {
-      withTsconfig(
-        `{
-          // Keep CLI diagnostics aligned with the editor.
-          "compilerOptions": {
-            "plugins": [{
-              "name": "@effect/tsgo",
-              "diagnosticSeverity": { "globalConsoleInEffect": "warning" },
-            }],
-          },
-        }`,
-        (p) => {
-          expect(JSON.parse(readTsgoLspConfig(p))).toEqual({
-            diagnosticSeverity: { globalConsoleInEffect: 'warning' },
-          });
-        },
-      );
-    });
-
-    it('follows inherited plugin options', () => {
-      const root = mkdtempSync(join(tmpdir(), 'effect-analyze-lspconfig-extends-'));
-      try {
-        writeFileSync(
-          join(root, 'base.json'),
-          JSON.stringify({
-            compilerOptions: {
-              plugins: [
-                {
-                  name: '@effect/tsgo',
-                  diagnosticSeverity: { globalErrorInEffectFailure: 'error' },
-                },
-              ],
-            },
-          }),
-          'utf8',
-        );
-        const project = join(root, 'tsconfig.json');
-        writeFileSync(project, '{ "extends": "./base.json" }', 'utf8');
-
-        expect(JSON.parse(readTsgoLspConfig(project))).toEqual({
-          diagnosticSeverity: { globalErrorInEffectFailure: 'error' },
-        });
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    });
-
-    it('falls back to rule defaults on an unreadable tsconfig', () => {
-      expect(readTsgoLspConfig('/nonexistent/tsconfig.json')).toBe('{}');
-    });
   });
 
   describe('CLI argument handling', () => {
@@ -202,8 +135,13 @@ describe('tsgo-diagnostics', () => {
 
   it('runs the real binary and returns parsed diagnostics', () => {
     const result = runTsgoDiagnostics({ project: 'tsconfig.json' });
-    expect(Array.isArray(result)).toBe(true);
-    for (const d of result ?? []) {
+    expect(Array.isArray(result.diagnostics)).toBe(true);
+    // The run summary travels with the diagnostics, so a caller can tell
+    // "checked and clean" from "checked nothing". This package's own tsconfig
+    // does not enable the `@effect/language-service` plugin, so the language
+    // service correctly checks none of its files.
+    expect(result.summary.totalFiles).toBeGreaterThan(0);
+    for (const d of result.diagnostics) {
       expect(d.filePath).toMatch(/\.tsx?$/);
       expect(['error', 'warning', 'info']).toContain(d.severity);
       expect(d.line).toBeGreaterThan(0);
@@ -237,7 +175,7 @@ export const program = Effect.gen(function* () {
             strict: true,
             skipLibCheck: true,
             noEmit: true,
-            plugins: [{ name: '@effect/tsgo' }],
+            plugins: [{ name: '@effect/language-service' }],
           },
           include: ['src/**/*.ts'],
         }),
@@ -257,7 +195,7 @@ export const program = Effect.gen(function* () {
         helper,
         `import { runTsgoDiagnostics } from ${JSON.stringify(join(__dirname, 'tsgo-diagnostics.ts'))};\n` +
           `const result = runTsgoDiagnostics({ project: ${JSON.stringify(project)} });\n` +
-          `process.stdout.write(JSON.stringify(result ?? []));\n`,
+          `process.stdout.write(JSON.stringify(result.diagnostics));\n`,
         'utf8',
       );
 

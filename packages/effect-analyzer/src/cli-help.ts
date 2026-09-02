@@ -13,6 +13,27 @@ export const HELP_TEXT = `
 effect-analyzer - Static analysis for Effect-TS
 
 Usage: effect-analyze [PATH] [options]
+       effect-analyze <command> [options]
+
+Commands (a drop-in replacement for the effect-tsgo CLI):
+  diagnostics              Effect language service diagnostics plus the analyzer's
+                           own rules, in one stream. Same flags as
+                           "effect-tsgo diagnostics", same exit codes:
+                             --project <tsconfig>   Project to check
+                             --file <path>          Check a single file
+                             --format <fmt>         json | pretty | text | github-actions
+                             --severity <list>      Filter: error,warning,message
+                             --strict               Also fail on warnings
+                             --progress             Narrate progress on stderr
+                             --list-files           Report Effect versions per file
+                             --fail-on <severity>   error | warning | message | none
+                             --lspconfig <json>     Inline plugin options override
+                             --no-analyzer          Language service diagnostics only
+                           One of --project or --file is required, as upstream.
+  setup                    Guided @effect/tsgo setup (forwarded)
+  config                   Interactive diagnostic severity picker (forwarded)
+  patch | unpatch          Manage the patched TypeScript/Oxlint binaries (forwarded)
+  get-exe-path             Print the Effect language service executable path (forwarded)
 
   PATH is optional and defaults to the current directory (.).
   When PATH is a directory: analyzes all TypeScript files and writes colocated
@@ -92,6 +113,9 @@ Options:
                            using the target project's TypeScript 7 installation
   --sarif                  Emit SARIF 2.1.0 output (for --lint-source)
   --baseline <file>        Compare findings against a baseline session/json file
+  --fail-on <severity>     Exit 1 when a finding is at or above error | warning | info
+                           (for --lint-source; omit for an advisory run that
+                           never changes the exit status)
   --fail-on-new            Exit non-zero when new findings exist vs baseline
   --require-suppression-reason  Require a reason after disable-next-line suppression comments
   --fail-on-stale-suppressions  Exit non-zero when disable-next-line suppressions are stale
@@ -125,6 +149,9 @@ Examples:
   effect-analyze ./program.ts --format json --output result.json
   effect-analyze ./program.ts --colocate   # Single file + write foo.effect-analysis.md
   effect-analyze ./src --lint-source --tsgo=tsconfig.json
+  effect-analyze ./src --lint-source --tsgo=tsconfig.json --fail-on=error
+  effect-analyze diagnostics --project tsconfig.json --format json
+  effect-analyze diagnostics --project tsconfig.json --format github-actions --strict
   effect-analyze ./src --lint-source --sarif -o findings.sarif
   effect-analyze ./src --lint-source --baseline ./.cache/effect-lint-baseline.json --fail-on-new
   effect-analyze ./src --lint-source --scorecard
