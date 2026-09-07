@@ -24,7 +24,9 @@ import {
   renderStaticMermaid,
   renderPathsMermaid,
   renderEnhancedMermaid,
+  renderMermaidWithRuntimeTrace,
 } from './output/mermaid';
+import { traceFromSpanTree, type SpanTree } from './runtime-trace';
 import { renderRailwayMermaid } from './output/mermaid-railway';
 import { renderServicesMermaid } from './output/mermaid-services';
 import { renderErrorsMermaid } from './output/mermaid-errors';
@@ -395,13 +397,32 @@ export const runAnalysis = (
         break;
       }
       case 'mermaid': {
+        const traceFile = options.runtimeTrace;
+        const runtimeTrace = traceFile
+          ? traceFromSpanTree(
+              JSON.parse(
+                yield* cliTry(() => fs.readFile(resolve(traceFile), 'utf8')),
+              ) as SpanTree,
+            )
+          : undefined;
+        const mermaidOptions = {
+          direction: options.direction,
+          ...(options.detail ? { detail: options.detail } : {}),
+        };
         const diagrams: string[] = [];
         for (const ir of filteredIrs) {
-          const diagram = yield* renderMermaid(ir, {
-            direction: options.direction,
-            ...(options.detail ? { detail: options.detail } : {}),
-          });
-          diagrams.push(diagram);
+          if (runtimeTrace) {
+            const overlay = renderMermaidWithRuntimeTrace(ir, runtimeTrace, mermaidOptions);
+            diagrams.push(
+              `${overlay.mermaid}\n%% runtime overlay: ` +
+                `${overlay.matchedSpanIds.length} matched, ` +
+                `${overlay.suffixMatchedSpanIds.length} matched by suffix, ` +
+                `${overlay.unmatchedSpanIds.length} unmatched, ` +
+                `${overlay.ambiguousSpanIds.length} ambiguous`,
+            );
+            continue;
+          }
+          diagrams.push(yield* renderMermaid(ir, mermaidOptions));
         }
         output = diagrams.join('\n\n');
         break;

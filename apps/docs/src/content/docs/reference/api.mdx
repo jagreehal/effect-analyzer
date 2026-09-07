@@ -169,7 +169,7 @@ const report = computeDiagramFidelity(ir)
 console.log(formatDiagramFidelity(report))
 ```
 
-Use `traceFromEffectSpans()` for Effect v4 spans or `traceFromOpenTelemetry()` for exported OpenTelemetry spans. `renderMermaidWithRuntimeTrace()` colors matched nodes by runtime status and returns unmatched or ambiguous span IDs.
+Use `traceFromEffectSpans()` for Effect v4 spans, `traceFromOpenTelemetry()` for exported OpenTelemetry spans, or `traceFromSpanTree()` for tools that export a trace as a nested span tree. `renderMermaidWithRuntimeTrace()` colors matched nodes by runtime status and reports how each span matched.
 
 ```ts
 import {

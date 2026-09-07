@@ -5,8 +5,8 @@
  * clear the screen: clearing before the run blanks the last good diagram every
  * time the file is saved mid-edit.
  *
- * ponytail: swaps the global `process.stdout.write` for the duration, so it is
- * only safe while nothing else writes concurrently. Overlapping captures
+ * Swaps the global `process.stdout.write` for the duration, so it is only safe
+ * while nothing else writes concurrently. Overlapping captures
  * restore in the order they finish, so the later one hands back a function the
  * earlier one already abandoned and all output after it is swallowed. Watch
  * mode is the only caller and serializes through `makeRefreshQueue` for exactly

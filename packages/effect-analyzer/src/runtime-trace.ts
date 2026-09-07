@@ -89,3 +89,38 @@ export const traceFromOpenTelemetry = (
     return durationMs === undefined ? {} : { durationMs };
   })(),
 })));
+
+/** One node of a nested span-tree JSON export. */
+export interface SpanTreeNode {
+  readonly spanId: string;
+  readonly name: string;
+  readonly status: 'ok' | 'error' | 'unset';
+  readonly durationMs?: number | null | undefined;
+  readonly running?: boolean | undefined;
+  readonly children?: readonly SpanTreeNode[] | undefined;
+}
+
+export interface SpanTree {
+  readonly spans: readonly SpanTreeNode[];
+}
+
+/** Adapter for tracing tools that export a trace as a nested span tree. */
+export const traceFromSpanTree = (trace: SpanTree): RuntimeTrace => {
+  const flat: FlatSpan[] = [];
+  const walk = (node: SpanTreeNode, parentSpanId?: string): void => {
+    flat.push({
+      spanId: node.spanId,
+      ...(parentSpanId ? { parentSpanId } : {}),
+      name: node.name,
+      status: node.running === true
+        ? 'running'
+        : node.status === 'error'
+          ? 'error'
+          : 'success',
+      ...(typeof node.durationMs === 'number' ? { durationMs: node.durationMs } : {}),
+    });
+    for (const child of node.children ?? []) walk(child, node.spanId);
+  };
+  for (const root of trace.spans) walk(root);
+  return addPaths(flat);
+};

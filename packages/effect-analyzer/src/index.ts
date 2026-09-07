@@ -24,11 +24,14 @@ export {
 
 export {
   traceFromEffectSpans,
+  traceFromSpanTree,
   traceFromOpenTelemetry,
   type RuntimeTrace,
   type RuntimeTraceSpan,
   type RuntimeSpanStatus,
   type OpenTelemetryReadableSpan,
+  type SpanTree,
+  type SpanTreeNode,
 } from './runtime-trace';
 
 export {

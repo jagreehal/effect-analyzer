@@ -22,6 +22,8 @@ export interface CLIOptions {
   readonly includeMetadata: boolean;
   readonly direction: MermaidDirection;
   readonly detail: 'compact' | 'standard' | 'verbose' | undefined;
+  /** Path to a span-tree JSON trace to overlay on the mermaid diagram. */
+  readonly runtimeTrace: string | undefined;
   readonly tsconfig: string | undefined;
   readonly colocate: boolean;
   readonly noColocate: boolean;
@@ -154,6 +156,7 @@ export function parseArgs(args: readonly string[]): {
 
   let pathArg: string | undefined;
   let format: CLIOptions['format'] = 'auto';
+  let runtimeTrace: string | undefined;
   let output: string | undefined;
   let pretty = true;
   let includeMetadata = true;
@@ -323,6 +326,10 @@ export function parseArgs(args: readonly string[]): {
       } else {
         rejectValue('--detail', value, DETAIL_VALUES);
       }
+    } else if (arg === '--runtime-trace') {
+      runtimeTrace = args[++i];
+    } else if (arg.startsWith('--runtime-trace=')) {
+      runtimeTrace = arg.slice('--runtime-trace='.length);
     } else if (arg === '--tsconfig') {
       tsconfig = args[++i];
     } else if (arg.startsWith('--tsconfig=')) {
@@ -608,6 +615,7 @@ export function parseArgs(args: readonly string[]): {
     includeMetadata,
     direction,
     detail,
+    runtimeTrace,
     tsconfig,
     colocate,
     noColocate,

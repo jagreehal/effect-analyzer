@@ -111,6 +111,12 @@ effect-analyze --diff v1.ts v2.ts --include-trivial  # Include trivial changes
 
 Renderers: `renderDiffMarkdown()`, `renderDiffJSON()`, `renderDiffMermaid()`
 
+### Runtime Overlay
+
+`--runtime-trace <file>` colors a `--format mermaid` diagram with a captured trace. The file is a nested span tree (`spanId`, `name`, `status: ok | error | unset`, optional `durationMs` and `running`, `children`), decoded by `traceFromSpanTree()`; `traceFromEffectSpans()` and `traceFromOpenTelemetry()` cover the other two shapes.
+
+Spans join to IR nodes by nested span path, falling back to the longest path suffix that identifies a single node, so spans opened above the analyzed program still resolve what runs beneath them. The diagram ends with `%% runtime overlay: N matched, N matched by suffix, N unmatched, N ambiguous`; `RuntimeOverlayResult` carries the same four lists.
+
 ### Interactive HTML
 
 ```bash
@@ -220,6 +226,7 @@ it. Adding a field to that key renumbers every existing finding.
 | `--export <name>` | For `openapi-runtime`: HttpApi export name |
 | `-o, --output <file>` | Output file (default: stdout) |
 | `-d, --direction <dir>` | Mermaid direction: TB, LR, BT, RL |
+| `--runtime-trace <file>` | Overlay a span-tree JSON trace on `--format mermaid` |
 | `-c, --compact` | Compact output |
 | `--pretty` | Pretty-print (default) |
 | `--tsconfig <path>` | Custom tsconfig.json path |
@@ -297,6 +304,7 @@ Exported from the focused package entry points, primarily `effect-analyzer/analy
 ```typescript
 import {
   renderStaticMermaid, renderEnhancedMermaid, renderRailwayMermaid,
+  renderMermaidWithRuntimeTrace, traceFromSpanTree, traceFromEffectSpans, traceFromOpenTelemetry,
   renderInteractiveHTML,
   renderDiffMarkdown, renderDiffJSON, renderDiffMermaid,
   generateTestMatrix, formatTestMatrixMarkdown, formatTestMatrixAsCode, formatTestChecklist,

@@ -47,6 +47,7 @@ Options:
   -o, --output <file>      Output file (default: stdout)
   -d, --direction <dir>    Mermaid diagram direction: TB | LR | BT | RL (default: TB)
   --detail <level>         Mermaid detail level: compact | standard | verbose (default: auto based on size)
+  --runtime-trace <file>   Overlay a runtime trace on --format mermaid (nested span-tree JSON)
   -c, --compact            Compact output (no formatting)
   --pretty                 Pretty-print output (default; overrides --compact)
   --tsconfig <path>        Path to tsconfig.json for resolution (e.g. when analyzing external repo)
