@@ -54,6 +54,8 @@ Options:
   -c, --compact            Compact output (no formatting)
   --pretty                 Pretty-print output (default; overrides --compact)
   --tsconfig <path>        Path to tsconfig.json for resolution (e.g. when analyzing external repo)
+  --extensions <list>      Extensions to discover when walking a directory (default: ts,tsx)
+  --max-depth <n>          How deep a directory walk descends (default: 10)
   --no-metadata            Exclude metadata from output
   --colocate               (Single file) Write analysis next to source as markdown
   --no-colocate            (Project mode) Do not write colocated files; print summary only

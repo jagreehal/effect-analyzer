@@ -272,6 +272,28 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--extensions and --max-depth', () => {
+    it('normalizes a comma-separated extension list', () => {
+      expect(opts('--extensions', 'ts,.tsx, js').extensions).toEqual(['.ts', '.tsx', '.js']);
+      expect(opts('--extensions=mts').extensions).toEqual(['.mts']);
+    });
+
+    it('leaves both unset by default, so discovery keeps its own defaults', () => {
+      expect(opts().extensions).toBeUndefined();
+      expect(opts().maxDepth).toBeUndefined();
+    });
+
+    it('rejects an empty list and a depth that cannot walk anything', () => {
+      expect(parseArgs(['src', '--extensions', ',']).errors).toHaveLength(1);
+      expect(parseArgs(['src', '--max-depth', '0']).errors).toHaveLength(1);
+      expect(parseArgs(['src', '--max-depth', 'deep']).errors).toHaveLength(1);
+    });
+
+    it('accepts a depth of one, meaning the directory itself', () => {
+      expect(opts('--max-depth', '1').maxDepth).toBe(1);
+    });
+  });
+
   describe('--tsgo', () => {
     it('defaults to tsconfig.json', () => {
       expect(opts('--tsgo').tsgoProject).toBe('tsconfig.json');

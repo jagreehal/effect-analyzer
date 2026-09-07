@@ -167,6 +167,13 @@ export const writeTestStubsForFile = (
 export const runAnalysis = (
   resolvedPath: string,
   options: CLIOptions,
+  /**
+   * Where the rendered result goes, `Console.log` by default.
+   *
+   * A run over several paths needs the pieces before they are printed: three
+   * JSON documents written one after another do not parse as one.
+   */
+  emit: (rendered: string) => Effect.Effect<void> = Console.log,
 ) =>
   Effect.gen(function* () {
     const style = createStyle(options.color && process.stdout.isTTY);
@@ -175,8 +182,12 @@ export const runAnalysis = (
     // The counts used to ignore it while the line explaining them respected
     // it, which left `--quiet` reporting "Found 2 program(s)" above a single
     // diagram with nothing saying where the other one went.
+    //
+    // Progress goes to stderr: stdout carries the diagram or the JSON, and a
+    // status line in the middle of it makes `> out.mmd` produce a file that
+    // does not parse.
     const logProgress = (message: string): Effect.Effect<void> =>
-      options.quiet ? Effect.void : Console.log(message);
+      options.quiet ? Effect.void : Console.error(message);
 
     const analyzerOptions =
       options.tsconfig !== undefined
@@ -295,7 +306,7 @@ export const runAnalysis = (
         options.quality ? programQualities : undefined,
         options.styleGuide,
       );
-      yield* Console.log(`Written: ${outputFile}`);
+      yield* Console.error(`Written: ${outputFile}`);
       return;
     }
 
@@ -561,8 +572,8 @@ export const runAnalysis = (
     const outputPath = options.output;
     if (outputPath) {
       yield* cliTry(() => fs.writeFile(outputPath, output, 'utf-8'));
-      yield* Console.log(`Output written to ${outputPath}`);
+      yield* Console.error(`Output written to ${outputPath}`);
     } else {
-      yield* Console.log(output);
+      yield* emit(output);
     }
   });

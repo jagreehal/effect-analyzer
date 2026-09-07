@@ -25,6 +25,10 @@ export interface CLIOptions {
   /** Path to a span-tree JSON trace to overlay on the mermaid diagram. */
   readonly runtimeTrace: string | undefined;
   readonly tsconfig: string | undefined;
+  /** Extensions discovered when walking a directory; default `.ts`, `.tsx`. */
+  readonly extensions: readonly string[] | undefined;
+  /** How deep a directory walk descends; default 10. */
+  readonly maxDepth: number | undefined;
   readonly colocate: boolean;
   readonly noColocate: boolean;
   readonly colocateSuffix: string;
@@ -159,6 +163,8 @@ export function parseArgs(args: readonly string[]): {
   let pathArg: string | undefined;
   let format: CLIOptions['format'] = 'auto';
   let runtimeTrace: string | undefined;
+  let extensions: readonly string[] | undefined;
+  let maxDepth: number | undefined;
   let output: string | undefined;
   let pretty = true;
   let includeMetadata = true;
@@ -332,6 +338,30 @@ export function parseArgs(args: readonly string[]): {
       runtimeTrace = args[++i];
     } else if (arg.startsWith('--runtime-trace=')) {
       runtimeTrace = arg.slice('--runtime-trace='.length);
+    } else if (arg === '--extensions' || arg.startsWith('--extensions=')) {
+      const value = arg.startsWith('--extensions=')
+        ? arg.slice('--extensions='.length)
+        : args[++i];
+      const parsed = (value ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .map((entry) => (entry.startsWith('.') ? entry : `.${entry}`));
+      if (parsed.length === 0) {
+        rejectValue('--extensions', value);
+      } else {
+        extensions = parsed;
+      }
+    } else if (arg === '--max-depth' || arg.startsWith('--max-depth=')) {
+      const value = arg.startsWith('--max-depth=')
+        ? arg.slice('--max-depth='.length)
+        : args[++i];
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        rejectValue('--max-depth', value);
+      } else {
+        maxDepth = parsed;
+      }
     } else if (arg === '--tsconfig') {
       tsconfig = args[++i];
     } else if (arg.startsWith('--tsconfig=')) {
@@ -618,6 +648,8 @@ export function parseArgs(args: readonly string[]): {
     direction,
     detail,
     runtimeTrace,
+    extensions,
+    maxDepth,
     tsconfig,
     colocate,
     noColocate,

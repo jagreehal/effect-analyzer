@@ -108,12 +108,23 @@ const runManyPaths = (paths: readonly string[], options: CLIOptions) =>
       }
     }
 
+    // JSON is collected and printed as one array: several documents in a row
+    // are not a document. Every other format concatenates as it always has.
+    const documents: string[] = [];
+    const collect = options.format === 'json'
+      ? (rendered: string) => Effect.sync(() => void documents.push(rendered))
+      : undefined;
+
     for (const path of paths) {
       const resolved = resolveCliPath(path);
       if (!options.quiet) {
-        yield* Console.log(`Analyzing ${resolved}...`);
+        yield* Console.error(`Analyzing ${resolved}...`);
       }
-      yield* runAnalysis(resolved, options);
+      yield* runAnalysis(resolved, options, collect);
+    }
+
+    if (collect) {
+      yield* Console.log(`[${documents.join(',')}]`);
     }
   });
 
@@ -320,7 +331,7 @@ const main = Effect.gen(function* () {
   }
 
   if (!options.quiet) {
-    yield* Console.log(`Analyzing ${resolvedPath}...`);
+    yield* Console.error(`Analyzing ${resolvedPath}...`);
   }
   yield* runAnalysis(resolvedPath, options);
 

@@ -46,9 +46,11 @@ describe('cli multiple paths', () => {
     ]);
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('checkout.ts');
-    expect(result.stdout).toContain('refund.ts');
+    expect(result.stderr).toContain('checkout.ts');
+    expect(result.stderr).toContain('refund.ts');
     expect(result.stdout.match(/flowchart/g)).toHaveLength(2);
+    // Redirecting stdout has to give a file that parses, so no status text.
+    expect(result.stdout).not.toContain('Analyzing');
   });
 
   it('expands a quoted glob itself, recursively', () => {
@@ -56,6 +58,20 @@ describe('cli multiple paths', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout.match(/flowchart/g)).toHaveLength(3);
+  });
+
+  it('prints one JSON document for the whole run', () => {
+    const result = runCli([
+      join('src', 'checkout.ts'),
+      join('src', 'refund.ts'),
+      '--format',
+      'json',
+    ]);
+
+    expect(result.status).toBe(0);
+    const parsed: unknown = JSON.parse(result.stdout);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).toHaveLength(2);
   });
 
   it('fails when a pattern matches nothing', () => {

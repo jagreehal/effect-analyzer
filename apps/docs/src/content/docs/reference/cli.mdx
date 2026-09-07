@@ -40,6 +40,16 @@ Error: 2 paths given. --output writes one file. Drop it, or pass one path.
 
 Diff mode reads its two sources from the positional arguments, so `--diff` keeps its own `<git-ref>:<path>` syntax.
 
+## Output Streams
+
+The result goes to stdout; progress, counts and warnings go to stderr. Redirecting produces a file that parses, with the status still visible in the terminal:
+
+```bash
+effect-analyze ./src/transfer.ts --format mermaid > transfer.mmd
+```
+
+`--quiet` silences the status lines themselves. Over several paths, `--format json` prints one array rather than a run of separate documents, so `| jq` works on the whole run.
+
 ## General Options
 
 | Flag | Description | Default |
@@ -51,6 +61,8 @@ Diff mode reads its two sources from the positional arguments, so `--diff` keeps
 | `--no-color` | Disable colored terminal output | color on |
 | `--quiet` | Suppress verbose status messages | off |
 | `--tsconfig <path>` | Path to a custom `tsconfig.json` | auto-detected |
+| `--extensions <list>` | Extensions discovered when walking a directory | `ts,tsx` |
+| `--max-depth <n>` | How deep a directory walk descends | `10` |
 | `--include-trivial` | Include trivial programs (schemas, thin wrappers) that are excluded by default | off |
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
 | `-h, --help` | Print help and exit | — |

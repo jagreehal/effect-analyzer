@@ -64,6 +64,10 @@ A path argument is a file, a directory (walked for `.ts`/`.tsx`, skipping `node_
 
 Multi-path runs go through `runManyPaths` (`cli.ts`), which refuses modes that read one directory (`--coverage-audit`, `--service-cycles`), follow one file (`--watch`, `--entry-points`, `--config-leaks`, `--cli-commands`), write one file (`--output`), or render from one entry point (`SINGLE_PATH_FORMATS`). Modes dispatched before path resolution (`--lint-source`, the report flags, the rules flags) reject extra positionals outright; `--diff` reads the positionals itself.
 
+### Output Streams
+
+The rendered result goes to stdout; progress and counts go to stderr through `logProgress` (`cli-mode-analysis.ts`), so `--format mermaid > file.mmd` yields a file that parses. `--quiet` silences the status lines. In a multi-path run `--format json` is collected and printed as one array — `runAnalysis` takes an optional `emit` sink for exactly that.
+
 ### Output Formats
 
 `effect-analyze <path> --format <fmt>`:
@@ -236,6 +240,8 @@ it. Adding a field to that key renumbers every existing finding.
 | `-c, --compact` | Compact output |
 | `--pretty` | Pretty-print (default) |
 | `--tsconfig <path>` | Custom tsconfig.json path |
+| `--extensions <list>` | Extensions to discover in a directory walk (default: `ts,tsx`) |
+| `--max-depth <n>` | Directory walk depth (default: 10) |
 | `--tsgo[=<tsconfig>]` | Merge official `@effect/tsgo` diagnostics (TypeScript 7+) |
 | `--fail-on <severity>` | Exit 1 on a finding at or above `error`/`warning`/`info` (for `--lint-source`; omit for an advisory run) |
 | `--no-metadata` | Exclude metadata |
