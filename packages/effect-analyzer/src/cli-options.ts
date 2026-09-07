@@ -132,6 +132,8 @@ const TEST_RUNNER_VALUES = ['vitest', 'jest', 'mocha'] as const;
 
 export function parseArgs(args: readonly string[]): {
   pathArg: string | undefined;
+  /** Every positional argument, in the order given. */
+  pathArgs: readonly string[];
   options: CLIOptions;
   errors: readonly string[];
 } {
@@ -693,5 +695,5 @@ export function parseArgs(args: readonly string[]): {
     improveExcludeRules: improveExcludeRules.length > 0 ? improveExcludeRules : undefined,
     improveMinPriority,
   };
-  return { pathArg, options, errors };
+  return { pathArg, pathArgs: positionalArgs, options, errors };
 }

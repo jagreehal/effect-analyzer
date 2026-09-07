@@ -280,12 +280,14 @@ describe('parseArgs', () => {
     it('consumes a following path only once a path argument has been seen', () => {
       expect(parseArgs(['src', '--tsgo', 'custom.json'])).toEqual({
         pathArg: 'src',
+        pathArgs: ['src'],
         options: expect.objectContaining({ tsgoProject: 'custom.json' }),
         errors: [],
       });
       // No path yet, so `other.ts` stays the path argument rather than the project.
       expect(parseArgs(['--tsgo', 'other.ts'])).toEqual({
         pathArg: 'other.ts',
+        pathArgs: ['other.ts'],
         options: expect.objectContaining({ tsgoProject: 'tsconfig.json' }),
         errors: [],
       });
@@ -421,6 +423,7 @@ describe('parseArgs', () => {
     it('parses an empty argv into the documented defaults', () => {
       expect(parseArgs([])).toEqual({
         pathArg: undefined,
+        pathArgs: [],
         options: expect.objectContaining({
           format: 'auto',
           pretty: true,

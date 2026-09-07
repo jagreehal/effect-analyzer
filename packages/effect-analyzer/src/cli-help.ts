@@ -12,8 +12,11 @@
 export const HELP_TEXT = `
 effect-analyzer - Static analysis for Effect-TS
 
-Usage: effect-analyze [PATH] [options]
+Usage: effect-analyze [PATH...] [options]
        effect-analyze <command> [options]
+
+A PATH is a file, a directory (analyzed recursively), or a glob. Quote a glob
+to let the CLI expand it: effect-analyze 'src/**/*.ts' --format mermaid
 
 Commands (a drop-in replacement for the effect-tsgo CLI):
   diagnostics              Effect language service diagnostics plus the analyzer's

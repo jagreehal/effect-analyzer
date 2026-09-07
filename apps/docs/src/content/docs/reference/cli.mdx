@@ -12,10 +12,33 @@ The `effect-analyze` CLI analyzes Effect TypeScript files and produces diagrams,
 ## Usage
 
 ```bash
-effect-analyze [path] [options]
+effect-analyze [path...] [options]
 ```
 
-When `path` is a file, the analyzer processes that file. When it is a directory, it processes all TypeScript files within it. Multiple paths can be provided for diff mode.
+A path is a file, a directory, or a glob.
+
+| Argument | Behavior |
+|---|---|
+| `src/transfer.ts` | Analyzes that file |
+| `src` | Walks the directory for `.ts` and `.tsx` files, skipping `node_modules` and `.git` |
+| `src/transfer.ts src/refund.ts` | Analyzes each file in turn, so an unquoted shell glob works |
+| `'src/**/*.ts'` | Quoted, so the CLI expands the pattern itself |
+
+A pattern that matches nothing is an error, not an empty run:
+
+```bash
+$ effect-analyze 'src/**/*.missing'
+Error: No files matched: src/**/*.missing
+```
+
+Modes that read one directory (`--coverage-audit`, `--service-cycles`), follow one file (`--watch`, `--entry-points`), or write one file (`--output`) say so rather than picking whichever path came first:
+
+```bash
+$ effect-analyze src/transfer.ts src/refund.ts -o diagram.mmd
+Error: 2 paths given. --output writes one file. Drop it, or pass one path.
+```
+
+Diff mode reads its two sources from the positional arguments, so `--diff` keeps its own `<git-ref>:<path>` syntax.
 
 ## General Options
 

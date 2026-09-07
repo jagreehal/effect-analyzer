@@ -18,8 +18,8 @@ import * as fs from 'node:fs/promises';
 import { Effect, Console, Exit, Option } from 'effect';
 import { analyzeStateMachines } from './state-machine';
 import { runWatchMode } from './watch-mode';
-import { cliFail, cliTry, resolveCliPath } from './cli-support';
-import { parseArgs } from './cli-options';
+import { cliFail, cliTry, expandCliPaths, resolveCliPath } from './cli-support';
+import { parseArgs, type CLIOptions } from './cli-options';
 import {
   isProxiedTsgoCommand,
   proxyTsgoCommand,
@@ -56,6 +56,67 @@ import { detectServiceCycles } from './service-cycles';
 
 
 
+/** Formats whose renderers take a single entry point, not a list of files. */
+const SINGLE_PATH_FORMATS = new Set<CLIOptions['format']>([
+  'migration',
+  'api-docs',
+  'openapi-paths',
+  'openapi-runtime',
+  'json-schema',
+  'mermaid-statechart',
+  'svg-statechart',
+  'statechart-html',
+  'xstate-config',
+  'statechart-coverage',
+]);
+
+/**
+ * Analyze every path a shell or a pattern produced.
+ *
+ * Modes that read a directory, follow one file, or write one output file cannot
+ * mean anything over a list, so they are refused with the reason rather than
+ * run against whichever path happened to come first.
+ */
+const runManyPaths = (paths: readonly string[], options: CLIOptions) =>
+  Effect.gen(function* () {
+    const refusal =
+      options.output
+        ? '--output writes one file. Drop it, or pass one path.'
+        : options.watch
+          ? '--watch follows one path.'
+          : options.coverageAudit || options.serviceCycles
+            ? '--coverage-audit and --service-cycles read one directory.'
+            : options.entryPoints || options.configLeaks || options.cliCommands
+              ? '--entry-points, --config-leaks and --cli-commands read one file.'
+              : SINGLE_PATH_FORMATS.has(options.format)
+                ? `--format ${options.format} reads one path.`
+                : undefined;
+    if (refusal) {
+      return yield* cliFail(`${String(paths.length)} paths given. ${refusal}`);
+    }
+
+    for (const path of paths) {
+      const resolved = resolveCliPath(path);
+      const stats = yield* cliTry(() => fs.stat(resolved)).pipe(Effect.option);
+      if (Option.isNone(stats)) {
+        return yield* cliFail(`Path not found: ${resolved}`);
+      }
+      if (stats.value.isDirectory()) {
+        return yield* cliFail(
+          `${resolved} is a directory. Analyze a directory on its own, not alongside other paths.`,
+        );
+      }
+    }
+
+    for (const path of paths) {
+      const resolved = resolveCliPath(path);
+      if (!options.quiet) {
+        yield* Console.log(`Analyzing ${resolved}...`);
+      }
+      yield* runAnalysis(resolved, options);
+    }
+  });
+
 const main = Effect.gen(function* () {
   const args = process.argv.slice(2);
 
@@ -78,10 +139,30 @@ const main = Effect.gen(function* () {
     return Exit.succeed(undefined);
   }
 
-  const { pathArg, options, errors: argErrors } = parseArgs(args);
+  const { pathArg, pathArgs, options, errors: argErrors } = parseArgs(args);
 
   if (argErrors.length > 0) {
     return yield* cliFail(argErrors.join('\n'));
+  }
+
+  // `--diff` reads the positionals itself; every other mode reached before path
+  // resolution takes one path, so extra ones are refused rather than dropped.
+  const takesOnePath =
+    options.lintSource ||
+    options.agentReport ||
+    options.errorChannel ||
+    options.serviceHealth ||
+    options.performance ||
+    options.coupling ||
+    options.improve ||
+    options.listRules ||
+    options.indexRules ||
+    options.searchRules !== undefined ||
+    options.explainRule !== undefined;
+  if (pathArgs.length > 1 && !options.diff && takesOnePath) {
+    return yield* cliFail(
+      `Expected one path, received ${String(pathArgs.length)}: ${pathArgs.join(', ')}`,
+    );
   }
 
   if (options.importSession) {
@@ -114,7 +195,14 @@ const main = Effect.gen(function* () {
     return Exit.succeed(undefined);
   }
 
-  const resolvedPath = resolveCliPath(pathArg);
+  const paths = yield* expandCliPaths(pathArgs);
+
+  if (paths.length > 1) {
+    yield* runManyPaths(paths, options);
+    return Exit.succeed(undefined);
+  }
+
+  const resolvedPath = resolveCliPath(paths[0] ?? pathArg);
 
   const s = yield* cliTry(() => fs.stat(resolvedPath)).pipe(
     Effect.option,

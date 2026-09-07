@@ -58,6 +58,12 @@ effect-analyze [PATH] [options]
 
 PATH defaults to `.` (current directory). When PATH is a directory, analyzes all TypeScript files and writes colocated `.effect-analysis.md` next to each file containing Effect programs.
 
+### Paths
+
+A path argument is a file, a directory (walked for `.ts`/`.tsx`, skipping `node_modules` and `.git`, depth 10), or a glob. Several paths analyze in turn, so an unquoted shell glob works; a quoted glob is expanded by the CLI itself through `expandCliPaths` (`cli-support.ts`, backed by `fs.glob`). A pattern matching nothing fails with `No files matched: <pattern>`.
+
+Multi-path runs go through `runManyPaths` (`cli.ts`), which refuses modes that read one directory (`--coverage-audit`, `--service-cycles`), follow one file (`--watch`, `--entry-points`, `--config-leaks`, `--cli-commands`), write one file (`--output`), or render from one entry point (`SINGLE_PATH_FORMATS`). Modes dispatched before path resolution (`--lint-source`, the report flags, the rules flags) reject extra positionals outright; `--diff` reads the positionals itself.
+
 ### Output Formats
 
 `effect-analyze <path> --format <fmt>`:
