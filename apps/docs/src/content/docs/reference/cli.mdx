@@ -12,10 +12,43 @@ The `effect-analyze` CLI analyzes Effect TypeScript files and produces diagrams,
 ## Usage
 
 ```bash
-effect-analyze [path] [options]
+effect-analyze [path...] [options]
 ```
 
-When `path` is a file, the analyzer processes that file. When it is a directory, it processes all TypeScript files within it. Multiple paths can be provided for diff mode.
+A path is a file, a directory, or a glob.
+
+| Argument | Behavior |
+|---|---|
+| `src/transfer.ts` | Analyzes that file |
+| `src` | Walks the directory for `.ts` and `.tsx` files, skipping `node_modules` and `.git` |
+| `src/transfer.ts src/refund.ts` | Analyzes each file in turn, so an unquoted shell glob works |
+| `'src/**/*.ts'` | Quoted, so the CLI expands the pattern itself |
+
+A pattern that matches nothing is an error, not an empty run:
+
+```bash
+$ effect-analyze 'src/**/*.missing'
+Error: No files matched: src/**/*.missing
+```
+
+Modes that read one directory (`--coverage-audit`, `--service-cycles`), follow one file (`--watch`, `--entry-points`), or write one file (`--output`) say so rather than picking whichever path came first:
+
+```bash
+$ effect-analyze src/transfer.ts src/refund.ts -o diagram.mmd
+Error: 2 paths given. --output writes one file. Drop it, or pass one path.
+```
+
+Diff mode reads its two sources from the positional arguments, so `--diff` keeps its own `<git-ref>:<path>` syntax.
+
+## Output Streams
+
+The result goes to stdout; progress, counts and warnings go to stderr. Redirecting produces a file that parses, with the status still visible in the terminal:
+
+```bash
+effect-analyze ./src/transfer.ts --format mermaid > transfer.mmd
+```
+
+`--quiet` silences the status lines themselves. Over several paths, `--format json` prints one array rather than a run of separate documents, so `| jq` works on the whole run.
 
 ## General Options
 
@@ -28,6 +61,8 @@ When `path` is a file, the analyzer processes that file. When it is a directory,
 | `--no-color` | Disable colored terminal output | color on |
 | `--quiet` | Suppress verbose status messages | off |
 | `--tsconfig <path>` | Path to a custom `tsconfig.json` | auto-detected |
+| `--extensions <list>` | Extensions discovered when walking a directory | `ts,tsx` |
+| `--max-depth <n>` | How deep a directory walk descends | `10` |
 | `--include-trivial` | Include trivial programs (schemas, thin wrappers) that are excluded by default | off |
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
 | `-h, --help` | Print help and exit | — |
@@ -50,6 +85,7 @@ Every error is reported, then the CLI exits 1 without running. A missing value (
 | `--style-guide` | Apply style-guide heuristics for cleaner, more readable diagrams | off |
 | `--no-style-guide` | Explicitly disable style-guide mode | — |
 | `--assert-diagram-fidelity` | Exit with code 1 when a diagram contains unresolved or ambiguous nodes | off |
+| `--runtime-trace <file>` | Overlay a captured trace on `--format mermaid` (see [Diagram Fidelity](/effect-analyzer/reference/diagram-fidelity/)) | off |
 
 ## Analysis Modes
 

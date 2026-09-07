@@ -12,8 +12,11 @@
 export const HELP_TEXT = `
 effect-analyzer - Static analysis for Effect-TS
 
-Usage: effect-analyze [PATH] [options]
+Usage: effect-analyze [PATH...] [options]
        effect-analyze <command> [options]
+
+A PATH is a file, a directory (analyzed recursively), or a glob. Quote a glob
+to let the CLI expand it: effect-analyze 'src/**/*.ts' --format mermaid
 
 Commands (a drop-in replacement for the effect-tsgo CLI):
   diagnostics              Effect language service diagnostics plus the analyzer's
@@ -47,9 +50,12 @@ Options:
   -o, --output <file>      Output file (default: stdout)
   -d, --direction <dir>    Mermaid diagram direction: TB | LR | BT | RL (default: TB)
   --detail <level>         Mermaid detail level: compact | standard | verbose (default: auto based on size)
+  --runtime-trace <file>   Overlay a runtime trace on --format mermaid (nested span-tree JSON)
   -c, --compact            Compact output (no formatting)
   --pretty                 Pretty-print output (default; overrides --compact)
   --tsconfig <path>        Path to tsconfig.json for resolution (e.g. when analyzing external repo)
+  --extensions <list>      Extensions to discover when walking a directory (default: ts,tsx)
+  --max-depth <n>          How deep a directory walk descends (default: 10)
   --no-metadata            Exclude metadata from output
   --colocate               (Single file) Write analysis next to source as markdown
   --no-colocate            (Project mode) Do not write colocated files; print summary only

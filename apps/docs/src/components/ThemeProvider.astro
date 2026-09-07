@@ -3,7 +3,7 @@
  * Fork of Starlight’s ThemeProvider: first visit defaults to dark (not system preference).
  * `localStorage` key `starlight-theme`: missing = dark; '' = auto; `light` | `dark` = explicit.
  */
-import Icon from '../../node_modules/@astrojs/starlight/user-components/Icon.astro';
+import { Icon } from '@astrojs/starlight/components';
 ---
 
 {/* This is intentionally inlined to avoid FOUC. */}

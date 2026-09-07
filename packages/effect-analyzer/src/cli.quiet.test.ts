@@ -17,7 +17,7 @@ export const checkout = Effect.gen(function* () {
 export const refundOrder = Effect.succeed('refunded');
 `;
 
-const runCli = (root: string, extraArgs: readonly string[]): string => {
+const runCli = (root: string, extraArgs: readonly string[]) => {
   const repoRoot = resolve(__dirname, '..');
   const result = spawnSync(
     process.execPath,
@@ -31,7 +31,7 @@ const runCli = (root: string, extraArgs: readonly string[]): string => {
     { cwd: repoRoot, encoding: 'utf8' },
   );
   expect(result.status).toBe(0);
-  return result.stdout;
+  return { stdout: result.stdout, stderr: result.stderr };
 };
 
 describe('cli --quiet', () => {
@@ -41,15 +41,17 @@ describe('cli --quiet', () => {
       writeFileSync(join(root, 'program.ts'), SOURCE, 'utf8');
 
       // Without --quiet both lines appear, so the count is accounted for.
+      // They belong on stderr, where they cannot corrupt a redirected diagram.
       const loud = runCli(root, []);
-      expect(loud).toContain('Found 2 program(s)');
-      expect(loud).toContain('trivial program(s)');
+      expect(loud.stderr).toContain('Found 2 program(s)');
+      expect(loud.stderr).toContain('trivial program(s)');
+      expect(loud.stdout).not.toContain('program(s)');
 
       // With --quiet neither should: "minimal output" cannot mean keeping the
       // number that raises the question and dropping the answer.
       const quiet = runCli(root, ['--quiet']);
-      expect(quiet).toContain('flowchart');
-      expect(quiet).not.toContain('program(s)');
+      expect(quiet.stdout).toContain('flowchart');
+      expect(quiet.stderr).not.toContain('program(s)');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

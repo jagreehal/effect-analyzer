@@ -24,7 +24,9 @@ import {
   renderStaticMermaid,
   renderPathsMermaid,
   renderEnhancedMermaid,
+  renderMermaidWithRuntimeTrace,
 } from './output/mermaid';
+import { traceFromSpanTree, type SpanTree } from './runtime-trace';
 import { renderRailwayMermaid } from './output/mermaid-railway';
 import { renderServicesMermaid } from './output/mermaid-services';
 import { renderErrorsMermaid } from './output/mermaid-errors';
@@ -165,6 +167,13 @@ export const writeTestStubsForFile = (
 export const runAnalysis = (
   resolvedPath: string,
   options: CLIOptions,
+  /**
+   * Where the rendered result goes, `Console.log` by default.
+   *
+   * A run over several paths needs the pieces before they are printed: three
+   * JSON documents written one after another do not parse as one.
+   */
+  emit: (rendered: string) => Effect.Effect<void> = Console.log,
 ) =>
   Effect.gen(function* () {
     const style = createStyle(options.color && process.stdout.isTTY);
@@ -173,8 +182,12 @@ export const runAnalysis = (
     // The counts used to ignore it while the line explaining them respected
     // it, which left `--quiet` reporting "Found 2 program(s)" above a single
     // diagram with nothing saying where the other one went.
+    //
+    // Progress goes to stderr: stdout carries the diagram or the JSON, and a
+    // status line in the middle of it makes `> out.mmd` produce a file that
+    // does not parse.
     const logProgress = (message: string): Effect.Effect<void> =>
-      options.quiet ? Effect.void : Console.log(message);
+      options.quiet ? Effect.void : Console.error(message);
 
     const analyzerOptions =
       options.tsconfig !== undefined
@@ -293,7 +306,7 @@ export const runAnalysis = (
         options.quality ? programQualities : undefined,
         options.styleGuide,
       );
-      yield* Console.log(`Written: ${outputFile}`);
+      yield* Console.error(`Written: ${outputFile}`);
       return;
     }
 
@@ -395,13 +408,32 @@ export const runAnalysis = (
         break;
       }
       case 'mermaid': {
+        const traceFile = options.runtimeTrace;
+        const runtimeTrace = traceFile
+          ? traceFromSpanTree(
+              JSON.parse(
+                yield* cliTry(() => fs.readFile(resolve(traceFile), 'utf8')),
+              ) as SpanTree,
+            )
+          : undefined;
+        const mermaidOptions = {
+          direction: options.direction,
+          ...(options.detail ? { detail: options.detail } : {}),
+        };
         const diagrams: string[] = [];
         for (const ir of filteredIrs) {
-          const diagram = yield* renderMermaid(ir, {
-            direction: options.direction,
-            ...(options.detail ? { detail: options.detail } : {}),
-          });
-          diagrams.push(diagram);
+          if (runtimeTrace) {
+            const overlay = renderMermaidWithRuntimeTrace(ir, runtimeTrace, mermaidOptions);
+            diagrams.push(
+              `${overlay.mermaid}\n%% runtime overlay: ` +
+                `${overlay.matchedSpanIds.length} matched, ` +
+                `${overlay.suffixMatchedSpanIds.length} matched by suffix, ` +
+                `${overlay.unmatchedSpanIds.length} unmatched, ` +
+                `${overlay.ambiguousSpanIds.length} ambiguous`,
+            );
+            continue;
+          }
+          diagrams.push(yield* renderMermaid(ir, mermaidOptions));
         }
         output = diagrams.join('\n\n');
         break;
@@ -540,8 +572,8 @@ export const runAnalysis = (
     const outputPath = options.output;
     if (outputPath) {
       yield* cliTry(() => fs.writeFile(outputPath, output, 'utf-8'));
-      yield* Console.log(`Output written to ${outputPath}`);
+      yield* Console.error(`Output written to ${outputPath}`);
     } else {
-      yield* Console.log(output);
+      yield* emit(output);
     }
   });

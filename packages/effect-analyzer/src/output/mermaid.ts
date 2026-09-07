@@ -1138,7 +1138,13 @@ const TRACE_STYLES: Record<RuntimeSpanStatus, string> = {
 
 export interface RuntimeOverlayResult {
   readonly mermaid: string;
+  /** Span path matched a static node exactly, root segment included. */
   readonly matchedSpanIds: readonly string[];
+  /**
+   * Span matched only after dropping leading path segments. Weaker evidence
+   * than an exact match, so it is reported apart from one.
+   */
+  readonly suffixMatchedSpanIds: readonly string[];
   readonly unmatchedSpanIds: readonly string[];
   readonly ambiguousSpanIds: readonly string[];
 }
@@ -1152,13 +1158,26 @@ export function renderMermaidWithRuntimeTrace(
   const { lines, context } = renderStaticMermaidInternal(ir, options);
   const irIndex = indexIR(ir);
   const matchedSpanIds: string[] = [];
+  const suffixMatchedSpanIds: string[] = [];
   const unmatchedSpanIds: string[] = [];
   const ambiguousSpanIds: string[] = [];
   const usedStatuses = new Set<RuntimeSpanStatus>();
   const assignments: string[] = [];
 
   for (const span of trace.spans) {
-    const staticIds = irIndex.idsBySpanPath.get(spanPathKey(span.path)) ?? [];
+    // The IR of one program cannot contain spans opened above it — an HTTP
+    // handler, a job runner, the caller's own `withSpan` — but a real trace
+    // always carries them. Try the full path first, then progressively shorter
+    // suffixes, so an outer ancestor does not lose every span beneath it.
+    let staticIds: readonly string[] = [];
+    let exact = false;
+    for (let start = 0; start < span.path.length; start++) {
+      const ids = irIndex.idsBySpanPath.get(spanPathKey(span.path.slice(start)));
+      if (!ids || ids.length === 0) continue;
+      staticIds = ids;
+      exact = start === 0;
+      break;
+    }
     if (staticIds.length === 0) {
       unmatchedSpanIds.push(span.spanId);
       continue;
@@ -1173,7 +1192,7 @@ export function renderMermaidWithRuntimeTrace(
       unmatchedSpanIds.push(span.spanId);
       continue;
     }
-    matchedSpanIds.push(span.spanId);
+    (exact ? matchedSpanIds : suffixMatchedSpanIds).push(span.spanId);
     usedStatuses.add(span.status);
     assignments.push(`  class ${mermaidId} trace_${span.status}`);
   }
@@ -1186,7 +1205,13 @@ export function renderMermaidWithRuntimeTrace(
     lines.push(...assignments);
   }
 
-  return { mermaid: lines.join('\n'), matchedSpanIds, unmatchedSpanIds, ambiguousSpanIds };
+  return {
+    mermaid: lines.join('\n'),
+    matchedSpanIds,
+    suffixMatchedSpanIds,
+    unmatchedSpanIds,
+    ambiguousSpanIds,
+  };
 }
 
 /**

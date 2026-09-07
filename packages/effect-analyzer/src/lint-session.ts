@@ -300,7 +300,7 @@ export const runSourceLintScan = async (
   }
 
   // Type-aware rules from the official Effect language service, when available.
-  // ponytail: tsgo diagnostics bypass our disable pragmas — tsgo has its own
+  // tsgo diagnostics bypass our disable pragmas — tsgo has its own
   // suppression story; wire the two together only if users actually ask.
   let tsgo: TsgoCoverage | undefined;
   if (options.tsgoProject) {

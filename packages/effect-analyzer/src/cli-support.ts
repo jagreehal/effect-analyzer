@@ -8,7 +8,7 @@
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import * as fs from 'fs/promises';
-import { isAbsolute, resolve } from 'path';
+import { isAbsolute, resolve, sep } from 'path';
 import { Console, Data, Effect, Option } from 'effect';
 import type { LintFinding } from './lint-session';
 
@@ -85,6 +85,66 @@ export const resolveCliPath = (inputPath: string | undefined): string => {
 
   return fromCurrent;
 };
+
+/** Shell metacharacters that make an argument a pattern rather than a path. */
+const GLOB_MAGIC = /[*?[\]{}]/;
+
+/** Directories a pattern should never reach into, matching project discovery. */
+const isIgnoredMatch = (path: string): boolean =>
+  path.includes(`${sep}node_modules${sep}`) || path.includes(`${sep}.git${sep}`);
+
+/**
+ * Bases a relative pattern is tried against, in order.
+ *
+ * The same fallbacks `resolveCliPath` uses: a package script can run the CLI
+ * from a directory the user never typed, and `INIT_CWD` is where they were.
+ */
+const patternBases = (): readonly string[] => [
+  ...new Set(
+    [process.cwd(), process.env.INIT_CWD, process.env.PWD, process.env.OLDPWD].filter(
+      (base): base is string => typeof base === 'string' && base.trim().length > 0,
+    ),
+  ),
+];
+
+const globPattern = async (pattern: string): Promise<readonly string[]> => {
+  for (const base of isAbsolute(pattern) ? [''] : patternBases()) {
+    const matches: string[] = [];
+    for await (const match of fs.glob(pattern, base === '' ? {} : { cwd: base })) {
+      const full = resolve(base, match);
+      if (!isIgnoredMatch(full)) matches.push(full);
+    }
+    if (matches.length > 0) return matches.sort((left, right) => left.localeCompare(right));
+  }
+  return [];
+};
+
+/**
+ * Expand the glob patterns among the CLI's positional arguments.
+ *
+ * A shell expands an unquoted pattern before the CLI sees it; a quoted one
+ * arrives verbatim, and `fs.glob` is Node's own, so this needs no dependency.
+ * Arguments without pattern characters are returned untouched, leaving plain
+ * path resolution and its "Path not found" message exactly as they were.
+ */
+export const expandCliPaths = (
+  patterns: readonly string[],
+): Effect.Effect<readonly string[], CliError> =>
+  Effect.gen(function* () {
+    const expanded: string[] = [];
+    for (const pattern of patterns) {
+      if (!GLOB_MAGIC.test(pattern)) {
+        expanded.push(pattern);
+        continue;
+      }
+      const matches = yield* cliTry(() => globPattern(pattern));
+      if (matches.length === 0) {
+        return yield* cliFail(`No files matched: ${pattern}`);
+      }
+      expanded.push(...matches);
+    }
+    return [...new Set(expanded)];
+  });
 
 /** Best-effort open of a file in the OS default application. */
 export const openInBrowser = (file: string): Effect.Effect<void> =>

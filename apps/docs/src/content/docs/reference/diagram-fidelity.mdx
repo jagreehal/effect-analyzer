@@ -63,7 +63,7 @@ The command checks one file or each analyzed program in a directory. It prints t
 
 ## Match Runtime Spans
 
-The analyzer joins runtime spans to static nodes by their full nested path. These two spans form the path `transfer > debit`:
+The analyzer joins runtime spans to static nodes by their nested path. These two spans form the path `transfer > debit`:
 
 ```ts
 const program = Effect.gen(function* () {
@@ -75,6 +75,8 @@ const program = Effect.gen(function* () {
 ```
 
 Keep names literal and give sibling spans different names. Put request IDs, account IDs, and other runtime values in span attributes.
+
+A captured trace usually starts above the analyzed program, in an HTTP handler or a job runner the analyzed file never mentions. The analyzer matches the full path first, then the longest path suffix that identifies a single node, so those outer spans still resolve everything nested beneath them.
 
 ### Effect v4 spans
 
@@ -100,11 +102,38 @@ const trace = traceFromOpenTelemetry(readableSpans)
 const overlay = renderMermaidWithRuntimeTrace(ir, trace)
 ```
 
-`RuntimeOverlayResult` returns the Mermaid source and three span-ID lists:
+### Span-tree JSON
+
+Tracing tools that export a trace as a nested tree of spans go through `traceFromSpanTree()`. Each node carries a `spanId`, a `name`, a `status` of `ok`, `error` or `unset`, an optional `durationMs`, an optional `running` flag, and its `children`:
+
+```ts
+import {
+  renderMermaidWithRuntimeTrace,
+  traceFromSpanTree,
+} from "effect-analyzer"
+
+const trace = traceFromSpanTree(JSON.parse(exportedTrace))
+const overlay = renderMermaidWithRuntimeTrace(ir, trace)
+```
+
+The CLI reads that same shape from a file:
+
+```bash
+npx effect-analyze ./src/transfer.ts --format mermaid --runtime-trace ./trace.json
+```
+
+The diagram is followed by a comment line counting how the spans matched, so a reviewer or an agent can weigh the colors:
+
+```
+%% runtime overlay: 5 matched, 1 matched by suffix, 0 unmatched, 0 ambiguous
+```
+
+`RuntimeOverlayResult` returns the Mermaid source and four span-ID lists:
 
 | Field | Meaning |
 |---|---|
-| `matchedSpanIds` | The trace path identifies one static node |
+| `matchedSpanIds` | The full trace path identifies one static node |
+| `suffixMatchedSpanIds` | A path suffix identifies one static node, after dropping outer spans |
 | `unmatchedSpanIds` | The trace path identifies no static node |
 | `ambiguousSpanIds` | The trace path identifies more than one static node |
 

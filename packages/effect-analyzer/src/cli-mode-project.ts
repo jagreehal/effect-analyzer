@@ -61,6 +61,8 @@ export const runCoverageAuditCli = (
   Effect.gen(function* () {
     const audit = yield* runCoverageAudit(resolvedPath, {
       tsconfig: options.tsconfig,
+      extensions: options.extensions,
+      maxDepth: options.maxDepth,
       includePerFileTiming: options.perFileTiming,
       excludeFromSuspiciousZeros: options.excludeFromSuspiciousZeros,
       knownEffectInternalsRoot: options.knownEffectInternalsRoot,
@@ -121,6 +123,8 @@ export const runProjectMode = (
 
     const projectResult = yield* analyzeProject(resolvedPath, {
       tsconfig: options.tsconfig,
+      extensions: options.extensions,
+      maxDepth: options.maxDepth,
       knownEffectInternalsRoot: options.knownEffectInternalsRoot,
       buildServiceMap: options.serviceMap,
       buildArchitecture: true,

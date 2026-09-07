@@ -58,6 +58,16 @@ effect-analyze [PATH] [options]
 
 PATH defaults to `.` (current directory). When PATH is a directory, analyzes all TypeScript files and writes colocated `.effect-analysis.md` next to each file containing Effect programs.
 
+### Paths
+
+A path argument is a file, a directory (walked for `.ts`/`.tsx`, skipping `node_modules` and `.git`, depth 10), or a glob. Several paths analyze in turn, so an unquoted shell glob works; a quoted glob is expanded by the CLI itself through `expandCliPaths` (`cli-support.ts`, backed by `fs.glob`). A pattern matching nothing fails with `No files matched: <pattern>`.
+
+Multi-path runs go through `runManyPaths` (`cli.ts`), which refuses modes that read one directory (`--coverage-audit`, `--service-cycles`), follow one file (`--watch`, `--entry-points`, `--config-leaks`, `--cli-commands`), write one file (`--output`), or render from one entry point (`SINGLE_PATH_FORMATS`). Modes dispatched before path resolution (`--lint-source`, the report flags, the rules flags) reject extra positionals outright; `--diff` reads the positionals itself.
+
+### Output Streams
+
+The rendered result goes to stdout; progress and counts go to stderr through `logProgress` (`cli-mode-analysis.ts`), so `--format mermaid > file.mmd` yields a file that parses. `--quiet` silences the status lines. In a multi-path run `--format json` is collected and printed as one array — `runAnalysis` takes an optional `emit` sink for exactly that.
+
 ### Output Formats
 
 `effect-analyze <path> --format <fmt>`:
@@ -110,6 +120,12 @@ effect-analyze --diff v1.ts v2.ts --include-trivial  # Include trivial changes
 ```
 
 Renderers: `renderDiffMarkdown()`, `renderDiffJSON()`, `renderDiffMermaid()`
+
+### Runtime Overlay
+
+`--runtime-trace <file>` colors a `--format mermaid` diagram with a captured trace. The file is a nested span tree (`spanId`, `name`, `status: ok | error | unset`, optional `durationMs` and `running`, `children`), decoded by `traceFromSpanTree()`; `traceFromEffectSpans()` and `traceFromOpenTelemetry()` cover the other two shapes.
+
+Spans join to IR nodes by nested span path, falling back to the longest path suffix that identifies a single node, so spans opened above the analyzed program still resolve what runs beneath them. The diagram ends with `%% runtime overlay: N matched, N matched by suffix, N unmatched, N ambiguous`; `RuntimeOverlayResult` carries the same four lists.
 
 ### Interactive HTML
 
@@ -220,9 +236,12 @@ it. Adding a field to that key renumbers every existing finding.
 | `--export <name>` | For `openapi-runtime`: HttpApi export name |
 | `-o, --output <file>` | Output file (default: stdout) |
 | `-d, --direction <dir>` | Mermaid direction: TB, LR, BT, RL |
+| `--runtime-trace <file>` | Overlay a span-tree JSON trace on `--format mermaid` |
 | `-c, --compact` | Compact output |
 | `--pretty` | Pretty-print (default) |
 | `--tsconfig <path>` | Custom tsconfig.json path |
+| `--extensions <list>` | Extensions to discover in a directory walk (default: `ts,tsx`) |
+| `--max-depth <n>` | Directory walk depth (default: 10) |
 | `--tsgo[=<tsconfig>]` | Merge official `@effect/tsgo` diagnostics (TypeScript 7+) |
 | `--fail-on <severity>` | Exit 1 on a finding at or above `error`/`warning`/`info` (for `--lint-source`; omit for an advisory run) |
 | `--no-metadata` | Exclude metadata |
@@ -297,6 +316,7 @@ Exported from the focused package entry points, primarily `effect-analyzer/analy
 ```typescript
 import {
   renderStaticMermaid, renderEnhancedMermaid, renderRailwayMermaid,
+  renderMermaidWithRuntimeTrace, traceFromSpanTree, traceFromEffectSpans, traceFromOpenTelemetry,
   renderInteractiveHTML,
   renderDiffMarkdown, renderDiffJSON, renderDiffMermaid,
   generateTestMatrix, formatTestMatrixMarkdown, formatTestMatrixAsCode, formatTestChecklist,
