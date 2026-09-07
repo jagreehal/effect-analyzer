@@ -1,5 +1,33 @@
 # effect-analyzer
 
+## 3.4.0
+
+### Minor Changes
+
+- 46fa6ee: Sharpen the CLI's output and directory walk. Progress, counts and warnings now
+  go to stderr, so `--format mermaid > diagram.mmd` writes a file that parses
+  while the status stays visible in the terminal. A run over several paths with
+  `--format json` prints one array, so `| jq` reads the whole run. `--extensions`
+  and `--max-depth` expose the directory walk's discovery rules, which until now
+  were fixed at `.ts`/`.tsx` and ten levels.
+- 46fa6ee: Accept several paths and globs on the command line. `effect-analyze src/a.ts
+src/b.ts` analyzes each file in turn, so an unquoted shell glob works, and a
+  quoted glob such as `'src/**/*.ts'` is expanded by the CLI itself through
+  `fs.glob`. A pattern that matches nothing is reported, and modes that read one
+  directory, follow one file, or write one output file say so rather than picking
+  whichever path came first.
+- 46fa6ee: Overlay a captured runtime trace on a diagram: `--runtime-trace <file>` colors a
+  `--format mermaid` diagram by span status and reports how each span matched.
+  `traceFromSpanTree()` decodes traces exported as a nested span tree, and span
+  matching resolves the longest unique path suffix, so spans opened above the
+  analyzed program still light up everything that ran beneath them.
+
+### Patch Changes
+
+- 46fa6ee: Import Starlight's `Icon` from `@astrojs/starlight/components` in the docs app's
+  theme provider. The previous relative path into `node_modules` pointed at a file
+  Starlight 0.42 no longer ships there, which broke the documentation build.
+
 ## 3.3.0
 
 ### Minor Changes
