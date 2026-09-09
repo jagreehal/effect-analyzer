@@ -1,5 +1,5 @@
 import { Option } from 'effect';
-import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
+import { DEFAULT_LABEL_MAX, escapeMermaidLabel as escapeLabel, truncateDisplayText } from '../analysis-utils';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
 import { splitTopLevelUnion } from '../type-extractor';
 
@@ -17,16 +17,6 @@ function stepId(index: number): string {
   const letter = String.fromCharCode(65 + (index % 26));
   const cycle = Math.floor(index / 26);
   return cycle === 0 ? letter : `${letter}${cycle}`;
-}
-
-/** Escape characters that break Mermaid label syntax. */
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
 }
 
 /** Strip trailing "Error" or "Exception" suffix from a type name. */

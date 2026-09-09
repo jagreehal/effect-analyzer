@@ -1,21 +1,12 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
+import { escapeMermaidLabel as escapeLabel } from '../analysis-utils';
 
 interface DecisionsOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
 }
 
 const DECISION_TYPES = new Set(['conditional', 'decision', 'switch', 'match']);
-
-/** Escape characters that break Mermaid label syntax. */
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
-}
 
 /** Truncate text to a maximum length, appending ellipsis if needed. */
 function truncate(text: string, max = 40): string {

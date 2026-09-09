@@ -136,7 +136,7 @@ interface RenderResult {
 
 function escapeLabel(label: string): string {
   return label
-    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
     .replace(/"/g, "'")
     .replace(/\[/g, '(')
     .replace(/\]/g, ')')

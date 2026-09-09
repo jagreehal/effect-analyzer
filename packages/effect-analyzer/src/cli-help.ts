@@ -9,6 +9,8 @@
  * drift apart in the first place.
  */
 
+import { createRequire } from 'node:module';
+
 export const HELP_TEXT = `
 effect-analyzer - Static analysis for Effect-TS
 
@@ -142,6 +144,7 @@ Options:
   --improve-exclude-rule <rule>  Exclude fixes for this rule (repeatable)
   --improve-min-priority <P0|P1|P2|P3>  Minimum priority level to include
   -h, --help               Show this help message
+  -v, --version            Print the analyzer version
 
 Examples:
   npx effect-analyzer                    # Analyze current directory; write colocated .md (gold tier)
@@ -177,4 +180,12 @@ Examples:
 
 export const printHelp = (): void => {
   process.stdout.write(HELP_TEXT + '\n');
+};
+
+export const printVersion = (): void => {
+  // Resolved through the package's own exports, so it works from dist and src.
+  const { version } = createRequire(import.meta.url)(
+    'effect-analyzer/package.json',
+  ) as { version: string };
+  process.stdout.write(version + '\n');
 };

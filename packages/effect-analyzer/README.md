@@ -14,6 +14,7 @@ effect-analyzer parses your source with [ts-morph](https://ts-morph.com/) and th
 
 ```bash
 npm install -D effect-analyzer
+npx effect-analyze --version
 ```
 
 Effect v4 is the only supported Effect release. `ts-morph` is bundled automatically.
@@ -467,7 +468,9 @@ const overlay = renderMermaidWithRuntimeTrace(ir, trace)
 ```
 
 Use `--assert-diagram-fidelity` in CI to reject unresolved, opaque, dynamic-span,
-or ambiguous-span nodes.
+or ambiguous-span nodes. It needs at least one program to check, so it also
+exits 1 when filtering leaves none — pass `--include-trivial` for a file whose
+programs are all trivial.
 
 [Full API reference →](https://jagreehal.github.io/effect-analyzer/reference/api/)
 

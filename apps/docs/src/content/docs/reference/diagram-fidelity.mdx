@@ -61,6 +61,10 @@ npx effect-analyze ./src --assert-diagram-fidelity
 
 The command checks one file or each analyzed program in a directory. It prints the findings and exits with code 1 when any report has `exact: false`.
 
+The assertion needs at least one program to check, so it also exits 1 when
+filtering leaves nothing — for example a file whose programs are all trivial.
+Pass `--include-trivial` to include them.
+
 ## Match Runtime Spans
 
 The analyzer joins runtime spans to static nodes by their nested path. These two spans form the path `transfer > debit`:
