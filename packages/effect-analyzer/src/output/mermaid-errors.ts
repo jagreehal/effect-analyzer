@@ -1,20 +1,11 @@
 import type { StaticEffectIR } from '../types';
 import { analyzeErrorFlow } from '../error-flow';
 import { analyzeErrorPropagation } from '../error-flow';
+import { escapeMermaidLabel as escapeLabel } from '../analysis-utils';
 
 // =============================================================================
 // Helpers
 // =============================================================================
-
-/** Escape characters that break Mermaid label syntax. */
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
-}
 
 /** Replace non-alphanumeric characters with underscores for Mermaid node IDs. */
 function sanitizeId(text: string): string {

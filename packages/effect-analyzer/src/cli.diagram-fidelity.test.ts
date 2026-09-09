@@ -33,4 +33,25 @@ describe('cli --assert-diagram-fidelity', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('fails when filtering left it nothing to assert', () => {
+    const root = mkdtempSync(join(tmpdir(), 'effect-fidelity-empty-'));
+    const sourceFile = join(root, 'program.ts');
+    writeFileSync(sourceFile, `
+      import { Effect } from "effect";
+      export const program = Effect.succeed(1);
+    `);
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [resolve('dist/cli.js'), sourceFile, '--assert-diagram-fidelity', '--quiet'],
+        { encoding: 'utf8' },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('checked no programs');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

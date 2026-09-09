@@ -44,6 +44,12 @@ export interface ErrorPropagationAnalysis {
 }
 
 export interface ErrorFlowAnalysis {
+  /**
+   * Every error type raised somewhere in the body, not the declared error
+   * channel of the program's signature. A step that raises `SchemaError` and
+   * maps it to `ValidationError` before returning is reported as `SchemaError`;
+   * for the channel, use `analyzeErrorChannels`.
+   */
   allErrors: string[];
   stepErrors: StepErrorInfo[];
   errorToSteps: Map<string, string[]>;

@@ -263,6 +263,12 @@ export const runAnalysis = (
     }
 
     if (options.assertDiagramFidelity) {
+      if (filteredIrs.length === 0) {
+        return yield* cliFail(
+          'Diagram fidelity assertion checked no programs. ' +
+            'Nothing was left after filtering — pass --include-trivial, or point at a file with an Effect program.',
+        );
+      }
       const reports = filteredIrs.map((ir) => ({
         programName: ir.root.programName,
         report: computeDiagramFidelity(ir),

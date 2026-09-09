@@ -29,7 +29,9 @@ const createResult = (
       return yield* Effect.fail(
         new AnalysisError(
           'NOT_SINGLE_PROGRAM',
-          `Expected exactly 1 program, found ${String(programs.length)}`,
+          `Expected exactly 1 program, found ${String(programs.length)}: ` +
+            `${programs.map((p) => p.root.programName).join(', ')}. ` +
+            'Use .named(name) to pick one, or .all for every program.',
         ),
       );
     }),

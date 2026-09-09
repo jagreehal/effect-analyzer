@@ -628,6 +628,20 @@ export function truncateDisplayText(s: string, max: number = DEFAULT_LABEL_MAX):
 const truncate = truncateDisplayText;
 
 /**
+ * Escape a label for a Mermaid node. Labels come from source text that may wrap
+ * across lines, so whitespace runs collapse to a single space.
+ */
+export function escapeMermaidLabel(text: string): string {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/"/g, '#quot;')
+    .replace(/</g, '#lt;')
+    .replace(/>/g, '#gt;')
+    .replace(/\(/g, '#lpar;')
+    .replace(/\)/g, '#rpar;');
+}
+
+/**
  * Extract a clean function name from a callee expression.
  *
  * For known Effect namespaces (Effect, Schema, Layer, etc.), strips the prefix:

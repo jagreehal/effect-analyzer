@@ -1,5 +1,6 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode, type StaticRetryNode, type StaticTimeoutNode } from '../types';
+import { escapeMermaidLabel as escapeLabel } from '../analysis-utils';
 
 interface RetryOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
@@ -8,16 +9,6 @@ interface RetryOptions {
 interface ResilienceNode {
   readonly node: StaticFlowNode;
   readonly index: number;
-}
-
-/** Escape characters that break Mermaid label syntax. */
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
 }
 
 /** Recursively collect retry and timeout nodes from the IR. */

@@ -7,7 +7,7 @@
  */
 
 import { parseTsgoProjectArgument } from './tsgo-diagnostics';
-import { printHelp } from './cli-help';
+import { printHelp, printVersion } from './cli-help';
 import type { CouplingIssueType, CouplingPriorityMap } from './agent-report';
 import type { FailOnSeverity } from './lint-session';
 
@@ -256,6 +256,11 @@ export function parseArgs(args: readonly string[]): {
 
     if (arg === '--help' || arg === '-h') {
       printHelp();
+      process.exit(0);
+    }
+
+    if (arg === '--version' || arg === '-v') {
+      printVersion();
       process.exit(0);
     }
 
@@ -621,6 +626,8 @@ export function parseArgs(args: readonly string[]): {
       } else {
         rejectValue('--test-runner', value, TEST_RUNNER_VALUES);
       }
+    } else {
+      errors.push(`Unknown option: ${arg}. See --help for the flag list.`);
     }
   }
 

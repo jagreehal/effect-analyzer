@@ -272,6 +272,18 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('unknown flags', () => {
+    it('refuses an unrecognized flag instead of analyzing with the defaults', () => {
+      expect(parseArgs(['--nope']).errors).toEqual([
+        'Unknown option: --nope. See --help for the flag list.',
+      ]);
+    });
+
+    it('still accepts a known flag', () => {
+      expect(parseArgs(['--quiet']).errors).toEqual([]);
+    });
+  });
+
   describe('--extensions and --max-depth', () => {
     it('normalizes a comma-separated extension list', () => {
       expect(opts('--extensions', 'ts,.tsx, js').extensions).toEqual(['.ts', '.tsx', '.js']);

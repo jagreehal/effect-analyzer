@@ -1,6 +1,6 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
-import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
+import { DEFAULT_LABEL_MAX, escapeMermaidLabel as escapeLabel, truncateDisplayText } from '../analysis-utils';
 
 interface ConcurrencyOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
@@ -11,16 +11,6 @@ type ConcurrencyNode =
   | { kind: 'race'; node: Extract<StaticFlowNode, { type: 'race' }> }
   | { kind: 'fiber'; node: Extract<StaticFlowNode, { type: 'fiber' }> }
   | { kind: 'primitive'; node: Extract<StaticFlowNode, { type: 'concurrency-primitive' }> };
-
-/** Escape characters that break Mermaid label syntax. */
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
-}
 
 /** Generate a short node ID. */
 function nodeId(prefix: string, index: number): string {

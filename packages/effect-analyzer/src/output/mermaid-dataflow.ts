@@ -1,5 +1,6 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
+import { escapeMermaidLabel as escapeLabel } from '../analysis-utils';
 
 interface DataflowOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
@@ -15,16 +16,6 @@ interface DataflowStep {
 /** Generate a short node ID: S0, S1, S2, ... */
 function stepId(index: number): string {
   return `S${index}`;
-}
-
-/** Escape characters that break Mermaid label syntax. */
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
 }
 
 /**

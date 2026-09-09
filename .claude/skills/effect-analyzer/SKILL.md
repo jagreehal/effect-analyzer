@@ -58,6 +58,14 @@ effect-analyze [PATH] [options]
 
 PATH defaults to `.` (current directory). When PATH is a directory, analyzes all TypeScript files and writes colocated `.effect-analysis.md` next to each file containing Effect programs.
 
+`-h, --help` and `-v, --version` print and exit 0 (`cli-help.ts`; the version is
+read through the package's own `./package.json` export, so it resolves the same
+from `src` and `dist`). Any other argument starting with `-` that no branch of
+`parseArgs` claims becomes an `Unknown option: <flag>` error. The default path
+is `.`, so a flag that fell through instead would analyze the whole current
+directory and write a report beside every file. Add a new flag to `parseArgs`
+and `HELP_TEXT` together.
+
 ### Paths
 
 A path argument is a file, a directory (walked for `.ts`/`.tsx`, skipping `node_modules` and `.git`, depth 10), or a glob. Several paths analyze in turn, so an unquoted shell glob works; a quoted glob is expanded by the CLI itself through `expandCliPaths` (`cli-support.ts`, backed by `fs.glob`). A pattern matching nothing fails with `No files matched: <pattern>`.
@@ -325,6 +333,12 @@ import {
   computeProgramDiagramQuality, buildTopOffendersReport,
 } from 'effect-analyzer/diagram';
 ```
+
+Every `mermaid-*.ts` renderer escapes node labels through the shared
+`escapeMermaidLabel` (`analysis-utils.ts`), which collapses whitespace runs to a
+single space — labels are built from source text that wraps across lines, and a
+raw newline inside `["..."]` will not parse. `mermaid.ts` keeps its own escape
+because it substitutes characters rather than entity-encoding them.
 
 ## Quick Reference
 

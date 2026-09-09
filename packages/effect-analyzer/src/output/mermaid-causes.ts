@@ -1,19 +1,9 @@
 import { Option } from 'effect';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
-import { DEFAULT_LABEL_MAX, truncateDisplayText } from '../analysis-utils';
+import { DEFAULT_LABEL_MAX, escapeMermaidLabel as escapeLabel, truncateDisplayText } from '../analysis-utils';
 
 interface CausesOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
-}
-
-/** Escape characters that break Mermaid label syntax. */
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
 }
 
 /** Replace non-alphanumeric characters with underscores for Mermaid node IDs. */

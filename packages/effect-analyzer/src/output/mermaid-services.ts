@@ -8,18 +8,10 @@
 
 import type { StaticEffectIR, ProjectServiceMap } from '../types';
 import { analyzeServiceFlow } from '../service-flow';
+import { escapeMermaidLabel as escapeLabel } from '../analysis-utils';
 
 interface ServicesOptions {
   readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
-}
-
-function escapeLabel(text: string): string {
-  return text
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
 }
 
 function sanitizeId(text: string): string {

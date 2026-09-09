@@ -13,6 +13,7 @@
     "effect-analyze": "./dist/cli.js"
   },
   "exports": {
+    "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
@@ -93,7 +94,7 @@
   },
   "homepage": "https://github.com/jagreehal/effect-analyzer/tree/main/packages/effect-analyzer#readme",
   "peerDependencies": {
-    "effect": "^4.0.0-beta.101"
+    "effect": "^4.0.0-rc.112"
   },
   "peerDependenciesMeta": {
     "effect": {

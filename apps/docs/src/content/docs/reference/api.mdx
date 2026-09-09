@@ -101,7 +101,7 @@ The fluent API methods available on `analyze(path)` and `analyze.source(code)`:
 
 | Method | Description |
 |---|---|
-| `.single` | Returns exactly one program (fails if zero or multiple) |
+| `.single` | Returns exactly one program (fails if zero or multiple; the failure names the programs found and points at `.named()` and `.all`) |
 | `.singleOption` | Returns `Option<IR>` - `None` if zero programs, fails if multiple |
 | `.all` | Returns all programs as an array |
 | `.named(name)` | Returns the program matching the given name |

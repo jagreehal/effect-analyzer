@@ -66,6 +66,14 @@ effect-analyze ./src/transfer.ts --format mermaid > transfer.mmd
 | `--include-trivial` | Include trivial programs (schemas, thin wrappers) that are excluded by default | off |
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
 | `-h, --help` | Print help and exit | — |
+| `-v, --version` | Print the analyzer version and exit | — |
+
+An unrecognised flag is an error, not a positional path:
+
+```bash
+$ effect-analyze ./src --nope
+Error: Unknown option: --nope. See --help for the flag list.
+```
 
 An unrecognised value for a flag with a fixed set of choices (`--format`, `--direction`, `--detail`, `--profile`, `--test-runner`, `--improve-min-priority`) is an error, not a fallback to the default:
 
