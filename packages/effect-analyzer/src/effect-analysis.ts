@@ -26,6 +26,7 @@ import type {
   StaticFlowNode,
   StaticEffectNode,
   StaticPipeNode,
+  StaticErrorHandlerNode,
   StaticLayerNode,
   StaticStreamNode,
   StaticFiberNode,
@@ -104,7 +105,7 @@ import {
   analyzeParallelCall as _analyzeParallelCall,
   analyzeRaceCall as _analyzeRaceCall,
 } from './parallel-race-analyzers';
-import { analyzeErrorHandlerCall as _analyzeErrorHandlerCall } from './error-handler-analyzer';
+import { analyzeErrorHandlerCall as _analyzeErrorHandlerCall, classifyErrorHandlerName } from './error-handler-analyzer';
 import { analyzeResourceCall as _analyzeResourceCall } from './resource-analyzer';
 import {
   analyzeConditionalCall as _analyzeConditionalCall,
@@ -167,13 +168,46 @@ const SCHEMA_OPS = [
  * combinators — cheap, no type-checker needed.
  */
 const EFFECT_PIPE_OP_REGEX =
-  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catch|catchCause|catchTag|catchTags|catchSome|catchSomeCause|catchSomeDefect|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*\(/;
+  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catch\w*|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|ignore|ignoreLogged|sandbox|unsandbox|flip|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*(?:\(|$)/;
 
 const pipeArgsIncludeEffectOp = (call: CallExpression): boolean => {
   for (const arg of call.getArguments()) {
     if (EFFECT_PIPE_OP_REGEX.test(arg.getText())) return true;
   }
   return false;
+};
+
+/**
+ * `Effect.orDie` and `Effect.ignore` are unary, so a pipe passes them uncalled
+ * and the call-based handler analyzer never sees them.
+ */
+const asErrorHandler = (
+  analyzed: StaticFlowNode,
+  arg: Node,
+  stats: AnalysisStats,
+): StaticFlowNode => {
+  if (analyzed.type !== 'effect') return analyzed;
+  if (arg.getKind() === loadTsMorph().SyntaxKind.CallExpression) return analyzed;
+  const text = arg.getText();
+  if (!ERROR_HANDLER_PATTERNS.some((pattern) => text.includes(pattern))) {
+    return analyzed;
+  }
+  const handlerType = classifyErrorHandlerName(text);
+  stats.errorHandlerCount++;
+  const node: StaticErrorHandlerNode = {
+    id: generateId(),
+    type: 'error-handler',
+    handlerType,
+    // Uncalled combinator: the effect it applies to is the pipe's own base,
+    // which `walkPropagation` already has in hand when it reaches this node.
+    source: { id: generateId(), type: 'effect', callee: text },
+    ...(analyzed.location ? { location: analyzed.location } : {}),
+  };
+  return {
+    ...node,
+    displayName: computeDisplayName(node),
+    semanticRole: computeSemanticRole(node),
+  };
 };
 
 export const analyzePipeChain = (
@@ -233,7 +267,7 @@ export const analyzePipeChain = (
           stats,
           serviceScope,
         );
-        transformations.push(analyzed);
+        transformations.push(asErrorHandler(analyzed, arg, stats));
       }
     }
 
@@ -282,6 +316,29 @@ export const analyzePipeChain = (
       if (flow.length > 0) typeFlow = flow;
       // Type extraction can fail; leaving typeFlow unset is the fallback.
     }).pipe(Effect.ignore);
+
+    // A pipe whose only transforms were annotations (Effect.withSpan) adds no
+    // step of its own. Emitting a "Pipe (0 steps)" node between every real call
+    // buries the flow; collapse to the base effect and carry the span across.
+    if (filteredTransformations.length === 0) {
+      // Chained annotation pipes stack: `x.pipe(withSpan('inner')).pipe(
+      // withSpan('outer'))` collapses twice onto the same base, so the names
+      // already on it are the inner ones. Concatenating keeps `spanNames`
+      // outermost-first, which is the order `indexIR` builds span paths in;
+      // overwriting would drop the inner span and lose the trace match.
+      const innerSpanNames =
+        initial.spanNames ?? (initial.spanName ? [initial.spanName] : []);
+      const mergedSpanNames = [...spanNames, ...innerSpanNames];
+      const innermost = mergedSpanNames.at(-1);
+      return [{
+        ...initial,
+        ...(innermost ? { spanName: innermost } : {}),
+        ...(mergedSpanNames.length > 0 ? { spanNames: mergedSpanNames } : {}),
+        ...(spanNameDynamic || initial.spanNameDynamic
+          ? { spanNameDynamic: true }
+          : {}),
+      }];
+    }
 
     const pipeNode: StaticPipeNode = {
       id: generateId(),
@@ -731,7 +788,9 @@ export const analyzeEffectCall = (
 ): Effect.Effect<StaticFlowNode, AnalysisError> =>
   Effect.gen(function* () {
     const { SyntaxKind } = loadTsMorph();
-    const callee = call.getExpression().getText();
+    // Source text keeps the line breaks of a wrapped member chain
+    // (`deps\n  .fetchRate`), which surfaces in every label as `deps .fetchRate`.
+    const callee = call.getExpression().getText().replace(/\s*\n\s*/g, '');
     const normalizedCallee = normalizeEffectCallee(callee, sourceFile);
     const calleeOperation =
       (/([A-Za-z_$][\w$]*)$/.exec(normalizedCallee))?.[1] ?? normalizedCallee;

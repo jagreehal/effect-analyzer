@@ -86,7 +86,12 @@ function computeLabel(node: StaticFlowNode, binding?: string): string {
     if (node.type === 'conditional') return 'Conditional';
     return node.type;
   })();
-  const labelled = binding === undefined ? raw : `${binding} <- ${raw}`;
+  // computeDisplayName already binds when the node knows its own variable
+  // name, so prefixing again would read `x <- x <- call`.
+  const labelled =
+    binding === undefined || raw.startsWith(`${binding} <- `)
+      ? raw
+      : `${binding} <- ${raw}`;
   return truncateDisplayText(labelled, DEFAULT_LABEL_MAX);
 }
 

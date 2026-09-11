@@ -483,7 +483,7 @@ export const runAnalysis = (
       }
       case 'mermaid-errors': {
         const errDir = options.direction === 'TB' ? 'LR' : options.direction;
-        const outputs = filteredIrs.map(ir => renderErrorsMermaid(ir, { direction: errDir }));
+        const outputs = filteredIrs.map(ir => renderErrorsMermaid(ir, { direction: errDir, when: 'always' }));
         output = outputs.join('\n\n');
         break;
       }

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.826Z
+- **Analyzed**: 2026-09-11T05:50:35.027Z
 - **Source Type**: direct
 
 ## Effect Flow
@@ -51,7 +51,7 @@ CurrencySchema (direct):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.830Z
+- **Analyzed**: 2026-09-11T05:50:35.032Z
 - **Source Type**: direct
 
 ## Effect Flow
@@ -64,7 +64,7 @@ flowchart TB
   start((Start))
   end_node((End))
 
-  n1["pipe (side-effect)"]
+  n1["Struct (side-effect)"]
 
   %% Edges
   start --> n1
@@ -87,7 +87,7 @@ flowchart TB
 
 ```
 TransferInputSchema (direct):
-  1. Calls pipe — schema
+  1. Calls Struct — schema
 
   Concurrency: sequential (no parallelism)
 ```
@@ -97,7 +97,7 @@ TransferInputSchema (direct):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.831Z
+- **Analyzed**: 2026-09-11T05:50:35.032Z
 - **Source Type**: class
 
 ## Effect Flow
@@ -143,7 +143,7 @@ ValidationError (class):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.831Z
+- **Analyzed**: 2026-09-11T05:50:35.033Z
 - **Source Type**: class
 
 ## Effect Flow
@@ -189,7 +189,7 @@ RateUnavailableError (class):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.831Z
+- **Analyzed**: 2026-09-11T05:50:35.033Z
 - **Source Type**: class
 
 ## Effect Flow
@@ -235,7 +235,7 @@ InsufficientFundsError (class):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.832Z
+- **Analyzed**: 2026-09-11T05:50:35.033Z
 - **Source Type**: class
 
 ## Effect Flow
@@ -281,7 +281,7 @@ TransferRejectedError (class):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.832Z
+- **Analyzed**: 2026-09-11T05:50:35.033Z
 - **Source Type**: class
 
 ## Effect Flow
@@ -327,7 +327,7 @@ ProviderUnavailableError (class):
 ## Metadata
 
 - **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/types.ts`
-- **Analyzed**: 2026-08-26T06:24:25.832Z
+- **Analyzed**: 2026-09-11T05:50:35.034Z
 - **Source Type**: class
 
 ## Effect Flow

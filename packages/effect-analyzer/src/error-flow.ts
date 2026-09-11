@@ -9,6 +9,7 @@ import type {
   StaticEffectIR,
   StaticFlowNode,
   StaticCauseNode,
+  StaticErrorHandlerNode,
 } from './types';
 import { getStaticChildren } from './types';
 import { splitTopLevelUnion } from './type-extractor';
@@ -17,6 +18,95 @@ import { Option } from 'effect';
 // =============================================================================
 // Types
 // =============================================================================
+
+/**
+ * What a handler does to the errors it takes off the channel. `catchTag` and
+ * `orDie` both make `E` smaller, but one recovers from the error and the other
+ * turns it into a defect that still crashes the fiber behind an `E` of `never`.
+ */
+export type ErrorDisposition =
+  /** Dealt with — the error is recovered from. */
+  | 'handled'
+  /** Still in `E`, under a different type (mapError, orElseFail, sandbox). */
+  | 'transformed'
+  /** Left `E` as a defect — `E` says `never`, the fiber can still die. */
+  | 'defect'
+  /** Silently became a success (ignore, orElseSucceed). */
+  | 'swallowed';
+
+/**
+ * Which of the incoming errors a handler takes. `'none'` covers the `filter*`
+ * operators: they test the success value, so they add to `E` (or add a defect)
+ * without removing anything — `filterOrFail` is `Effect<A, E, R> => Effect<B, E2 | E, R>`.
+ */
+type HandlerScope = 'all' | 'tags' | 'partial' | 'none';
+
+interface HandlerEntry {
+  readonly disposition: ErrorDisposition;
+  readonly scope: HandlerScope;
+  /** For operators that always take one known error, whatever `E` holds. */
+  readonly tags?: readonly string[];
+}
+
+const HANDLER_TABLE: Record<StaticErrorHandlerNode['handlerType'], HandlerEntry> = {
+  catch: { disposition: 'handled', scope: 'all' },
+  catchCause: { disposition: 'handled', scope: 'all' },
+  catchDefect: { disposition: 'handled', scope: 'all' },
+  catchEager: { disposition: 'handled', scope: 'all' },
+  catchTag: { disposition: 'handled', scope: 'tags' },
+  catchTags: { disposition: 'handled', scope: 'tags' },
+  catchIf: { disposition: 'handled', scope: 'partial' },
+  catchSome: { disposition: 'handled', scope: 'partial' },
+  catchSomeCause: { disposition: 'handled', scope: 'partial' },
+  catchSomeDefect: { disposition: 'handled', scope: 'partial' },
+  catchFilter: { disposition: 'handled', scope: 'partial' },
+  catchCauseIf: { disposition: 'handled', scope: 'partial' },
+  catchCauseFilter: { disposition: 'handled', scope: 'partial' },
+  catchReason: { disposition: 'handled', scope: 'partial' },
+  catchReasons: { disposition: 'handled', scope: 'partial' },
+  // Exclude<E, Cause.NoSuchElementError> — one named error, never a share of
+  // whatever else `E` happens to hold. (Effect 3 spells it NoSuchElementException.)
+  catchNoSuchElement: {
+    disposition: 'handled',
+    scope: 'tags',
+    tags: ['NoSuchElementError', 'NoSuchElementException'],
+  },
+  orElse: { disposition: 'handled', scope: 'all' },
+  filterOrElse: { disposition: 'handled', scope: 'none' },
+  firstSuccessOf: { disposition: 'handled', scope: 'all' },
+  match: { disposition: 'handled', scope: 'all' },
+  matchCause: { disposition: 'handled', scope: 'all' },
+  matchEffect: { disposition: 'handled', scope: 'all' },
+  matchCauseEffect: { disposition: 'handled', scope: 'all' },
+  eventually: { disposition: 'handled', scope: 'all' },
+  mapError: { disposition: 'transformed', scope: 'all' },
+  mapErrorCause: { disposition: 'transformed', scope: 'all' },
+  mapBoth: { disposition: 'transformed', scope: 'all' },
+  orElseFail: { disposition: 'transformed', scope: 'all' },
+  filterOrFail: { disposition: 'transformed', scope: 'none' },
+  sandbox: { disposition: 'transformed', scope: 'all' },
+  unsandbox: { disposition: 'transformed', scope: 'all' },
+  parallelErrors: { disposition: 'transformed', scope: 'all' },
+  flip: { disposition: 'transformed', scope: 'all' },
+  orDie: { disposition: 'defect', scope: 'all' },
+  orDieWith: { disposition: 'defect', scope: 'all' },
+  filterOrDie: { disposition: 'defect', scope: 'none' },
+  filterOrDieMessage: { disposition: 'defect', scope: 'none' },
+  ignore: { disposition: 'swallowed', scope: 'all' },
+  ignoreLogged: { disposition: 'swallowed', scope: 'all' },
+  orElseSucceed: { disposition: 'swallowed', scope: 'all' },
+};
+
+/** What this handler does to the errors it removes from the channel. */
+export const errorDisposition = (
+  handlerType: StaticErrorHandlerNode['handlerType'],
+): ErrorDisposition => lookupHandler(handlerType)?.disposition ?? 'handled';
+
+/** IR can arrive from JSON, so a handler type this build does not know is possible. */
+const lookupHandler = (
+  handlerType: StaticErrorHandlerNode['handlerType'],
+): HandlerEntry | undefined =>
+  (HANDLER_TABLE as Partial<Record<string, HandlerEntry>>)[handlerType];
 
 export interface StepErrorInfo {
   stepId: string;
@@ -30,7 +120,7 @@ export interface ErrorPropagation {
   atNode: string;
   possibleErrors: string[];
   narrowedBy?: {
-    handler: string;
+    handler: StaticErrorHandlerNode['handlerType'];
     removedErrors: string[];
     addedErrors: string[];
   };
@@ -72,6 +162,21 @@ export interface ErrorValidation {
 // =============================================================================
 // Helpers: parse error type string (e.g. "A | B" or "never")
 // =============================================================================
+
+/**
+ * Does a handler's tag name this error? Tags are bare (`'NoSuchElementError'`,
+ * a `catchTag` literal); the checker may print the error qualified
+ * (`Cause.NoSuchElementError` — a namespace member, `import * as`, Effect 3's
+ * `declare namespace Cause`). Compare with the qualifier dropped, but keep the
+ * qualified name as the error's identity everywhere else: `A.Error` and
+ * `B.Error` are two errors, not one.
+ */
+const matchesTag = (error: string, tag: string): boolean =>
+  error === tag ||
+  error.replace(/^(?:[A-Za-z_$][\w$]*\.)+(?=[A-Za-z_$])/, '') === tag;
+
+const matchingAny = (errors: readonly string[], tags: readonly string[]): string[] =>
+  errors.filter((e) => tags.some((tag) => matchesTag(e, tag)));
 
 function parseErrorTypes(errorType: string): string[] {
   const t = errorType.trim();
@@ -216,67 +321,29 @@ function walkPropagation(
       current = walkPropagation([handler.source], current, result);
       const sourceErrors = [...current];
       const removed: string[] = [];
-      if (handler.handlerType === 'catchTag' && handler.errorTag) {
-        removed.push(handler.errorTag);
-      } else if (handler.handlerType === 'catchTags') {
-        // Object-form catchTags: use extracted tag keys if available, otherwise
-        // fall back to heuristic (names ending in Error or starting with uppercase).
-        if (handler.errorTags && handler.errorTags.length > 0) {
-          removed.push(
-            ...sourceErrors.filter((e) =>
-              handler.errorTags ? handler.errorTags.includes(e) : false,
-            ),
-          );
-        } else {
+      const entry = lookupHandler(handler.handlerType);
+      const scope = entry?.scope ?? 'all';
+      const fixedTags = entry?.tags;
+      if (scope === 'tags') {
+        if (handler.handlerType === 'catchTag' && handler.errorTag) {
+          // Remove the error under the spelling it is carried in; fall back to
+          // the bare tag when the source's errors could not be resolved at all.
+          const matched = matchingAny(sourceErrors, [handler.errorTag]);
+          removed.push(...(matched.length > 0 ? matched : [handler.errorTag]));
+        } else if (handler.errorTags && handler.errorTags.length > 0) {
+          removed.push(...matchingAny(sourceErrors, handler.errorTags));
+        } else if (fixedTags) {
+          removed.push(...matchingAny(sourceErrors, fixedTags));
+        } else if (handler.handlerType === 'catchTags') {
+          // Object-form catchTags without extracted keys: fall back to the
+          // heuristic that error-like names are the ones being caught.
           removed.push(...sourceErrors.filter((e) => /Error$|^[A-Z]/.test(e)));
         }
-      } else if (
-        handler.handlerType === 'catchIf' ||
-        handler.handlerType === 'catchSome' ||
-        handler.handlerType === 'catchSomeCause' ||
-        handler.handlerType === 'catchSomeDefect'
-      ) {
-        // Predicate/selective catches remove a subset we cannot fully infer.
+        // A catchTag whose tag is not a literal removes nothing rather than guessing.
+      } else if (scope === 'partial') {
+        // Predicate/reason catches remove a subset we cannot infer.
         removed.push(...sourceErrors.slice(0, Math.ceil(sourceErrors.length / 2)));
-      } else if (
-        handler.handlerType === 'catch' ||
-        handler.handlerType === 'catchCause' ||
-        handler.handlerType === 'catchDefect' ||
-        handler.handlerType === 'orElse' ||
-        handler.handlerType === 'orDie' ||
-        handler.handlerType === 'orDieWith'
-      ) {
-        removed.push(...sourceErrors);
-      } else if (
-        handler.handlerType === 'mapError' ||
-        handler.handlerType === 'mapErrorCause' ||
-        handler.handlerType === 'mapBoth'
-      ) {
-        // Error type is transformed — remove original errors, add a placeholder
-        // since we can't statically determine the mapped-to type without full inference.
-        removed.push(...sourceErrors);
-      } else if (
-        handler.handlerType === 'sandbox'
-      ) {
-        // sandbox wraps error + defects into Cause — remove typed errors (they become Cause)
-        removed.push(...sourceErrors);
-      } else if (
-        handler.handlerType === 'ignore' ||
-        handler.handlerType === 'ignoreLogged'
-      ) {
-        // ignore silences all errors
-        removed.push(...sourceErrors);
-      } else if (
-        handler.handlerType === 'orElseFail' ||
-        handler.handlerType === 'orElseSucceed'
-      ) {
-        // orElseFail replaces all errors with a new error; orElseSucceed silences them
-        removed.push(...sourceErrors);
-      } else if (
-        handler.handlerType === 'filterOrDie' ||
-        handler.handlerType === 'filterOrDieMessage'
-      ) {
-        // filter predicates that fail convert to defects — remove typed errors
+      } else if (scope !== 'none') {
         removed.push(...sourceErrors);
       }
       const afterNarrow = withoutErrors(current, removed);
