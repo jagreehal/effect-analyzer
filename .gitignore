@@ -19,6 +19,10 @@ ___*
 .astro/
 docs/
 !apps/docs/
+# Docs fixtures are build inputs the docs site reads by path, not generated
+# output — only the colocated analysis files under them are.
+!packages/effect-analyzer/src/__fixtures__/docs/
+packages/effect-analyzer/src/__fixtures__/docs/**/*-analysis.md
 apps/docs/.astro/
 apps/docs/.playwright-cli/
 apps/docs/.turbo/

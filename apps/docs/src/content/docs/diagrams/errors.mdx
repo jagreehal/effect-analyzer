@@ -1,6 +1,6 @@
 ---
 title: Error Flow Diagrams
-description: Visualize error propagation, handlers, and unhandled errors in Effect programs.
+description: Visualize which step produces which error, what each handler does to it, and what reaches the caller.
 sidebar:
   order: 4
 ---
@@ -8,7 +8,7 @@ sidebar:
 import { Aside } from '@astrojs/starlight/components';
 import DiagramSource from '../../../components/DiagramSource.astro';
 
-The **error flow diagram** visualizes how errors propagate through your Effect program - which steps produce errors, which handlers catch them, and which errors remain unhandled at the program boundary.
+The **error flow diagram** visualizes how errors move through your Effect program - which steps produce them, what each handler does to them, and which ones reach the caller in `E`.
 
 ## Generating an Error Flow Diagram
 
@@ -19,38 +19,111 @@ npx effect-analyze ./src/transfer.ts --format mermaid-errors
 The diagram shows:
 
 - **Error producers** - steps that can fail, annotated with their error types
-- **Error handlers** - `catch`, `catchTag`, `catchTags` nodes that intercept errors
-- **Unhandled errors** - errors that propagate out of the program without being caught
+- **Handlers** - what intercepts each error, and *what it does to it*
+- **Channel** - errors that reach the caller still typed, which is the normal case
 
-For a program with `AccountNotFoundError` and `InsufficientFundsError`:
+## What each edge means
+
+`catchTag` and `orDie` both make `E` smaller. They are opposites, and the
+diagram labels them differently:
+
+| Edge | Combinators | Meaning |
+| --- | --- | --- |
+| `caught by` | `catch`, `catchTag`, `catchTags`, `catchReason`, `match`, `orElse` | Recovered from. |
+| `mapped by` | `mapError`, `mapBoth`, `orElseFail`, `sandbox` | Still in `E`, under a different type. |
+| `dies at` | `orDie`, `orDieWith` | Left `E` as a defect. `E` reads `never`, the fiber can still die. |
+| `swallowed by` | `ignore`, `ignoreLogged`, `orElseSucceed` | Silently became a success. |
+
+The `filter*` operators are absent by design: they test the *success* value, so
+they add to `E` (or add a defect) without taking anything out of it.
+
+An error reaching the caller is **not** a fault. `E` is a declared part of the
+signature, and a caller that has to handle `TransferRejectedError` is the type
+system working. Red is reserved for the two rows that take an error out of `E`
+without dealing with it.
 
 <DiagramSource
-  sourcePath="packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts"
-  title="transfer-workflow.ts"
-  mermaid={`graph TB
-  getBalance -->|AccountNotFoundError| ERR1[AccountNotFoundError]
-  decision -->|InsufficientFundsError| ERR2[InsufficientFundsError]
-  debit -->|AccountNotFoundError| ERR1
-  credit -->|AccountNotFoundError| ERR1
-  ERR1 -.->|unhandled| BOUNDARY[Program Boundary]
-  ERR2 -.->|unhandled| BOUNDARY`}
+  sourcePath="packages/effect-analyzer/src/__fixtures__/docs/transfer-error-handling.ts"
+  title="transfer-error-handling.ts"
+  mermaid={`flowchart LR
+
+  subgraph Steps
+    step_effect_1["fetchRate"]
+    step_effect_6["recordAudit"]
+    step_effect_11["writeLedger"]
+    step_effect_16["loadConfig"]
+    step_effect_21["submit"]
+  end
+
+  subgraph Errors
+    err_AuditFailedError("AuditFailed")
+    err_ConfigError("Config")
+    err_LedgerError("Ledger")
+    err_RateUnavailableError("RateUnavailable")
+    err_TransferRejectedError("TransferRejected")
+  end
+
+  subgraph Handlers
+    handler_effect_4["catchTag"]
+    handler_effect_8["ignore"]
+    handler_effect_13["orDie"]
+    handler_effect_19["mapError"]
+  end
+
+  CHANNEL["E #lpar;reaches caller#rpar;"]
+
+  step_effect_1 --produces--> err_RateUnavailableError
+  step_effect_6 --produces--> err_AuditFailedError
+  step_effect_11 --produces--> err_LedgerError
+  step_effect_16 --produces--> err_ConfigError
+  step_effect_21 --produces--> err_TransferRejectedError
+  err_RateUnavailableError --caught by--> handler_effect_4
+  err_AuditFailedError --swallowed by--> handler_effect_8
+  err_LedgerError --dies at--> handler_effect_13
+  err_ConfigError --mapped by--> handler_effect_19
+  err_TransferRejectedError --> CHANNEL
+
+  classDef stepStyle fill:#BBDEFB
+  classDef errorStyle fill:#FFE0B2
+  classDef handledStyle fill:#C8E6C9
+  classDef transformedStyle fill:#E0E0E0
+  classDef channelStyle fill:#E3F2FD,stroke:#1565C0
+  classDef defectStyle fill:#FFCDD2,stroke:#C62828
+  classDef swallowedStyle fill:#FFE082,stroke:#F9A825
+  class step_effect_1 stepStyle
+  class step_effect_6 stepStyle
+  class step_effect_11 stepStyle
+  class step_effect_16 stepStyle
+  class step_effect_21 stepStyle
+  class err_AuditFailedError errorStyle
+  class err_ConfigError errorStyle
+  class err_LedgerError errorStyle
+  class err_RateUnavailableError errorStyle
+  class err_TransferRejectedError errorStyle
+  class handler_effect_4 handledStyle
+  class handler_effect_8 swallowedStyle
+  class handler_effect_13 defectStyle
+  class handler_effect_19 transformedStyle
+  class CHANNEL channelStyle`}
 />
 
-If the program includes a `catchTag` handler, the diagram shows the error being intercepted:
+## When the diagram renders itself
 
-```mermaid
-graph TB
-  getBalance -->|AccountNotFoundError| CATCH[catchTag AccountNotFoundError]
-  CATCH --> recovery[fallback logic]
+If nothing in the program touches the error channel, every error simply reaches
+the caller - which the [railway diagram](/effect-analyzer/diagrams/railway/)
+already shows per step, in flow order. There is no second fact to draw, so the
+default renders a marker instead and auto mode drops the diagram:
+
+```
+flowchart LR
+  NoHandlers((No handlers - see railway))
 ```
 
-## When Auto Mode Selects Error Flow
+Asking for it by name overrides that:
 
-Auto mode includes the error flow view when your program has:
-
-- Multiple distinct error types
-- One or more error handler nodes (`catch`, `catchTag`, `catchTags`)
-- A mix of handled and unhandled errors
+```bash
+npx effect-analyze ./src/transfer.ts --format mermaid-errors
+```
 
 ## Cause Diagrams
 
@@ -72,9 +145,25 @@ import { renderErrorsMermaid } from "effect-analyzer/diagram"
 import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
+
+// Default: renders a marker when no handler touches the channel.
 const diagram = renderErrorsMermaid(ir)
 
-console.log(diagram)
+// Render it regardless of whether anything is handled.
+const always = renderErrorsMermaid(ir, { when: "always" })
+
+console.log(diagram, always)
+```
+
+`errorDisposition` exposes the same classification to your own tooling:
+
+```ts
+import { errorDisposition } from "effect-analyzer/analysis"
+
+errorDisposition("catchTag") // "handled"
+errorDisposition("mapError") // "transformed"
+errorDisposition("orDie")    // "defect"
+errorDisposition("ignore")   // "swallowed"
 ```
 
 <Aside type="note">

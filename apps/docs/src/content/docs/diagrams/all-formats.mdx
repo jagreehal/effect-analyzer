@@ -18,7 +18,7 @@ effect-analyzer supports over 25 output formats. Use `--format <name>` on the CL
 | Execution paths | `--format mermaid-paths` | Each execution path as a separate flow | Understanding all possible routes |
 | Enhanced | `--format mermaid-enhanced` | Rich annotations (types, services, errors) per node | Documentation and review |
 | Service map | `--format mermaid-services` | Service dependency graph | Understanding DI topology |
-| Error flow | `--format mermaid-errors` | Error producers, handlers, propagation | Debugging error handling |
+| Error flow | `--format mermaid-errors` | Producers, what each handler does (caught / mapped / defect / swallowed), what reaches the caller | Reviewing error handling |
 | Decision tree | `--format mermaid-decisions` | Conditional branching visualization | Programs with many `if`/`match` |
 | Cause hierarchy | `--format mermaid-causes` | Cause and Exit wrapping structure | Cause/Exit pattern analysis |
 | Concurrency | `--format mermaid-concurrency` | Parallel and race fork/join structure | Programs with `Effect.all`/`Effect.race` |

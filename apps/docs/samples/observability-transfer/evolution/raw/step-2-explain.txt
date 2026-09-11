@@ -1,8 +1,6 @@
 createSendMoneyWorkflow (generator):
-  1. validated = Pipes deps.validateTransfer through:
-    Calls deps.validateTransfer — collection
-  2. rate = Pipes deps.fetchRate through:
-    Calls deps.fetchRate
+  1. Yields validated <- deps.validateTransfer
+  2. Yields rate <- deps.fetchRate
 
   Error paths: RateUnavailableError, ValidationError
   Concurrency: sequential (no parallelism)

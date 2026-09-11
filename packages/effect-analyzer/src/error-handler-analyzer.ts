@@ -35,6 +35,137 @@ import {
 } from './analysis-utils';
 import type { AnalysisContext } from './analysis-context';
 
+/**
+ * Which handler a callee names. Ordered longest-first: the chain is substring
+ * based, so `catchReason` must be tested before `catchCause` and `catch`, or
+ * Effect 4's selective catches all read as catch-everything.
+ */
+export const classifyErrorHandlerName = (
+  callee: string,
+): StaticErrorHandlerNode['handlerType'] => {
+  if (callee.includes('catchCauseFilter')) {
+    return 'catchCauseFilter';
+  }
+  if (callee.includes('catchCauseIf')) {
+    return 'catchCauseIf';
+  }
+  if (callee.includes('catchNoSuchElement')) {
+    return 'catchNoSuchElement';
+  }
+  if (callee.includes('catchReasons')) {
+    return 'catchReasons';
+  }
+  if (callee.includes('catchReason')) {
+    return 'catchReason';
+  }
+  if (callee.includes('catchFilter')) {
+    return 'catchFilter';
+  }
+  if (callee.includes('catchEager')) {
+    return 'catchEager';
+  }
+  if (callee.includes('catchCause')) {
+    return 'catchCause';
+  }
+  if (callee.includes('catchSomeCause')) {
+    return 'catchSomeCause';
+  }
+  if (callee.includes('catchSomeDefect')) {
+    return 'catchSomeDefect';
+  }
+  if (callee.includes('catchDefect')) {
+    return 'catchDefect';
+  }
+  if (callee.includes('catchTags')) {
+    return 'catchTags';
+  }
+  if (callee.includes('catchIf')) {
+    return 'catchIf';
+  }
+  if (callee.includes('catchSome')) {
+    return 'catchSome';
+  }
+  if (callee.includes('catchTag')) {
+    return 'catchTag';
+  }
+  if (callee.includes('catch')) {
+    return 'catch';
+  }
+  if (callee.includes('orElseFail')) {
+    return 'orElseFail';
+  }
+  if (callee.includes('orElseSucceed')) {
+    return 'orElseSucceed';
+  }
+  if (callee.includes('orElse')) {
+    return 'orElse';
+  }
+  if (callee.includes('orDieWith')) {
+    return 'orDieWith';
+  }
+  if (callee.includes('orDie')) {
+    return 'orDie';
+  }
+  if (callee.includes('flip')) {
+    return 'flip';
+  }
+  if (callee.includes('mapErrorCause')) {
+    return 'mapErrorCause';
+  }
+  if (callee.includes('mapBoth')) {
+    return 'mapBoth';
+  }
+  if (callee.includes('mapError')) {
+    return 'mapError';
+  }
+  if (callee.includes('unsandbox')) {
+    return 'unsandbox';
+  }
+  if (callee.includes('sandbox')) {
+    return 'sandbox';
+  }
+  if (callee.includes('parallelErrors')) {
+    return 'parallelErrors';
+  }
+  if (callee.includes('filterOrDieMessage')) {
+    return 'filterOrDieMessage';
+  }
+  if (callee.includes('filterOrDie')) {
+    return 'filterOrDie';
+  }
+  if (callee.includes('filterOrElse')) {
+    return 'filterOrElse';
+  }
+  if (callee.includes('filterOrFail')) {
+    return 'filterOrFail';
+  }
+  if (callee.includes('matchCauseEffect')) {
+    return 'matchCauseEffect';
+  }
+  if (callee.includes('matchCause')) {
+    return 'matchCause';
+  }
+  if (callee.includes('matchEffect')) {
+    return 'matchEffect';
+  }
+  if (callee.includes('match')) {
+    return 'match';
+  }
+  if (callee.includes('firstSuccessOf')) {
+    return 'firstSuccessOf';
+  }
+  if (callee.includes('ignoreLogged')) {
+    return 'ignoreLogged';
+  }
+  if (callee.includes('ignore')) {
+    return 'ignore';
+  }
+  if (callee.includes('eventually')) {
+    return 'eventually';
+  }
+  return 'catch';
+};
+
 export const analyzeErrorHandlerCall = (
   deps: AnalysisContext,
   call: CallExpression,
@@ -48,76 +179,7 @@ export const analyzeErrorHandlerCall = (
   Effect.gen(function* () {
     const args = call.getArguments();
 
-    let handlerType: StaticErrorHandlerNode['handlerType'];
-    if (callee.includes('catchCause')) {
-      handlerType = 'catchCause';
-    } else if (callee.includes('catchSomeCause')) {
-      handlerType = 'catchSomeCause';
-    } else if (callee.includes('catchSomeDefect')) {
-      handlerType = 'catchSomeDefect';
-    } else if (callee.includes('catchDefect')) {
-      handlerType = 'catchDefect';
-    } else if (callee.includes('catchTags')) {
-      handlerType = 'catchTags';
-    } else if (callee.includes('catchIf')) {
-      handlerType = 'catchIf';
-    } else if (callee.includes('catchSome')) {
-      handlerType = 'catchSome';
-    } else if (callee.includes('catchTag')) {
-      handlerType = 'catchTag';
-    } else if (callee.includes('catch')) {
-      handlerType = 'catch';
-    } else if (callee.includes('orElseFail')) {
-      handlerType = 'orElseFail';
-    } else if (callee.includes('orElseSucceed')) {
-      handlerType = 'orElseSucceed';
-    } else if (callee.includes('orElse')) {
-      handlerType = 'orElse';
-    } else if (callee.includes('orDieWith')) {
-      handlerType = 'orDieWith';
-    } else if (callee.includes('orDie')) {
-      handlerType = 'orDie';
-    } else if (callee.includes('flip')) {
-      handlerType = 'flip';
-    } else if (callee.includes('mapErrorCause')) {
-      handlerType = 'mapErrorCause';
-    } else if (callee.includes('mapBoth')) {
-      handlerType = 'mapBoth';
-    } else if (callee.includes('mapError')) {
-      handlerType = 'mapError';
-    } else if (callee.includes('unsandbox')) {
-      handlerType = 'unsandbox';
-    } else if (callee.includes('sandbox')) {
-      handlerType = 'sandbox';
-    } else if (callee.includes('parallelErrors')) {
-      handlerType = 'parallelErrors';
-    } else if (callee.includes('filterOrDieMessage')) {
-      handlerType = 'filterOrDieMessage';
-    } else if (callee.includes('filterOrDie')) {
-      handlerType = 'filterOrDie';
-    } else if (callee.includes('filterOrElse')) {
-      handlerType = 'filterOrElse';
-    } else if (callee.includes('filterOrFail')) {
-      handlerType = 'filterOrFail';
-    } else if (callee.includes('matchCauseEffect')) {
-      handlerType = 'matchCauseEffect';
-    } else if (callee.includes('matchCause')) {
-      handlerType = 'matchCause';
-    } else if (callee.includes('matchEffect')) {
-      handlerType = 'matchEffect';
-    } else if (callee.includes('match')) {
-      handlerType = 'match';
-    } else if (callee.includes('firstSuccessOf')) {
-      handlerType = 'firstSuccessOf';
-    } else if (callee.includes('ignoreLogged')) {
-      handlerType = 'ignoreLogged';
-    } else if (callee.includes('ignore')) {
-      handlerType = 'ignore';
-    } else if (callee.includes('eventually')) {
-      handlerType = 'eventually';
-    } else {
-      handlerType = 'catch';
-    }
+    const handlerType = classifyErrorHandlerName(callee);
 
     // For methods that are called as effect.pipe(Effect.catch(handler))
     // we need to find the source effect differently

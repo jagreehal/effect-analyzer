@@ -40,7 +40,7 @@ StaticEffectIR { root: StaticEffectProgram, metadata, serviceDefinitions, warnin
 - `effect` — individual Effect calls (with `callee`, `semanticRole`, `serviceCall`)
 - `generator` / `pipe` — Effect.gen blocks and pipe chains
 - `parallel` / `race` — concurrency patterns
-- `error-handler` — catch/catchAll/catchTag (37 handler variants)
+- `error-handler` — catch/catchTag/orDie/ignore (40 handler variants incl. Effect 4 `catchReason`, `catchFilter`, `catchNoSuchElement`); unary combinators passed uncalled in a pipe (`Effect.orDie`) are detected too
 - `retry` / `timeout` / `resource` — resilience patterns
 - `conditional` / `decision` / `switch` — control flow
 - `layer` / `stream` / `fiber` — Effect ecosystem constructs
@@ -89,7 +89,7 @@ The rendered result goes to stdout; progress and counts go to stderr through `lo
 | `mermaid-enhanced` | Enhanced Mermaid with colors/styles |
 | `mermaid-railway` | Happy path + error branches |
 | `mermaid-services` | Service dependency map |
-| `mermaid-errors` | Error propagation |
+| `mermaid-errors` | What each handler does to each error (`caught by` / `mapped by` / `dies at` / `swallowed by`); errors nothing intercepts go to a neutral `E (reaches caller)` node. Renders a `((No handlers - see railway))` marker when no handler touches the channel, so auto mode drops it; `--format mermaid-errors` passes `when: 'always'` |
 | `mermaid-decisions` | Control flow |
 | `mermaid-causes` | Cause/error cause chain diagram |
 | `mermaid-concurrency` | Parallel/race |
@@ -299,7 +299,7 @@ Exported from the focused package entry points, primarily `effect-analyzer/analy
 
 - **Composition:** `analyzeProgramGraph()`, `analyzeProjectComposition()`
 - **Data flow:** `buildDataFlowGraph()`, `buildLayerDependencyGraph()`
-- **Error flow:** `analyzeErrorFlow()`, `analyzeErrorPropagation()`
+- **Error flow:** `analyzeErrorFlow()`, `analyzeErrorPropagation()`, `errorDisposition(handlerType)` → `'handled' | 'transformed' | 'defect' | 'swallowed'`. Handler semantics live in one table (`HANDLER_TABLE` in `error-flow.ts`): disposition + scope (`all` / `tags` / `partial` / `none` — the `filter*` operators test the success value and remove nothing). Qualified error names (`Cause.NoSuchElementError`) are identities; tags match with the qualifier dropped.
 - **Service flow:** `analyzeServiceFlow()`, `buildProjectServiceMap()`
 - **State flow:** `analyzeStateFlow()` — Ref/state tracking
 - **Scope/resource:** `analyzeScopeResource()` — Resource lifecycle

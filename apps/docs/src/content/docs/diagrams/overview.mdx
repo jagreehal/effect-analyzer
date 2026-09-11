@@ -37,7 +37,7 @@ Certain IR patterns always trigger a specific diagram type:
 When hard rules do not apply, the analyzer scores your program on several dimensions:
 
 - **Complexity** - low cyclomatic complexity favors railway; high complexity favors flowchart
-- **Error density** - many error types or handlers trigger the error flow view
+- **Error handling** - a handler touching the error channel triggers the error flow view; when every error simply reaches the caller, the railway view already shows it
 - **Service count** - programs with several `Context.Service` dependencies get a service map
 - **Retry/timeout presence** - retry or timeout nodes trigger the retry timeline view
 - **Layer composition** - programs with `Layer.provide` or `Layer.merge` get a layer graph
@@ -72,7 +72,7 @@ effect-analyzer includes 15 Mermaid diagram renderers, each optimized for a diff
 | `mermaid-paths` | All execution paths rendered as separate flows |
 | `mermaid-enhanced` | Rich annotations per node (types, services, errors) |
 | `mermaid-services` | Service dependency map showing which steps require which services |
-| `mermaid-errors` | Error handling and propagation visualization |
+| `mermaid-errors` | What each handler does to each error; what reaches the caller |
 | `mermaid-decisions` | Conditional branching tree |
 | `mermaid-causes` | Cause and Exit error wrapping hierarchy |
 | `mermaid-concurrency` | Parallel and race patterns with fork/join structure |

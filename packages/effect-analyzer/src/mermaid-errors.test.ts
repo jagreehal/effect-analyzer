@@ -61,7 +61,7 @@ describe('renderErrorsMermaid', () => {
       { effect: makeNode({ id: 'n2', callee: 'fetchRate', typeSignature: makeSig('RateError') }) },
     ]);
 
-    const result = renderErrorsMermaid(ir);
+    const result = renderErrorsMermaid(ir, { when: 'always' });
 
     expect(result).toContain('flowchart LR');
     // Step nodes
@@ -109,22 +109,68 @@ describe('renderErrorsMermaid', () => {
     expect(result).toContain('flowchart LR');
     // Handler node
     expect(result).toContain('catchTag');
-    expect(result).toContain('handlerStyle');
+    expect(result).toContain('handledStyle');
     // Caught-by edge
     expect(result).toContain('--caught by-->');
   });
 
-  it('renders UNHANDLED node for errors without handlers', () => {
+  it('skips itself when nothing handles anything, and says where to look', () => {
     const ir = makeGeneratorIR([
       { effect: makeNode({ id: 'n1', callee: 'validate', typeSignature: makeSig('ValidationError') }) },
       { effect: makeNode({ id: 'n2', callee: 'fetchRate', typeSignature: makeSig('RateError') }) },
     ]);
 
+    // Every error reaching the caller is the railway diagram's story, told in
+    // flow order. The `((No ` marker is what the auto format picker skips on.
     const result = renderErrorsMermaid(ir);
+    expect(result).toContain('((No ');
+    expect(result).toContain('railway');
+  });
 
-    // With no handlers, all errors should be unhandled
-    expect(result).toContain('UNHANDLED');
-    expect(result).toContain('unhandledStyle');
+  it('sends errors nothing intercepts to the channel, not to an alarm', () => {
+    const ir = makeGeneratorIR([
+      { effect: makeNode({ id: 'n1', callee: 'validate', typeSignature: makeSig('ValidationError') }) },
+    ]);
+
+    const result = renderErrorsMermaid(ir, { when: 'always' });
+
+    // An error in `E` is declared, not escaped: neutral channel node, and red
+    // stays reserved for an error that leaves `E` unhandled.
+    expect(result).toContain('E #lpar;reaches caller#rpar;');
+    expect(result).toContain('channelStyle');
+    expect(result).not.toContain('UNHANDLED');
+  });
+
+  it.each([
+    ['orDie', 'dies at', 'defectStyle'],
+    ['orElseSucceed', 'swallowed by', 'swallowedStyle'],
+    ['mapError', 'mapped by', 'transformedStyle'],
+    ['catch', 'caught by', 'handledStyle'],
+  ] as const)('renders %s as "%s"', (handlerType, edge, style) => {
+    const ir: StaticEffectIR = {
+      root: {
+        id: 'prog-1',
+        type: 'program',
+        programName: 'test',
+        source: 'generator',
+        children: [
+          {
+            id: 'handler-1',
+            type: 'error-handler',
+            handlerType,
+            source: makeNode({ id: 'n1', callee: 'charge', typeSignature: makeSig('ChargeError') }),
+          } as unknown as StaticFlowNode,
+        ],
+        dependencies: [],
+        errorTypes: [],
+      },
+      metadata: { analyzedAt: Date.now(), filePath: 'test.ts', stats: makeStats() },
+      references: new Map(),
+    };
+
+    const result = renderErrorsMermaid(ir);
+    expect(result).toContain(`--${edge}-->`);
+    expect(result).toContain(style);
   });
 
   it('renders graceful empty output when no errors', () => {

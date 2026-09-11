@@ -196,7 +196,7 @@ Auto-mode picks the most relevant views for your program, or choose explicitly:
 | `mermaid-railway` | Linear happy path with error branches |
 | `mermaid` | Full flowchart with all control flow |
 | `mermaid-services` | Service dependency map |
-| `mermaid-errors` | Error propagation and handling |
+| `mermaid-errors` | What each handler does to each error; what reaches the caller in `E` |
 | `mermaid-concurrency` | Parallel and race patterns |
 | `mermaid-layers` | Layer composition graph |
 | `mermaid-retry` | Retry and timeout strategies |

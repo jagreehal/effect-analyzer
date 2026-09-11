@@ -17,8 +17,7 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Pipes deps.validateTransfer through:
-    Calls deps.validateTransfer — collection
+  1. Yields validated <- deps.validateTransfer
 
   Error paths: ValidationError
   Concurrency: sequential (no parallelism)
@@ -67,10 +66,8 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Pipes deps.validateTransfer through:
-    Calls deps.validateTransfer — collection
-  2. rate = Pipes deps.fetchRate through:
-    Calls deps.fetchRate
+  1. Yields validated <- deps.validateTransfer
+  2. Yields rate <- deps.fetchRate
 
   Error paths: RateUnavailableError, ValidationError
   Concurrency: sequential (no parallelism)
@@ -122,14 +119,10 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Pipes deps.validateTransfer through:
-    Calls deps.validateTransfer — collection
-  2. rate = Pipes deps.fetchRate through:
-    Calls deps.fetchRate
-  3. balance = Pipes deps.getBalance through:
-    Calls deps.getBalance
-  4. converted = Pipes deps.convertCurrency through:
-    Calls deps.convertCurrency
+  1. Yields validated <- deps.validateTransfer
+  2. Yields rate <- deps.fetchRate
+  3. Yields balance <- deps.getBalance
+  4. Yields converted <- deps.convertCurrency
 
   Error paths: InsufficientFundsError, RateUnavailableError, ValidationError
   Concurrency: sequential (no parallelism)
@@ -183,16 +176,11 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Pipes deps.validateTransfer through:
-    Calls deps.validateTransfer — collection
-  2. rate = Pipes deps.fetchRate through:
-    Calls deps.fetchRate
-  3. balance = Pipes deps.getBalance through:
-    Calls deps.getBalance
-  4. converted = Pipes deps.convertCurrency through:
-    Calls deps.convertCurrency
-  5. transfer = Pipes deps.executeTransfer through:
-    Calls deps.executeTransfer
+  1. Yields validated <- deps.validateTransfer
+  2. Yields rate <- deps.fetchRate
+  3. Yields balance <- deps.getBalance
+  4. Yields converted <- deps.convertCurrency
+  5. Yields transfer <- deps.executeTransfer
 
   Error paths: InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
   Concurrency: sequential (no parallelism)
@@ -248,18 +236,12 @@ flowchart LR
 
 ```
 createSendMoneyWorkflow (generator):
-  1. validated = Pipes deps.validateTransfer through:
-    Calls deps.validateTransfer — collection
-  2. rate = Pipes deps.fetchRate through:
-    Calls deps.fetchRate
-  3. balance = Pipes deps.getBalance through:
-    Calls deps.getBalance
-  4. converted = Pipes deps.convertCurrency through:
-    Calls deps.convertCurrency
-  5. transfer = Pipes deps.executeTransfer through:
-    Calls deps.executeTransfer
-  6. Pipes deps.sendConfirmation through:
-    Calls deps.sendConfirmation
+  1. Yields validated <- deps.validateTransfer
+  2. Yields rate <- deps.fetchRate
+  3. Yields balance <- deps.getBalance
+  4. Yields converted <- deps.convertCurrency
+  5. Yields transfer <- deps.executeTransfer
+  6. Calls deps.sendConfirmation
 
   Error paths: ConfirmationFailedError, InsufficientFundsError, ProviderUnavailableError, RateUnavailableError, TransferRejectedError, ValidationError
   Concurrency: sequential (no parallelism)

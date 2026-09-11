@@ -1,6 +1,5 @@
 createSendMoneyWorkflow (generator):
-  1. validated = Pipes deps.validateTransfer through:
-    Calls deps.validateTransfer — collection
+  1. Yields validated <- deps.validateTransfer
 
   Error paths: ValidationError
   Concurrency: sequential (no parallelism)
