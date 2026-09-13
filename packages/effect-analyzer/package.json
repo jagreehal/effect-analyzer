@@ -115,7 +115,7 @@
     "@stryker-mutator/vitest-runner": "9.6.1",
     "@total-typescript/ts-reset": "^0.6.1",
     "@typeonce/effect-machine": "0.31.2",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.5.1",
     "effect": "4.0.0-rc.112",
     "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
