@@ -66,6 +66,35 @@ npx effect-analyze ./src/program.ts --tsconfig ./tsconfig.app.json
 If no `tsconfig.json` is found, the analyzer still works but type extraction (error types, service requirements) will be less accurate. For best results, ensure a `tsconfig.json` is present in your project root or specify one explicitly.
 </Aside>
 
+## GitHub Action
+
+To review every pull request without installing anything in the repository, add one
+workflow step. It posts a comment with the structural diff, railway diagrams, new lint
+findings and a merge-risk verdict for every Effect program the PR touched:
+
+```yaml title=".github/workflows/effect-review.yml"
+name: Effect review
+on:
+  pull_request:
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: jagreehal/effect-analyzer@v3
+        with:
+          path: src
+```
+
+See [GitHub Action](/effect-analyzer/project/github-action/) for every input, version
+pinning, monorepos and gating.
+
 ## Next Steps
 
-Head to the [Quick Start](/effect-analyzer/quick-start/) to analyze your first Effect program.
+Head to the [Quick Start](/effect-analyzer/quick-start/) to analyze your first Effect program, or the [GitHub Action](/effect-analyzer/project/github-action/) to put the review on every PR.

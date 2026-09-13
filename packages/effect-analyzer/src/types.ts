@@ -1039,6 +1039,8 @@ export interface EffectTypeSignature {
   readonly typeConfidence: 'declared' | 'inferred' | 'unknown';
   /** Raw type string from TypeScript */
   readonly rawTypeString?: string;
+  /** TaggedError `_tag` literals for E, when the checker can see them */
+  readonly errorTags?: readonly string[];
 }
 
 /** Stream type args — Stream<A, E, R> (21.3 type extraction) */

@@ -103,16 +103,16 @@ Auto mode is designed to give you the most useful views without requiring you to
 All formats support the following output options:
 
 ```bash
-# Save to file
-npx effect-analyze ./src/program.ts --format mermaid-railway -o diagram.md
+# Save to a custom path (skip the adjacent .effect-analysis.md)
+npx effect-analyze ./src/program.ts --format mermaid-railway -o diagram.md --no-colocate
 
 # Compact JSON (no indentation)
-npx effect-analyze ./src/program.ts --format json --compact
+npx effect-analyze ./src/program.ts --format json --compact --no-colocate
 
 # Control flow direction
-npx effect-analyze ./src/program.ts --format mermaid --direction LR
+npx effect-analyze ./src/program.ts --format mermaid --direction LR --no-colocate
 
-# Include trivial programs (schemas, thin wrappers)
+# Include trivial programs (schemas, thin wrappers, Effect.runPromise)
 npx effect-analyze ./src/program.ts --include-trivial
 ```
 

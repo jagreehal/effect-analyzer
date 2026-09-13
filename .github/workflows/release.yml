@@ -58,3 +58,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
+
+      # `uses: jagreehal/effect-analyzer@v3` follows the latest 3.x release of the
+      # action, the way actions/checkout@v4 does.
+      - name: Move the major version tag for the GitHub Action
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          version=$(jq -r '.[] | select(.name == "effect-analyzer") | .version' <<< "$PUBLISHED")
+          [ -n "$version" ] || exit 0
+          git tag -f "v${version%%.*}"
+          git push -f origin "v${version%%.*}"

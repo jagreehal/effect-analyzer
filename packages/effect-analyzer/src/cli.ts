@@ -13,6 +13,7 @@ import { runCoverageAuditCli, runProjectMode } from './cli-mode-project';
 import { runApiDocsMode, runJsonSchemaMode, runOpenApiRuntime } from './cli-mode-api';
 import { runStatechartMode } from './cli-mode-statechart';
 import { runDiffMode, runExtraAnalyzers, runMigration } from './cli-mode-extras';
+import { runReviewCommand } from './cli-mode-review';
 import { resolve, basename } from 'path';
 import * as fs from 'node:fs/promises';
 import { Effect, Console, Exit, Option } from 'effect';
@@ -147,6 +148,11 @@ const main = Effect.gen(function* () {
       if (result.stderr.length > 0) process.stderr.write(result.stderr);
     });
     process.exitCode = result.exitCode;
+    return Exit.succeed(undefined);
+  }
+
+  if (subcommand === 'review') {
+    yield* runReviewCommand(subcommandArgs);
     return Exit.succeed(undefined);
   }
 
@@ -337,7 +343,7 @@ const main = Effect.gen(function* () {
 
   // Discoverability: in the default (auto) view, surface any state machines in
   // the file so users find the feature without knowing the --format flag.
-  if (options.format === 'auto' && !options.output && !options.colocate) {
+  if (options.format === 'auto' && !options.output) {
     const machines = yield* Effect.sync(() => {
       try {
         return analyzeStateMachines(resolvedPath).machines;

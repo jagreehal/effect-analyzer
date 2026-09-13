@@ -71,6 +71,7 @@ import {
   computeDiagramFidelity,
   formatDiagramFidelity,
 } from './diagram-fidelity';
+import { isTrivialProgram } from './trivial-programs';
 
 export const loadQualityHintsByFile = (
   options: CLIOptions,
@@ -240,22 +241,11 @@ export const runAnalysis = (
       );
     }
 
-    // Filter trivial programs by default (class definitions, schema declarations, single-expression direct programs)
+    // Filter trivial programs by default (class definitions, schema declarations,
+    // runPromise entrypoints, single-expression direct programs)
     if (!options.includeTrivial) {
       const beforeCount = filteredIrs.length;
-      filteredIrs = filteredIrs.filter((ir) => {
-        const { source, children } = ir.root;
-        // Skip class-sourced programs (TaggedError, Schema class, Service tag)
-        if (source === 'class' || source === 'classProperty' || source === 'classMethod') return false;
-        // Skip single direct-expression programs with Schema/Data callees
-        if (source === 'direct' && children.length === 1 && children[0]?.type === 'effect') {
-          const callee = (children[0] as { callee?: string }).callee ?? '';
-          if (callee.startsWith('Schema.') || callee.startsWith('Data.') || callee === 'Service') return false;
-        }
-        // Skip direct programs that are just thin wrappers (single expression, no generator)
-        if (source === 'direct' && children.length <= 1) return false;
-        return true;
-      });
+      filteredIrs = filteredIrs.filter((program) => !isTrivialProgram(program));
       const removed = beforeCount - filteredIrs.length;
       if (removed > 0) {
         yield* logProgress(`Filtered ${String(removed)} trivial program(s) (use --include-trivial to see all)`);
@@ -302,7 +292,8 @@ export const runAnalysis = (
       }
     }
 
-    if (options.colocate) {
+    // Single file: write the adjacent markdown and still print the diagram.
+    if (!options.noColocate) {
       const outputFile = yield* writeColocatedOutputForFile(
         resolvedPath,
         filteredIrs,
@@ -313,7 +304,6 @@ export const runAnalysis = (
         options.styleGuide,
       );
       yield* Console.error(`Written: ${outputFile}`);
-      return;
     }
 
     let output = '';

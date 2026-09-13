@@ -87,6 +87,7 @@ export default defineConfig({
           items: [
             { label: 'Coverage Audit', slug: 'project/coverage-audit' },
             { label: 'Semantic Diff', slug: 'project/diff' },
+            { label: 'GitHub Action', slug: 'project/github-action' },
             { label: 'Migration Assistant', slug: 'project/migration' },
             { label: 'Tutorial: Migrate One File', slug: 'project/migrate-one-file' },
             { label: 'Strict Diagnostics', slug: 'project/diagnostics' },

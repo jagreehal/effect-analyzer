@@ -14,12 +14,14 @@ The **railway diagram** is the signature visualization of effect-analyzer. Inspi
   sourcePath="packages/effect-analyzer/src/__fixtures__/docs/transfer-workflow.ts"
   title="transfer-workflow.ts"
   mermaid={`flowchart LR
-  A[accounts #lt;- AccountService] -->|ok| B[audit #lt;- AuditLog]
-  B -->|ok| C[balance #lt;- accounts.getBalance]
-  C -->|ok| D[decision]
-  D -->|ok| Done((Success))
-  C -->|err| CE[AccountNotFoundError]
-  D -->|err| DE[InsufficientFundsError]`}
+  A["AccountService"] -->|ok| B["AuditLog"]
+  B -->|ok| C["accounts.getBalance"]
+  C -->|ok| D["decision"]
+  D -->|ok| E["accounts.debit"]
+  E -->|ok| F["accounts.credit"]
+  F -->|ok| G["audit.record"]
+  G -->|ok| Done((Success))
+  D -->|err| DE["InsufficientFundsError"]`}
 />
 
 ## The Railway Pattern
@@ -35,10 +37,12 @@ This makes it immediately clear:
 ## Generating a Railway Diagram
 
 ```bash
-npx effect-analyze ./src/transfer.ts --format mermaid-railway
+npx effect-analyze ./src/transfer.ts
 ```
 
-For the docs transfer fixture, this produces the diagram above. Solid `|ok|` arrows trace the happy path; solid `|err|` arrows show error branches.
+Linear programs pick railway in auto mode. `--format mermaid-railway` forces it. The default also writes `transfer.effect-analysis.md` with the same diagram.
+
+Steps are labelled with the callee (`accounts.getBalance`), not a yield binding. Error nodes use the TaggedError `_tag` when the class has one (`Data.TaggedError("NOT_FOUND")` renders as `NOT_FOUND`).
 
 ## When Auto Mode Selects Railway
 

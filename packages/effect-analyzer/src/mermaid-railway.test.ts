@@ -47,8 +47,8 @@ describe('renderRailwayMermaid', () => {
     expect(result).toContain('flowchart LR');
     expect(result).toContain('-->|ok|');
     expect(result).toContain('-->|err|');
-    expect(result).toContain('Validation');
-    expect(result).toContain('RateUnavailable');
+    expect(result).toContain('ValidationError');
+    expect(result).toContain('RateUnavailableError');
     const lines = result.split('\n');
     const cNodeLine = lines.find(l => l.includes('Get Balance'));
     expect(cNodeLine).toBeDefined();
@@ -74,16 +74,15 @@ describe('renderRailwayMermaid', () => {
       { effect: makeNode({ id: 'n1', callee: 'transfer', displayName: 'Transfer', typeSignature: makeSig('TransferRejectedError | ProviderUnavailableError') }) },
     ]);
     const result = renderRailwayMermaid(ir);
-    expect(result).toContain('TransferRejected / ProviderUnavailable');
+    expect(result).toContain('TransferRejectedError / ProviderUnavailableError');
   });
 
-  it('strips Error and Exception suffixes from error type names', () => {
+  it('keeps Error and Exception suffixes so TaggedError tags stay intact', () => {
     const ir = makeGeneratorIR([
       { effect: makeNode({ id: 'n1', callee: 'parse', displayName: 'Parse', typeSignature: makeSig('ParseException') }) },
     ]);
     const result = renderRailwayMermaid(ir);
-    expect(result).toContain('Parse');
-    expect(result).not.toContain('ParseException');
+    expect(result).toContain('ParseException');
   });
 
   it('falls back to program-level errors when no step has type info', () => {
@@ -108,7 +107,7 @@ describe('renderRailwayMermaid', () => {
       references: new Map(),
     };
     const result = renderRailwayMermaid(ir);
-    expect(result).toContain('Errors["Database / Network"]');
+    expect(result).toContain('Errors["DatabaseError / NetworkError"]');
   });
 
   it('respects direction option', () => {
@@ -221,8 +220,8 @@ describe('renderRailwayMermaid', () => {
 
     const result = renderRailwayMermaid(ir);
 
-    expect(result).toContain('A["converted #lt;- deps.convertCurrency#lpar;{ amount: validated.amount…"]');
-    expect(result).toContain('AE["InsufficientFunds"]');
+    expect(result).toContain('A["deps.convertCurrency"]');
+    expect(result).toContain('AE["InsufficientFundsError"]');
   });
 
   it('generates IDs beyond 26 steps', () => {
@@ -289,7 +288,7 @@ describe('renderRailwayMermaid', () => {
     const result = renderRailwayMermaid(ir);
 
     expect(result).toContain('Effect.all');
-    expect(result).toContain('Left / Right');
+    expect(result).toContain('LeftError / RightError');
     expect(result).toContain('-->|err|');
   });
 
@@ -321,7 +320,7 @@ describe('renderRailwayMermaid', () => {
     const result = renderRailwayMermaid(ir);
 
     expect(result).toContain('Effect.race');
-    expect(result).toContain('Timeout / Network');
+    expect(result).toContain('TimeoutError / NetworkError');
     expect(result).toContain('-->|err|');
   });
 
@@ -331,7 +330,7 @@ describe('renderRailwayMermaid', () => {
     ]);
     const result = renderRailwayMermaid(ir);
     expect(result).toContain('A["Do Thing"] -->|ok| Done((Success))');
-    expect(result).toContain('A -->|err| AE["Some"]');
+    expect(result).toContain('A -->|err| AE["SomeError"]');
   });
 
   // Real analyzer output for `const x = yield* deps.call(...).pipe(Effect.withSpan(...))`
@@ -364,10 +363,11 @@ describe('renderRailwayMermaid', () => {
     const result = renderRailwayMermaid(ir);
 
     expect(result).not.toContain('No steps');
-    expect(result).toContain('validated #lt;- deps.validateTransfer');
-    expect(result).toContain('rate #lt;- deps.fetchRate');
-    expect(result).toContain('Validation');
-    expect(result).toContain('RateUnavailable');
+    expect(result).toContain('deps.validateTransfer');
+    expect(result).toContain('deps.fetchRate');
+    expect(result).not.toContain('#lt;-');
+    expect(result).toContain('ValidationError');
+    expect(result).toContain('RateUnavailableError');
     expect(result).toContain('Done((Success))');
   });
 
@@ -386,5 +386,21 @@ describe('renderRailwayMermaid', () => {
     const result = renderRailwayMermaid(ir);
     expect(result).not.toContain('No steps');
     expect(result).toContain('deps.sendConfirmation');
+  });
+
+  it('prefers a TaggedError _tag over the class name', () => {
+    const ir = makeGeneratorIR([
+      {
+        effect: makeNode({
+          id: 'n1',
+          callee: 'getOrders',
+          displayName: 'getOrders',
+          typeSignature: { ...makeSig('FetchError'), errorTags: ['FETCH_ERROR'] },
+        }),
+      },
+    ]);
+    const result = renderRailwayMermaid(ir);
+    expect(result).toContain('FETCH_ERROR');
+    expect(result).not.toContain('FetchError');
   });
 });

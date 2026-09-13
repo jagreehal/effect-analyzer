@@ -35,6 +35,15 @@ Commands (a drop-in replacement for the effect-tsgo CLI):
                              --lspconfig <json>     Inline plugin options override
                              --no-analyzer          Language service diagnostics only
                            One of --project or --file is required, as upstream.
+  review [PATHSPEC...]     Review the Effect programs a change touched: structural
+                           diff per program against a base ref, regressions, new lint
+                           findings, railway diagrams, and a merge-risk verdict, as
+                           the markdown a PR comment shows. Reads the change from git.
+                             --base <ref>           Ref to compare against (default: HEAD)
+                             --head <ref>           Ref holding the change (default: working tree)
+                             --format <fmt>         markdown | json
+                             -o, --output <file>    Write the report to a file
+                             --fail-on-regression   Exit 1 when merge risk is high
   setup                    Guided @effect/tsgo setup (forwarded)
   config                   Interactive diagnostic severity picker (forwarded)
   patch | unpatch          Manage the patched TypeScript/Oxlint binaries (forwarded)
@@ -59,8 +68,8 @@ Options:
   --extensions <list>      Extensions to discover when walking a directory (default: ts,tsx)
   --max-depth <n>          How deep a directory walk descends (default: 10)
   --no-metadata            Exclude metadata from output
-  --colocate               (Single file) Write analysis next to source as markdown
-  --no-colocate            (Project mode) Do not write colocated files; print summary only
+  --colocate               Write analysis next to source (default: on for a single file)
+  --no-colocate            Print only; do not write the adjacent analysis file
   --no-colocate-enhanced   Use standard Mermaid in colocated docs (default: enhanced)
   --colocate-suffix <s>    Suffix for colocated files (default: "effect-analysis")
                            Result: foo/bar.ts -> foo/bar.effect-analysis.md
@@ -150,13 +159,13 @@ Examples:
   npx effect-analyzer                    # Analyze current directory; write colocated .md (gold tier)
   effect-analyze                           # Same
   effect-analyze ./src                     # Analyze ./src (directory -> project mode)
-  effect-analyze ./program.ts              # Single file; auto-selected diagrams to stdout
+  effect-analyze ./program.ts              # Writes program.effect-analysis.md and prints the diagram
+  effect-analyze ./program.ts --no-colocate  # Print only
   effect-analyze ./packages --coverage-audit -o coverage-baseline.json
   effect-analyze ./src --quality
   effect-analyze ./src --quality --quality-eslint ./.cache/eslint.json
   effect-analyze ./program.ts --format mermaid-paths --style-guide
   effect-analyze ./program.ts --format json --output result.json
-  effect-analyze ./program.ts --colocate   # Single file + write foo.effect-analysis.md
   effect-analyze ./src --lint-source --tsgo=tsconfig.json
   effect-analyze ./src --lint-source --tsgo=tsconfig.json --fail-on=error
   effect-analyze diagnostics --project tsconfig.json --format json
@@ -176,16 +185,18 @@ Examples:
   effect-analyze ./src/types.ts --format json-schema --export User  # Exact JSON Schema, from Effect itself
   effect-analyze ./src/api.ts --format openapi-runtime --export TodoApi -o openapi.json  # Runtime OpenApi.fromApi
   effect-analyze --diff HEAD:./src/checkout.ts main:./src/checkout.ts  # Structural diff between two git refs
+  effect-analyze review --base origin/main src/   # PR review of every program the branch changed
+  effect-analyze review --base main --head HEAD --fail-on-regression   # CI gate
 `;
 
 export const printHelp = (): void => {
   process.stdout.write(HELP_TEXT + '\n');
 };
 
+/** Resolved through the package's own exports, so it works from dist and src. */
+export const packageVersion = (): string =>
+  (createRequire(import.meta.url)('effect-analyzer/package.json') as { version: string }).version;
+
 export const printVersion = (): void => {
-  // Resolved through the package's own exports, so it works from dist and src.
-  const { version } = createRequire(import.meta.url)(
-    'effect-analyzer/package.json',
-  ) as { version: string };
-  process.stdout.write(version + '\n');
+  process.stdout.write(packageVersion() + '\n');
 };

@@ -1,5 +1,10 @@
 import { Option } from 'effect';
-import { DEFAULT_LABEL_MAX, escapeMermaidLabel as escapeLabel, truncateDisplayText } from '../analysis-utils';
+import {
+  DEFAULT_LABEL_MAX,
+  escapeMermaidLabel as escapeLabel,
+  extractFunctionName,
+  truncateDisplayText,
+} from '../analysis-utils';
 import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
 import { splitTopLevelUnion } from '../type-extractor';
 
@@ -19,25 +24,26 @@ function stepId(index: number): string {
   return cycle === 0 ? letter : `${letter}${cycle}`;
 }
 
-/** Strip trailing "Error" or "Exception" suffix from a type name. */
-function stripErrorSuffix(name: string): string {
-  return name.replace(/(Error|Exception)$/, '');
-}
-
-/** Extract error types string from a node, split into individual type names. */
+/** Prefer a TaggedError `_tag` when the signature recorded it. */
 function extractErrorTypes(node: StaticFlowNode): readonly string[] {
-  let raw: string | undefined;
+  const signature =
+    node.type === 'effect'
+      ? node.typeSignature
+      : 'typeSignature' in node
+        ? (node.typeSignature as { errorType?: string; errorTags?: readonly string[] } | undefined)
+        : undefined;
 
-  if (node.type === 'effect') {
-    raw = node.typeSignature?.errorType ?? node.errorType;
-  } else if ('typeSignature' in node && node.typeSignature) {
-    raw = (node.typeSignature as { errorType?: string }).errorType;
+  if (signature?.errorTags && signature.errorTags.length > 0) {
+    return signature.errorTags.filter((tag) => tag !== 'never');
   }
+
+  const raw =
+    signature?.errorType ??
+    (node.type === 'effect' ? node.errorType : undefined);
 
   if (!raw || raw === 'never' || raw.trim() === '') return [];
 
-  return splitTopLevelUnion(raw)
-    .filter(s => s !== 'never');
+  return splitTopLevelUnion(raw).filter((s) => s !== 'never');
 }
 
 /** Recursively collect error types from a node and its descendants. */
@@ -64,35 +70,30 @@ function collectErrorTypes(node: StaticFlowNode): readonly string[] {
 }
 
 /**
- * Compute a display label for a flow node. `binding` is the generator variable
- * the step's result was yielded into — it lives on the yield, not on the node,
- * so it has to be threaded in.
+ * Railway step label: the callee. A `displayName` is kept unless it already
+ * baked in a yield binding (`x <- foo`) or a pipe wrapper.
  */
-function computeLabel(node: StaticFlowNode, binding?: string): string {
+function computeLabel(node: StaticFlowNode): string {
   const raw = ((): string => {
-    if (node.displayName) return node.displayName;
-    if (node.type === 'effect') {
-      if (node.name) {
-        const stripped = node.name.replace(/^Effect\./, '');
-        return stripped.charAt(0).toUpperCase() + stripped.slice(1);
-      }
-      return node.callee.replace(/^Effect\./, '');
-    }
-    if (node.name) return node.name;
-    if (node.type === 'parallel') return 'Effect.all';
-    if (node.type === 'race') return 'Effect.race';
+    if (node.type === 'parallel') return node.name ?? 'Effect.all';
+    if (node.type === 'race') return node.name ?? 'Effect.race';
     if (node.type === 'error-handler') return 'Error Handler';
     if (node.type === 'retry') return 'Retry';
     if (node.type === 'conditional') return 'Conditional';
+    if (
+      node.displayName &&
+      !node.displayName.includes(' <- ') &&
+      !/^Pipe \(/.test(node.displayName)
+    ) {
+      return node.displayName;
+    }
+    if (node.type === 'effect' && node.callee) {
+      return extractFunctionName(node.callee);
+    }
+    if (node.name) return node.name;
     return node.type;
   })();
-  // computeDisplayName already binds when the node knows its own variable
-  // name, so prefixing again would read `x <- x <- call`.
-  const labelled =
-    binding === undefined || raw.startsWith(`${binding} <- `)
-      ? raw
-      : `${binding} <- ${raw}`;
-  return truncateDisplayText(labelled, DEFAULT_LABEL_MAX);
+  return truncateDisplayText(raw, DEFAULT_LABEL_MAX);
 }
 
 /** Transparent: recurse into children, don't show this node itself. */
@@ -173,31 +174,19 @@ function isAnonymousEffect(node: StaticFlowNode): boolean {
  * step, so it counts whether or not its result was bound to a name; anything
  * else is only a step if the source named it.
  */
-type Arrival =
-  | { readonly kind: 'yielded'; readonly binding: string | undefined }
-  | { readonly kind: 'nested' };
+type Arrival = { readonly kind: 'yielded' } | { readonly kind: 'nested' };
 
+const YIELDED: Arrival = { kind: 'yielded' };
 const NESTED: Arrival = { kind: 'nested' };
 
-const bindingOf = (arrival: Arrival): string | undefined =>
-  arrival.kind === 'yielded' ? arrival.binding : undefined;
-
-/** A concrete railway step and the generator binding that named it, if any. */
-interface FlatStep {
-  readonly node: StaticFlowNode;
-  readonly binding?: string;
-}
-
 /** Flatten IR children to a linear list of concrete steps for the railway diagram. */
-function flattenNodesToSteps(nodes: readonly StaticFlowNode[]): readonly FlatStep[] {
-  const steps: FlatStep[] = [];
+function flattenNodesToSteps(nodes: readonly StaticFlowNode[]): readonly StaticFlowNode[] {
+  const steps: StaticFlowNode[] = [];
 
   const visit = (node: StaticFlowNode, arrival: Arrival): void => {
-    // A generator's bindings live on its yields, so recurse over those directly
-    // rather than through `getStaticChildren`, which drops the variable name.
     if (node.type === 'generator') {
       for (const yielded of node.yields) {
-        visit(yielded.effect, { kind: 'yielded', binding: yielded.variableName });
+        visit(yielded.effect, YIELDED);
       }
       return;
     }
@@ -215,15 +204,10 @@ function flattenNodesToSteps(nodes: readonly StaticFlowNode[]): readonly FlatSte
     // Skip entirely: error handlers, transforms, streams, etc.
     if (isSkippedRailwayNode(node)) return;
 
-    const binding = bindingOf(arrival);
-    const push = (): void => {
-      steps.push({ node, ...(binding !== undefined ? { binding } : {}) });
-    };
-
     // Opaque: shown as a single box, never recursed into (loops, conditionals,
     // parallel, race, retry, timeout, resource).
     if (isOpaqueRailwayStep(node)) {
-      push();
+      steps.push(node);
       return;
     }
 
@@ -232,7 +216,7 @@ function flattenNodesToSteps(nodes: readonly StaticFlowNode[]): readonly FlatSte
     if (isDefinitionNode(node)) return;
     if (arrival.kind === 'nested' && isAnonymousEffect(node)) return;
 
-    push();
+    steps.push(node);
   };
 
   for (const node of nodes) {
@@ -243,9 +227,9 @@ function flattenNodesToSteps(nodes: readonly StaticFlowNode[]): readonly FlatSte
 }
 
 /** Build railway step descriptors from flow nodes. */
-function buildSteps(flat: readonly FlatStep[]): readonly RailwayStep[] {
-  return flat.map(({ node, binding }) => ({
-    label: computeLabel(node, binding),
+function buildSteps(flat: readonly StaticFlowNode[]): readonly RailwayStep[] {
+  return flat.map((node) => ({
+    label: computeLabel(node),
     errorTypes: collectErrorTypes(node),
   }));
 }
@@ -307,16 +291,12 @@ export function renderRailwayMermaid(
 
       const id = stepId(i);
       const errId = `${id}E`;
-      const errLabel = escapeLabel(
-        errorTypes.map(stripErrorSuffix).join(' / ')
-      );
+      const errLabel = escapeLabel(errorTypes.join(' / '));
       errorLines.push(`  ${id} -->|err| ${errId}["${errLabel}"]`);
     }
   } else if (ir.root.errorTypes.length > 0) {
     const lastId = stepId(steps.length - 1);
-    const errLabel = escapeLabel(
-      ir.root.errorTypes.map(stripErrorSuffix).join(' / ')
-    );
+    const errLabel = escapeLabel(ir.root.errorTypes.join(' / '));
     errorLines.push(`  ${lastId} -->|err| Errors["${errLabel}"]`);
   }
 

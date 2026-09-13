@@ -7,6 +7,8 @@ import * as fs from 'node:fs/promises';
 import { Effect, Data, DateTime } from 'effect';
 import type { StaticEffectIR, AnalysisStats, DiagramQuality, ServiceArtifact, ProjectServiceMap } from '../types';
 import { renderMermaid, renderEnhancedMermaid, renderPathsMermaid } from './mermaid';
+import { renderRailwayMermaid } from './mermaid-railway';
+import { inferBestDiagramType } from './auto-diagram';
 import { generatePaths } from '../path-generator';
 import { renderExplanation } from './explain';
 import { analyzeStateMachines } from '../state-machine';
@@ -87,6 +89,22 @@ const formatStats = (stats: AnalysisStats): string => {
   return lines.length > 0 ? lines.join('\n') : '- No operations found';
 };
 
+const renderFlowDiagram = (
+  ir: StaticEffectIR,
+  direction: 'TB' | 'LR' | 'BT' | 'RL',
+  useEnhanced: boolean,
+): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    if (inferBestDiagramType(ir) === 'railway') {
+      const railwayDir = direction === 'TB' ? 'LR' : direction;
+      return renderRailwayMermaid(ir, { direction: railwayDir });
+    }
+    if (useEnhanced) {
+      return renderEnhancedMermaid(ir, { direction });
+    }
+    return yield* renderMermaid(ir, { direction });
+  });
+
 /**
  * Render a single IR as markdown content for colocated output
  */
@@ -116,7 +134,7 @@ export const renderColocatedMarkdown = (
     sections.push('## Effect Flow');
     sections.push('');
     sections.push('```mermaid');
-    const diagram = yield* renderMermaid(ir, { direction });
+    const diagram = yield* renderFlowDiagram(ir, direction, false);
     sections.push(diagram.trim());
     sections.push('```');
     sections.push('');
@@ -205,9 +223,7 @@ export const renderColocatedMarkdownForFile = (
       sections.push('', '');
 
       sections.push('## Effect Flow', '', '```mermaid');
-      const diagram = useEnhanced
-        ? renderEnhancedMermaid(ir, { direction })
-        : (yield* renderMermaid(ir, { direction }));
+      const diagram = yield* renderFlowDiagram(ir, direction, useEnhanced);
       sections.push(diagram.trim());
       sections.push('```', '', '');
 

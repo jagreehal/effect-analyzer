@@ -66,7 +66,9 @@ Run the analyzer with no format flag to use **auto mode**, which selects the bes
 npx effect-analyze ./transfer.ts
 ```
 
-Auto mode examines your program's structure and picks the most relevant views. For this program, it will typically select a railway diagram (linear happy path with error branches) plus a service dependency map.
+That command prints the diagram and writes `transfer.effect-analysis.md` next to the source. Pass `--no-colocate` to print only.
+
+Auto mode examines your program's structure and picks the most relevant views. For this program, it will typically select a railway diagram (linear happy path with error branches) plus a service dependency map. `Effect.runPromise` in a test file is not treated as a second program.
 
 ## Trying Specific Formats
 
@@ -112,10 +114,10 @@ This reports cyclomatic complexity, cognitive complexity, path count, nesting de
 
 ## Saving Output to a File
 
-Write the output to a file with the `-o` flag:
+The default already writes `transfer.effect-analysis.md`. Use `-o` when you want a different path, and `--no-colocate` when you only want that file (or stdout):
 
 ```bash
-npx effect-analyze ./transfer.ts --format mermaid-railway -o transfer-diagram.md
+npx effect-analyze ./transfer.ts --format mermaid-railway -o transfer-diagram.md --no-colocate
 ```
 
 ## Watch Mode
@@ -127,7 +129,7 @@ npx effect-analyze ./transfer.ts --watch
 ```
 
 <Aside type="note">
-Watch mode re-runs the analysis on every save, printing fresh output to stdout. Combine with `--cache` to skip re-analysis when the file content hasn't changed.
+Watch mode re-runs the analysis on every save, printing fresh output to stdout and rewriting the adjacent markdown. Combine with `--cache` to skip re-analysis when the file content hasn't changed. Pass `--no-colocate` if you only want stdout.
 </Aside>
 
 ## Using the Library API
@@ -170,10 +172,25 @@ npx effect-analyze ./transfer.ts --assert-diagram-fidelity
 
 Use literal, distinct `Effect.withSpan` names for code that you plan to match against runtime traces. See [Diagram Fidelity](/effect-analyzer/reference/diagram-fidelity/) for the report fields and trace adapters.
 
+## Reviewing Pull Requests
+
+Everything above works on one file. To see what a whole branch changed, run the
+review — the same report the [GitHub Action](/effect-analyzer/project/github-action/)
+posts on a PR:
+
+```bash
+npx effect-analyze review --base origin/main src/
+```
+
+It lists every Effect program the branch touched, flags removed error handlers and
+retries as regressions, shows lint findings the branch introduced, and grades the merge
+risk. Add the action and this arrives as a PR comment with the diagrams rendered.
+
 ## What to Explore Next
 
 - [Diagram Overview](/effect-analyzer/diagrams/overview/) - understand auto-detection and all diagram types
 - [Complexity Metrics](/effect-analyzer/analysis/complexity/) - deep dive into the 6 complexity metrics
+- [GitHub Action](/effect-analyzer/project/github-action/) - the review on every pull request
 - [Coverage Audit](/effect-analyzer/project/coverage-audit/) - scan your entire project
 - [CLI Reference](/effect-analyzer/reference/cli/) - every flag and option
 - [Diagram Fidelity](/effect-analyzer/reference/diagram-fidelity/) - check static coverage and overlay runtime spans

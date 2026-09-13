@@ -35,7 +35,8 @@ import DiagnosticPanel from '../../components/DiagnosticPanel.astro';
 <CardGrid>
   <Card title="PR reviews catch real changes" icon="approve-check">
     Text diffs say *"3 lines changed"*. The semantic diff says *"retry removed, `DbService` added,
-    error path now uncaught"*. Stop merging behaviour drift on autopilot.
+    error path now uncaught"*. The [GitHub Action](/effect-analyzer/project/github-action/) posts
+    it on every PR, diagrams included, in one workflow step.
   </Card>
   <Card title="Onboard without reading every yield" icon="seti:plan">
     New teammates open the interactive HTML viewer for a function and see services, layers, error
@@ -62,6 +63,7 @@ Prefer the CLI for CI pipelines and local sanity checks? Same analyzer, same IR.
 - **[Live playground](/effect-analyzer/playground/)** — paste any Effect function, see the railway diagram in the browser. No install.
 - **[Interactive HTML viewer](/effect-analyzer/reference/html-viewer/)** — the exported, shareable artifact embedded directly in the docs.
 - **[`t3code` case study](/effect-analyzer/case-studies/t3code/)** — Mermaid diff output on a real codebase under refactor.
+- **[GitHub Action](/effect-analyzer/project/github-action/)** — one step that reviews every PR: structural diff, railway diagrams, new lint findings, merge risk.
 
 ## Quick Start
 
@@ -69,12 +71,18 @@ Prefer the CLI for CI pipelines and local sanity checks? Same analyzer, same IR.
 # Install
 npm install effect-analyzer
 
-# Analyze a file
+# Analyze a file (prints the diagram and writes my-program.effect-analysis.md)
 npx effect-analyze ./src/my-program.ts
 
-# Generate a railway diagram
+# Print only
+npx effect-analyze ./src/my-program.ts --no-colocate
+
+# Force a railway diagram
 npx effect-analyze ./src/my-program.ts --format mermaid-railway
 
 # Compare versions
 npx effect-analyze HEAD:program.ts program.ts --diff
+
+# Review everything a branch changed, as the PR comment would show it
+npx effect-analyze review --base origin/main src/
 ```

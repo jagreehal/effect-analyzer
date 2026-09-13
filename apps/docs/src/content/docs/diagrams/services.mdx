@@ -85,13 +85,13 @@ The `ServiceArtifact` type contains:
 
 ## Colocated Output
 
-When running in directory mode with `--colocate`, each generated `.effect-analysis.md` file includes the service dependencies for that file's programs:
+Directory mode writes `.effect-analysis.md` next to each source file by default. Each file includes the service dependencies for that file's programs:
 
 ```bash
-npx effect-analyze ./src --colocate
+npx effect-analyze ./src
 ```
 
-This writes a `*.effect-analysis.md` file next to each source file, containing diagrams, complexity metrics, and the service dependency list.
+Pass `--no-colocate` for a summary only.
 
 ## Related
 
