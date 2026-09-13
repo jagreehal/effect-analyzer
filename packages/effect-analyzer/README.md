@@ -120,11 +120,33 @@ or the [audit policy flags](#coverage-audit).
 
 ### In GitHub Actions
 
+One step reviews every Effect program a pull request touched and posts a sticky PR
+comment: a walkthrough table, a checks table (structural regressions, new lint
+findings, new error types, complexity), a railway diagram per changed program, and
+a prompt block for AI agents.
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-node@v4
+    with: { node-version: 22 }
+  - uses: jagreehal/effect-analyzer@v3
+    with:
+      path: src
+      fail-on-regression: true   # optional gate
+```
+
+The action wraps `npx effect-analyze review --base <ref>`, which you can run locally
+too. See the [GitHub Action docs](https://jagreehal.github.io/effect-analyzer/project/github-action/).
+
+For whole-codebase gates rather than per-PR review:
+
 ```yaml
 - run: npx effect-analyze ./src --lint-source --baseline .cache/effect-baseline.json --fail-on-new
 - run: npx effect-analyze ./src --coverage-audit --quiet --max-audit-failed-files 0
-- if: always()
-  run: npx effect-analyze "origin/main:src/transfer.ts" src/transfer.ts --diff >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ## What You Get

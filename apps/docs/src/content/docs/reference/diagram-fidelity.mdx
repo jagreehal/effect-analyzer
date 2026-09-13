@@ -62,7 +62,8 @@ npx effect-analyze ./src --assert-diagram-fidelity
 The command checks one file or each analyzed program in a directory. It prints the findings and exits with code 1 when any report has `exact: false`.
 
 The assertion needs at least one program to check, so it also exits 1 when
-filtering leaves nothing — for example a file whose programs are all trivial.
+filtering leaves nothing — for example a file whose programs are all trivial
+(schemas, thin wrappers, or only `Effect.runPromise` of another program).
 Pass `--include-trivial` to include them.
 
 ## Match Runtime Spans

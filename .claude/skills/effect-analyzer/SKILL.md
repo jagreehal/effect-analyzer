@@ -56,7 +56,7 @@ All types use `readonly` everywhere. See `StaticFlowNode` union in `src/types.ts
 effect-analyze [PATH] [options]
 ```
 
-PATH defaults to `.` (current directory). When PATH is a directory, analyzes all TypeScript files and writes colocated `.effect-analysis.md` next to each file containing Effect programs.
+PATH defaults to `.` (current directory). A file or a directory writes colocated `.effect-analysis.md` next to each file containing Effect programs (`--no-colocate` prints only); a single file also prints its diagram. Linear programs are colocated as railway; `Effect.runPromise` entrypoints count as trivial (`trivial-programs.ts`).
 
 `-h, --help` and `-v, --version` print and exit 0 (`cli-help.ts`; the version is
 read through the package's own `./package.json` export, so it resolves the same
@@ -87,7 +87,7 @@ The rendered result goes to stdout; progress and counts go to stderr through `lo
 | `mermaid` | Generic flowchart |
 | `mermaid-paths` | Path-based rendering (with style-guide heuristics) |
 | `mermaid-enhanced` | Enhanced Mermaid with colors/styles |
-| `mermaid-railway` | Happy path + error branches |
+| `mermaid-railway` | Happy path + error branches; steps labelled by callee, err nodes by TaggedError `_tag` (`typeSignature.errorTags`) |
 | `mermaid-services` | Service dependency map |
 | `mermaid-errors` | What each handler does to each error (`caught by` / `mapped by` / `dies at` / `swallowed by`); errors nothing intercepts go to a neutral `E (reaches caller)` node. Renders a `((No handlers - see railway))` marker when no handler touches the channel, so auto mode drops it; `--format mermaid-errors` passes `when: 'always'` |
 | `mermaid-decisions` | Control flow |
@@ -129,6 +129,37 @@ effect-analyze --diff v1.ts v2.ts --include-trivial  # Include trivial changes
 
 Renderers: `renderDiffMarkdown()`, `renderDiffJSON()`, `renderDiffMermaid()`
 
+### PR Review (`review` subcommand)
+
+```bash
+effect-analyze review                          # working tree vs HEAD
+effect-analyze review --base origin/main src/  # branch vs main, restricted to src/
+effect-analyze review --base main --head HEAD --format json --fail-on-regression
+```
+
+`review` is dispatched before `parseArgs` (like `diagnostics`) and parses its own
+flags in `cli-mode-review.ts`; the core is `buildReview` / `renderReviewMarkdown`
+in `pr-review.ts`. Both refs are checked with `git rev-parse --verify` first and
+a missing one fails with a `ReviewError` naming the `git fetch` to run. It lists
+changed `.ts`/`.tsx` files with `git diff --name-status --find-renames` (tests,
+`.d.ts` and `node_modules` excluded; untracked files are included when `--head`
+is omitted; a rename keeps `previousPath` so the file is diffed against its old
+self rather than read as a removal plus an addition), analyzes both sides with
+`analyzeEffectSource`, pairs programs by name *and occurrence* (a file can hold
+two `main`s), diffs each pair with `diffPrograms({ regressionMode: true })`, and
+lints both sides with `lintSourceCode`, keeping findings whose `rule|message`
+key is new on the head side (`info` severity is dropped: it repeats on every PR).
+Risk is `high` on any regression or new lint error, `moderate` on a new warning
+or a program that crossed the cyclomatic warning threshold, else `low`. The
+markdown starts with `<!-- effect-analyzer-review -->` so a bot can find and
+update its own comment; JSON output embeds the markdown so a bot needs one run.
+The repo-root `action.yml` is a composite action wrapping this command (default
+`cli` runs `effect-analyzer@3`; a comment that cannot be posted, as on a fork PR,
+is a `::warning`, not a failure; annotation text is workflow-command escaped in
+jq); `release.yml` moves the `v3` tag on publish so `uses:
+jagreehal/effect-analyzer@v3` tracks 3.x; `.github/workflows/effect-review.yml`
+dogfoods it with the branch's own build.
+
 ### Runtime Overlay
 
 `--runtime-trace <file>` colors a `--format mermaid` diagram with a captured trace. The file is a nested span tree (`spanId`, `name`, `status: ok | error | unset`, optional `durationMs` and `running`, `children`), decoded by `traceFromSpanTree()`; `traceFromEffectSpans()` and `traceFromOpenTelemetry()` cover the other two shapes.
@@ -153,7 +184,8 @@ effect-analyze src/                            # Writes .effect-analysis.md next
 effect-analyze src/ --no-colocate              # Skip writing files, print summary only
 effect-analyze src/ --no-colocate-enhanced     # Use standard Mermaid (not enhanced)
 effect-analyze src/ --colocate-suffix=analysis # Custom suffix: foo.analysis.md
-effect-analyze ./file.ts --colocate            # Single file: write colocated doc
+effect-analyze ./file.ts                       # Single file: writes file.effect-analysis.md and prints the diagram
+effect-analyze ./file.ts --no-colocate         # Print only
 ```
 
 ### Coverage Audit
@@ -253,8 +285,8 @@ it. Adding a field to that key renumbers every existing finding.
 | `--tsgo[=<tsconfig>]` | Merge official `@effect/tsgo` diagnostics (TypeScript 7+) |
 | `--fail-on <severity>` | Exit 1 on a finding at or above `error`/`warning`/`info` (for `--lint-source`; omit for an advisory run) |
 | `--no-metadata` | Exclude metadata |
-| `--colocate` | Single-file: write colocated .md |
-| `--no-colocate` | Project mode: skip writing files |
+| `--colocate` | Write colocated .md (the default) |
+| `--no-colocate` | Print only; skip writing files |
 | `--no-colocate-enhanced` | Standard Mermaid in colocated docs |
 | `--colocate-suffix <s>` | Custom suffix (default: `effect-analysis`) |
 | `-q, --quiet` | Minimal output |

@@ -1,0 +1,337 @@
+---
+title: GitHub Action
+description: Install, configure and use the effect-analyzer GitHub Action — one step that reviews every Effect program a pull request touched and posts railway diagrams, regressions, new lint findings and a merge-risk verdict as a PR comment.
+sidebar:
+  order: 3
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+A pull request against an Effect codebase changes the *shape* of programs: a step
+added, a `catchTag` dropped, an error type that now reaches the caller. The text diff
+shows lines. The action shows the shape, on the PR, before anyone reads the lines.
+
+It is the same experience you get from a hosted review bot, without a hosted review
+bot: no app to install, no account, no code leaves your runner.
+
+## What you get on every PR
+
+One comment, updated in place on every push:
+
+- **Merge risk** — 🟢 Low, 🟡 Moderate or 🔴 High, with the reason in one line.
+- **Walkthrough** — a table of every Effect program the PR changed: what changed
+  (`+2 steps, error-handler removed ⚠️`), and steps / error types / complexity before → after.
+- **Checks** — structural regressions, new lint findings, new error types, complexity.
+- **Railway diagram** per changed program, rendered by GitHub, collapsed so the comment stays short.
+- **Prompt for AI agents** — every regression and finding with file and line, ready to
+  paste into Claude Code, Cursor or Copilot.
+
+Plus the same report in the job summary, and `::warning` annotations on the exact lines
+of new findings in the *Files changed* tab.
+
+```markdown
+## Effect Analyzer review
+
+**Merge risk:** 🔴 High · 1 structural regression, 1 new lint warning
+
+<details open>
+<summary>📝 Walkthrough — 1 file, 1 program changed</summary>
+
+| File | Program | Change | Steps | Errors | Complexity |
+|---|---|---|---|---|---|
+| `src/total.ts` | `fetchTotal` | +1 steps, −1 steps, `error-handler` removed ⚠️, `loop` added | 3 | 1 | 1 → 2 |
+
+</details>
+
+### 🚥 Checks
+
+| Check | Result | Details |
+|---|---|---|
+| Structural regressions | ❌ | `fetchTotal`: error-handler block removed |
+| New lint findings | ⚠️ | ⚠️ `src/total.ts:11` array-push-spread: arr.push(...xs) — spreading onto Array#push can stack-overflow on large arrays |
+| New error types | ✅ | none |
+| Complexity | ✅ | within thresholds |
+```
+
+<Aside type="tip" title="Regressions are removals">
+A regression is something the base had and the head does not: a removed step, a
+removed `error-handler`, `retry`, `timeout` or `parallel` block, or a whole program.
+Additions never fail the check. The point is to make an accidental deletion — the most
+common damage an automated refactor does — impossible to miss.
+</Aside>
+
+## Install
+
+<Steps>
+
+1. Create `.github/workflows/effect-review.yml` in your repository:
+
+   ```yaml title=".github/workflows/effect-review.yml"
+   name: Effect review
+
+   on:
+     pull_request:
+
+   permissions:
+     contents: read
+     pull-requests: write
+
+   jobs:
+     review:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+           with:
+             node-version: 22
+         - uses: jagreehal/effect-analyzer@v3
+           with:
+             path: src
+   ```
+
+2. Commit it to your default branch.
+
+3. Open a pull request that touches an Effect program. The **Effect review** check
+   runs and the comment appears within a minute or two.
+
+</Steps>
+
+That is all. Nothing is installed in the repository: the action fetches the current
+3.x `effect-analyzer` release through `npx` on the runner.
+
+### Requirements
+
+- **Node 22 or newer** on the runner — add `actions/setup-node` as above. The action
+  fails with a clear message otherwise.
+- **`pull-requests: write`** permission, so the comment can be posted. Omit it and the
+  review still runs, still writes the job summary and annotations, and skips the comment.
+- **Effect v4** in the project being reviewed, same as the CLI.
+
+<Aside type="note" title="Pull requests from forks">
+On `pull_request` events from a fork, GitHub gives the job a read-only token, so the
+comment cannot be posted. The job summary and annotations still work. If you need the
+comment on fork PRs, trigger the workflow on `pull_request_target` and check out the PR
+head explicitly — read GitHub's guidance on that event first; it runs with write access
+against untrusted code.
+</Aside>
+
+## Configure
+
+Every input has a working default. Override only what you need.
+
+| Input | Default | What it does |
+|---|---|---|
+| `path` | *(whole change)* | Git pathspecs to review, space separated: `src packages/api`. Anything outside them is ignored |
+| `base` | PR base branch, or the previous commit on `push` | Ref the change is compared against |
+| `head` | PR head, or `HEAD` | Ref holding the change |
+| `comment` | `true` | Post and keep updating the sticky PR comment |
+| `annotations` | `true` | Emit `::warning` / `::error` annotations for new findings |
+| `fail-on-regression` | `false` | Fail the job when merge risk is **high** |
+| `cli` | `npx -y -p effect-analyzer@3 effect-analyze` | Command that runs the analyzer. Pin an exact version or use your project's install |
+| `github-token` | `github.token` | Token used to post the comment |
+
+Outputs: `risk` (`low` \| `moderate` \| `high`) and `report` (path of the markdown file).
+
+### Versions and pinning
+
+Two things have a version: the action (the shell that posts the comment) and the
+analyzer it runs.
+
+- **The action** — `@v3` follows the latest 3.x release, the way `actions/checkout@v4`
+  does; the tag moves on every release. For a fixed action, pin a release tag
+  (`@effect-analyzer@3.5.0`) or a commit SHA.
+- **The analyzer** — the default `cli` runs `effect-analyzer@3`, so it also follows
+  3.x. To freeze it:
+
+```yaml
+- uses: jagreehal/effect-analyzer@v3
+  with:
+    cli: npx -y -p effect-analyzer@3.5.0 effect-analyze
+```
+
+Or use your project's own install, below, and let your lockfile decide.
+
+### Use your project's own install
+
+If `effect-analyzer` is already a dev dependency, run that one so CI and your editor
+agree on the version:
+
+<Tabs>
+  <TabItem label="pnpm">
+    ```yaml
+    - uses: pnpm/action-setup@v4
+    - run: pnpm install --frozen-lockfile
+    - uses: jagreehal/effect-analyzer@v3
+      with:
+        cli: pnpm exec effect-analyze
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```yaml
+    - run: npm ci
+    - uses: jagreehal/effect-analyzer@v3
+      with:
+        cli: npx effect-analyze
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```yaml
+    - run: yarn install --immutable
+    - uses: jagreehal/effect-analyzer@v3
+      with:
+        cli: yarn effect-analyze
+    ```
+  </TabItem>
+</Tabs>
+
+### Monorepos
+
+`path` takes git pathspecs, so point it at the packages that hold Effect code and the
+review ignores the rest:
+
+```yaml
+- uses: jagreehal/effect-analyzer@v3
+  with:
+    path: packages/api/src packages/workers/src
+```
+
+Files are analyzed from their source text, so this works without building the
+workspace first.
+
+### Make it a required check
+
+Turn on the gate, then add **Effect review** to the branch protection rules or ruleset
+for your default branch:
+
+```yaml
+- uses: jagreehal/effect-analyzer@v3
+  with:
+    path: src
+    fail-on-regression: true
+```
+
+The job fails only when risk is **high**: a structural regression or a new lint
+*error*. Warnings and complexity changes are reported, not blocking.
+
+To decide for yourself, branch on the output:
+
+```yaml
+- uses: jagreehal/effect-analyzer@v3
+  id: effect
+  with:
+    path: src
+- if: steps.effect.outputs.risk != 'low'
+  run: echo "::notice::effect-analyzer risk is ${{ steps.effect.outputs.risk }} — ask for a second reviewer"
+```
+
+### Comment, summary, or both
+
+Some teams want the report only in the job summary, with nothing posted to the thread:
+
+```yaml
+- uses: jagreehal/effect-analyzer@v3
+  with:
+    path: src
+    comment: false
+```
+
+The summary is the same markdown, diagrams included, under the workflow run.
+
+### Run on push too
+
+The action also runs on `push`, comparing against the previous commit. Useful on a
+long-lived branch to see what each push changed:
+
+```yaml
+on:
+  pull_request:
+  push:
+    branches: [main]
+```
+
+On `push` there is no PR to comment on, so the report goes to the job summary.
+
+## How merge risk is scored
+
+| Risk | When |
+|---|---|
+| 🔴 **High** | Any structural regression, or a new lint finding with severity `error` |
+| 🟡 **Moderate** | A new lint `warning`, or a program whose cyclomatic complexity rose past the warning threshold (10) in this PR |
+| 🟢 **Low** | Everything else, including any number of additions |
+
+Lint findings are only counted when the change *introduced* them: both sides of the
+file are linted and a finding that already existed at the base is not reported, even
+if the line moved. `info`-level findings are never shown in the review; run
+[`--lint-source`](/effect-analyzer/project/source-linter/) for the full list.
+
+## Use it locally
+
+The action is a thin wrapper over one CLI command, so you can see the review before
+you push:
+
+```bash
+# What did my branch change, against main?
+npx effect-analyze review --base origin/main src/
+
+# What did I change since the last commit? (working tree vs HEAD, untracked files included)
+npx effect-analyze review
+
+# Machine-readable, exit 1 on high risk
+npx effect-analyze review --base main --head HEAD --format json --fail-on-regression
+```
+
+| Flag | Description |
+|---|---|
+| `[PATHSPEC...]` | Git pathspecs restricting the change set |
+| `--base <ref>` | Ref to compare against (default: `HEAD`) |
+| `--head <ref>` | Ref holding the change (default: the working tree) |
+| `--format markdown\|json` | JSON carries `files`, `regressions`, `newFindings`, `risk` and the rendered `markdown` |
+| `-o, --output <file>` | Write the report to a file |
+| `--fail-on-regression` | Exit 1 when merge risk is high |
+
+The markdown starts with `<!-- effect-analyzer-review -->`, which is how the action
+finds its own comment to update. A bot for GitLab, Bitbucket or Gitea can do the same
+with one run of `--format json`.
+
+## Troubleshooting
+
+**"No Effect programs changed."** — the PR touched no `.ts`/`.tsx` file with an Effect
+program under `path`. Test files (`*.test.ts`, `*.spec.ts`) and `.d.ts` are excluded
+on purpose.
+
+**The comment never appears, but the job is green.** — look for a `could not post the
+review comment` warning in the run. Check `permissions: pull-requests: write` is set on
+the job or workflow, and that the PR is not from a fork. The report is still in the job
+summary.
+
+**"effect-analyzer needs Node 22+"** — add `actions/setup-node@v4` with
+`node-version: 22` (or newer) before the action.
+
+**"Cannot resolve 'x'. Fetch it first"** — the base or head commit is not in the
+checkout. The action fetches both refs itself; if you pass a custom `base`, make sure it
+is a ref the runner can fetch from `origin`. Locally, run the `git fetch` the message
+suggests.
+
+**A moved file shows as one big regression?** It should not: renames are followed, and
+a renamed file is diffed against its old path (the walkthrough shows `old → new`). If
+git does not detect the rename because the file changed too much, the old programs
+report as removed and the new ones as added — review that one by hand.
+
+**Two programs with the same name in one file** are paired by order of appearance, so
+a `main` and the runner that calls it are compared with their own base version.
+
+## Pair it with code scanning
+
+The review comment covers what the PR changed. For every lint finding across the
+codebase in the *Security* tab, add the
+[SARIF upload](/effect-analyzer/project/source-linter/#sarif-output) as a second step.
+For type-aware Effect diagnostics, run
+[`effect-analyze diagnostics --format github-actions`](/effect-analyzer/project/diagnostics/),
+which annotates in the same way.
+
+## Related
+
+- [Semantic Diff](/effect-analyzer/project/diff/) — the per-program diff the review is built on
+- [What a text diff misses](/effect-analyzer/case-studies/review-scenarios/) — five PRs where the shape changed and the lines did not say so
+- [Guardrails for Coding Agents](/effect-analyzer/agent-guardrails/) — gating an agent's edits
+- [CLI Reference](/effect-analyzer/reference/cli/#review) — every flag

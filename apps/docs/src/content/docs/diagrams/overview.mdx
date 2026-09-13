@@ -19,6 +19,8 @@ Auto mode is the default behavior when you run:
 npx effect-analyze ./src/program.ts
 ```
 
+That prints the chosen diagrams and writes `program.effect-analysis.md` next to the source. Pass `--no-colocate` to print only.
+
 It always produces a **baseline diagram** - railway for simple programs, flowchart for complex ones - plus up to two specialized views based on what your program contains. The selection uses a combination of hard rules and soft heuristics.
 
 ### Hard Rules

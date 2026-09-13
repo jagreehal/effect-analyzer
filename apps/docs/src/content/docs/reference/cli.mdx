@@ -19,7 +19,7 @@ A path is a file, a directory, or a glob.
 
 | Argument | Behavior |
 |---|---|
-| `src/transfer.ts` | Analyzes that file |
+| `src/transfer.ts` | Analyzes that file, prints the diagram, and writes `src/transfer.effect-analysis.md` |
 | `src` | Walks the directory for `.ts` and `.tsx` files, skipping `node_modules` and `.git` |
 | `src/transfer.ts src/refund.ts` | Analyzes each file in turn, so an unquoted shell glob works |
 | `'src/**/*.ts'` | Quoted, so the CLI expands the pattern itself |
@@ -42,10 +42,10 @@ Diff mode reads its two sources from the positional arguments, so `--diff` keeps
 
 ## Output Streams
 
-The result goes to stdout; progress, counts and warnings go to stderr. Redirecting produces a file that parses, with the status still visible in the terminal:
+The result goes to stdout; progress, counts and warnings go to stderr. Redirecting produces a file that parses, with the status still visible in the terminal. A single file also writes `*.effect-analysis.md` next to the source unless you pass `--no-colocate`:
 
 ```bash
-effect-analyze ./src/transfer.ts --format mermaid > transfer.mmd
+effect-analyze ./src/transfer.ts --format mermaid --no-colocate > transfer.mmd
 ```
 
 `--quiet` silences the status lines themselves. Over several paths, `--format json` prints one array rather than a run of separate documents, so `| jq` works on the whole run.
@@ -63,7 +63,7 @@ effect-analyze ./src/transfer.ts --format mermaid > transfer.mmd
 | `--tsconfig <path>` | Path to a custom `tsconfig.json` | auto-detected |
 | `--extensions <list>` | Extensions discovered when walking a directory | `ts,tsx` |
 | `--max-depth <n>` | How deep a directory walk descends | `10` |
-| `--include-trivial` | Include trivial programs (schemas, thin wrappers) that are excluded by default | off |
+| `--include-trivial` | Include trivial programs (schemas, thin wrappers, `Effect.runPromise` entrypoints) that are excluded by default | off |
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
 | `-h, --help` | Print help and exit | — |
 | `-v, --version` | Print the analyzer version and exit | — |
@@ -113,11 +113,40 @@ subcommands, the same flags, the same exit codes.
 
 | Command | Description |
 |---|---|
+| `review` | Review the Effect programs a change touched: structural diff per program, regressions, new lint findings, railway diagrams and a merge-risk verdict, as PR-comment markdown or JSON. What the [GitHub Action](/effect-analyzer/project/github-action/) runs |
 | `diagnostics` | Effect language service diagnostics **plus** the analyzer's own rules, in one stream. Superset of `effect-tsgo diagnostics` |
 | `setup` | Guided `@effect/tsgo` setup (forwarded verbatim) |
 | `config` | Interactive diagnostic severity picker (forwarded verbatim) |
 | `patch` / `unpatch` | Manage the patched TypeScript/Oxlint binaries (forwarded verbatim) |
 | `get-exe-path` | Print the Effect language service executable path (forwarded verbatim) |
+
+### `review`
+
+```bash
+effect-analyze review [PATHSPEC...] [--base <ref>] [--head <ref>] [--format markdown|json] [-o <file>] [--fail-on-regression]
+```
+
+Reads the change from git — `--base` (default `HEAD`) to `--head` (default: the
+working tree, untracked files included) — restricted to the given pathspecs. Every
+changed `.ts`/`.tsx` file is analyzed at both refs from source; tests, `.d.ts` and
+`node_modules` are skipped.
+
+| Flag | Description |
+|---|---|
+| `--base <ref>` | Ref the change is compared against (default: `HEAD`) |
+| `--head <ref>` | Ref holding the change (default: working tree) |
+| `--format <fmt>` | `markdown` (default) or `json`. JSON carries `files`, `regressions`, `newFindings`, `risk` and the rendered `markdown` |
+| `-o, --output <file>` | Write the report to a file instead of stdout |
+| `--fail-on-regression` | Exit 1 when merge risk is `high`: a structural regression or a new lint error |
+
+```bash
+effect-analyze review --base origin/main src/
+effect-analyze review --base main --head HEAD --format json --fail-on-regression
+```
+
+Programs are paired by name and order of appearance, diffed with `--diff`'s engine in
+regression mode, and both sides are linted so only findings the change introduced are
+reported (`info` severity omitted). See [GitHub Action](/effect-analyzer/project/github-action/).
 
 ### `diagnostics`
 
@@ -272,16 +301,23 @@ Inspect and search the deterministic rule registry (source lints, effect-lints, 
 | `--test-overwrite` | Overwrite existing test files instead of skipping |
 | `--no-test` | Disable an earlier `--test` (e.g. from a shared alias or script) |
 
+## Colocated Output
+
+A file or a directory writes `.effect-analysis.md` next to each source that contains an Effect program. Linear programs get a railway diagram in that file. `--no-colocate` prints only.
+
+| Flag | Description | Default |
+|---|---|---|
+| `--colocate` | Write `.effect-analysis.md` next to source (same as the default) | on |
+| `--no-colocate` | Print only; do not write adjacent files | — |
+| `--colocate-suffix <suffix>` | Custom suffix for colocated files | `effect-analysis` |
+| `--no-colocate-enhanced` | Use standard Mermaid instead of railway/enhanced in colocated files | — |
+
 ## Directory Mode Options
 
 | Flag | Description | Default |
 |---|---|---|
-| `--colocate` | Write `.effect-analysis.md` next to each source file | off |
-| `--no-colocate` | Print a summary to stdout instead of writing files | — |
-| `--colocate-suffix <suffix>` | Custom suffix for colocated files | `effect-analysis` |
 | `--service-map` | Show a deduplicated service registry across the project | on |
 | `--no-service-map` | Disable the project-wide service map | — |
-| `--no-colocate-enhanced` | Use standard Mermaid instead of enhanced format for colocated files | — |
 | `--max-files <n>` | Analyze at most n files (cursor-window mode for huge repos) | unlimited |
 | `--cursor <n>` | Start from nth file in sorted file list (resumable window) | 0 |
 
@@ -371,6 +407,8 @@ For reproducible CI runs, the analyzer can export and re-import a full session e
 effect-analyze src/transfer.ts
 ```
 
+Writes `src/transfer.effect-analysis.md` and prints the diagram. Pass `--no-colocate` to print only.
+
 ### Generate a railway diagram and save to file
 
 ```bash
@@ -388,8 +426,10 @@ The command prints each fidelity issue before it exits. See [Diagram Fidelity](/
 ### Analyze a directory with colocated output
 
 ```bash
-effect-analyze src/ --colocate
+effect-analyze src/
 ```
+
+Same as a single file: adjacent `.effect-analysis.md` is the default. Pass `--no-colocate` for a summary only.
 
 ### Run a coverage audit with JSON output
 

@@ -29,6 +29,82 @@ const EFFECT_TYPE_REGEX_3 = /Effect(?:\.Effect)?<([^,]+),\s*([^,]+),\s*([^>]+)>/
 const EFFECT_TYPE_REGEX_2 = /Effect(?:\.Effect)?<([^,>]+),\s*([^,>]+)>/;
 
 /**
+ * Read `_tag` string literals off an error type (including unions).
+ * `Data.TaggedError("NOT_FOUND")` exposes `_tag: "NOT_FOUND"`.
+ */
+export function taggedErrorTagsFromType(type: Type | undefined): readonly string[] {
+  if (!type) return [];
+  if (type.isUnion()) {
+    return [...new Set(type.getUnionTypes().flatMap((part) => taggedErrorTagsFromType(part)))];
+  }
+
+  const apparent = tagsFromTagProperty(type.getApparentType());
+  if (apparent.length > 0) return apparent;
+  const own = tagsFromTagProperty(type);
+  if (own.length > 0) return own;
+
+  const symbol = type.getSymbol() ?? type.getAliasSymbol();
+  if (!symbol) return [];
+  const tags: string[] = [];
+  for (const declaration of symbol.getDeclarations()) {
+    const tagged = /TaggedError\s*\(\s*['"]([^'"]+)['"]\s*\)/.exec(declaration.getText());
+    if (tagged?.[1]) tags.push(tagged[1]);
+  }
+  return tags;
+}
+
+function tagsFromTagProperty(type: Type): readonly string[] {
+  const tagProperty = type.getProperty('_tag');
+  if (!tagProperty) return [];
+  const tags: string[] = [];
+  for (const declaration of tagProperty.getDeclarations()) {
+    let tagType;
+    try {
+      tagType = declaration.getType();
+    } catch {
+      continue;
+    }
+    if (tagType.isLiteral()) {
+      const value = tagType.getLiteralValue();
+      if (typeof value === 'string') tags.push(value);
+      continue;
+    }
+    const quoted = /^(?:["'])([^"']+)(?:["'])$/.exec(tagType.getText());
+    if (quoted?.[1]) tags.push(quoted[1]);
+  }
+  return tags;
+}
+
+const withErrorTags = (
+  signature: EffectTypeSignature,
+  errorType: Type | undefined,
+  node?: Node,
+): EffectTypeSignature => {
+  const fromType = taggedErrorTagsFromType(errorType);
+  const fromSource = node ? taggedErrorTagsFromSource(node, signature.errorType) : [];
+  const errorTags = fromType.length > 0 ? fromType : fromSource;
+  return errorTags.length > 0 ? { ...signature, errorTags } : signature;
+};
+
+function taggedErrorTagsFromSource(node: Node, errorTypeName: string): readonly string[] {
+  const sourceFile = node.getSourceFile();
+  const tags: string[] = [];
+  for (const name of errorTypeName.split('|').map((part) => part.trim())) {
+    const cls = sourceFile.getClass(name);
+    if (!cls) continue;
+    const text = cls.getText();
+    const tagged = /TaggedError\s*\(\s*['"]([^'"]+)['"]\s*\)/.exec(text);
+    if (tagged?.[1]) {
+      tags.push(tagged[1]);
+      continue;
+    }
+    const field = /(?:readonly\s+)?_tag\s*=\s*['"]([^'"]+)['"]/.exec(text);
+    if (field?.[1]) tags.push(field[1]);
+  }
+  return tags;
+}
+
+/**
  * Build EffectTypeSignature from type text using regex (fallback when Type API has no type args).
  */
 export function effectTypeSignatureFromTypeText(
@@ -145,25 +221,25 @@ export const extractEffectTypeSignature = (
     if (/^[A-Z]$/.test(errorTypeStr)) {
       const resolved = tryResolveGenericFromInnerExpression(node, _typeChecker);
       if (resolved) {
-        return {
+        return withErrorTags({
           successType: typeToString(aType),
           errorType: resolved.errorType,
           requirementsType: typeToString(rType),
           isInferred: true,
           typeConfidence: 'inferred',
           rawTypeString: nodeType.getText(),
-        };
+        }, eType, node);
       }
     }
 
-    return {
+    return withErrorTags({
       successType: typeToString(aType),
       errorType: errorTypeStr,
       requirementsType: typeToString(rType),
       isInferred: true,
       typeConfidence: 'declared',
       rawTypeString: nodeType.getText(),
-    };
+    }, eType, node);
   }
 
   // Fallback: parse A, E, R from type text when Type API doesn't provide type args
@@ -183,12 +259,12 @@ export const extractEffectTypeSignature = (
         };
       }
     }
-    return fromText;
+    return withErrorTags(fromText, undefined, node);
   }
 
   // Fallback: resolve the callee function's return type annotation
   const fromCallee = tryExtractFromCalleeReturnType(node);
-  if (fromCallee) return fromCallee;
+  if (fromCallee) return withErrorTags(fromCallee, undefined, node);
 
   return {
     successType: 'unknown',
@@ -225,14 +301,14 @@ function tryExtractFromCalleeReturnType(node: Node): EffectTypeSignature | undef
       const returnArgs = extractTypeArguments(returnType);
       if (returnArgs) {
         const [aType, eType, rType] = returnArgs;
-        return {
+        return withErrorTags({
           successType: typeToString(aType),
           errorType: typeToString(eType),
           requirementsType: typeToString(rType),
           isInferred: true,
           typeConfidence: 'inferred',
           rawTypeString: returnType.getText(),
-        };
+        }, eType, node);
       }
 
       // Try regex on the return type text
@@ -262,14 +338,14 @@ function tryExtractFromCalleeReturnType(node: Node): EffectTypeSignature | undef
           const retArgs = extractTypeArguments(retType);
           if (retArgs) {
             const [aType, eType, rType] = retArgs;
-            return {
+            return withErrorTags({
               successType: typeToString(aType),
               errorType: typeToString(eType),
               requirementsType: typeToString(rType),
               isInferred: true,
               typeConfidence: 'inferred',
               rawTypeString: retType.getText(),
-            };
+            }, eType, node);
           }
           returnTypeText = retType.getText();
         }

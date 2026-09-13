@@ -1,0 +1,44 @@
+name: Effect review
+
+# Dogfoods ./action.yml on this repo's own pull requests, with the CLI built
+# from the branch under review rather than the published package.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: effect-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install pnpm
+        run: corepack prepare pnpm@latest --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI
+        run: pnpm --filter effect-analyzer build
+
+      - uses: ./
+        with:
+          path: packages/effect-analyzer/src apps/docs/samples
+          cli: node packages/effect-analyzer/dist/cli.js
