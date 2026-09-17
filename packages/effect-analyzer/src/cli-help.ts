@@ -44,6 +44,7 @@ Commands (a drop-in replacement for the effect-tsgo CLI):
                              --format <fmt>         markdown | json
                              -o, --output <file>    Write the report to a file
                              --fail-on-regression   Exit 1 when merge risk is high
+                             --include-tests        Also review *.test.ts / *.spec.ts files
   setup                    Guided @effect/tsgo setup (forwarded)
   config                   Interactive diagnostic severity picker (forwarded)
   patch | unpatch          Manage the patched TypeScript/Oxlint binaries (forwarded)

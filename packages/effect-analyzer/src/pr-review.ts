@@ -28,6 +28,8 @@ export interface ReviewOptions {
   readonly head?: string | undefined;
   /** Git pathspecs restricting the change set (`src`, `packages/api`). */
   readonly paths?: readonly string[] | undefined;
+  /** Also review `*.test.ts` / `*.spec.ts`, for projects whose programs live in their tests. */
+  readonly includeTests?: boolean | undefined;
   readonly cwd?: string | undefined;
 }
 
@@ -88,8 +90,11 @@ export interface ReviewReport {
 const git = (args: readonly string[], cwd: string): string =>
   execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
 
-const isReviewable = (path: string): boolean =>
-  /\.tsx?$/.test(path) && !/\.(test|spec|d)\.tsx?$/.test(path) && !path.includes('node_modules/');
+const isReviewable = (path: string, includeTests: boolean): boolean =>
+  /\.tsx?$/.test(path) &&
+  !/\.d\.tsx?$/.test(path) &&
+  (includeTests || !/\.(test|spec)\.tsx?$/.test(path)) &&
+  !path.includes('node_modules/');
 
 /** Git could not give us the change: a ref outside the local object database, usually. */
 export class ReviewError extends Data.TaggedError('ReviewError')<{
@@ -117,6 +122,7 @@ const assertRef = (ref: string, cwd: string): void => {
 const changedFiles = (options: ReviewOptions, cwd: string): readonly ReviewFile[] => {
   const pathspecs = options.paths && options.paths.length > 0 ? ['--', ...options.paths] : [];
   const range = options.head ? [options.base, options.head] : [options.base];
+  const includeTests = options.includeTests ?? false;
   const status = git(['diff', '--name-status', '--find-renames', ...range, ...pathspecs], cwd);
   const files: ReviewFile[] = [];
   for (const line of status.split('\n')) {
@@ -124,7 +130,7 @@ const changedFiles = (options: ReviewOptions, cwd: string): readonly ReviewFile[
     if (!code || !first) continue;
     const s = code[0];
     const path = s === 'R' || s === 'C' ? second : first;
-    if (!path || !isReviewable(path)) continue;
+    if (!path || !isReviewable(path, includeTests)) continue;
     files.push({
       path,
       status: s === 'A' || s === 'C' ? 'added' : s === 'D' ? 'removed' : s === 'R' ? 'renamed' : 'modified',
@@ -135,7 +141,7 @@ const changedFiles = (options: ReviewOptions, cwd: string): readonly ReviewFile[
   if (!options.head) {
     const untracked = git(['ls-files', '--others', '--exclude-standard', ...pathspecs], cwd);
     for (const path of untracked.split('\n')) {
-      if (path && isReviewable(path)) files.push({ path, status: 'added', programs: [] });
+      if (path && isReviewable(path, includeTests)) files.push({ path, status: 'added', programs: [] });
     }
   }
   return files;

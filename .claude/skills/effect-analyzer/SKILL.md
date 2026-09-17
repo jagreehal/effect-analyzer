@@ -135,15 +135,16 @@ Renderers: `renderDiffMarkdown()`, `renderDiffJSON()`, `renderDiffMermaid()`
 effect-analyze review                          # working tree vs HEAD
 effect-analyze review --base origin/main src/  # branch vs main, restricted to src/
 effect-analyze review --base main --head HEAD --format json --fail-on-regression
+effect-analyze review --include-tests          # also review *.test.ts / *.spec.ts
 ```
 
 `review` is dispatched before `parseArgs` (like `diagnostics`) and parses its own
 flags in `cli-mode-review.ts`; the core is `buildReview` / `renderReviewMarkdown`
 in `pr-review.ts`. Both refs are checked with `git rev-parse --verify` first and
 a missing one fails with a `ReviewError` naming the `git fetch` to run. It lists
-changed `.ts`/`.tsx` files with `git diff --name-status --find-renames` (tests,
-`.d.ts` and `node_modules` excluded; untracked files are included when `--head`
-is omitted; a rename keeps `previousPath` so the file is diffed against its old
+changed `.ts`/`.tsx` files with `git diff --name-status --find-renames` (`.d.ts`
+and `node_modules` excluded, tests too unless `--include-tests`; untracked files
+are included when `--head` is omitted; a rename keeps `previousPath` so the file is diffed against its old
 self rather than read as a removal plus an addition), analyzes both sides with
 `analyzeEffectSource`, pairs programs by name *and occurrence* (a file can hold
 two `main`s), diffs each pair with `diffPrograms({ regressionMode: true })`, and

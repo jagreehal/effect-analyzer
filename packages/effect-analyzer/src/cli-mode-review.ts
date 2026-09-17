@@ -19,6 +19,7 @@ export interface ReviewInvocation {
   readonly format: 'markdown' | 'json';
   readonly output?: string | undefined;
   readonly failOnRegression: boolean;
+  readonly includeTests: boolean;
   readonly errors: readonly string[];
 }
 
@@ -28,6 +29,7 @@ export const parseReviewArgs = (args: readonly string[]): ReviewInvocation => {
   let format: ReviewInvocation['format'] = 'markdown';
   let output: string | undefined;
   let failOnRegression = false;
+  let includeTests = false;
   const paths: string[] = [];
   const errors: string[] = [];
 
@@ -63,6 +65,8 @@ export const parseReviewArgs = (args: readonly string[]): ReviewInvocation => {
       i = j;
     } else if (arg === '--fail-on-regression') {
       failOnRegression = true;
+    } else if (arg === '--include-tests') {
+      includeTests = true;
     } else if (arg.startsWith('-')) {
       errors.push(`Unknown option: ${arg}`);
     } else {
@@ -70,7 +74,7 @@ export const parseReviewArgs = (args: readonly string[]): ReviewInvocation => {
     }
   }
 
-  return { base, head, paths, format, output, failOnRegression, errors };
+  return { base, head, paths, format, output, failOnRegression, includeTests, errors };
 };
 
 export const runReviewCommand = (args: readonly string[]): Effect.Effect<void, CliError> =>
@@ -84,6 +88,7 @@ export const runReviewCommand = (args: readonly string[]): Effect.Effect<void, C
       base: invocation.base,
       head: invocation.head,
       paths: invocation.paths,
+      includeTests: invocation.includeTests,
     }).pipe(Effect.catch((e) => cliFail(e.message, e)));
 
     const markdown = renderReviewMarkdown(report, { version: packageVersion() });
