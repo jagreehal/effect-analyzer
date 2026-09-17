@@ -123,7 +123,7 @@ subcommands, the same flags, the same exit codes.
 ### `review`
 
 ```bash
-effect-analyze review [PATHSPEC...] [--base <ref>] [--head <ref>] [--format markdown|json] [-o <file>] [--fail-on-regression]
+effect-analyze review [PATHSPEC...] [--base <ref>] [--head <ref>] [--format markdown|json] [-o <file>] [--fail-on-regression] [--include-tests]
 ```
 
 Reads the change from git — `--base` (default `HEAD`) to `--head` (default: the
@@ -138,6 +138,7 @@ changed `.ts`/`.tsx` file is analyzed at both refs from source; tests, `.d.ts` a
 | `--format <fmt>` | `markdown` (default) or `json`. JSON carries `files`, `regressions`, `newFindings`, `risk` and the rendered `markdown` |
 | `-o, --output <file>` | Write the report to a file instead of stdout |
 | `--fail-on-regression` | Exit 1 when merge risk is `high`: a structural regression or a new lint error |
+| `--include-tests` | Also review `*.test.ts` / `*.spec.ts` files (skipped by default) |
 
 ```bash
 effect-analyze review --base origin/main src/

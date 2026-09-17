@@ -91,6 +91,33 @@ describe('cli review', () => {
     }
   }, 30_000);
 
+  it('skips test files unless --include-tests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'effect-analyze-review-'));
+    try {
+      gitIn(root, 'init', '-q');
+      const program = (steps: string) =>
+        `import { Effect } from 'effect';\nexport const prog = Effect.gen(function* () {${steps}});\n`;
+      writeFileSync(join(root, 'prog.test.ts'), program('yield* Effect.succeed(1); yield* Effect.succeed(2);'));
+      gitIn(root, 'add', 'prog.test.ts');
+      gitIn(root, 'commit', '-qm', 'v1');
+      writeFileSync(join(root, 'prog.test.ts'), program('yield* Effect.succeed(1);'));
+
+      const skipped = spawnSync(process.execPath, [CLI, 'review'], { cwd: root, encoding: 'utf8' });
+      expect(skipped.status, skipped.stderr).toBe(0);
+      expect(skipped.stdout).toContain('No Effect programs changed.');
+
+      const included = spawnSync(process.execPath, [CLI, 'review', '--include-tests', '--format', 'json'], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      expect(included.status, included.stderr).toBe(0);
+      const report = JSON.parse(included.stdout) as { files: { path: string }[] };
+      expect(report.files.map((f) => f.path)).toEqual(['prog.test.ts']);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it('says so when no Effect program changed', () => {
     const root = mkdtempSync(join(tmpdir(), 'effect-analyze-review-'));
     try {

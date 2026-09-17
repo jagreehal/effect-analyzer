@@ -127,6 +127,7 @@ Every input has a working default. Override only what you need.
 | `comment` | `true` | Post and keep updating the sticky PR comment |
 | `annotations` | `true` | Emit `::warning` / `::error` annotations for new findings |
 | `fail-on-regression` | `false` | Fail the job when merge risk is **high** |
+| `include-tests` | `false` | Also review `*.test.ts` / `*.spec.ts` files, for projects whose Effect programs live in their tests |
 | `cli` | `npx -y -p effect-analyzer@3 effect-analyze` | Command that runs the analyzer. Pin an exact version or use your project's install |
 | `github-token` | `github.token` | Token used to post the comment |
 
@@ -288,6 +289,7 @@ npx effect-analyze review --base main --head HEAD --format json --fail-on-regres
 | `--format markdown\|json` | JSON carries `files`, `regressions`, `newFindings`, `risk` and the rendered `markdown` |
 | `-o, --output <file>` | Write the report to a file |
 | `--fail-on-regression` | Exit 1 when merge risk is high |
+| `--include-tests` | Also review `*.test.ts` / `*.spec.ts` files |
 
 The markdown starts with `<!-- effect-analyzer-review -->`, which is how the action
 finds its own comment to update. A bot for GitLab, Bitbucket or Gitea can do the same
