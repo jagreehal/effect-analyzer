@@ -1,5 +1,11 @@
 # effect-analyzer
 
+## 3.6.1
+
+### Patch Changes
+
+- 1c71077: Add `--include-tests` to `effect-analyze review`, and a matching `include-tests` input on the GitHub Action, so projects whose Effect programs live in `*.test.ts` / `*.spec.ts` files can review them too.
+
 ## 3.6.0
 
 ### Minor Changes
