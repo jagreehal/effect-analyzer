@@ -1,5 +1,11 @@
 # effect-analyzer
 
+## 3.6.2
+
+### Patch Changes
+
+- dd1f30b: Railway diagrams in the `effect-analyze review` comment are now expanded by default. Collapse them with `--diagrams collapsed` (CLI) or `diagrams: collapsed` (GitHub Action).
+
 ## 3.6.1
 
 ### Patch Changes
