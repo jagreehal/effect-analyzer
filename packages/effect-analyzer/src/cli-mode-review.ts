@@ -20,6 +20,7 @@ export interface ReviewInvocation {
   readonly output?: string | undefined;
   readonly failOnRegression: boolean;
   readonly includeTests: boolean;
+  readonly diagrams: 'open' | 'collapsed';
   readonly errors: readonly string[];
 }
 
@@ -30,6 +31,7 @@ export const parseReviewArgs = (args: readonly string[]): ReviewInvocation => {
   let output: string | undefined;
   let failOnRegression = false;
   let includeTests = false;
+  let diagrams: ReviewInvocation['diagrams'] = 'open';
   const paths: string[] = [];
   const errors: string[] = [];
 
@@ -67,6 +69,11 @@ export const parseReviewArgs = (args: readonly string[]): ReviewInvocation => {
       failOnRegression = true;
     } else if (arg === '--include-tests') {
       includeTests = true;
+    } else if (arg === '--diagrams' || arg.startsWith('--diagrams=')) {
+      const [v, j] = valueOf(i, '--diagrams');
+      if (v === 'open' || v === 'collapsed') diagrams = v;
+      else if (v !== undefined) errors.push(`Invalid value for --diagrams: ${v} (expected open or collapsed)`);
+      i = j;
     } else if (arg.startsWith('-')) {
       errors.push(`Unknown option: ${arg}`);
     } else {
@@ -74,7 +81,7 @@ export const parseReviewArgs = (args: readonly string[]): ReviewInvocation => {
     }
   }
 
-  return { base, head, paths, format, output, failOnRegression, includeTests, errors };
+  return { base, head, paths, format, output, failOnRegression, includeTests, diagrams, errors };
 };
 
 export const runReviewCommand = (args: readonly string[]): Effect.Effect<void, CliError> =>
@@ -91,7 +98,7 @@ export const runReviewCommand = (args: readonly string[]): Effect.Effect<void, C
       includeTests: invocation.includeTests,
     }).pipe(Effect.catch((e) => cliFail(e.message, e)));
 
-    const markdown = renderReviewMarkdown(report, { version: packageVersion() });
+    const markdown = renderReviewMarkdown(report, { version: packageVersion(), diagrams: invocation.diagrams });
     // JSON carries the rendering too, so a bot needs one run for the gate and the comment.
     const rendered =
       invocation.format === 'json' ? JSON.stringify({ ...report, markdown }, null, 2) : markdown;

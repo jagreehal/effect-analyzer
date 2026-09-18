@@ -383,7 +383,10 @@ const riskReason = (r: ReviewReport): string => {
   return parts.length ? ` · ${parts.join(', ')}` : '';
 };
 
-export const renderReviewMarkdown = (r: ReviewReport, options?: { readonly version?: string }): string => {
+export const renderReviewMarkdown = (
+  r: ReviewReport,
+  options?: { readonly version?: string; readonly diagrams?: 'open' | 'collapsed' },
+): string => {
   const programs = r.files.flatMap((f) =>
     f.programs.map((p) => ({ file: f.previousPath ? `${f.previousPath} → ${f.path}` : f.path, ...p })),
   );
@@ -448,7 +451,7 @@ export const renderReviewMarkdown = (r: ReviewReport, options?: { readonly versi
   const withDiagram = touched.flatMap((p) => (p.railway === undefined ? [] : [{ ...p, railway: p.railway }]));
   for (const p of withDiagram.slice(0, MAX_DIAGRAMS)) {
     lines.push(
-      '<details>',
+      options?.diagrams === 'collapsed' ? '<details>' : '<details open>',
       `<summary>🛤️ \`${p.name}\` — ${p.kind === 'added' ? 'new' : 'after'} (\`${p.file}\`)</summary>`,
       '',
       '```mermaid',
