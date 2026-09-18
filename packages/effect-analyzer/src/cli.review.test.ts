@@ -64,6 +64,14 @@ describe('cli review', () => {
       expect(md.stdout).toContain('`fetchTotal`: error-handler block removed');
       expect(md.stdout).toContain('array-push-spread');
       expect(md.stdout).toContain('```mermaid');
+      expect(md.stdout).toContain('<details open>\n<summary>🛤️');
+
+      const collapsed = spawnSync(process.execPath, [CLI, 'review', '--base', 'HEAD', '--diagrams', 'collapsed'], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      expect(collapsed.status, collapsed.stderr).toBe(0);
+      expect(collapsed.stdout).toContain('<details>\n<summary>🛤️');
       expect(md.stdout).toContain('Prompt for AI agents');
       expect(md.stdout).not.toContain('untouched.ts');
 

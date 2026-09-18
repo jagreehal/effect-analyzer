@@ -30,6 +30,9 @@ inputs:
   include-tests:
     description: 'Also review *.test.ts / *.spec.ts files, for projects whose Effect programs live in their tests.'
     default: 'false'
+  diagrams:
+    description: 'Railway diagrams in the comment: open (expanded) or collapsed.'
+    default: 'open'
   cli:
     description: 'Command that runs the analyzer. Pin an exact version with "npx -y -p effect-analyzer@3.5.0 effect-analyze", or use your own install ("pnpm exec effect-analyze").'
     default: 'npx -y -p effect-analyzer@3 effect-analyze'
@@ -76,6 +79,7 @@ runs:
         CLI: ${{ inputs.cli }}
         PATHS: ${{ inputs.path }}
         INCLUDE_TESTS: ${{ inputs.include-tests == 'true' && '--include-tests' || '' }}
+        DIAGRAMS: ${{ inputs.diagrams }}
         BASE: ${{ steps.refs.outputs.base }}
         HEAD: ${{ steps.refs.outputs.head }}
       run: |
@@ -83,7 +87,7 @@ runs:
         out="$RUNNER_TEMP/effect-analyzer-review"
         mkdir -p "$out"
         # shellcheck disable=SC2086
-        $CLI review $PATHS $INCLUDE_TESTS --base "$BASE" --head "$HEAD" --format json -o "$out/review.json"
+        $CLI review $PATHS $INCLUDE_TESTS --diagrams "$DIAGRAMS" --base "$BASE" --head "$HEAD" --format json -o "$out/review.json"
         jq -r .markdown "$out/review.json" > "$out/review.md"
         cat "$out/review.md" >> "$GITHUB_STEP_SUMMARY"
         echo "risk=$(jq -r .risk "$out/review.json")" >> "$GITHUB_OUTPUT"

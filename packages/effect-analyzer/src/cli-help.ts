@@ -45,6 +45,7 @@ Commands (a drop-in replacement for the effect-tsgo CLI):
                              -o, --output <file>    Write the report to a file
                              --fail-on-regression   Exit 1 when merge risk is high
                              --include-tests        Also review *.test.ts / *.spec.ts files
+                             --diagrams <mode>      Railway diagrams: open (default) | collapsed
   setup                    Guided @effect/tsgo setup (forwarded)
   config                   Interactive diagnostic severity picker (forwarded)
   patch | unpatch          Manage the patched TypeScript/Oxlint binaries (forwarded)

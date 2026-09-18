@@ -136,6 +136,7 @@ effect-analyze review                          # working tree vs HEAD
 effect-analyze review --base origin/main src/  # branch vs main, restricted to src/
 effect-analyze review --base main --head HEAD --format json --fail-on-regression
 effect-analyze review --include-tests          # also review *.test.ts / *.spec.ts
+effect-analyze review --diagrams collapsed     # fold the railway diagrams (open by default)
 ```
 
 `review` is dispatched before `parseArgs` (like `diagnostics`) and parses its own

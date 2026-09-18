@@ -22,7 +22,7 @@ One comment, updated in place on every push:
 - **Walkthrough** — a table of every Effect program the PR changed: what changed
   (`+2 steps, error-handler removed ⚠️`), and steps / error types / complexity before → after.
 - **Checks** — structural regressions, new lint findings, new error types, complexity.
-- **Railway diagram** per changed program, rendered by GitHub, collapsed so the comment stays short.
+- **Railway diagram** per changed program, rendered by GitHub and open by default.
 - **Prompt for AI agents** — every regression and finding with file and line, ready to
   paste into Claude Code, Cursor or Copilot.
 
@@ -128,6 +128,7 @@ Every input has a working default. Override only what you need.
 | `annotations` | `true` | Emit `::warning` / `::error` annotations for new findings |
 | `fail-on-regression` | `false` | Fail the job when merge risk is **high** |
 | `include-tests` | `false` | Also review `*.test.ts` / `*.spec.ts` files, for projects whose Effect programs live in their tests |
+| `diagrams` | `open` | Railway diagrams in the comment: `open` (expanded) or `collapsed` |
 | `cli` | `npx -y -p effect-analyzer@3 effect-analyze` | Command that runs the analyzer. Pin an exact version or use your project's install |
 | `github-token` | `github.token` | Token used to post the comment |
 
@@ -290,6 +291,7 @@ npx effect-analyze review --base main --head HEAD --format json --fail-on-regres
 | `-o, --output <file>` | Write the report to a file |
 | `--fail-on-regression` | Exit 1 when merge risk is high |
 | `--include-tests` | Also review `*.test.ts` / `*.spec.ts` files |
+| `--diagrams <mode>` | Railway diagrams `open` (default) or `collapsed` |
 
 The markdown starts with `<!-- effect-analyzer-review -->`, which is how the action
 finds its own comment to update. A bot for GitLab, Bitbucket or Gitea can do the same
