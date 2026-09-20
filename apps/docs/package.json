@@ -18,7 +18,7 @@
     "@typeonce/effect-machine": "0.31.2",
     "astro": "^7.3.2",
     "astro-mermaid": "^2.1.0",
-    "effect": "4.0.0-rc.113",
+    "effect": "4.0.0-rc.115",
     "mermaid": "^11.17.2",
     "sharp": "^0.35.4",
     "ts-morph": "^28.0.0"
