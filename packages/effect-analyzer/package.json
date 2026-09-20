@@ -116,7 +116,7 @@
     "@total-typescript/ts-reset": "^0.6.1",
     "@typeonce/effect-machine": "0.31.2",
     "@types/node": "^26.4.1",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.115",
     "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
     "ts-morph": "^28.0.0",
