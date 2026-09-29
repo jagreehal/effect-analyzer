@@ -1,56 +1,52 @@
-import { describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import type { StaticEffectIR, StaticFlowNode, SemanticRole } from './types';
-import {
-  computeProgramDiagramQuality,
-  computeFileDiagramQuality,
-  buildTopOffendersReport,
-} from './diagram-quality';
-import { loadDiagramQualityHintsFromEslintJson } from './diagram-quality-eslint';
+import { mkdtempSync, writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { join } from "path"
+import { describe, expect, it } from "vitest"
+import { buildTopOffendersReport, computeFileDiagramQuality, computeProgramDiagramQuality } from "./diagram-quality"
+import { loadDiagramQualityHintsFromEslintJson } from "./diagram-quality-eslint"
+import type { SemanticRole, StaticEffectIR, StaticFlowNode } from "./types"
 
 function makeEffect(
   id: string,
   callee: string,
-  semanticRole?: SemanticRole,
+  semanticRole?: SemanticRole
 ): StaticFlowNode {
   return {
     id,
-    type: 'effect',
+    type: "effect",
     callee,
-    ...(semanticRole ? { semanticRole } : {}),
-  } as StaticFlowNode;
+    ...(semanticRole ? { semanticRole } : {})
+  }
 }
 
 function makeUnknown(id: string): StaticFlowNode {
   return {
     id,
-    type: 'unknown',
-    reason: 'Could not determine effect type',
-  } as StaticFlowNode;
+    type: "unknown",
+    reason: "Could not determine effect type"
+  }
 }
 
-function makePipe(id: string, steps: readonly StaticFlowNode[]): StaticFlowNode {
-  const first = steps[0];
+function makePipe(id: string, steps: ReadonlyArray<StaticFlowNode>): StaticFlowNode {
+  const first = steps[0]
   return {
     id,
-    type: 'pipe',
-    initial: first ?? makeEffect(`${id}-init`, 'Effect.succeed'),
-    transformations: steps.slice(1),
-  } as StaticFlowNode;
+    type: "pipe",
+    initial: first ?? makeEffect(`${id}-init`, "Effect.succeed"),
+    transformations: steps.slice(1)
+  }
 }
 
-function makeIR(programName: string, children: readonly StaticFlowNode[], filePath = 'test.ts'): StaticEffectIR {
+function makeIR(programName: string, children: ReadonlyArray<StaticFlowNode>, filePath = "test.ts"): StaticEffectIR {
   return {
     root: {
       id: `${programName}-root`,
-      type: 'program',
+      type: "program",
       programName,
-      source: 'generator',
+      source: "generator",
       children,
       dependencies: [],
-      errorTypes: [],
+      errorTypes: []
     },
     metadata: {
       analyzedAt: Date.now(),
@@ -67,104 +63,103 @@ function makeIR(programName: string, children: readonly StaticFlowNode[], filePa
         conditionalCount: 0,
         layerCount: 0,
         interruptionCount: 0,
-        unknownCount: children.filter((n) => n.type === 'unknown').length,
+        unknownCount: children.filter((n) => n.type === "unknown").length
       },
-      warnings: [],
+      warnings: []
     },
-    references: new Map(),
-  };
+    references: new Map()
+  }
 }
 
-describe('diagram quality', () => {
-  it('is deterministic for same program input', () => {
-    const ir = makeIR('a', [
-      makeEffect('n1', 'Effect.logInfo', 'side-effect'),
-      makeEffect('n2', 'repo.getUser', 'service-call'),
-      makePipe('p1', [
-        makeEffect('n3', 'Effect.succeed'),
-        makeEffect('n4', 'map', 'transform'),
+describe("diagram quality", () => {
+  it("is deterministic for same program input", () => {
+    const ir = makeIR("a", [
+      makeEffect("n1", "Effect.logInfo", "side-effect"),
+      makeEffect("n2", "repo.getUser", "service-call"),
+      makePipe("p1", [
+        makeEffect("n3", "Effect.succeed"),
+        makeEffect("n4", "map", "transform")
       ]),
-      makeUnknown('u1'),
-    ]);
+      makeUnknown("u1")
+    ])
 
-    const first = computeProgramDiagramQuality(ir);
-    const second = computeProgramDiagramQuality(ir);
+    const first = computeProgramDiagramQuality(ir)
+    const second = computeProgramDiagramQuality(ir)
 
-    expect(second).toEqual(first);
-  });
+    expect(second).toEqual(first)
+  })
 
-  it('caps tips and uses non-judgmental prefixes', () => {
-    const ir = makeIR('tips', [
-      makeEffect('n1', 'Effect.logInfo', 'side-effect'),
-      makeEffect('n2', 'Effect.logInfo', 'side-effect'),
-      makeEffect('n3', 'Effect.logInfo', 'side-effect'),
-      makeEffect('n4', '_', 'service-call'),
-      makeEffect('n5', 'Effect', 'side-effect'),
-      makeUnknown('u1'),
-      makeUnknown('u2'),
-      makePipe('p1', [
-        makeEffect('n6', 'Effect.succeed'),
-        makeEffect('n7', 'map', 'transform'),
-        makeEffect('n8', 'map', 'transform'),
-        makeEffect('n9', 'map', 'transform'),
-      ]),
-    ]);
-    const quality = computeProgramDiagramQuality(ir);
+  it("caps tips and uses non-judgmental prefixes", () => {
+    const ir = makeIR("tips", [
+      makeEffect("n1", "Effect.logInfo", "side-effect"),
+      makeEffect("n2", "Effect.logInfo", "side-effect"),
+      makeEffect("n3", "Effect.logInfo", "side-effect"),
+      makeEffect("n4", "_", "service-call"),
+      makeEffect("n5", "Effect", "side-effect"),
+      makeUnknown("u1"),
+      makeUnknown("u2"),
+      makePipe("p1", [
+        makeEffect("n6", "Effect.succeed"),
+        makeEffect("n7", "map", "transform"),
+        makeEffect("n8", "map", "transform"),
+        makeEffect("n9", "map", "transform")
+      ])
+    ])
+    const quality = computeProgramDiagramQuality(ir)
 
-    expect(quality.tips.length).toBeLessThanOrEqual(3);
+    expect(quality.tips.length).toBeLessThanOrEqual(3)
     for (const tip of quality.tips) {
       expect(
-        tip.startsWith('Consider') ||
-          tip.startsWith('If you want clearer diagrams') ||
-          tip.startsWith('For larger programs'),
-      ).toBe(true);
+        tip.startsWith("Consider") ||
+          tip.startsWith("If you want clearer diagrams") ||
+          tip.startsWith("For larger programs")
+      ).toBe(true)
     }
-  });
+  })
 
-  it('builds deterministic top offenders with tie-break by file path', () => {
+  it("builds deterministic top offenders with tie-break by file path", () => {
     const qa = computeFileDiagramQuality(
-      '/repo/b.ts',
-      [makeIR('b', [makeEffect('n1', 'Effect.logInfo', 'side-effect')], '/repo/b.ts')],
-    );
+      "/repo/b.ts",
+      [makeIR("b", [makeEffect("n1", "Effect.logInfo", "side-effect")], "/repo/b.ts")]
+    )
     const qb = computeFileDiagramQuality(
-      '/repo/a.ts',
-      [makeIR('a', [makeEffect('n1', 'Effect.logInfo', 'side-effect')], '/repo/a.ts')],
-    );
+      "/repo/a.ts",
+      [makeIR("a", [makeEffect("n1", "Effect.logInfo", "side-effect")], "/repo/a.ts")]
+    )
 
-    const report = buildTopOffendersReport([qa, qb], 2);
-    expect(report.highestLogRatio).toHaveLength(2);
-    expect(report.highestLogRatio[0]?.filePath).toBe('/repo/a.ts');
-    expect(report.highestLogRatio[1]?.filePath).toBe('/repo/b.ts');
-  });
-});
+    const report = buildTopOffendersReport([qa, qb], 2)
+    expect(report.highestLogRatio).toHaveLength(2)
+    expect(report.highestLogRatio[0]?.filePath).toBe("/repo/a.ts")
+    expect(report.highestLogRatio[1]?.filePath).toBe("/repo/b.ts")
+  })
+})
 
-describe('diagram quality eslint ingestion', () => {
-  it('maps effect-like eslint rules and ignores non-effect ones', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'diagram-quality-eslint-'));
-    const jsonPath = join(dir, 'eslint.json');
+describe("diagram quality eslint ingestion", () => {
+  it("maps effect-like eslint rules and ignores non-effect ones", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "diagram-quality-eslint-"))
+    const jsonPath = join(dir, "eslint.json")
     writeFileSync(
       jsonPath,
       JSON.stringify(
         [
           {
-            filePath: '/repo/src/a.ts',
+            filePath: "/repo/src/a.ts",
             messages: [
-              { ruleId: '@effect/untagged-yield', message: 'yield should be tagged', severity: 1 },
-              { ruleId: 'no-unused-vars', message: 'unused', severity: 1 },
-            ],
-          },
+              { ruleId: "@effect/untagged-yield", message: "yield should be tagged", severity: 1 },
+              { ruleId: "no-unused-vars", message: "unused", severity: 1 }
+            ]
+          }
         ],
         null,
-        2,
+        2
       ),
-      'utf-8',
-    );
+      "utf-8"
+    )
 
-    const hints = await loadDiagramQualityHintsFromEslintJson(jsonPath);
-    const fileHints = hints.get('/repo/src/a.ts');
-    expect(fileHints).toBeDefined();
-    expect((fileHints?.reasons ?? []).some((r) => r.includes('@effect/untagged-yield'))).toBe(true);
-    expect((fileHints?.reasons ?? []).some((r) => r.includes('no-unused-vars'))).toBe(false);
-  });
-});
-
+    const hints = await loadDiagramQualityHintsFromEslintJson(jsonPath)
+    const fileHints = hints.get("/repo/src/a.ts")
+    expect(fileHints).toBeDefined()
+    expect((fileHints?.reasons ?? []).some((r) => r.includes("@effect/untagged-yield"))).toBe(true)
+    expect((fileHints?.reasons ?? []).some((r) => r.includes("no-unused-vars"))).toBe(false)
+  })
+})

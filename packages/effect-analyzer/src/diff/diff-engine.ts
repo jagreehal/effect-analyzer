@@ -1,53 +1,42 @@
-import { Option } from 'effect';
-import {
-  getStaticChildren,
-  type StaticEffectIR,
-  type StaticEffectProgram,
-  type StaticFlowNode,
-} from '../types';
-import type {
-  ProgramDiff,
-  DiffOptions,
-  StepDiffEntry,
-  StructuralChange,
-  DiffSummary,
-} from './types';
+import { Option } from "effect"
+import { getStaticChildren, type StaticEffectIR, type StaticEffectProgram, type StaticFlowNode } from "../types"
+import type { DiffOptions, DiffSummary, ProgramDiff, StepDiffEntry, StructuralChange } from "./types"
 
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
 
 interface StepContext {
-  stepId: string;
-  callee: string;
-  containerType: string;
-  index: number;
+  stepId: string
+  callee: string
+  containerType: string
+  index: number
   /** Content-based fingerprint for stable matching */
-  fingerprint: string;
+  fingerprint: string
 }
 
 const CONTAINER_TYPES = new Set([
-  'parallel',
-  'race',
-  'conditional',
-  'decision',
-  'switch',
-  'loop',
-  'error-handler',
-  'retry',
-  'generator',
-  'pipe',
-  'stream',
-  'fiber',
-]);
+  "parallel",
+  "race",
+  "conditional",
+  "decision",
+  "switch",
+  "loop",
+  "error-handler",
+  "retry",
+  "generator",
+  "pipe",
+  "stream",
+  "fiber"
+])
 
 function computeFingerprint(node: StaticFlowNode): string {
-  if (node.type === 'effect') {
+  if (node.type === "effect") {
     // Use displayName (includes variable name, e.g. "config <- succeed")
     // to disambiguate repeated callees; fall back to callee alone
-    return node.displayName ?? node.callee;
+    return node.displayName ?? node.callee
   }
-  return `${node.type}:${node.displayName ?? node.id}`;
+  return `${node.type}:${node.displayName ?? node.id}`
 }
 
 // ---------------------------------------------------------------------------
@@ -56,51 +45,51 @@ function computeFingerprint(node: StaticFlowNode): string {
 
 function collectStepsWithContext(
   node: StaticFlowNode | StaticEffectProgram,
-  containerType = 'root',
-  index = 0,
-): StepContext[] {
-  const results: StepContext[] = [];
+  containerType = "root",
+  index = 0
+): Array<StepContext> {
+  const results: Array<StepContext> = []
 
-  if (node.type === 'effect') {
+  if (node.type === "effect") {
     results.push({
       stepId: node.id,
       callee: node.callee,
       containerType,
       index,
-      fingerprint: computeFingerprint(node),
-    });
+      fingerprint: computeFingerprint(node)
+    })
     // Still recurse into callbackBody via getStaticChildren
   }
 
-  const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
-  const nextContainer = CONTAINER_TYPES.has(node.type) ? node.type : containerType;
+  const children = Option.getOrElse(getStaticChildren(node), () => [] as ReadonlyArray<StaticFlowNode>)
+  const nextContainer = CONTAINER_TYPES.has(node.type) ? node.type : containerType
 
-  let childIdx = 0;
+  let childIdx = 0
   for (const child of children) {
     // For effect nodes at this level, the container is the current node type
-    const childResults = collectStepsWithContext(child, nextContainer, childIdx);
-    results.push(...childResults);
-    childIdx++;
+    const childResults = collectStepsWithContext(child, nextContainer, childIdx)
+    results.push(...childResults)
+    childIdx++
   }
 
-  return results;
+  return results
 }
 
 function countContainerTypes(node: StaticFlowNode | StaticEffectProgram): Map<string, number> {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, number>()
 
   function walk(n: StaticFlowNode | StaticEffectProgram): void {
     if (CONTAINER_TYPES.has(n.type)) {
-      counts.set(n.type, (counts.get(n.type) ?? 0) + 1);
+      counts.set(n.type, (counts.get(n.type) ?? 0) + 1)
     }
-    const children = Option.getOrElse(getStaticChildren(n), () => [] as readonly StaticFlowNode[]);
+    const children = Option.getOrElse(getStaticChildren(n), () => [] as ReadonlyArray<StaticFlowNode>)
     for (const child of children) {
-      walk(child);
+      walk(child)
     }
   }
 
-  walk(node);
-  return counts;
+  walk(node)
+  return counts
 }
 
 // ---------------------------------------------------------------------------
@@ -110,97 +99,99 @@ function countContainerTypes(node: StaticFlowNode | StaticEffectProgram): Map<st
 export function diffPrograms(
   before: StaticEffectIR,
   after: StaticEffectIR,
-  options?: DiffOptions,
+  options?: DiffOptions
 ): ProgramDiff {
-  const detectRenames = options?.detectRenames ?? true;
-  const regressionMode = options?.regressionMode ?? false;
+  const detectRenames = options?.detectRenames ?? true
+  const regressionMode = options?.regressionMode ?? false
 
-  const beforeSteps = collectStepsWithContext(before.root);
-  const afterSteps = collectStepsWithContext(after.root);
+  const beforeSteps = collectStepsWithContext(before.root)
+  const afterSteps = collectStepsWithContext(after.root)
 
-  const matchedBeforeIdx = new Set<number>();
-  const matchedAfterIdx = new Set<number>();
-  const entries: StepDiffEntry[] = [];
+  const matchedBeforeIdx = new Set<number>()
+  const matchedAfterIdx = new Set<number>()
+  const entries: Array<StepDiffEntry> = []
 
   // Pass 1: Match by fingerprint (content-based, stable across analysis runs)
   // Sub-pass 1a: match same-container fingerprints first to avoid cross-container
   // matches stealing candidates when duplicates exist.
   function matchByFingerprint(requireSameContainer: boolean): void {
     for (let bIdx = 0; bIdx < beforeSteps.length; bIdx++) {
-      if (matchedBeforeIdx.has(bIdx)) continue;
-      const beforeStep = beforeSteps[bIdx];
-      if (!beforeStep) continue;
+      if (matchedBeforeIdx.has(bIdx)) continue
+      const beforeStep = beforeSteps[bIdx]
+      if (!beforeStep) continue
 
       // Collect unmatched after-step candidates with the same fingerprint
-      const candidates: number[] = [];
+      const candidates: Array<number> = []
       for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
         if (!matchedAfterIdx.has(aIdx) && afterSteps[aIdx]?.fingerprint === beforeStep.fingerprint) {
-          const afterCandidate = afterSteps[aIdx];
-          if (requireSameContainer && afterCandidate && afterCandidate.containerType !== beforeStep.containerType) continue;
-          candidates.push(aIdx);
+          const afterCandidate = afterSteps[aIdx]
+          if (requireSameContainer && afterCandidate && afterCandidate.containerType !== beforeStep.containerType) {
+            continue
+          }
+          candidates.push(aIdx)
         }
       }
-      if (candidates.length === 0) continue;
+      if (candidates.length === 0) continue
 
       // Pick best candidate by closest index
-      let bestIdx = candidates[0] ?? 0;
-      let bestDist = Math.abs((afterSteps[bestIdx]?.index ?? 0) - beforeStep.index);
+      let bestIdx = candidates[0] ?? 0
+      let bestDist = Math.abs((afterSteps[bestIdx]?.index ?? 0) - beforeStep.index)
       for (let i = 1; i < candidates.length; i++) {
-        const aIdx = candidates[i] ?? 0;
-        const dist = Math.abs((afterSteps[aIdx]?.index ?? 0) - beforeStep.index);
+        const aIdx = candidates[i] ?? 0
+        const dist = Math.abs((afterSteps[aIdx]?.index ?? 0) - beforeStep.index)
         if (dist < bestDist) {
-          bestIdx = aIdx;
-          bestDist = dist;
+          bestIdx = aIdx
+          bestDist = dist
         }
       }
 
-      const afterStep = afterSteps[bestIdx];
-      if (!afterStep) continue;
-      matchedBeforeIdx.add(bIdx);
-      matchedAfterIdx.add(bestIdx);
+      const afterStep = afterSteps[bestIdx]
+      if (!afterStep) continue
+      matchedBeforeIdx.add(bIdx)
+      matchedAfterIdx.add(bestIdx)
 
       if (beforeStep.containerType !== afterStep.containerType) {
         entries.push({
-          kind: 'moved',
+          kind: "moved",
           stepId: afterStep.stepId,
           callee: afterStep.callee,
           containerBefore: beforeStep.containerType,
-          containerAfter: afterStep.containerType,
-        });
+          containerAfter: afterStep.containerType
+        })
       } else {
         entries.push({
-          kind: 'unchanged',
+          kind: "unchanged",
           stepId: afterStep.stepId,
-          callee: afterStep.callee,
-        });
+          callee: afterStep.callee
+        })
       }
     }
   }
   // First match within same container, then allow cross-container moves
-  matchByFingerprint(true);
-  matchByFingerprint(false);
+  matchByFingerprint(true)
+  matchByFingerprint(false)
 
   // Pass 2: Rename detection — match unmatched by callee
   if (detectRenames) {
     for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
-      if (matchedAfterIdx.has(aIdx)) continue;
-      const afterStep = afterSteps[aIdx];
-      if (!afterStep) continue;
+      if (matchedAfterIdx.has(aIdx)) continue
+      const afterStep = afterSteps[aIdx]
+      if (!afterStep) continue
       // Find first unmatched before-step with same callee
       const bIdx = beforeSteps.findIndex(
-        (bStep, bi) => !matchedBeforeIdx.has(bi) && bStep.callee === afterStep.callee,
-      );
+        (bStep, bi) => !matchedBeforeIdx.has(bi) && bStep.callee === afterStep.callee
+      )
       if (bIdx >= 0) {
-        const matchedBefore = beforeSteps[bIdx];
-        if (!matchedBefore) continue;
-        matchedBeforeIdx.add(bIdx);
-        matchedAfterIdx.add(aIdx);
+        const matchedBefore = beforeSteps[bIdx]
+        if (!matchedBefore) continue
+        matchedBeforeIdx.add(bIdx)
+        matchedAfterIdx.add(aIdx)
         entries.push({
-          kind: 'renamed',
+          kind: "renamed",
           stepId: afterStep.stepId,
           previousStepId: matchedBefore.stepId,
-          callee: afterStep.callee,
-        });
+          callee: afterStep.callee
+        })
       }
     }
   }
@@ -208,67 +199,67 @@ export function diffPrograms(
   // Pass 3: Remaining unmatched → removed / added
   for (let bIdx = 0; bIdx < beforeSteps.length; bIdx++) {
     if (!matchedBeforeIdx.has(bIdx)) {
-      const bs = beforeSteps[bIdx];
-      if (!bs) continue;
+      const bs = beforeSteps[bIdx]
+      if (!bs) continue
       entries.push({
-        kind: 'removed',
+        kind: "removed",
         stepId: bs.stepId,
-        callee: bs.callee,
-      });
+        callee: bs.callee
+      })
     }
   }
   for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
     if (!matchedAfterIdx.has(aIdx)) {
-      const as2 = afterSteps[aIdx];
-      if (!as2) continue;
+      const as2 = afterSteps[aIdx]
+      if (!as2) continue
       entries.push({
-        kind: 'added',
+        kind: "added",
         stepId: as2.stepId,
-        callee: as2.callee,
-      });
+        callee: as2.callee
+      })
     }
   }
 
   // Structural changes — compare container counts
-  const structuralChanges: StructuralChange[] = [];
-  const beforeContainers = countContainerTypes(before.root);
-  const afterContainers = countContainerTypes(after.root);
+  const structuralChanges: Array<StructuralChange> = []
+  const beforeContainers = countContainerTypes(before.root)
+  const afterContainers = countContainerTypes(after.root)
 
-  const allContainerKeys = new Set([...beforeContainers.keys(), ...afterContainers.keys()]);
+  const allContainerKeys = new Set([...beforeContainers.keys(), ...afterContainers.keys()])
   for (const key of allContainerKeys) {
-    const bCount = beforeContainers.get(key) ?? 0;
-    const aCount = afterContainers.get(key) ?? 0;
+    const bCount = beforeContainers.get(key) ?? 0
+    const aCount = afterContainers.get(key) ?? 0
     if (aCount > bCount) {
       for (let i = 0; i < aCount - bCount; i++) {
         structuralChanges.push({
-          kind: 'added',
+          kind: "added",
           nodeType: key,
-          description: `${key} block added`,
-        });
+          description: `${key} block added`
+        })
       }
     } else if (bCount > aCount) {
       for (let i = 0; i < bCount - aCount; i++) {
         structuralChanges.push({
-          kind: 'removed',
+          kind: "removed",
           nodeType: key,
-          description: `${key} block removed`,
-        });
+          description: `${key} block removed`
+        })
       }
     }
   }
 
   // Summary
   const summary: DiffSummary = {
-    stepsAdded: entries.filter((e) => e.kind === 'added').length,
-    stepsRemoved: entries.filter((e) => e.kind === 'removed').length,
-    stepsRenamed: entries.filter((e) => e.kind === 'renamed').length,
-    stepsMoved: entries.filter((e) => e.kind === 'moved').length,
-    stepsUnchanged: entries.filter((e) => e.kind === 'unchanged').length,
+    stepsAdded: entries.filter((e) => e.kind === "added").length,
+    stepsRemoved: entries.filter((e) => e.kind === "removed").length,
+    stepsRenamed: entries.filter((e) => e.kind === "renamed").length,
+    stepsMoved: entries.filter((e) => e.kind === "moved").length,
+    stepsUnchanged: entries.filter((e) => e.kind === "unchanged").length,
     structuralChanges: structuralChanges.length,
     hasRegressions: regressionMode
-      ? entries.some((e) => e.kind === 'removed') || structuralChanges.some((sc) => sc.kind === 'removed')
-      : false,
-  };
+      ? entries.some((e) => e.kind === "removed") || structuralChanges.some((sc) => sc.kind === "removed")
+      : false
+  }
 
   return {
     beforeName: before.root.programName,
@@ -276,6 +267,6 @@ export function diffPrograms(
     diffedAt: Date.now(),
     steps: entries,
     structuralChanges,
-    summary,
-  };
+    summary
+  }
 }

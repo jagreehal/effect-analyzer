@@ -13,67 +13,67 @@
  * about the file's imports, not an extraction heuristic.
  */
 
-import { Node, Project, SyntaxKind, type CallExpression } from 'ts-morph';
-import type { SourceLocation } from './types';
-import { analyzeStateMachines, type StateMachine } from './state-machine';
+import { type CallExpression, Node, Project, SyntaxKind } from "ts-morph"
+import { analyzeStateMachines, type StateMachine } from "./state-machine"
+import type { SourceLocation } from "./types"
 // Import resolution only. The near-miss heuristics below stay this module's
 // own, so it keeps reporting sensibly as the extractor evolves.
-import { isMachineCall } from './state-machine-ast';
+import { isMachineCall } from "./state-machine-ast"
 
 export interface StateMachineRejection {
-  readonly name: string;
-  readonly kind: 'effect-machine';
-  readonly reason: string;
-  readonly hint: string;
-  readonly location: SourceLocation | undefined;
+  readonly name: string
+  readonly kind: "effect-machine"
+  readonly reason: string
+  readonly hint: string
+  readonly location: SourceLocation | undefined
 }
 
 export interface StateMachineDiagnostics {
-  readonly machines: readonly StateMachine[];
-  readonly rejected: readonly StateMachineRejection[];
+  readonly machines: ReadonlyArray<StateMachine>
+  readonly rejected: ReadonlyArray<StateMachineRejection>
 }
 
 function locOf(node: Node, filePath: string): SourceLocation {
-  const sf = node.getSourceFile();
-  const offset = node.getStart();
-  const { line, column } = sf.getLineAndColumnAtPos(offset);
-  return { filePath, line, column, offset };
+  const sf = node.getSourceFile()
+  const offset = node.getStart()
+  const { line, column } = sf.getLineAndColumnAtPos(offset)
+  return { filePath, line, column, offset }
 }
 
 function ownerOf(node: Node): { name: string; nameNode: Node } | undefined {
-  let cur: Node | undefined = node.getParent();
+  let cur: Node | undefined = node.getParent()
   while (cur) {
     if (Node.isVariableDeclaration(cur)) {
-      return { name: cur.getName(), nameNode: cur.getNameNode() };
+      return { name: cur.getName(), nameNode: cur.getNameNode() }
     }
-    cur = cur.getParent();
+    cur = cur.getParent()
   }
-  return undefined;
+  return undefined
 }
 
 /** An `X.<name>(...)` call, wherever `X` came from. */
 function isNamedCall(node: Node, name: string): node is CallExpression {
-  if (!Node.isCallExpression(node)) return false;
-  const expr = node.getExpression();
-  return Node.isPropertyAccessExpression(expr) && expr.getName() === name;
+  if (!Node.isCallExpression(node)) return false
+  const expr = node.getExpression()
+  return Node.isPropertyAccessExpression(expr) && expr.getName() === name
 }
 
 /** The receiver of an `X.make(...)` call, as written. */
 function receiverOf(call: CallExpression): string {
-  const expr = call.getExpression();
+  const expr = call.getExpression()
   return Node.isPropertyAccessExpression(expr)
     ? expr.getExpression().getText()
-    : '';
+    : ""
 }
 
 /** Is `X.handle(...)` chained onto this node? */
 function hasHandleChain(node: Node): boolean {
-  const parent = node.getParent();
+  const parent = node.getParent()
   return (
     !!parent &&
     Node.isPropertyAccessExpression(parent) &&
-    parent.getName() === 'handle'
-  );
+    parent.getName() === "handle"
+  )
 }
 
 /**
@@ -83,136 +83,136 @@ function hasHandleChain(node: Node): boolean {
  */
 function isImplementedElsewhere(
   name: string,
-  sf: ReturnType<Project['createSourceFile']>,
+  sf: ReturnType<Project["createSourceFile"]>
 ): boolean {
   return sf
     .getDescendantsOfKind(SyntaxKind.Identifier)
-    .some((identifier) => identifier.getText() === name && hasHandleChain(identifier));
+    .some((identifier) => identifier.getText() === name && hasHandleChain(identifier))
 }
 
 const unresolvedBindingReason = (call: CallExpression): string =>
-  `\`${receiverOf(call)}\` is not a \`Machine\` imported from @typeonce/effect-machine`;
+  `\`${receiverOf(call)}\` is not a \`Machine\` imported from @typeonce/effect-machine`
 
 const UNRESOLVED_BINDING_HINT =
-  'import it directly — `import { Machine } from "@typeonce/effect-machine"`; a local re-export cannot be followed';
+  "import it directly — `import { Machine } from \"@typeonce/effect-machine\"`; a local re-export cannot be followed"
 
 /** The `states:` value of a `Machine.make(...)` config, if written inline. */
 function statesArgument(makeCall: CallExpression): Node | undefined {
-  const config = makeCall.getArguments()[0];
-  if (!config || !Node.isObjectLiteralExpression(config)) return undefined;
+  const config = makeCall.getArguments()[0]
+  if (!config || !Node.isObjectLiteralExpression(config)) return undefined
   return config
-    .getProperty('states')
+    .getProperty("states")
     ?.asKind(SyntaxKind.PropertyAssignment)
-    ?.getInitializer();
+    ?.getInitializer()
 }
 
 export function diagnoseStateMachines(
   filePath: string,
-  source?: string,
+  source?: string
 ): StateMachineDiagnostics {
-  const project = new Project({ useInMemoryFileSystem: !!source });
+  const project = new Project({ useInMemoryFileSystem: !!source })
   const sf = source
     ? project.createSourceFile(filePath, source, { overwrite: true })
-    : project.addSourceFileAtPath(filePath);
+    : project.addSourceFileAtPath(filePath)
 
-  const { machines } = analyzeStateMachines(filePath, source);
-  const matched = new Set(machines.map((m) => m.name));
-  const rejected: StateMachineRejection[] = [];
-  const reported = new Set<string>();
+  const { machines } = analyzeStateMachines(filePath, source)
+  const matched = new Set(machines.map((m) => m.name))
+  const rejected: Array<StateMachineRejection> = []
+  const reported = new Set<string>()
 
   const add = (
     name: string,
     reason: string,
     hint: string,
-    anchor: Node,
+    anchor: Node
   ): void => {
-    if (matched.has(name) || reported.has(name)) return;
-    reported.add(name);
+    if (matched.has(name) || reported.has(name)) return
+    reported.add(name)
     rejected.push({
       name,
-      kind: 'effect-machine',
+      kind: "effect-machine",
       reason,
       hint,
-      location: locOf(anchor, filePath),
-    });
-  };
+      location: locOf(anchor, filePath)
+    })
+  }
 
-  const usedStateTrees = new Set<string>();
+  const usedStateTrees = new Set<string>()
   /** An unresolved `Machine` binding was already reported for this file. */
-  let bindingReported = false;
+  let bindingReported = false
 
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!isMachineCall(call, 'make')) {
+    if (!isMachineCall(call, "make")) {
       // A `.make(...).handle(...)` chain the extractor skipped because its
       // receiver is not a `Machine` imported from the package — most often a
       // local barrel that re-exports it. Without this the file goes silent.
-      if (!isNamedCall(call, 'make') || !hasHandleChain(call)) continue;
-      const chained = ownerOf(call);
+      if (!isNamedCall(call, "make") || !hasHandleChain(call)) continue
+      const chained = ownerOf(call)
       add(
-        chained?.name ?? 'Machine.make',
+        chained?.name ?? "Machine.make",
         unresolvedBindingReason(call),
         UNRESOLVED_BINDING_HINT,
-        chained?.nameNode ?? call,
-      );
-      bindingReported = true;
-      continue;
+        chained?.nameNode ?? call
+      )
+      bindingReported = true
+      continue
     }
-    const owner = ownerOf(call);
-    const name = owner?.name ?? 'Machine.make';
-    const anchor = owner?.nameNode ?? call;
+    const owner = ownerOf(call)
+    const name = owner?.name ?? "Machine.make"
+    const anchor = owner?.nameNode ?? call
 
-    const states = statesArgument(call);
+    const states = statesArgument(call)
     if (states) {
       // `MyStates.states` — remember the tree so an unused state descriptor is
       // not also reported.
-      const root = states.getText().split('.')[0];
-      if (root) usedStateTrees.add(root);
+      const root = states.getText().split(".")[0]
+      if (root) usedStateTrees.add(root)
     }
 
-    if (owner && isImplementedElsewhere(owner.name, sf)) continue;
+    if (owner && isImplementedElsewhere(owner.name, sf)) continue
 
     add(
       name,
       states
-        ? 'the state tree is not declared in this file, so its states cannot be read'
-        : 'the machine config has no `states` property',
-      'declare `Machine.states({...})` in this file and pass its `.states`'
-        + ' (`Machine.defineStates` on effect-machine <= 0.5)',
-      anchor,
-    );
+        ? "the state tree is not declared in this file, so its states cannot be read"
+        : "the machine config has no `states` property",
+      "declare `Machine.states({...})` in this file and pass its `.states`"
+        + " (`Machine.defineStates` on effect-machine <= 0.5)",
+      anchor
+    )
   }
 
   // A state tree that no machine in this file consumes.
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!isMachineCall(call, 'defineStates') && !isMachineCall(call, 'states')) {
+    if (!isMachineCall(call, "defineStates") && !isMachineCall(call, "states")) {
       // A barrel-imported state descriptor. Same root cause as an unresolved
       // `.make(...)` chain, so only speak when that has not already said it.
       if (
         bindingReported ||
-        (!isNamedCall(call, 'defineStates') && !isNamedCall(call, 'states'))
+        (!isNamedCall(call, "defineStates") && !isNamedCall(call, "states"))
       ) {
-        continue;
+        continue
       }
-      const unresolved = ownerOf(call);
-      if (!unresolved) continue;
+      const unresolved = ownerOf(call)
+      if (!unresolved) continue
       add(
         unresolved.name,
         unresolvedBindingReason(call),
         UNRESOLVED_BINDING_HINT,
-        unresolved.nameNode,
-      );
-      bindingReported = true;
-      continue;
+        unresolved.nameNode
+      )
+      bindingReported = true
+      continue
     }
-    const owner = ownerOf(call);
-    if (!owner || usedStateTrees.has(owner.name)) continue;
+    const owner = ownerOf(call)
+    if (!owner || usedStateTrees.has(owner.name)) continue
     add(
       owner.name,
-      'states are defined but no Machine.make in this file uses them',
-      'pass `states: ' + owner.name + '.states` to Machine.make({...})',
-      owner.nameNode,
-    );
+      "states are defined but no Machine.make in this file uses them",
+      "pass `states: " + owner.name + ".states` to Machine.make({...})",
+      owner.nameNode
+    )
   }
 
-  return { machines, rejected };
+  return { machines, rejected }
 }

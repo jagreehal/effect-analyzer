@@ -34,6 +34,10 @@ diagram labels them differently:
 | `dies at` | `orDie`, `orDieWith` | Left `E` as a defect. `E` reads `never`, the fiber can still die. |
 | `swallowed by` | `ignore`, `ignoreLogged`, `orElseSucceed` | Silently became a success. |
 
+`--format explain` reads a program's error paths from its type, so an error that
+a handler catches or remaps drops out of the list. For `catchTags`, explain
+lists each tag with its own handler.
+
 The `filter*` operators are absent by design: they test the *success* value, so
 they add to `E` (or add a defect) without taking anything out of it.
 

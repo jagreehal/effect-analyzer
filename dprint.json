@@ -1,0 +1,46 @@
+{
+  "$schema": "https://dprint.dev/schemas/v0.json",
+  "incremental": false,
+  "includes": ["**/*.{ts,tsx,js,jsx,json,md}"],
+  "indentWidth": 2,
+  "lineWidth": 120,
+  "newLineKind": "lf",
+  "typescript": {
+    "semiColons": "asi",
+    "quoteStyle": "alwaysDouble",
+    "trailingCommas": "never",
+    "operatorPosition": "maintain",
+    "arrowFunction.useParentheses": "force"
+  },
+  "excludes": [
+    "**/dist",
+    "**/build",
+    "**/coverage",
+    "**/node_modules",
+    "**/*.tsbuildinfo",
+    "**/CHANGELOG.md",
+    "pnpm-lock.yaml",
+    "**/___*",
+    "**/___*/**",
+    "**/.*",
+    "!.changeset",
+    "!.changeset/**/*",
+    "!.github",
+    "!.github/**/*",
+    "!.oxlintrc.json",
+    "!**/.oxlintrc.json",
+    "!.vscode",
+    "!.vscode/**/*",
+    // Inputs the analyzer reads by position: reformatting them would shift the
+    // line/column numbers that tests, generated analyses and docs quote.
+    "packages/effect-analyzer/src/__fixtures__/**",
+    "apps/docs/samples/**",
+    "examples/migrate-one-file/before.ts",
+    "**/*.effect-analysis.md"
+  ],
+  "plugins": [
+    "https://plugins.dprint.dev/typescript-0.93.4.wasm",
+    "https://plugins.dprint.dev/markdown-0.20.0.wasm",
+    "https://plugins.dprint.dev/json-0.21.1.wasm"
+  ]
+}

@@ -4,23 +4,17 @@
  * Analyzes a directory of TypeScript files and aggregates results.
  */
 
-import { Effect } from 'effect';
-import { readdir, readFile, stat } from 'fs/promises';
-import { readFileSync } from 'fs';
-import { join, extname, resolve, basename } from 'path';
-import type { StaticEffectIR, ProjectServiceMap } from './types';
-import { loadTsMorph } from './ts-morph-loader';
-import { buildProjectServiceMap } from './service-registry';
-import { scanProjectCorpus, type ProjectCorpus } from './project-corpus';
-import { assessAudit, type AuditAssessment } from './audit-assessment';
-import {
-  assessIRFidelity,
-  type FidelityFinding,
-} from './fidelity-findings';
-import {
-  extractProjectArchitecture,
-  type ProjectArchitectureSummary,
-} from './project-architecture';
+import { Effect } from "effect"
+import { readFileSync } from "fs"
+import { readdir, readFile, stat } from "fs/promises"
+import { basename, extname, join, resolve } from "path"
+import { assessAudit, type AuditAssessment } from "./audit-assessment"
+import { assessIRFidelity, type FidelityFinding } from "./fidelity-findings"
+import { extractProjectArchitecture, type ProjectArchitectureSummary } from "./project-architecture"
+import { type ProjectCorpus, scanProjectCorpus } from "./project-corpus"
+import { buildProjectServiceMap } from "./service-registry"
+import { loadTsMorph } from "./ts-morph-loader"
+import type { ProjectServiceMap, StaticEffectIR } from "./types"
 
 // =============================================================================
 // Types
@@ -28,183 +22,206 @@ import {
 
 /** Per-file failure for project analysis (Gap 3: no silent drops). */
 export interface ProjectFileFailure {
-  readonly file: string;
-  readonly error: string;
+  readonly file: string
+  readonly error: string
 }
 
 export interface ProjectAnalysisResult {
   /** File path -> list of program IRs in that file */
-  readonly byFile: Map<string, readonly StaticEffectIR[]>;
+  readonly byFile: Map<string, ReadonlyArray<StaticEffectIR>>
   /** All programs across the project */
-  readonly allPrograms: readonly StaticEffectIR[];
+  readonly allPrograms: ReadonlyArray<StaticEffectIR>
   /** Entry points (files that run Effect.runPromise / runSync / NodeRuntime.runMain) - heuristic + package.json */
-  readonly entryPointFiles: string[];
+  readonly entryPointFiles: Array<string>
   /** Total file count discovered */
-  readonly fileCount: number;
+  readonly fileCount: number
   /** Files that failed to analyze (error message included) - Gap 3 */
-  readonly failedFiles: readonly ProjectFileFailure[];
+  readonly failedFiles: ReadonlyArray<ProjectFileFailure>
   /** Files that were analyzed but had zero Effect programs */
-  readonly zeroProgramFiles: readonly string[];
+  readonly zeroProgramFiles: ReadonlyArray<string>
   /** Project-level deduplicated service map (when --service-map is enabled) */
-  readonly serviceMap?: ProjectServiceMap | undefined;
+  readonly serviceMap?: ProjectServiceMap | undefined
   /** Project-level runtime architecture summary (when enabled). */
-  readonly architecture?: ProjectArchitectureSummary | undefined;
+  readonly architecture?: ProjectArchitectureSummary | undefined
 }
 
 export interface AnalyzeProjectOptions {
-  readonly tsconfig?: string | undefined;
+  readonly tsconfig?: string | undefined
   /** File extensions to discover; default ['.ts', '.tsx']. Include '.js'/.jsx' for best-effort JS (Gap 6). */
-  readonly extensions?: readonly string[] | undefined;
-  readonly maxDepth?: number | undefined;
+  readonly extensions?: ReadonlyArray<string> | undefined
+  readonly maxDepth?: number | undefined
   /** When true, include per-file durationMs in outcomes (improve.md §7 optional timing). */
-  readonly includePerFileTiming?: boolean | undefined;
+  readonly includePerFileTiming?: boolean | undefined
   /** Optional false-positive review: paths matching any of these (substring or path segment) are excluded from suspiciousZeros (improve.md §5). */
-  readonly excludeFromSuspiciousZeros?: readonly string[] | undefined;
+  readonly excludeFromSuspiciousZeros?: ReadonlyArray<string> | undefined
   /** Optional path to known Effect internals root for per-file analysis (improve.md §1). */
-  readonly knownEffectInternalsRoot?: string | undefined;
+  readonly knownEffectInternalsRoot?: string | undefined
   /** When true, build the deduplicated project-level service map (--service-map). */
-  readonly buildServiceMap?: boolean | undefined;
+  readonly buildServiceMap?: boolean | undefined
   /** When true, build a project-level runtime architecture summary. */
-  readonly buildArchitecture?: boolean | undefined;
+  readonly buildArchitecture?: boolean | undefined
 }
 
 /** Per-file outcome for coverage audit. */
 export interface FileOutcome {
-  readonly file: string;
-  readonly status: 'ok' | 'fail' | 'zero';
-  readonly programCount?: number;
-  readonly error?: string;
+  readonly file: string
+  readonly status: "ok" | "fail" | "zero"
+  readonly programCount?: number
+  readonly error?: string
   /** When includePerFileTiming: analysis time in ms (improve.md §7). */
-  readonly durationMs?: number;
+  readonly durationMs?: number
 }
 
 export type ZeroProgramCategory =
-  | 'barrel_or_index'
-  | 'config_or_build'
-  | 'test_or_dtslint'
-  | 'type_only'
-  | 'suspicious'
-  | 'other';
+  | "barrel_or_index"
+  | "config_or_build"
+  | "test_or_dtslint"
+  | "type_only"
+  | "suspicious"
+  | "other"
 
 export interface ZeroProgramClassification {
-  readonly file: string;
-  readonly category: ZeroProgramCategory;
-  readonly importsEffect: boolean;
+  readonly file: string
+  readonly category: ZeroProgramCategory
+  readonly importsEffect: boolean
 }
 
 export interface ProjectFidelityFinding extends FidelityFinding {
-  readonly file: string;
-  readonly programName: string;
+  readonly file: string
+  readonly programName: string
 }
 
 /** Coverage audit: discovered vs analyzed vs failed/zero, with per-file outcomes. */
 export interface CoverageAuditResult {
-  readonly discovered: number;
-  readonly analyzed: number;
-  readonly zeroPrograms: number;
-  readonly failed: number;
-  readonly outcomes: readonly FileOutcome[];
-  readonly assessment: AuditAssessment;
+  readonly discovered: number
+  readonly analyzed: number
+  readonly zeroPrograms: number
+  readonly failed: number
+  readonly outcomes: ReadonlyArray<FileOutcome>
+  readonly assessment: AuditAssessment
   /** unknownCount / totalNodes across all analyzed files (0–1). */
-  readonly unknownNodeRate: number;
+  readonly unknownNodeRate: number
   /** Repo-level aggregate: total node count across all analyzed programs (improve.md §5). */
-  readonly totalNodes: number;
+  readonly totalNodes: number
   /** Repo-level aggregate: unknown node count across all analyzed programs (improve.md §5). */
-  readonly unknownNodes: number;
+  readonly unknownNodes: number
   /** Located fidelity evidence across every analyzed program. */
-  readonly fidelityFindings: readonly ProjectFidelityFinding[];
+  readonly fidelityFindings: ReadonlyArray<ProjectFidelityFinding>
   /** Files that import from effect/@effect but produced zero programs. */
-  readonly suspiciousZeros: readonly string[];
+  readonly suspiciousZeros: ReadonlyArray<string>
   /** Per-category zero-program counts for triage. */
-  readonly zeroProgramCategoryCounts: Readonly<Record<ZeroProgramCategory, number>>;
+  readonly zeroProgramCategoryCounts: Readonly<Record<ZeroProgramCategory, number>>
   /** Per-file category for zero-program outcomes. */
-  readonly zeroProgramClassifications: readonly ZeroProgramClassification[];
+  readonly zeroProgramClassifications: ReadonlyArray<ZeroProgramClassification>
   /** Top N files by unknown node rate (highest first), for --show-top-unknown. */
-  readonly topUnknownFiles?: readonly string[];
+  readonly topUnknownFiles?: ReadonlyArray<string>
   /** Unknown node counts by reason. */
-  readonly unknownReasonCounts?: Readonly<Record<string, number>>;
+  readonly unknownReasonCounts?: Readonly<Record<string, number>>
   /** Top unknown reasons by count (highest first), for --show-top-unknown-reasons. */
-  readonly topUnknownReasons?: readonly { reason: string; count: number }[];
+  readonly topUnknownReasons?: ReadonlyArray<{ reason: string; count: number }>
   /** Audit execution time in ms (improve.md §7 performance validation). */
-  readonly durationMs?: number;
+  readonly durationMs?: number
 }
 
-const DEFAULT_OPTIONS: Required<Omit<AnalyzeProjectOptions, 'tsconfig'>> = {
-  extensions: ['.ts', '.tsx'],
+const DEFAULT_OPTIONS: Required<Omit<AnalyzeProjectOptions, "tsconfig">> = {
+  extensions: [".ts", ".tsx"],
   maxDepth: 10,
   knownEffectInternalsRoot: undefined,
   includePerFileTiming: false,
   excludeFromSuspiciousZeros: [],
   buildServiceMap: false,
-  buildArchitecture: false,
-};
-
-
+  buildArchitecture: false
+}
 
 /** Modules from `effect` that do NOT produce Effect programs on their own. */
 const NON_PROGRAM_EFFECT_MODULES = new Set([
-  'Option', 'Either', 'Predicate', 'Order', 'Equivalence',
-  'Hash', 'Equal', 'Inspectable', 'Pipeable', 'Types',
-  'Brand', 'Chunk', 'HashMap', 'HashSet', 'List',
-  'SortedMap', 'SortedSet', 'Duration', 'DateTime',
-  'BigInt', 'BigDecimal', 'Number', 'String', 'Struct',
-  'Tuple', 'ReadonlyArray', 'Array', 'Record',
-  'Schema', 'ServiceMap', 'Data', 'Match', 'Function',
-]);
+  "Option",
+  "Either",
+  "Predicate",
+  "Order",
+  "Equivalence",
+  "Hash",
+  "Equal",
+  "Inspectable",
+  "Pipeable",
+  "Types",
+  "Brand",
+  "Chunk",
+  "HashMap",
+  "HashSet",
+  "List",
+  "SortedMap",
+  "SortedSet",
+  "Duration",
+  "DateTime",
+  "BigInt",
+  "BigDecimal",
+  "Number",
+  "String",
+  "Struct",
+  "Tuple",
+  "ReadonlyArray",
+  "Array",
+  "Record",
+  "Schema",
+  "ServiceMap",
+  "Data",
+  "Match",
+  "Function"
+])
 
 function fileImportsEffect(filePath: string): boolean {
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    if (!/from\s+["'](?:effect|effect\/|@effect\/)/.test(content)) return false;
+    const content = readFileSync(filePath, "utf-8")
+    if (!/from\s+["'](?:effect|effect\/|@effect\/)/.test(content)) return false
 
     // Check if all runtime (non-type) named imports from "effect" are non-program modules
     // `import type { ... }` lines are always safe (type-only, no runtime behavior)
-    const runtimeImportMatches = content.matchAll(/import\s+{([^}]+)}\s+from\s+["']effect["']/g);
-    let hasAnyRuntimeImport = false;
-    let allNonProgram = true;
+    const runtimeImportMatches = content.matchAll(/import\s+{([^}]+)}\s+from\s+["']effect["']/g)
+    let hasAnyRuntimeImport = false
+    let allNonProgram = true
     for (const match of runtimeImportMatches) {
       // Skip if this is actually an `import type` statement (the regex above won't match `import type {`)
       // But we need to check for inline `type` specifiers like `import { type Effect, Schema } from "effect"`
-      const names = match[1]!.split(',')
-        .map(s => s.trim())
-        .filter(s => !s.startsWith('type '))  // skip inline type imports
-        .map(s => s.split(/\s+as\s+/)[0]!.trim())
-        .filter(Boolean);
+      const names = match[1]!.split(",")
+        .map((s) => s.trim())
+        .filter((s) => !s.startsWith("type ")) // skip inline type imports
+        .map((s) => s.split(/\s+as\s+/)[0]!.trim())
+        .filter(Boolean)
       for (const name of names) {
-        hasAnyRuntimeImport = true;
+        hasAnyRuntimeImport = true
         if (!NON_PROGRAM_EFFECT_MODULES.has(name)) {
-          allNonProgram = false;
-          break;
+          allNonProgram = false
+          break
         }
       }
-      if (!allNonProgram) break;
+      if (!allNonProgram) break
     }
 
-    if (hasAnyRuntimeImport && allNonProgram) return false;
+    if (hasAnyRuntimeImport && allNonProgram) return false
 
     // Check for namespace imports: import * as X from "effect" or "effect/..."
-    const hasNamespaceImport = /import\s+\*\s+as\s+\w+\s+from\s+["'](?:effect|effect\/|@effect\/)/.test(content);
-    if (hasNamespaceImport) return true;
+    const hasNamespaceImport = /import\s+\*\s+as\s+\w+\s+from\s+["'](?:effect|effect\/|@effect\/)/.test(content)
+    if (hasNamespaceImport) return true
 
     // Check for named/namespace imports from effect submodules (e.g. "effect/Effect", "@effect/...")
     // These weren't caught by the exact "effect" regex above
-    const hasSubmoduleImport = /import\s+{[^}]+}\s+from\s+["'](?:effect\/|@effect\/)/.test(content);
-    if (hasSubmoduleImport) return true;
+    const hasSubmoduleImport = /import\s+{[^}]+}\s+from\s+["'](?:effect\/|@effect\/)/.test(content)
+    if (hasSubmoduleImport) return true
 
     // If only `import type` statements exist (no runtime imports at all), not suspicious
-    if (!hasAnyRuntimeImport) return false;
+    if (!hasAnyRuntimeImport) return false
 
-    return true;
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
 function isTypeOnlyZeroCandidate(filePath: string): boolean {
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    const hasRuntimeLikeEffectUsage =
-      /\bEffect\./.test(content) ||
+    const content = readFileSync(filePath, "utf-8")
+    const hasRuntimeLikeEffectUsage = /\bEffect\./.test(content) ||
       /\bLayer\./.test(content) ||
       /\bStream\./.test(content) ||
       /\bSchema\./.test(content) ||
@@ -213,8 +230,8 @@ function isTypeOnlyZeroCandidate(filePath: string): boolean {
       /\brunPromise\b/.test(content) ||
       /\brunSync\b/.test(content) ||
       /\brunFork\b/.test(content) ||
-      /\bacquireRelease\b/.test(content);
-    if (hasRuntimeLikeEffectUsage) return false;
+      /\bacquireRelease\b/.test(content)
+    if (hasRuntimeLikeEffectUsage) return false
 
     return (
       /\binterface\b/.test(content) ||
@@ -222,64 +239,64 @@ function isTypeOnlyZeroCandidate(filePath: string): boolean {
       /\bdeclare\b/.test(content) ||
       /^\s*import\s+type\b/m.test(content) ||
       /^\s*export\s+type\b/m.test(content)
-    );
+    )
   } catch {
-    return false;
+    return false
   }
 }
 
 function isLightweightEffectAdapterFile(filePath: string): boolean {
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    const hasProgramLikeUsage =
-      /\byield\*/.test(content) ||
+    const content = readFileSync(filePath, "utf-8")
+    const hasProgramLikeUsage = /\byield\*/.test(content) ||
       /\bEffect\.gen\b/.test(content) ||
       /\bpipe\(/.test(content) ||
       /\bEffect\.run(?:Promise|Sync|Fork|Callback)\b/.test(content) ||
       /\bacquireRelease\b/.test(content) ||
-      /\bLayer\.(?:effect|scoped|merge|provide)\b/.test(content);
-    if (hasProgramLikeUsage) return false;
+      /\bLayer\.(?:effect|scoped|merge|provide)\b/.test(content)
+    if (hasProgramLikeUsage) return false
 
-    const effectConstructorMentions =
-      content.match(/\bEffect\.(?:void|succeed|fail|sync|try|promise|async)\b/g) ?? [];
-    if (effectConstructorMentions.length === 0) return false;
+    const effectConstructorMentions = content.match(/\bEffect\.(?:void|succeed|fail|sync|try|promise|async)\b/g) ?? []
+    if (effectConstructorMentions.length === 0) return false
 
-    const callbackPropertyMentions =
-      content.match(/(?:readonly\s+)?[A-Za-z0-9_]+\s*:\s*\([^)]*\)\s*=>/g) ?? [];
+    const callbackPropertyMentions = content.match(/(?:readonly\s+)?[A-Za-z0-9_]+\s*:\s*\([^)]*\)\s*=>/g) ?? []
 
-    return callbackPropertyMentions.length > 0;
+    return callbackPropertyMentions.length > 0
   } catch {
-    return false;
+    return false
   }
 }
 
-function detectExpectedZeroCategory(filePath: string): Exclude<ZeroProgramCategory, 'suspicious' | 'other'> | undefined {
-  const normalized = filePath.replace(/\\/g, '/');
-  const base = basename(normalized).toLowerCase();
+function detectExpectedZeroCategory(
+  filePath: string
+): Exclude<ZeroProgramCategory, "suspicious" | "other"> | undefined {
+  const normalized = filePath.replace(/\\/g, "/")
+  const base = basename(normalized).toLowerCase()
 
-  if (base === 'index.ts' || base === 'index.tsx' || /\/index\.[jt]sx?$/.test(normalized)) {
-    return 'barrel_or_index';
+  if (base === "index.ts" || base === "index.tsx" || /\/index\.[jt]sx?$/.test(normalized)) {
+    return "barrel_or_index"
   }
 
   if (
     /(^|\/)(__tests__|test|tests|dtslint)(\/|$)/.test(normalized) ||
     /\.(test|spec|tst)\.[jt]sx?$/.test(normalized)
   ) {
-    return 'test_or_dtslint';
+    return "test_or_dtslint"
   }
 
   if (
-    /(^|\/)(vitest|vite|jest|webpack|rollup|tsup|esbuild|eslint|prettier|babel|playwright|typedoc|karma)\.config\.[jt]s$/.test(normalized) ||
+    /(^|\/)(vitest|vite|jest|webpack|rollup|tsup|esbuild|eslint|prettier|babel|playwright|typedoc|karma)\.config\.[jt]s$/
+      .test(normalized) ||
     /(^|\/)vitest\.workspace\.[jt]s$/.test(normalized)
   ) {
-    return 'config_or_build';
+    return "config_or_build"
   }
 
   if (isTypeOnlyZeroCandidate(filePath)) {
-    return 'type_only';
+    return "type_only"
   }
 
-  return undefined;
+  return undefined
 }
 // =============================================================================
 // Entry points from package.json (Gap 4: semantic entry-point detection)
@@ -288,107 +305,110 @@ function detectExpectedZeroCategory(filePath: string): Exclude<ZeroProgramCatego
 async function findPackageJsonDirs(
   dir: string,
   maxDepth: number,
-  currentDepth: number,
-): Promise<string[]> {
-  if (currentDepth >= maxDepth) return [];
-  const result: string[] = [];
+  currentDepth: number
+): Promise<Array<string>> {
+  if (currentDepth >= maxDepth) return []
+  const result: Array<string> = []
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    const hasPkg = entries.some((e) => e.isFile() && e.name === 'package.json');
-    if (hasPkg) result.push(dir);
+    const entries = await readdir(dir, { withFileTypes: true })
+    const hasPkg = entries.some((e) => e.isFile() && e.name === "package.json")
+    if (hasPkg) result.push(dir)
     for (const ent of entries) {
-      if (ent.isDirectory() && ent.name !== 'node_modules' && ent.name !== '.git') {
+      if (ent.isDirectory() && ent.name !== "node_modules" && ent.name !== ".git") {
         result.push(
-          ...(await findPackageJsonDirs(join(dir, ent.name), maxDepth, currentDepth + 1)),
-        );
+          ...(await findPackageJsonDirs(join(dir, ent.name), maxDepth, currentDepth + 1))
+        )
       }
     }
   } catch {
     // ignore
   }
-  return result;
+  return result
 }
 
 function resolveEntry(
   pkgDir: string,
   entry: string | undefined,
-  extensions: readonly string[],
-): string[] {
-  if (!entry || typeof entry !== 'string') return [];
-  const normalized = entry.replace(/^\.\//, '');
-  const base = join(pkgDir, normalized);
-  const ext = extname(normalized);
+  extensions: ReadonlyArray<string>
+): Array<string> {
+  if (!entry || typeof entry !== "string") return []
+  const normalized = entry.replace(/^\.\//, "")
+  const base = join(pkgDir, normalized)
+  const ext = extname(normalized)
   if (ext) {
-    return [resolve(base)];
+    return [resolve(base)]
   }
-  return extensions.map((e) => resolve(base + e));
+  return extensions.map((e) => resolve(base + e))
 }
 
 /** Gap 4: Detect files that have Effect.runPromise / runSync / NodeRuntime.runMain at top level. */
 async function fileHasTopLevelRunCall(filePath: string): Promise<boolean> {
   try {
-    const { Project, SyntaxKind } = loadTsMorph();
-    const project = new Project({ skipAddingFilesFromTsConfig: true });
-    const sourceFile = project.addSourceFileAtPath(filePath);
-    const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
+    const { Project, SyntaxKind } = loadTsMorph()
+    const project = new Project({ skipAddingFilesFromTsConfig: true })
+    const sourceFile = project.addSourceFileAtPath(filePath)
+    const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
     const functionKinds = [
       SyntaxKind.FunctionDeclaration,
       SyntaxKind.FunctionExpression,
       SyntaxKind.ArrowFunction,
-      SyntaxKind.MethodDeclaration,
-    ];
+      SyntaxKind.MethodDeclaration
+    ]
     for (const call of callExpressions) {
-      const parent = call.getParent();
-      if (parent?.getKind() !== SyntaxKind.ExpressionStatement) continue;
-      let current: ReturnType<typeof parent.getParent> = parent;
+      const parent = call.getParent()
+      if (parent?.getKind() !== SyntaxKind.ExpressionStatement) continue
+      let current: ReturnType<typeof parent.getParent> = parent
       while (current) {
-        const kind = current.getKind();
-        if (kind === SyntaxKind.SourceFile) break;
-        if (functionKinds.includes(kind)) break;
-        current = current.getParent();
+        const kind = current.getKind()
+        if (kind === SyntaxKind.SourceFile) break
+        if (functionKinds.includes(kind)) break
+        current = current.getParent()
       }
-      if (current?.getKind() !== SyntaxKind.SourceFile) continue;
-      const exprText = call.getExpression().getText();
+      if (current?.getKind() !== SyntaxKind.SourceFile) continue
+      const exprText = call.getExpression().getText()
       if (
-        exprText.includes('.runPromise') ||
-        exprText.includes('.runSync') ||
-        exprText.includes('.runFork') ||
-        exprText.includes('.runCallback') ||
-        exprText.includes('NodeRuntime.runMain') ||
-        exprText.includes('BunRuntime.runMain') ||
-        exprText.includes('DenoRuntime.runMain') ||
-        exprText.includes('Runtime.runPromise') ||
-        exprText.includes('Runtime.runSync') ||
-        exprText.includes('Runtime.runFork')
+        exprText.includes(".runPromise") ||
+        exprText.includes(".runSync") ||
+        exprText.includes(".runFork") ||
+        exprText.includes(".runCallback") ||
+        exprText.includes("NodeRuntime.runMain") ||
+        exprText.includes("BunRuntime.runMain") ||
+        exprText.includes("DenoRuntime.runMain") ||
+        exprText.includes("Runtime.runPromise") ||
+        exprText.includes("Runtime.runSync") ||
+        exprText.includes("Runtime.runFork")
       ) {
-        return true;
+        return true
       }
     }
   } catch {
     // ignore parse errors
   }
-  return false;
+  return false
 }
 
 async function getEntryPointsFromPackageJson(
   dirPath: string,
-  extensions: readonly string[],
-): Promise<string[]> {
-  const pkgDirs = await findPackageJsonDirs(dirPath, 10, 0);
-  const entryPaths: string[] = [];
+  extensions: ReadonlyArray<string>
+): Promise<Array<string>> {
+  const pkgDirs = await findPackageJsonDirs(dirPath, 10, 0)
+  const entryPaths: Array<string> = []
   for (const pkgDir of pkgDirs) {
     try {
-      const raw = await readFile(join(pkgDir, 'package.json'), 'utf-8');
-      const pkg = JSON.parse(raw) as { main?: string; module?: string; bin?: string | Record<string, string> };
-      const dirs = [resolveEntry(pkgDir, pkg.main, extensions), resolveEntry(pkgDir, pkg.module, extensions)];
-      if (typeof pkg.bin === 'string') dirs.push(resolveEntry(pkgDir, pkg.bin, extensions));
-      else if (pkg.bin && typeof pkg.bin === 'object')
-        for (const v of Object.values(pkg.bin)) dirs.push(resolveEntry(pkgDir, typeof v === 'string' ? v : undefined, extensions));
+      const raw = await readFile(join(pkgDir, "package.json"), "utf-8")
+      const pkg = JSON.parse(raw) as { main?: string; module?: string; bin?: string | Record<string, string> }
+      const dirs = [resolveEntry(pkgDir, pkg.main, extensions), resolveEntry(pkgDir, pkg.module, extensions)]
+      if (typeof pkg.bin === "string") dirs.push(resolveEntry(pkgDir, pkg.bin, extensions))
+      else if (pkg.bin && typeof pkg.bin === "object") {
+        for (const v of Object.values(pkg.bin)) {
+          dirs.push(resolveEntry(pkgDir, typeof v === "string" ? v : undefined, extensions))
+        }
+      }
       for (const list of dirs) {
         for (const p of list) {
           try {
-            const s = await stat(p).catch(() => null);
-            if (s?.isFile()) entryPaths.push(p);
+            const s = await stat(p).catch(() => null)
+            if (s?.isFile()) entryPaths.push(p)
           } catch {
             // skip
           }
@@ -398,7 +418,7 @@ async function getEntryPointsFromPackageJson(
       // skip invalid or missing package.json
     }
   }
-  return [...new Set(entryPaths)];
+  return [...new Set(entryPaths)]
 }
 
 // =============================================================================
@@ -410,88 +430,85 @@ async function getEntryPointsFromPackageJson(
  */
 export function analyzeProjectCorpus(
   corpus: ProjectCorpus,
-  options: AnalyzeProjectOptions = {},
+  options: AnalyzeProjectOptions = {}
 ): Effect.Effect<ProjectAnalysisResult> {
-  const dirPath = corpus.root;
-  const extensions = (options.extensions ?? DEFAULT_OPTIONS.extensions)!;
-  return Effect.gen(function* () {
-    const files = corpus.files.map((entry) => entry.file);
-    const byFile = new Map<string, readonly StaticEffectIR[]>();
-    const allPrograms: StaticEffectIR[] = [];
-    const entryPointFiles: string[] = [];
-    const failedFiles: ProjectFileFailure[] = [];
-    const zeroProgramFiles: string[] = [];
+  const dirPath = corpus.root
+  const extensions = (options.extensions ?? DEFAULT_OPTIONS.extensions)!
+  return Effect.gen(function*() {
+    const files = corpus.files.map((entry) => entry.file)
+    const byFile = new Map<string, ReadonlyArray<StaticEffectIR>>()
+    const allPrograms: Array<StaticEffectIR> = []
+    const entryPointFiles: Array<string> = []
+    const failedFiles: Array<ProjectFileFailure> = []
+    const zeroProgramFiles: Array<string> = []
 
     for (const entry of corpus.files) {
-      const file = entry.file;
-      if (entry.status === 'fail') {
-        failedFiles.push({ file, error: entry.error ?? 'Unknown analysis failure' });
-        continue;
+      const file = entry.file
+      if (entry.status === "fail") {
+        failedFiles.push({ file, error: entry.error ?? "Unknown analysis failure" })
+        continue
       }
-      if (entry.status === 'zero') {
-        zeroProgramFiles.push(file);
-        continue;
+      if (entry.status === "zero") {
+        zeroProgramFiles.push(file)
+        continue
       }
-      const programs = entry.programs;
-      byFile.set(file, programs);
-      allPrograms.push(...programs);
+      const programs = entry.programs
+      byFile.set(file, programs)
+      allPrograms.push(...programs)
       for (const ir of programs) {
-        const nameLikeEntry =
-          ir.root.programName === 'main' || ir.root.programName.includes('run');
-        const isRunCall = ir.root.source === 'run';
+        const nameLikeEntry = ir.root.programName === "main" || ir.root.programName.includes("run")
+        const isRunCall = ir.root.source === "run"
         if (nameLikeEntry || isRunCall) {
-          if (!entryPointFiles.includes(file)) entryPointFiles.push(file);
+          if (!entryPointFiles.includes(file)) entryPointFiles.push(file)
         }
       }
     }
 
-    const packageEntryPaths = yield* Effect.promise(() =>
-      getEntryPointsFromPackageJson(dirPath, extensions),
-    );
+    const packageEntryPaths = yield* Effect.promise(() => getEntryPointsFromPackageJson(dirPath, extensions))
     for (const p of packageEntryPaths) {
       if (files.includes(p) && !entryPointFiles.includes(p)) {
-        entryPointFiles.push(p);
+        entryPointFiles.push(p)
       }
     }
 
     for (const file of byFile.keys()) {
-      if (entryPointFiles.includes(file)) continue;
-      const hasRun = yield* Effect.promise(() => fileHasTopLevelRunCall(file));
-      if (hasRun) entryPointFiles.push(file);
+      if (entryPointFiles.includes(file)) continue
+      const hasRun = yield* Effect.promise(() => fileHasTopLevelRunCall(file))
+      if (hasRun) entryPointFiles.push(file)
     }
 
     // Optionally build the deduplicated service map
-    let serviceMap: ProjectServiceMap | undefined;
+    let serviceMap: ProjectServiceMap | undefined
     if (options.buildServiceMap) {
       serviceMap = yield* Effect.try(() => {
-        const { Project } = loadTsMorph();
+        const { Project } = loadTsMorph()
         const project = new Project({
           skipAddingFilesFromTsConfig: true,
-          compilerOptions: { allowJs: true },
-        });
+          compilerOptions: { allowJs: true }
+        })
         // oxlint-disable-next-line typescript/no-explicit-any
-        const sourceFileMap = new Map<string, any>();
+        const sourceFileMap = new Map<string, any>()
         for (const file of byFile.keys()) {
           // Files that cannot be loaded are skipped, not fatal. This stays a
           // plain try/catch: it guards one synchronous ts-morph call inside an
           // already-suspended Effect.try, so lifting it would only add a nested
           // runtime.
           try {
-            sourceFileMap.set(file, project.addSourceFileAtPath(file));
+            sourceFileMap.set(file, project.addSourceFileAtPath(file))
           } catch {
-            continue;
+            continue
           }
         }
-        return buildProjectServiceMap(byFile, sourceFileMap);
+        return buildProjectServiceMap(byFile, sourceFileMap)
       }).pipe(
         // Fall back to IR-only service map (no AST-level extraction)
-        Effect.orElseSucceed(() => buildProjectServiceMap(byFile)),
-      );
+        Effect.orElseSucceed(() => buildProjectServiceMap(byFile))
+      )
     }
 
     const architecture = options.buildArchitecture
       ? extractProjectArchitecture(files, { tsconfig: options.tsconfig })
-      : undefined;
+      : undefined
 
     return {
       byFile,
@@ -501,25 +518,25 @@ export function analyzeProjectCorpus(
       failedFiles,
       zeroProgramFiles,
       serviceMap,
-      architecture,
-    };
-  });
+      architecture
+    }
+  })
 }
 
 export function analyzeProject(
   dirPath: string,
-  options: AnalyzeProjectOptions = {},
+  options: AnalyzeProjectOptions = {}
 ): Effect.Effect<ProjectAnalysisResult> {
-  const extensions = options.extensions ?? DEFAULT_OPTIONS.extensions;
-  const maxDepth = options.maxDepth ?? DEFAULT_OPTIONS.maxDepth;
+  const extensions = options.extensions ?? DEFAULT_OPTIONS.extensions
+  const maxDepth = options.maxDepth ?? DEFAULT_OPTIONS.maxDepth
   return scanProjectCorpus(dirPath, {
     extensions,
     maxDepth,
     tsconfig: options.tsconfig,
-    knownEffectInternalsRoot: options.knownEffectInternalsRoot,
+    knownEffectInternalsRoot: options.knownEffectInternalsRoot
   }).pipe(
-    Effect.flatMap((corpus) => analyzeProjectCorpus(corpus, options)),
-  );
+    Effect.flatMap((corpus) => analyzeProjectCorpus(corpus, options))
+  )
 }
 
 // =============================================================================
@@ -533,140 +550,138 @@ export function analyzeProject(
  */
 export function runCoverageAudit(
   dirPath: string,
-  options: AnalyzeProjectOptions = {},
+  options: AnalyzeProjectOptions = {}
 ): Effect.Effect<CoverageAuditResult> {
   return scanProjectCorpus(dirPath, {
     extensions: options.extensions ?? DEFAULT_OPTIONS.extensions,
     maxDepth: options.maxDepth ?? DEFAULT_OPTIONS.maxDepth,
     tsconfig: options.tsconfig,
     includePerFileTiming: options.includePerFileTiming,
-    knownEffectInternalsRoot: options.knownEffectInternalsRoot,
+    knownEffectInternalsRoot: options.knownEffectInternalsRoot
   }).pipe(
-    Effect.flatMap((corpus) => runCoverageAuditFromCorpus(corpus, options)),
-  );
+    Effect.flatMap((corpus) => runCoverageAuditFromCorpus(corpus, options))
+  )
 }
 
 export function runCoverageAuditFromCorpus(
   corpus: ProjectCorpus,
-  options: AnalyzeProjectOptions = {},
+  options: AnalyzeProjectOptions = {}
 ): Effect.Effect<CoverageAuditResult> {
   return Effect.sync(() => {
-    const outcomes: FileOutcome[] = [];
-    let totalNodes = 0;
-    let unknownNodes = 0;
-    let sourceUnresolvedNodes = 0;
-    const fidelityFindings: ProjectFidelityFinding[] = [];
-    const fileUnknownRates: { file: string; total: number; unknown: number }[] = [];
-    const unknownReasonsCorpus = new Map<string, number>();
+    const outcomes: Array<FileOutcome> = []
+    let totalNodes = 0
+    let unknownNodes = 0
+    let sourceUnresolvedNodes = 0
+    const fidelityFindings: Array<ProjectFidelityFinding> = []
+    const fileUnknownRates: Array<{ file: string; total: number; unknown: number }> = []
+    const unknownReasonsCorpus = new Map<string, number>()
 
     for (const entry of corpus.files) {
-      const file = entry.file;
-      const durationMs = entry.durationMs;
-      if (entry.status !== 'fail') {
-        const count = entry.programs.length;
-        let fileTotal = 0;
-        let fileUnknown = 0;
+      const file = entry.file
+      const durationMs = entry.durationMs
+      if (entry.status !== "fail") {
+        const count = entry.programs.length
+        let fileTotal = 0
+        let fileUnknown = 0
         for (const ir of entry.programs) {
-          const fidelity = assessIRFidelity(ir);
+          const fidelity = assessIRFidelity(ir)
           const unknownFindings = fidelity.findings.filter(
-            (finding) => finding.kind === 'unknown-node',
-          );
-          totalNodes += fidelity.sourceRepresentation.total;
-          unknownNodes += unknownFindings.length;
-          sourceUnresolvedNodes +=
-            fidelity.sourceRepresentation.total - fidelity.sourceRepresentation.resolved;
-          fileTotal += fidelity.sourceRepresentation.total;
-          fileUnknown += unknownFindings.length;
+            (finding) => finding.kind === "unknown-node"
+          )
+          totalNodes += fidelity.sourceRepresentation.total
+          unknownNodes += unknownFindings.length
+          sourceUnresolvedNodes += fidelity.sourceRepresentation.total - fidelity.sourceRepresentation.resolved
+          fileTotal += fidelity.sourceRepresentation.total
+          fileUnknown += unknownFindings.length
           for (const finding of fidelity.findings) {
             fidelityFindings.push({
               ...finding,
               file,
-              programName: ir.root.programName,
-            });
-            if (finding.kind === 'unknown-node') {
-              const reason = finding.reason ?? 'Unknown reason';
-              unknownReasonsCorpus.set(reason, (unknownReasonsCorpus.get(reason) ?? 0) + 1);
+              programName: ir.root.programName
+            })
+            if (finding.kind === "unknown-node") {
+              const reason = finding.reason ?? "Unknown reason"
+              unknownReasonsCorpus.set(reason, (unknownReasonsCorpus.get(reason) ?? 0) + 1)
             }
           }
         }
         if (fileTotal > 0) {
-          fileUnknownRates.push({ file, total: fileTotal, unknown: fileUnknown });
+          fileUnknownRates.push({ file, total: fileTotal, unknown: fileUnknown })
         }
         outcomes.push(
           count > 0
-            ? { file, status: 'ok', programCount: count, ...(durationMs !== undefined ? { durationMs } : {}) }
-            : { file, status: 'zero', programCount: 0, ...(durationMs !== undefined ? { durationMs } : {}) },
-        );
+            ? { file, status: "ok", programCount: count, ...(durationMs !== undefined ? { durationMs } : {}) }
+            : { file, status: "zero", programCount: 0, ...(durationMs !== undefined ? { durationMs } : {}) }
+        )
       } else {
         outcomes.push({
           file,
-          status: 'fail',
+          status: "fail",
           ...(entry.error === undefined ? {} : { error: entry.error }),
-          ...(durationMs !== undefined ? { durationMs } : {}),
-        });
+          ...(durationMs !== undefined ? { durationMs } : {})
+        })
       }
     }
 
-    const discovered = corpus.files.length;
-    const analyzed = outcomes.filter((o) => o.status === 'ok').length;
-    const zeroPrograms = outcomes.filter((o) => o.status === 'zero').length;
-    const failed = outcomes.filter((o) => o.status === 'fail').length;
-    const excludePatterns = options.excludeFromSuspiciousZeros ?? [];
+    const discovered = corpus.files.length
+    const analyzed = outcomes.filter((o) => o.status === "ok").length
+    const zeroPrograms = outcomes.filter((o) => o.status === "zero").length
+    const failed = outcomes.filter((o) => o.status === "fail").length
+    const excludePatterns = options.excludeFromSuspiciousZeros ?? []
     const isExcludedFromSuspicious = (filePath: string): boolean => {
-      const normalized = filePath.replace(/\\/g, '/');
+      const normalized = filePath.replace(/\\/g, "/")
       return excludePatterns.some(
-        (p) => normalized.includes(p.replace(/\\/g, '/')) || normalized.endsWith(p.replace(/\\/g, '/')),
-      );
-    };
+        (p) => normalized.includes(p.replace(/\\/g, "/")) || normalized.endsWith(p.replace(/\\/g, "/"))
+      )
+    }
     const zeroProgramCategoryCounts: Record<ZeroProgramCategory, number> = {
       barrel_or_index: 0,
       config_or_build: 0,
       test_or_dtslint: 0,
       type_only: 0,
       suspicious: 0,
-      other: 0,
-    };
-    const suspiciousZeros: string[] = [];
-    const zeroProgramClassifications: ZeroProgramClassification[] = [];
-
-    const zeroOutcomes = outcomes.filter((o) => o.status === 'zero');
-    for (const o of zeroOutcomes) {
-      const importsEffect = fileImportsEffect(o.file);
-      const expectedCategory = detectExpectedZeroCategory(o.file);
-      const category: ZeroProgramCategory =
-        importsEffect &&
-        !isExcludedFromSuspicious(o.file) &&
-        expectedCategory === undefined &&
-        !isLightweightEffectAdapterFile(o.file)
-          ? 'suspicious'
-          : (expectedCategory ?? 'other');
-
-      zeroProgramCategoryCounts[category]++;
-      zeroProgramClassifications.push({ file: o.file, category, importsEffect });
-      if (category === 'suspicious') suspiciousZeros.push(o.file);
+      other: 0
     }
-    const unknownNodeRate = totalNodes > 0 ? unknownNodes / totalNodes : 0;
+    const suspiciousZeros: Array<string> = []
+    const zeroProgramClassifications: Array<ZeroProgramClassification> = []
+
+    const zeroOutcomes = outcomes.filter((o) => o.status === "zero")
+    for (const o of zeroOutcomes) {
+      const importsEffect = fileImportsEffect(o.file)
+      const expectedCategory = detectExpectedZeroCategory(o.file)
+      const category: ZeroProgramCategory = importsEffect &&
+          !isExcludedFromSuspicious(o.file) &&
+          expectedCategory === undefined &&
+          !isLightweightEffectAdapterFile(o.file)
+        ? "suspicious"
+        : (expectedCategory ?? "other")
+
+      zeroProgramCategoryCounts[category]++
+      zeroProgramClassifications.push({ file: o.file, category, importsEffect })
+      if (category === "suspicious") suspiciousZeros.push(o.file)
+    }
+    const unknownNodeRate = totalNodes > 0 ? unknownNodes / totalNodes : 0
     const assessment = assessAudit({
       discoveredFiles: discovered,
       effectFiles: analyzed,
       failedFiles: failed,
       totalNodes,
-      unresolvedNodes: sourceUnresolvedNodes,
-    });
+      unresolvedNodes: sourceUnresolvedNodes
+    })
     const topUnknownFiles = fileUnknownRates
       .filter((f) => f.total > 0)
       .sort((a, b) => (b.unknown / b.total) - (a.unknown / a.total))
       .slice(0, 10)
-      .map((f) => f.file);
+      .map((f) => f.file)
 
-    const unknownReasonCounts: Record<string, number> = {};
-    for (const [reason, n] of unknownReasonsCorpus) unknownReasonCounts[reason] = n;
+    const unknownReasonCounts: Record<string, number> = {}
+    for (const [reason, n] of unknownReasonsCorpus) unknownReasonCounts[reason] = n
     const topUnknownReasons = [...unknownReasonsCorpus.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
-      .map(([reason, count]) => ({ reason, count }));
+      .map(([reason, count]) => ({ reason, count }))
 
-    const durationMs = corpus.durationMs;
+    const durationMs = corpus.durationMs
     return {
       discovered,
       analyzed,
@@ -684,7 +699,7 @@ export function runCoverageAuditFromCorpus(
       topUnknownFiles,
       unknownReasonCounts,
       topUnknownReasons,
-      durationMs,
-    };
-  });
+      durationMs
+    }
+  })
 }

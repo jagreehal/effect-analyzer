@@ -7,143 +7,143 @@
  * - R (Requirements/Context type)
  */
 
-import type { Type, Node, TypeChecker, VariableDeclaration, CallExpression, PropertyAccessExpression } from 'ts-morph';
-import { loadTsMorph } from './ts-morph-loader';
+import type { CallExpression, Node, PropertyAccessExpression, Type, TypeChecker, VariableDeclaration } from "ts-morph"
+import { loadTsMorph } from "./ts-morph-loader"
 import type {
+  CauseTypeSignature,
   EffectTypeSignature,
-  ServiceRequirement,
-  SourceLocation,
-  StreamTypeSignature,
   LayerTypeSignature,
   ScheduleTypeSignature,
-  CauseTypeSignature,
-} from './types';
+  ServiceRequirement,
+  SourceLocation,
+  StreamTypeSignature
+} from "./types"
 
 // =============================================================================
 // Type Extraction
 // =============================================================================
 
 /** Regex to parse Effect<A, E, R> from type text when Type API fails */
-const EFFECT_TYPE_REGEX_3 = /Effect(?:\.Effect)?<([^,]+),\s*([^,]+),\s*([^>]+)>/;
+const EFFECT_TYPE_REGEX_3 = /Effect(?:\.Effect)?<([^,]+),\s*([^,]+),\s*([^>]+)>/
 /** Regex to parse Effect<A, E> (2 params, R defaults to never) */
-const EFFECT_TYPE_REGEX_2 = /Effect(?:\.Effect)?<([^,>]+),\s*([^,>]+)>/;
+const EFFECT_TYPE_REGEX_2 = /Effect(?:\.Effect)?<([^,>]+),\s*([^,>]+)>/
 
 /**
  * Read `_tag` string literals off an error type (including unions).
  * `Data.TaggedError("NOT_FOUND")` exposes `_tag: "NOT_FOUND"`.
  */
-export function taggedErrorTagsFromType(type: Type | undefined): readonly string[] {
-  if (!type) return [];
+export function taggedErrorTagsFromType(type: Type | undefined): ReadonlyArray<string> {
+  if (!type) return []
   if (type.isUnion()) {
-    return [...new Set(type.getUnionTypes().flatMap((part) => taggedErrorTagsFromType(part)))];
+    return [...new Set(type.getUnionTypes().flatMap((part) => taggedErrorTagsFromType(part)))]
   }
 
-  const apparent = tagsFromTagProperty(type.getApparentType());
-  if (apparent.length > 0) return apparent;
-  const own = tagsFromTagProperty(type);
-  if (own.length > 0) return own;
+  const apparent = tagsFromTagProperty(type.getApparentType())
+  if (apparent.length > 0) return apparent
+  const own = tagsFromTagProperty(type)
+  if (own.length > 0) return own
 
-  const symbol = type.getSymbol() ?? type.getAliasSymbol();
-  if (!symbol) return [];
-  const tags: string[] = [];
+  const symbol = type.getSymbol() ?? type.getAliasSymbol()
+  if (!symbol) return []
+  const tags: Array<string> = []
   for (const declaration of symbol.getDeclarations()) {
-    const tagged = /TaggedError\s*\(\s*['"]([^'"]+)['"]\s*\)/.exec(declaration.getText());
-    if (tagged?.[1]) tags.push(tagged[1]);
+    const tagged = /TaggedError\s*\(\s*['"]([^'"]+)['"]\s*\)/.exec(declaration.getText())
+    if (tagged?.[1]) tags.push(tagged[1])
   }
-  return tags;
+  return tags
 }
 
-function tagsFromTagProperty(type: Type): readonly string[] {
-  const tagProperty = type.getProperty('_tag');
-  if (!tagProperty) return [];
-  const tags: string[] = [];
+function tagsFromTagProperty(type: Type): ReadonlyArray<string> {
+  const tagProperty = type.getProperty("_tag")
+  if (!tagProperty) return []
+  const tags: Array<string> = []
   for (const declaration of tagProperty.getDeclarations()) {
-    let tagType;
+    let tagType
     try {
-      tagType = declaration.getType();
+      tagType = declaration.getType()
     } catch {
-      continue;
+      continue
     }
     if (tagType.isLiteral()) {
-      const value = tagType.getLiteralValue();
-      if (typeof value === 'string') tags.push(value);
-      continue;
+      const value = tagType.getLiteralValue()
+      if (typeof value === "string") tags.push(value)
+      continue
     }
-    const quoted = /^(?:["'])([^"']+)(?:["'])$/.exec(tagType.getText());
-    if (quoted?.[1]) tags.push(quoted[1]);
+    const quoted = /^(?:["'])([^"']+)(?:["'])$/.exec(tagType.getText())
+    if (quoted?.[1]) tags.push(quoted[1])
   }
-  return tags;
+  return tags
 }
 
 const withErrorTags = (
   signature: EffectTypeSignature,
   errorType: Type | undefined,
-  node?: Node,
+  node?: Node
 ): EffectTypeSignature => {
-  const fromType = taggedErrorTagsFromType(errorType);
-  const fromSource = node ? taggedErrorTagsFromSource(node, signature.errorType) : [];
-  const errorTags = fromType.length > 0 ? fromType : fromSource;
-  return errorTags.length > 0 ? { ...signature, errorTags } : signature;
-};
+  const fromType = taggedErrorTagsFromType(errorType)
+  const fromSource = node ? taggedErrorTagsFromSource(node, signature.errorType) : []
+  const errorTags = fromType.length > 0 ? fromType : fromSource
+  return errorTags.length > 0 ? { ...signature, errorTags } : signature
+}
 
-function taggedErrorTagsFromSource(node: Node, errorTypeName: string): readonly string[] {
-  const sourceFile = node.getSourceFile();
-  const tags: string[] = [];
-  for (const name of errorTypeName.split('|').map((part) => part.trim())) {
-    const cls = sourceFile.getClass(name);
-    if (!cls) continue;
-    const text = cls.getText();
-    const tagged = /TaggedError\s*\(\s*['"]([^'"]+)['"]\s*\)/.exec(text);
+function taggedErrorTagsFromSource(node: Node, errorTypeName: string): ReadonlyArray<string> {
+  const sourceFile = node.getSourceFile()
+  const tags: Array<string> = []
+  for (const name of errorTypeName.split("|").map((part) => part.trim())) {
+    const cls = sourceFile.getClass(name)
+    if (!cls) continue
+    const text = cls.getText()
+    const tagged = /TaggedError\s*\(\s*['"]([^'"]+)['"]\s*\)/.exec(text)
     if (tagged?.[1]) {
-      tags.push(tagged[1]);
-      continue;
+      tags.push(tagged[1])
+      continue
     }
-    const field = /(?:readonly\s+)?_tag\s*=\s*['"]([^'"]+)['"]/.exec(text);
-    if (field?.[1]) tags.push(field[1]);
+    const field = /(?:readonly\s+)?_tag\s*=\s*['"]([^'"]+)['"]/.exec(text)
+    if (field?.[1]) tags.push(field[1])
   }
-  return tags;
+  return tags
 }
 
 /**
  * Build EffectTypeSignature from type text using regex (fallback when Type API has no type args).
  */
 export function effectTypeSignatureFromTypeText(
-  typeText: string,
+  typeText: string
 ): EffectTypeSignature | undefined {
   const clean = (s: string) =>
     s
-      .replace(/import\([^)]+\)\./g, '')
-      .replace(/typeof\s+/g, '')
+      .replace(/import\([^)]+\)\./g, "")
+      .replace(/typeof\s+/g, "")
       .trim()
-      .substring(0, 200);
+      .substring(0, 200)
 
   // Try 3-param: Effect<A, E, R>
-  const match3 = EFFECT_TYPE_REGEX_3.exec(typeText);
+  const match3 = EFFECT_TYPE_REGEX_3.exec(typeText)
   if (match3) {
     return {
       successType: clean(match3[1]!),
       errorType: clean(match3[2]!),
       requirementsType: clean(match3[3]!),
       isInferred: false,
-      typeConfidence: 'inferred',
-      rawTypeString: typeText,
-    };
+      typeConfidence: "inferred",
+      rawTypeString: typeText
+    }
   }
 
   // Try 2-param: Effect<A, E> (R defaults to never)
-  const match2 = EFFECT_TYPE_REGEX_2.exec(typeText);
+  const match2 = EFFECT_TYPE_REGEX_2.exec(typeText)
   if (match2) {
     return {
       successType: clean(match2[1]!),
       errorType: clean(match2[2]!),
-      requirementsType: 'never',
+      requirementsType: "never",
       isInferred: false,
-      typeConfidence: 'inferred',
-      rawTypeString: typeText,
-    };
+      typeConfidence: "inferred",
+      rawTypeString: typeText
+    }
   }
 
-  return undefined;
+  return undefined
 }
 
 /**
@@ -152,33 +152,33 @@ export function effectTypeSignatureFromTypeText(
  */
 function tryResolveGenericFromInnerExpression(
   node: Node,
-  typeChecker: TypeChecker,
+  typeChecker: TypeChecker
 ): { errorType: string } | undefined {
   try {
-    const { SyntaxKind } = loadTsMorph();
+    const { SyntaxKind } = loadTsMorph()
     if (node.getKind() === SyntaxKind.CallExpression) {
-      const call = node as CallExpression;
-      const expr = call.getExpression();
+      const call = node as CallExpression
+      const expr = call.getExpression()
       // For pipe chains: base.pipe(Effect.withSpan("x")) — check the base expression
       if (expr.getKind() === SyntaxKind.PropertyAccessExpression) {
-        const propAccess = expr as PropertyAccessExpression;
-        if (propAccess.getName() === 'pipe') {
-          const baseExpr = propAccess.getExpression();
+        const propAccess = expr as PropertyAccessExpression
+        if (propAccess.getName() === "pipe") {
+          const baseExpr = propAccess.getExpression()
           if (baseExpr) {
-            const baseSig = extractEffectTypeSignature(baseExpr, typeChecker);
+            const baseSig = extractEffectTypeSignature(baseExpr, typeChecker)
             if (baseSig && !/^[A-Z]$/.test(baseSig.errorType)) {
-              return { errorType: baseSig.errorType };
+              return { errorType: baseSig.errorType }
             }
           }
         }
       }
       // For curried calls: Effect.withSpan("name")(effect) — check the argument
-      const args = call.getArguments();
+      const args = call.getArguments()
       if (args.length > 0) {
         for (const arg of args) {
-          const argSig = extractEffectTypeSignature(arg, typeChecker);
+          const argSig = extractEffectTypeSignature(arg, typeChecker)
           if (argSig && !/^[A-Z]$/.test(argSig.errorType)) {
-            return { errorType: argSig.errorType };
+            return { errorType: argSig.errorType }
           }
         }
       }
@@ -186,7 +186,7 @@ function tryResolveGenericFromInnerExpression(
   } catch {
     // Type resolution can fail; return undefined
   }
-  return undefined;
+  return undefined
 }
 
 /**
@@ -194,87 +194,95 @@ function tryResolveGenericFromInnerExpression(
  */
 export const extractEffectTypeSignature = (
   node: Node,
-  _typeChecker: TypeChecker,
+  _typeChecker: TypeChecker
 ): EffectTypeSignature | undefined => {
   // Get the type of the node (can throw when type checker is unavailable)
-  let nodeType;
+  let nodeType
   try {
-    nodeType = node.getType();
+    nodeType = node.getType()
   } catch {
-    return undefined;
+    return undefined
   }
 
   // Check if it's an Effect type
   if (!isEffectType(nodeType)) {
-    return undefined;
+    return undefined
   }
 
   // Extract type arguments (A, E, R)
-  const typeArgs = extractTypeArguments(nodeType);
+  const typeArgs = extractTypeArguments(nodeType)
 
   if (typeArgs) {
-    const [aType, eType, rType] = typeArgs;
-    const errorTypeStr = typeToString(eType);
+    const [aType, eType, rType] = typeArgs
+    const errorTypeStr = typeToString(eType)
 
     // If errorType is a single-letter type parameter (e.g. "E"), try to resolve
     // from the call's inner expression type
     if (/^[A-Z]$/.test(errorTypeStr)) {
-      const resolved = tryResolveGenericFromInnerExpression(node, _typeChecker);
+      const resolved = tryResolveGenericFromInnerExpression(node, _typeChecker)
       if (resolved) {
-        return withErrorTags({
-          successType: typeToString(aType),
-          errorType: resolved.errorType,
-          requirementsType: typeToString(rType),
-          isInferred: true,
-          typeConfidence: 'inferred',
-          rawTypeString: nodeType.getText(),
-        }, eType, node);
+        return withErrorTags(
+          {
+            successType: typeToString(aType),
+            errorType: resolved.errorType,
+            requirementsType: typeToString(rType),
+            isInferred: true,
+            typeConfidence: "inferred",
+            rawTypeString: nodeType.getText()
+          },
+          eType,
+          node
+        )
       }
     }
 
-    return withErrorTags({
-      successType: typeToString(aType),
-      errorType: errorTypeStr,
-      requirementsType: typeToString(rType),
-      isInferred: true,
-      typeConfidence: 'declared',
-      rawTypeString: nodeType.getText(),
-    }, eType, node);
+    return withErrorTags(
+      {
+        successType: typeToString(aType),
+        errorType: errorTypeStr,
+        requirementsType: typeToString(rType),
+        isInferred: true,
+        typeConfidence: "declared",
+        rawTypeString: nodeType.getText()
+      },
+      eType,
+      node
+    )
   }
 
   // Fallback: parse A, E, R from type text when Type API doesn't provide type args
-  const typeText = nodeType.getText();
-  const fromText = effectTypeSignatureFromTypeText(typeText);
+  const typeText = nodeType.getText()
+  const fromText = effectTypeSignatureFromTypeText(typeText)
   if (fromText) {
-    const eTrim = fromText.errorType.trim();
+    const eTrim = fromText.errorType.trim()
     if (/^[A-Z]$/.test(eTrim)) {
-      const resolved = tryResolveGenericFromInnerExpression(node, _typeChecker);
+      const resolved = tryResolveGenericFromInnerExpression(node, _typeChecker)
       if (resolved) {
         return {
           ...fromText,
           errorType: resolved.errorType,
           isInferred: true,
-          typeConfidence: 'inferred',
-          rawTypeString: nodeType.getText(),
-        };
+          typeConfidence: "inferred",
+          rawTypeString: nodeType.getText()
+        }
       }
     }
-    return withErrorTags(fromText, undefined, node);
+    return withErrorTags(fromText, undefined, node)
   }
 
   // Fallback: resolve the callee function's return type annotation
-  const fromCallee = tryExtractFromCalleeReturnType(node);
-  if (fromCallee) return withErrorTags(fromCallee, undefined, node);
+  const fromCallee = tryExtractFromCalleeReturnType(node)
+  if (fromCallee) return withErrorTags(fromCallee, undefined, node)
 
   return {
-    successType: 'unknown',
-    errorType: 'never',
-    requirementsType: 'never',
+    successType: "unknown",
+    errorType: "never",
+    requirementsType: "never",
     isInferred: false,
-    typeConfidence: 'unknown',
-    rawTypeString: typeText,
-  };
-};
+    typeConfidence: "unknown",
+    rawTypeString: typeText
+  }
+}
 
 /**
  * When a call expression's resolved type lacks type args, try to extract
@@ -287,114 +295,122 @@ export const extractEffectTypeSignature = (
 function tryExtractFromCalleeReturnType(node: Node): EffectTypeSignature | undefined {
   try {
     // Only works for call expressions
-    if (!('getExpression' in node)) return undefined;
-    const call = node as CallExpression;
-    const callee = call.getExpression();
+    if (!("getExpression" in node)) return undefined
+    const call = node as CallExpression
+    const callee = call.getExpression()
 
     // Try to get the callee's return type from its signature
-    const calleeType = callee.getType();
-    const callSignatures = calleeType.getCallSignatures();
+    const calleeType = callee.getType()
+    const callSignatures = calleeType.getCallSignatures()
     if (callSignatures.length > 0) {
-      const returnType = callSignatures[0]!.getReturnType();
+      const returnType = callSignatures[0]!.getReturnType()
 
       // Try type arguments on the return type
-      const returnArgs = extractTypeArguments(returnType);
+      const returnArgs = extractTypeArguments(returnType)
       if (returnArgs) {
-        const [aType, eType, rType] = returnArgs;
-        return withErrorTags({
-          successType: typeToString(aType),
-          errorType: typeToString(eType),
-          requirementsType: typeToString(rType),
-          isInferred: true,
-          typeConfidence: 'inferred',
-          rawTypeString: returnType.getText(),
-        }, eType, node);
+        const [aType, eType, rType] = returnArgs
+        return withErrorTags(
+          {
+            successType: typeToString(aType),
+            errorType: typeToString(eType),
+            requirementsType: typeToString(rType),
+            isInferred: true,
+            typeConfidence: "inferred",
+            rawTypeString: returnType.getText()
+          },
+          eType,
+          node
+        )
       }
 
       // Try regex on the return type text
-      const returnText = returnType.getText();
-      const fromReturnText = effectTypeSignatureFromTypeText(returnText);
-      if (fromReturnText) return fromReturnText;
+      const returnText = returnType.getText()
+      const fromReturnText = effectTypeSignatureFromTypeText(returnText)
+      if (fromReturnText) return fromReturnText
     }
 
     // Try to resolve the callee to its declaration and read the return type annotation
-    const symbol = callee.getSymbol();
-    if (!symbol) return undefined;
+    const symbol = callee.getSymbol()
+    if (!symbol) return undefined
 
     for (const decl of symbol.getDeclarations()) {
       // Get the return type annotation text from the declaration
-      let returnTypeText: string | undefined;
+      let returnTypeText: string | undefined
 
-      if ('getReturnType' in decl) {
+      if ("getReturnType" in decl) {
         // Function/method declarations
-        const declType = (decl as { getReturnType: () => Type }).getReturnType();
-        returnTypeText = declType.getText();
-      } else if ('getType' in decl) {
+        const declType = (decl as { getReturnType: () => Type }).getReturnType()
+        returnTypeText = declType.getText()
+      } else if ("getType" in decl) {
         // Variable declarations: get the type of the variable, then its call signatures
-        const varType = (decl as { getType: () => Type }).getType();
-        const sigs = varType.getCallSignatures();
+        const varType = (decl as { getType: () => Type }).getType()
+        const sigs = varType.getCallSignatures()
         if (sigs.length > 0) {
-          const retType = sigs[0]!.getReturnType();
-          const retArgs = extractTypeArguments(retType);
+          const retType = sigs[0]!.getReturnType()
+          const retArgs = extractTypeArguments(retType)
           if (retArgs) {
-            const [aType, eType, rType] = retArgs;
-            return withErrorTags({
-              successType: typeToString(aType),
-              errorType: typeToString(eType),
-              requirementsType: typeToString(rType),
-              isInferred: true,
-              typeConfidence: 'inferred',
-              rawTypeString: retType.getText(),
-            }, eType, node);
+            const [aType, eType, rType] = retArgs
+            return withErrorTags(
+              {
+                successType: typeToString(aType),
+                errorType: typeToString(eType),
+                requirementsType: typeToString(rType),
+                isInferred: true,
+                typeConfidence: "inferred",
+                rawTypeString: retType.getText()
+              },
+              eType,
+              node
+            )
           }
-          returnTypeText = retType.getText();
+          returnTypeText = retType.getText()
         }
       }
 
       if (returnTypeText) {
-        const fromAnnotation = effectTypeSignatureFromTypeText(returnTypeText);
+        const fromAnnotation = effectTypeSignatureFromTypeText(returnTypeText)
         if (fromAnnotation) {
-          return { ...fromAnnotation, typeConfidence: 'inferred' };
+          return { ...fromAnnotation, typeConfidence: "inferred" }
         }
       }
     }
   } catch {
     // Callee resolution can fail for dynamic or unresolvable expressions
   }
-  return undefined;
+  return undefined
 }
 
 /**
  * Check if a type is an Effect type
  */
 const isEffectType = (type: Type): boolean => {
-  const symbol = type.getSymbol();
-  const typeText = type.getText();
-  
+  const symbol = type.getSymbol()
+  const typeText = type.getText()
+
   // Check by symbol name
   if (symbol) {
-    const name = symbol.getName();
-    if (name === 'Effect' || name.includes('Effect')) {
-      return true;
+    const name = symbol.getName()
+    if (name === "Effect" || name.includes("Effect")) {
+      return true
     }
   }
-  
+
   // Check by type text pattern
-  if (typeText.includes('Effect<') || typeText.startsWith('Effect.')) {
-    return true;
+  if (typeText.includes("Effect<") || typeText.startsWith("Effect.")) {
+    return true
   }
-  
+
   // Check for Effect interface
-  const aliasSymbol = type.getAliasSymbol();
+  const aliasSymbol = type.getAliasSymbol()
   if (aliasSymbol) {
-    const aliasName = aliasSymbol.getName();
-    if (aliasName === 'Effect' || aliasName.includes('Effect')) {
-      return true;
+    const aliasName = aliasSymbol.getName()
+    if (aliasName === "Effect" || aliasName.includes("Effect")) {
+      return true
     }
   }
-  
-  return false;
-};
+
+  return false
+}
 
 /**
  * Extract type arguments from an Effect type
@@ -402,32 +418,32 @@ const isEffectType = (type: Type): boolean => {
  */
 const extractTypeArguments = (type: Type): [Type, Type, Type] | undefined => {
   try {
-    const typeArgs = type.getTypeArguments?.();
+    const typeArgs = type.getTypeArguments?.()
     if (!typeArgs || typeArgs.length < 3) {
-      const aliasTypeArgs = type.getAliasTypeArguments?.();
+      const aliasTypeArgs = type.getAliasTypeArguments?.()
       if (aliasTypeArgs && aliasTypeArgs.length >= 3) {
-        return [aliasTypeArgs[0]!, aliasTypeArgs[1]!, aliasTypeArgs[2]!];
+        return [aliasTypeArgs[0]!, aliasTypeArgs[1]!, aliasTypeArgs[2]!]
       }
-      return undefined;
+      return undefined
     }
-    return [typeArgs[0]!, typeArgs[1]!, typeArgs[2]!];
+    return [typeArgs[0]!, typeArgs[1]!, typeArgs[2]!]
   } catch {
-    return undefined;
+    return undefined
   }
-};
+}
 
 /**
  * Convert a Type to a readable string
  */
 const typeToString = (type: Type): string => {
-  const text = type.getText();
-  
+  const text = type.getText()
+
   // Clean up the type string
   return text
-    .replace(/import\([^)]+\)\./g, '') // Remove import paths
-    .replace(/typeof\s+/g, '') // Remove typeof
-    .substring(0, 200); // Limit length
-};
+    .replace(/import\([^)]+\)\./g, "") // Remove import paths
+    .replace(/typeof\s+/g, "") // Remove typeof
+    .substring(0, 200) // Limit length
+}
 
 // =============================================================================
 // Service Requirement Extraction
@@ -438,125 +454,125 @@ const typeToString = (type: Type): string => {
  */
 export const extractServiceRequirements = (
   node: Node,
-  _typeChecker: TypeChecker,
-): ServiceRequirement[] => {
-  const requirements: ServiceRequirement[] = [];
-  
+  _typeChecker: TypeChecker
+): Array<ServiceRequirement> => {
+  const requirements: Array<ServiceRequirement> = []
+
   // Try to get the type - first from the node, then from type annotation
-  let nodeType = node.getType();
-  let locationNode: Node = node;
-  
+  let nodeType = node.getType()
+  let locationNode: Node = node
+
   // If node type doesn't have the required info, try to get declared type from variable
-  let nodeTypeArgs: readonly Type[] | undefined;
+  let nodeTypeArgs: ReadonlyArray<Type> | undefined
   try {
-    nodeTypeArgs = typeof nodeType.getTypeArguments === 'function' ? nodeType.getTypeArguments() : undefined;
+    nodeTypeArgs = typeof nodeType.getTypeArguments === "function" ? nodeType.getTypeArguments() : undefined
   } catch {
-    nodeTypeArgs = undefined;
+    nodeTypeArgs = undefined
   }
   if (!nodeTypeArgs || nodeTypeArgs.length < 3) {
-    const parent = node.getParent();
-    if (parent?.getKindName() === 'VariableDeclaration') {
-      const varDecl = parent as VariableDeclaration;
-      const declaredType = varDecl.getType();
+    const parent = node.getParent()
+    if (parent?.getKindName() === "VariableDeclaration") {
+      const varDecl = parent as VariableDeclaration
+      const declaredType = varDecl.getType()
       if (declaredType) {
-        nodeType = declaredType;
-        locationNode = varDecl;
+        nodeType = declaredType
+        locationNode = varDecl
       }
     }
   }
-  
+
   // Check if type contains Context requirements
-  const rType = extractRequirementsType(nodeType);
-  if (!rType) return requirements;
-  
+  const rType = extractRequirementsType(nodeType)
+  if (!rType) return requirements
+
   // Extract individual services from the Context type
-  const services = extractServicesFromContext(rType);
-  
+  const services = extractServicesFromContext(rType)
+
   for (const service of services) {
-    const sourceFile = locationNode.getSourceFile();
-    const offset = locationNode.getStart();
-    const { line, column } = sourceFile.getLineAndColumnAtPos(offset);
+    const sourceFile = locationNode.getSourceFile()
+    const offset = locationNode.getStart()
+    const { line, column } = sourceFile.getLineAndColumnAtPos(offset)
     const location: SourceLocation = {
       filePath: sourceFile.getFilePath(),
       line,
       column,
-      offset,
-    };
-    
+      offset
+    }
+
     requirements.push({
       serviceId: service.id,
       serviceType: service.typeName,
-      requiredAt: location,
-    });
+      requiredAt: location
+    })
   }
-  
-  return requirements;
-};
+
+  return requirements
+}
 
 /**
  * Extract the R (requirements) type from an Effect type
  */
 const extractRequirementsType = (type: Type): Type | undefined => {
-  const typeArgs = extractTypeArguments(type);
-  if (!typeArgs) return undefined;
-  
-  return typeArgs[2]; // R is the third type parameter
-};
+  const typeArgs = extractTypeArguments(type)
+  if (!typeArgs) return undefined
+
+  return typeArgs[2] // R is the third type parameter
+}
 
 /**
  * Extract individual service types from a Context type
  */
-const extractServicesFromContext = (contextType: Type): { id: string; typeName: string }[] => {
-  const services: { id: string; typeName: string }[] = [];
-  
+const extractServicesFromContext = (contextType: Type): Array<{ id: string; typeName: string }> => {
+  const services: Array<{ id: string; typeName: string }> = []
+
   // Check if it's Context<Tag>
-  const typeText = contextType.getText();
-  
+  const typeText = contextType.getText()
+
   // Try to extract Tag identifier from Context<Tag>
-  const contextMatch = /Context<([^>]+)>/.exec(typeText);
+  const contextMatch = /Context<([^>]+)>/.exec(typeText)
   if (contextMatch) {
-    const tagType = contextMatch[1]!;
+    const tagType = contextMatch[1]!
     services.push({
       id: extractTagIdentifier(tagType),
-      typeName: tagType,
-    });
+      typeName: tagType
+    })
   }
-  
+
   // Check for intersection types (Context<A> | Context<B>)
-  if (typeText.includes('|')) {
-    const parts = splitTopLevelUnion(typeText);
+  if (typeText.includes("|")) {
+    const parts = splitTopLevelUnion(typeText)
     for (const part of parts) {
-      const match = /Context<([^>]+)>/.exec(part);
+      const match = /Context<([^>]+)>/.exec(part)
       if (match) {
         services.push({
           id: extractTagIdentifier(match[1]!),
-          typeName: match[1]!,
-        });
+          typeName: match[1]!
+        })
       }
     }
   }
-  
+
   // Check for never type (no requirements)
-  if (typeText === 'never' || typeText === '{}') {
-    return [];
+  if (typeText === "never" || typeText === "{}") {
+    return []
   }
-  
-  return services;
-};
+
+  return services
+}
 
 /**
  * Extract tag identifier from a Tag type string
  */
 const extractTagIdentifier = (tagType: string): string => {
   // Try to extract from Tag<"identifier", ...>
-  const match = /Tag<["']([^"']+)["']/.exec(tagType);
+  const match = /Tag<["']([^"']+)["']/.exec(tagType)
   if (match) {
-    return match[1]!;
+    return match[1]!
   }
-  
+
   // Fallback: use the type name
-  return tagType.split('<')[0]!.trim();
-};
+  return tagType.split("<")[0]!.trim()
+}
 
 // =============================================================================
 // Type Transformation Tracking
@@ -568,27 +584,27 @@ const extractTagIdentifier = (tagType: string): string => {
 export const trackTypeTransformation = (
   inputType: EffectTypeSignature,
   operation: string,
-  outputType: EffectTypeSignature,
+  outputType: EffectTypeSignature
 ): { operation: string; typeChange: string } => {
-  const changes: string[] = [];
-  
+  const changes: Array<string> = []
+
   if (inputType.successType !== outputType.successType) {
-    changes.push(`${inputType.successType} → ${outputType.successType}`);
+    changes.push(`${inputType.successType} → ${outputType.successType}`)
   }
-  
+
   if (inputType.errorType !== outputType.errorType) {
-    changes.push(`${inputType.errorType} → ${outputType.errorType}`);
+    changes.push(`${inputType.errorType} → ${outputType.errorType}`)
   }
-  
+
   if (inputType.requirementsType !== outputType.requirementsType) {
-    changes.push(`${inputType.requirementsType} → ${outputType.requirementsType}`);
+    changes.push(`${inputType.requirementsType} → ${outputType.requirementsType}`)
   }
-  
+
   return {
     operation,
-    typeChange: changes.length > 0 ? changes.join(', ') : 'no change',
-  };
-};
+    typeChange: changes.length > 0 ? changes.join(", ") : "no change"
+  }
+}
 
 // =============================================================================
 // Utility Functions
@@ -598,62 +614,62 @@ export const trackTypeTransformation = (
  * Split a type string on top-level `|` only, respecting angle brackets and string literals.
  * e.g. `Envelope<"A" | "B"> | FooError` → `["Envelope<\"A\" | \"B\">", "FooError"]`
  */
-export function splitTopLevelUnion(typeText: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  let depth = 0;      // angle bracket depth
-  let inString: string | null = null;
+export function splitTopLevelUnion(typeText: string): Array<string> {
+  const parts: Array<string> = []
+  let current = ""
+  let depth = 0 // angle bracket depth
+  let inString: string | null = null
 
   for (let i = 0; i < typeText.length; i++) {
-    const ch = typeText[i]!;
+    const ch = typeText[i]!
 
     if (inString) {
-      current += ch;
-      if (ch === inString && typeText[i - 1] !== '\\') {
-        inString = null;
+      current += ch
+      if (ch === inString && typeText[i - 1] !== "\\") {
+        inString = null
       }
-      continue;
+      continue
     }
 
-    if (ch === '"' || ch === "'" || ch === '`') {
-      inString = ch;
-      current += ch;
-      continue;
+    if (ch === "\"" || ch === "'" || ch === "`") {
+      inString = ch
+      current += ch
+      continue
     }
 
-    if (ch === '<' || ch === '(') {
-      depth++;
-      current += ch;
-      continue;
+    if (ch === "<" || ch === "(") {
+      depth++
+      current += ch
+      continue
     }
 
-    if (ch === '>' || ch === ')') {
-      depth = Math.max(0, depth - 1);
-      current += ch;
-      continue;
+    if (ch === ">" || ch === ")") {
+      depth = Math.max(0, depth - 1)
+      current += ch
+      continue
     }
 
-    if (ch === '|' && depth === 0) {
-      parts.push(current.trim());
-      current = '';
-      continue;
+    if (ch === "|" && depth === 0) {
+      parts.push(current.trim())
+      current = ""
+      continue
     }
 
-    current += ch;
+    current += ch
   }
 
-  const last = current.trim();
-  if (last) parts.push(last);
+  const last = current.trim()
+  if (last) parts.push(last)
 
-  return parts.filter(Boolean);
+  return parts.filter(Boolean)
 }
 
 /**
  * Format type signature for display
  */
 export const formatTypeSignature = (sig: EffectTypeSignature): string => {
-  return `Effect<${sig.successType}, ${sig.errorType}, ${sig.requirementsType}>`;
-};
+  return `Effect<${sig.successType}, ${sig.errorType}, ${sig.requirementsType}>`
+}
 
 // =============================================================================
 // Stream / Layer / Schedule / Cause type extraction (21.3)
@@ -661,73 +677,73 @@ export const formatTypeSignature = (sig: EffectTypeSignature): string => {
 
 const cleanTypeArg = (s: string): string =>
   s
-    .replace(/import\([^)]+\)\./g, '')
-    .replace(/typeof\s+/g, '')
+    .replace(/import\([^)]+\)\./g, "")
+    .replace(/typeof\s+/g, "")
     .trim()
-    .substring(0, 200);
+    .substring(0, 200)
 
 /** Regexes for type args when Type API has no type arguments */
-const STREAM_TYPE_REGEX = /Stream<([^,]+),\s*([^,]+),\s*([^>]+)>/;
-const LAYER_TYPE_REGEX = /Layer<([^,]+),\s*([^,]+),\s*([^>]+)>/;
-const SCHEDULE_TYPE_REGEX = /Schedule<([^,]+),\s*([^,]+),\s*([^>]+)>/;
-const CAUSE_TYPE_REGEX = /Cause<([^>]+)>/;
+const STREAM_TYPE_REGEX = /Stream<([^,]+),\s*([^,]+),\s*([^>]+)>/
+const LAYER_TYPE_REGEX = /Layer<([^,]+),\s*([^,]+),\s*([^>]+)>/
+const SCHEDULE_TYPE_REGEX = /Schedule<([^,]+),\s*([^,]+),\s*([^>]+)>/
+const CAUSE_TYPE_REGEX = /Cause<([^>]+)>/
 
 /**
  * Extract Stream<A, E, R> type args from a node's type (regex fallback).
  */
 export function extractStreamTypeSignature(node: Node): StreamTypeSignature | undefined {
-  const typeText = node.getType().getText();
-  const match = STREAM_TYPE_REGEX.exec(typeText);
-  if (!match) return undefined;
+  const typeText = node.getType().getText()
+  const match = STREAM_TYPE_REGEX.exec(typeText)
+  if (!match) return undefined
   return {
     successType: cleanTypeArg(match[1]!),
     errorType: cleanTypeArg(match[2]!),
     requirementsType: cleanTypeArg(match[3]!),
-    rawTypeString: typeText,
-  };
+    rawTypeString: typeText
+  }
 }
 
 /**
  * Extract Layer<ROut, E, RIn> type args from a node's type (regex fallback).
  */
 export function extractLayerTypeSignature(node: Node): LayerTypeSignature | undefined {
-  const typeText = node.getType().getText();
-  const match = LAYER_TYPE_REGEX.exec(typeText);
-  if (!match) return undefined;
+  const typeText = node.getType().getText()
+  const match = LAYER_TYPE_REGEX.exec(typeText)
+  if (!match) return undefined
   return {
     providedType: cleanTypeArg(match[1]!),
     errorType: cleanTypeArg(match[2]!),
     requiredType: cleanTypeArg(match[3]!),
-    rawTypeString: typeText,
-  };
+    rawTypeString: typeText
+  }
 }
 
 /**
  * Extract Schedule<Out, In, R> type args from a node's type (regex fallback).
  */
 export function extractScheduleTypeSignature(node: Node): ScheduleTypeSignature | undefined {
-  const typeText = node.getType().getText();
-  const match = SCHEDULE_TYPE_REGEX.exec(typeText);
-  if (!match) return undefined;
+  const typeText = node.getType().getText()
+  const match = SCHEDULE_TYPE_REGEX.exec(typeText)
+  if (!match) return undefined
   return {
     outputType: cleanTypeArg(match[1]!),
     inputType: cleanTypeArg(match[2]!),
     requirementsType: cleanTypeArg(match[3]!),
-    rawTypeString: typeText,
-  };
+    rawTypeString: typeText
+  }
 }
 
 /**
  * Extract Cause<E> type arg from a node's type (regex fallback).
  */
 export function extractCauseTypeSignature(node: Node): CauseTypeSignature | undefined {
-  const typeText = node.getType().getText();
-  const match = CAUSE_TYPE_REGEX.exec(typeText);
-  if (!match) return undefined;
+  const typeText = node.getType().getText()
+  const match = CAUSE_TYPE_REGEX.exec(typeText)
+  if (!match) return undefined
   return {
     errorType: cleanTypeArg(match[1]!),
-    rawTypeString: typeText,
-  };
+    rawTypeString: typeText
+  }
 }
 
 // =============================================================================
@@ -738,29 +754,29 @@ export function extractCauseTypeSignature(node: Node): CauseTypeSignature | unde
  * Check if a type is a Schema type
  */
 export const isSchemaType = (type: Type): boolean => {
-  const symbol = type.getSymbol();
+  const symbol = type.getSymbol()
   if (symbol) {
-    const name = symbol.getName();
-    return name === 'Schema' || name.includes('Schema');
+    const name = symbol.getName()
+    return name === "Schema" || name.includes("Schema")
   }
-  
-  const typeText = type.getText();
-  return typeText.includes('Schema<') || typeText.startsWith('Schema.');
-};
+
+  const typeText = type.getText()
+  return typeText.includes("Schema<") || typeText.startsWith("Schema.")
+}
 
 /**
  * Extract Schema validation information
  */
 export const extractSchemaInfo = (type: Type): { encoded: string; decoded: string } | undefined => {
-  if (!isSchemaType(type)) return undefined;
-  
-  const typeArgs = type.getTypeArguments();
+  if (!isSchemaType(type)) return undefined
+
+  const typeArgs = type.getTypeArguments()
   if (typeArgs.length >= 2) {
     return {
       encoded: typeToString(typeArgs[1]!),
-      decoded: typeToString(typeArgs[0]!),
-    };
+      decoded: typeToString(typeArgs[0]!)
+    }
   }
-  
-  return undefined;
-};
+
+  return undefined
+}

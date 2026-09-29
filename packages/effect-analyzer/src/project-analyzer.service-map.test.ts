@@ -1,20 +1,20 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { describe, it, expect } from 'vitest';
-import { Effect } from 'effect';
-import { analyzeProject } from './project-analyzer';
+import { Effect } from "effect"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { describe, expect, it } from "vitest"
+import { analyzeProject } from "./project-analyzer"
 
-describe('analyzeProject service-map integration', () => {
-  it('includes service tags declared in zero-program files', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'effect-analyze-service-map-'));
+describe("analyzeProject service-map integration", () => {
+  it("includes service tags declared in zero-program files", async () => {
+    const root = mkdtempSync(join(tmpdir(), "effect-analyze-service-map-"))
 
     try {
-      const srcDir = join(root, 'src');
-      mkdirSync(srcDir, { recursive: true });
+      const srcDir = join(root, "src")
+      mkdirSync(srcDir, { recursive: true })
 
       writeFileSync(
-        join(srcDir, 'services.ts'),
+        join(srcDir, "services.ts"),
         `
 import { Context } from "effect";
 
@@ -22,11 +22,11 @@ export class Logger extends Context.Tag("Logger")<Logger, {
   readonly log: (msg: string) => void
 }>() {}
 `,
-        'utf8',
-      );
+        "utf8"
+      )
 
       writeFileSync(
-        join(srcDir, 'main.ts'),
+        join(srcDir, "main.ts"),
         `
 import { Effect } from "effect";
 import { Logger } from "./services";
@@ -36,35 +36,35 @@ export const main = Effect.gen(function* () {
   return logger;
 });
 `,
-        'utf8',
-      );
+        "utf8"
+      )
 
       const result = await Effect.runPromise(
         analyzeProject(srcDir, {
           buildServiceMap: true,
-          maxDepth: 3,
-        }),
-      );
+          maxDepth: 3
+        })
+      )
 
-      const serviceMap = result.serviceMap;
-      expect(serviceMap).toBeDefined();
+      const serviceMap = result.serviceMap
+      expect(serviceMap).toBeDefined()
 
-      expect(serviceMap?.services.has('Logger')).toBe(true);
-      expect(serviceMap?.unresolvedServices).not.toContain('Logger');
+      expect(serviceMap?.services.has("Logger")).toBe(true)
+      expect(serviceMap?.unresolvedServices).not.toContain("Logger")
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true })
     }
-  }, 20_000);
+  }, 20_000)
 
-  it('can attach project architecture summaries', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'effect-analyze-architecture-project-'));
+  it("can attach project architecture summaries", async () => {
+    const root = mkdtempSync(join(tmpdir(), "effect-analyze-architecture-project-"))
 
     try {
-      const srcDir = join(root, 'src');
-      mkdirSync(srcDir, { recursive: true });
+      const srcDir = join(root, "src")
+      mkdirSync(srcDir, { recursive: true })
 
       writeFileSync(
-        join(srcDir, 'main.ts'),
+        join(srcDir, "main.ts"),
         `
 import * as Runtime from "./runtime";
 
@@ -82,20 +82,20 @@ export const program = Runtime.makeProgram({
   container,
 });
 `,
-        'utf8',
-      );
+        "utf8"
+      )
 
       const result = await Effect.runPromise(
         analyzeProject(srcDir, {
           buildArchitecture: true,
-          maxDepth: 3,
-        }),
-      );
+          maxDepth: 3
+        })
+      )
 
-      expect(result.architecture?.runtimes).toHaveLength(1);
-      expect(result.architecture?.runtimes[0]?.runtimeName).toBe('program');
+      expect(result.architecture?.runtimes).toHaveLength(1)
+      expect(result.architecture?.runtimes[0]?.runtimeName).toBe("program")
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true })
     }
-  }, 20_000);
-});
+  }, 20_000)
+})

@@ -3,72 +3,75 @@
  * No tests run against external repos (e.g. Effect repo) or baseline files.
  */
 
-import { describe, it, expect } from 'vitest';
-import { Effect } from 'effect';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { runCoverageAudit } from './project-analyzer';
+import { Effect } from "effect"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { join } from "path"
+import { describe, expect, it } from "vitest"
+import { runCoverageAudit } from "./project-analyzer"
 
-describe('Coverage audit', () => {
+describe("Coverage audit", () => {
   it(
-    'classifies non-Effect TS files as zero-program outcomes (not failures)',
+    "classifies non-Effect TS files as zero-program outcomes (not failures)",
     { timeout: 15_000 },
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'effectjs-audit-'));
+      const dir = mkdtempSync(join(tmpdir(), "effectjs-audit-"))
       try {
         writeFileSync(
-          join(dir, 'has-effect.ts'),
+          join(dir, "has-effect.ts"),
           [
-            'import { Effect } from "effect";',
-            'export const program = Effect.succeed(1);',
-            '',
-          ].join('\n'),
-          'utf-8',
-        );
+            "import { Effect } from \"effect\";",
+            "export const program = Effect.succeed(1);",
+            ""
+          ].join("\n"),
+          "utf-8"
+        )
         writeFileSync(
-          join(dir, 'no-effect.ts'),
+          join(dir, "no-effect.ts"),
           [
-            'export const answer = 42;',
-            'export const greet = (name: string) => `hi ${name}`;',
-            '',
-          ].join('\n'),
-          'utf-8',
-        );
+            "export const answer = 42;",
+            "export const greet = (name: string) => `hi ${name}`;",
+            ""
+          ].join("\n"),
+          "utf-8"
+        )
 
         const audit = await Effect.runPromise(
-          runCoverageAudit(dir, { extensions: ['.ts'], maxDepth: 2 }),
-        );
+          runCoverageAudit(dir, { extensions: [".ts"], maxDepth: 2 })
+        )
 
-        expect(audit.discovered).toBe(2);
-        expect(audit.analyzed).toBe(1);
-        expect(audit.zeroPrograms).toBe(1);
-        expect(audit.failed).toBe(0);
+        expect(audit.discovered).toBe(2)
+        expect(audit.analyzed).toBe(1)
+        expect(audit.zeroPrograms).toBe(1)
+        expect(audit.failed).toBe(0)
       } finally {
-        rmSync(dir, { recursive: true, force: true });
+        rmSync(dir, { recursive: true, force: true })
       }
-    },
-  );
-});
+    }
+  )
+})
 
-describe('Corpus regression / benchmark shape', () => {
-  it('produces audit result with named assessment dimensions and diagnostic rates', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'benchmark-shape-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const appPath = join(dir, 'app.ts');
+describe("Corpus regression / benchmark shape", () => {
+  it("produces audit result with named assessment dimensions and diagnostic rates", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "benchmark-shape-"))
+    const tsconfigPath = join(dir, "tsconfig.json")
+    const appPath = join(dir, "app.ts")
     try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['*.ts'] }));
-      writeFileSync(appPath, [
-        'import { Effect } from "effect";',
-        'export const program = Effect.succeed(1);',
-      ].join('\n'));
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["*.ts"] }))
+      writeFileSync(
+        appPath,
+        [
+          "import { Effect } from \"effect\";",
+          "export const program = Effect.succeed(1);"
+        ].join("\n")
+      )
 
       const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
+        runCoverageAudit(dir, { tsconfig: tsconfigPath })
+      )
 
       const benchmarkRow = {
-        repo: 'test',
+        repo: "test",
         timestamp: new Date().toISOString(),
         discovered: audit.discovered,
         analyzed: audit.analyzed,
@@ -77,319 +80,353 @@ describe('Corpus regression / benchmark shape', () => {
         assessment: audit.assessment,
         unknownNodeRate: audit.unknownNodeRate,
         suspiciousZerosCount: audit.suspiciousZeros.length,
-        durationMs: 0,
-      };
+        durationMs: 0
+      }
 
-      expect(typeof benchmarkRow.discovered).toBe('number');
-      expect(typeof benchmarkRow.analyzed).toBe('number');
+      expect(typeof benchmarkRow.discovered).toBe("number")
+      expect(typeof benchmarkRow.analyzed).toBe("number")
       expect(benchmarkRow.assessment.effectAdoption).toEqual({
         numerator: 1,
         denominator: 1,
-        rate: 1,
-      });
-      expect(benchmarkRow.assessment.analysisSuccess.rate).toBe(1);
-      expect(benchmarkRow.assessment.sourceResolution.rate).toBe(1);
-      expect(typeof benchmarkRow.unknownNodeRate).toBe('number');
-      expect(typeof benchmarkRow.suspiciousZerosCount).toBe('number');
-      expect(benchmarkRow.discovered).toBeGreaterThanOrEqual(0);
-      expect(benchmarkRow.analyzed).toBeGreaterThanOrEqual(0);
-      expect(typeof audit.totalNodes).toBe('number');
-      expect(typeof audit.unknownNodes).toBe('number');
-      expect(typeof (audit as { durationMs?: number }).durationMs).toBe('number');
+        rate: 1
+      })
+      expect(benchmarkRow.assessment.analysisSuccess.rate).toBe(1)
+      expect(benchmarkRow.assessment.sourceResolution.rate).toBe(1)
+      expect(typeof benchmarkRow.unknownNodeRate).toBe("number")
+      expect(typeof benchmarkRow.suspiciousZerosCount).toBe("number")
+      expect(benchmarkRow.discovered).toBeGreaterThanOrEqual(0)
+      expect(benchmarkRow.analyzed).toBeGreaterThanOrEqual(0)
+      expect(typeof audit.totalNodes).toBe("number")
+      expect(typeof audit.unknownNodes).toBe("number")
+      expect(typeof (audit as { durationMs?: number }).durationMs).toBe("number")
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true })
     }
-  });
+  })
 
-  it('delta vs baseline uses the named adoption rate', () => {
-    const baseline = { analyzed: 8, effectAdoption: 0.8, unknownNodeRate: 0.1 };
-    const current = { analyzed: 9, effectAdoption: 0.9, unknownNodeRate: 0.08 };
+  it("delta vs baseline uses the named adoption rate", () => {
+    const baseline = { analyzed: 8, effectAdoption: 0.8, unknownNodeRate: 0.1 }
+    const current = { analyzed: 9, effectAdoption: 0.9, unknownNodeRate: 0.08 }
     const delta = (a: typeof baseline, b: typeof current) => ({
       analyzed: b.analyzed - a.analyzed,
       unknownNodeRate: b.unknownNodeRate - a.unknownNodeRate,
-      effectAdoption: b.effectAdoption - a.effectAdoption,
-    });
-    const d = delta(baseline, current);
-    expect(typeof d.analyzed).toBe('number');
-    expect(typeof d.unknownNodeRate).toBe('number');
-    expect(typeof d.effectAdoption).toBe('number');
-    expect(d.analyzed).toBe(1);
-    expect(d.unknownNodeRate).toBeCloseTo(-0.02);
-  });
+      effectAdoption: b.effectAdoption - a.effectAdoption
+    })
+    const d = delta(baseline, current)
+    expect(typeof d.analyzed).toBe("number")
+    expect(typeof d.unknownNodeRate).toBe("number")
+    expect(typeof d.effectAdoption).toBe("number")
+    expect(d.analyzed).toBe(1)
+    expect(d.unknownNodeRate).toBeCloseTo(-0.02)
+  })
 
   it(
-    'includes topUnknownReasons and unknownReasonCounts when audit runs',
+    "includes topUnknownReasons and unknownReasonCounts when audit runs",
     { timeout: 45_000 },
     async () => {
-    const fixturesDir = join(__dirname, '__fixtures__');
-    const audit = await Effect.runPromise(
-      runCoverageAudit(fixturesDir),
-    );
-    expect(Array.isArray(audit.topUnknownReasons)).toBe(true);
-    const reasons = audit.topUnknownReasons;
-    if (reasons && reasons.length > 0) {
-      expect(reasons[0]).toHaveProperty('reason');
-      expect(reasons[0]).toHaveProperty('count');
-      expect(typeof reasons[0].count).toBe('number');
+      const fixturesDir = join(__dirname, "__fixtures__")
+      const audit = await Effect.runPromise(
+        runCoverageAudit(fixturesDir)
+      )
+      expect(Array.isArray(audit.topUnknownReasons)).toBe(true)
+      const reasons = audit.topUnknownReasons
+      if (reasons && reasons.length > 0) {
+        expect(reasons[0]).toHaveProperty("reason")
+        expect(reasons[0]).toHaveProperty("count")
+        expect(typeof reasons[0].count).toBe("number")
+      }
+      expect(typeof audit.unknownReasonCounts).toBe("object")
     }
-    expect(typeof audit.unknownReasonCounts).toBe('object');
-  });
-});
+  )
+})
 
-describe('§5 Optional: false-positive review / excludeFromSuspiciousZeros', () => {
-  it('excludes files matching excludeFromSuspiciousZeros from suspiciousZeros', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'exclude-suspicious-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const suspiciousPath = join(dir, 'imports-effect-no-programs.ts');
-    const excludedPath = join(dir, 'fixtures', 'also-zero.ts');
-    mkdirSync(join(dir, 'fixtures'), { recursive: true });
+describe("§5 Optional: false-positive review / excludeFromSuspiciousZeros", () => {
+  it("excludes files matching excludeFromSuspiciousZeros from suspiciousZeros", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "exclude-suspicious-"))
+    const tsconfigPath = join(dir, "tsconfig.json")
+    const suspiciousPath = join(dir, "imports-effect-no-programs.ts")
+    const excludedPath = join(dir, "fixtures", "also-zero.ts")
+    mkdirSync(join(dir, "fixtures"), { recursive: true })
     try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(suspiciousPath, "import { Effect } from 'effect';\n// no programs\n");
-      writeFileSync(excludedPath, "import { Effect } from 'effect';\n// no programs\n");
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+      writeFileSync(suspiciousPath, "import { Effect } from 'effect';\n// no programs\n")
+      writeFileSync(excludedPath, "import { Effect } from 'effect';\n// no programs\n")
 
       const auditWithoutExclude = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
+        runCoverageAudit(dir, { tsconfig: tsconfigPath })
+      )
       const auditWithExclude = await Effect.runPromise(
         runCoverageAudit(dir, {
           tsconfig: tsconfigPath,
-          excludeFromSuspiciousZeros: ['fixtures/', 'also-zero'],
-        }),
-      );
+          excludeFromSuspiciousZeros: ["fixtures/", "also-zero"]
+        })
+      )
 
-      expect(auditWithoutExclude.suspiciousZeros).toContain(suspiciousPath);
-      expect(auditWithoutExclude.suspiciousZeros).toContain(excludedPath);
+      expect(auditWithoutExclude.suspiciousZeros).toContain(suspiciousPath)
+      expect(auditWithoutExclude.suspiciousZeros).toContain(excludedPath)
 
-      expect(auditWithExclude.suspiciousZeros).toContain(suspiciousPath);
-      expect(auditWithExclude.suspiciousZeros).not.toContain(excludedPath);
+      expect(auditWithExclude.suspiciousZeros).toContain(suspiciousPath)
+      expect(auditWithExclude.suspiciousZeros).not.toContain(excludedPath)
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true })
     }
-  });
+  })
 
-  it('should not classify ServiceMap.Service-only files as suspicious zeros', { timeout: 15_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'servicemap-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const serviceDefPath = join(dir, 'MyService.ts');
+  it("should not classify ServiceMap.Service-only files as suspicious zeros", { timeout: 15_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "servicemap-"))
+    const tsconfigPath = join(dir, "tsconfig.json")
+    const serviceDefPath = join(dir, "MyService.ts")
     try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(serviceDefPath, [
-        'import { ServiceMap } from "effect";',
-        'import type { Effect } from "effect";',
-        '',
-        'export interface MyServiceShape {',
-        '  readonly execute: (input: string) => Effect.Effect<string>;',
-        '}',
-        '',
-        'export class MyService extends ServiceMap.Service<MyService, MyServiceShape>()("my/Service") {}',
-        '',
-      ].join('\n'));
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+      writeFileSync(
+        serviceDefPath,
+        [
+          "import { ServiceMap } from \"effect\";",
+          "import type { Effect } from \"effect\";",
+          "",
+          "export interface MyServiceShape {",
+          "  readonly execute: (input: string) => Effect.Effect<string>;",
+          "}",
+          "",
+          "export class MyService extends ServiceMap.Service<MyService, MyServiceShape>()(\"my/Service\") {}",
+          ""
+        ].join("\n")
+      )
 
       const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
+        runCoverageAudit(dir, { tsconfig: tsconfigPath })
+      )
 
       // ServiceMap.Service files should NOT be in suspiciousZeros
-      expect(audit.suspiciousZeros).not.toContain(serviceDefPath);
-      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0);
+      expect(audit.suspiciousZeros).not.toContain(serviceDefPath)
+      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0)
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true })
     }
-  });
+  })
 
-  it('should not classify lightweight Effect adapter files as suspicious zeros', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'adapter-zero-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const adapterPath = join(dir, 'crash-ui.ts');
+  it("should not classify lightweight Effect adapter files as suspicious zeros", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "adapter-zero-"))
+    const tsconfigPath = join(dir, "tsconfig.json")
+    const adapterPath = join(dir, "crash-ui.ts")
     try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(adapterPath, [
-        'import { Effect } from "effect";',
-        '',
-        'export const noOpDispatch = {',
-        '  dispatchAsync: (_message: unknown) => Effect.void,',
-        '  dispatchSync: (_message: unknown) => {},',
-        '};',
-        '',
-      ].join('\n'));
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+      writeFileSync(
+        adapterPath,
+        [
+          "import { Effect } from \"effect\";",
+          "",
+          "export const noOpDispatch = {",
+          "  dispatchAsync: (_message: unknown) => Effect.void,",
+          "  dispatchSync: (_message: unknown) => {},",
+          "};",
+          ""
+        ].join("\n")
+      )
 
       const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
+        runCoverageAudit(dir, { tsconfig: tsconfigPath })
+      )
 
-      expect(audit.suspiciousZeros).not.toContain(adapterPath);
+      expect(audit.suspiciousZeros).not.toContain(adapterPath)
       expect(
-        audit.zeroProgramClassifications.find((entry) => entry.file === adapterPath)?.category,
-      ).toBe('other');
+        audit.zeroProgramClassifications.find((entry) => entry.file === adapterPath)?.category
+      ).toBe("other")
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true })
     }
-  });
+  })
 
-  it('should not classify Option-only import files as suspicious zeros', { timeout: 15_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'option-only-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const optionOnlyPath = join(dir, 'helpers.ts');
+  it("should not classify Option-only import files as suspicious zeros", { timeout: 15_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "option-only-"))
+    const tsconfigPath = join(dir, "tsconfig.json")
+    const optionOnlyPath = join(dir, "helpers.ts")
     try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(optionOnlyPath, [
-        'import { Option } from "effect";',
-        '',
-        'export function getFirstItem(items: string[]): Option.Option<string> {',
-        '  return items.length > 0 ? Option.some(items[0]!) : Option.none();',
-        '}',
-        '',
-      ].join('\n'));
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+      writeFileSync(
+        optionOnlyPath,
+        [
+          "import { Option } from \"effect\";",
+          "",
+          "export function getFirstItem(items: string[]): Option.Option<string> {",
+          "  return items.length > 0 ? Option.some(items[0]!) : Option.none();",
+          "}",
+          ""
+        ].join("\n")
+      )
 
       const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
+        runCoverageAudit(dir, { tsconfig: tsconfigPath })
+      )
 
       // Option-only files should NOT be in suspiciousZeros
-      expect(audit.suspiciousZeros).not.toContain(optionOnlyPath);
-      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0);
+      expect(audit.suspiciousZeros).not.toContain(optionOnlyPath)
+      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0)
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true })
     }
-  });
+  })
 
-  it('should not classify Schema-only import files as suspicious zeros', { timeout: 15_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'schema-only-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
+  it("should not classify Schema-only import files as suspicious zeros", { timeout: 15_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "schema-only-"))
+    const tsconfigPath = join(dir, "tsconfig.json")
     // Use a pattern where Schema is imported but no programs are discoverable
     // (e.g. Schema used only in type annotations or re-exported)
-    const schemaOnlyPath = join(dir, 'keybindings.ts');
+    const schemaOnlyPath = join(dir, "keybindings.ts")
     try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(schemaOnlyPath, [
-        'import { Schema } from "effect";',
-        '',
-        '// Schema used only for decoding in a plain function (no Effect program)',
-        'export function decode(input: unknown): string | null {',
-        '  const result = Schema.decodeUnknownOption(Schema.String)(input);',
-        '  return result._tag === "Some" ? result.value : null;',
-        '}',
-        '',
-      ].join('\n'));
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+      writeFileSync(
+        schemaOnlyPath,
+        [
+          "import { Schema } from \"effect\";",
+          "",
+          "// Schema used only for decoding in a plain function (no Effect program)",
+          "export function decode(input: unknown): string | null {",
+          "  const result = Schema.decodeUnknownOption(Schema.String)(input);",
+          "  return result._tag === \"Some\" ? result.value : null;",
+          "}",
+          ""
+        ].join("\n")
+      )
 
       const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
+        runCoverageAudit(dir, { tsconfig: tsconfigPath })
+      )
 
-      expect(audit.suspiciousZeros).not.toContain(schemaOnlyPath);
-      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0);
+      expect(audit.suspiciousZeros).not.toContain(schemaOnlyPath)
+      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0)
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true })
     }
-  });
+  })
 
-  it('should still classify namespace Effect imports with zero programs as suspicious zeros', { timeout: 15_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'namespace-effect-zero-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const suspiciousPath = join(dir, 'helpers.ts');
+  it(
+    "should still classify namespace Effect imports with zero programs as suspicious zeros",
+    { timeout: 15_000 },
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "namespace-effect-zero-"))
+      const tsconfigPath = join(dir, "tsconfig.json")
+      const suspiciousPath = join(dir, "helpers.ts")
+      try {
+        writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+        writeFileSync(
+          suspiciousPath,
+          [
+            "import * as Effect from \"effect\";",
+            "",
+            "export type MyEffect = Effect.Effect<number>;",
+            ""
+          ].join("\n")
+        )
+
+        const audit = await Effect.runPromise(
+          runCoverageAudit(dir, { tsconfig: tsconfigPath })
+        )
+
+        expect(audit.suspiciousZeros).toContain(suspiciousPath)
+        expect(audit.zeroProgramCategoryCounts.suspicious).toBe(1)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it(
+    "should still classify effect submodule imports with zero programs as suspicious zeros",
+    { timeout: 15_000 },
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "submodule-effect-zero-"))
+      const tsconfigPath = join(dir, "tsconfig.json")
+      const suspiciousPath = join(dir, "helpers.ts")
+      try {
+        writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+        writeFileSync(
+          suspiciousPath,
+          [
+            "import * as Effect from \"effect/Effect\";",
+            "",
+            "export type MyEffect = Effect.Effect<number>;",
+            ""
+          ].join("\n")
+        )
+
+        const audit = await Effect.runPromise(
+          runCoverageAudit(dir, { tsconfig: tsconfigPath })
+        )
+
+        expect(audit.suspiciousZeros).toContain(suspiciousPath)
+        expect(audit.zeroProgramCategoryCounts.suspicious).toBe(1)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it(
+    "should not classify inline type-only effect submodule imports as suspicious zeros",
+    { timeout: 15_000 },
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "submodule-effect-type-only-"))
+      const tsconfigPath = join(dir, "tsconfig.json")
+      const typeOnlyPath = join(dir, "helpers.ts")
+      try {
+        writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+        writeFileSync(
+          typeOnlyPath,
+          [
+            "import { type Effect } from \"effect/Effect\";",
+            "",
+            "export type MyEffect = Effect<number>;",
+            ""
+          ].join("\n")
+        )
+
+        const audit = await Effect.runPromise(
+          runCoverageAudit(dir, { tsconfig: tsconfigPath })
+        )
+
+        expect(audit.suspiciousZeros).not.toContain(typeOnlyPath)
+        expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it("classifies zero-program files into expected buckets and suspicious", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "zero-buckets-"))
+    const tsconfigPath = join(dir, "tsconfig.json")
+    const indexPath = join(dir, "index.ts")
+    const configPath = join(dir, "vitest.config.ts")
+    const testPath = join(dir, "example.test.ts")
+    const typeOnlyPath = join(dir, "types.ts")
+    const suspiciousPath = join(dir, "imports-effect-no-programs.ts")
+    const otherPath = join(dir, "plain.ts")
     try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(suspiciousPath, [
-        'import * as Effect from "effect";',
-        '',
-        'export type MyEffect = Effect.Effect<number>;',
-        '',
-      ].join('\n'));
+      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts"] }))
+      writeFileSync(indexPath, "export { x } from \"./plain\";\n")
+      writeFileSync(configPath, "export default {};\n")
+      writeFileSync(testPath, "export const n = 1;\n")
+      writeFileSync(typeOnlyPath, "export interface User { id: string }\nexport type Id = string\n")
+      writeFileSync(suspiciousPath, "import { Effect } from 'effect';\n// no programs here\n")
+      writeFileSync(otherPath, "export const answer = 42;\n")
 
       const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
+        runCoverageAudit(dir, { tsconfig: tsconfigPath })
+      )
 
-      expect(audit.suspiciousZeros).toContain(suspiciousPath);
-      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(1);
+      expect(audit.failed).toBe(0)
+      expect(audit.zeroPrograms).toBe(6)
+      expect(audit.zeroProgramCategoryCounts.barrel_or_index).toBe(1)
+      expect(audit.zeroProgramCategoryCounts.config_or_build).toBe(1)
+      expect(audit.zeroProgramCategoryCounts.test_or_dtslint).toBe(1)
+      expect(audit.zeroProgramCategoryCounts.type_only).toBe(1)
+      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(1)
+      expect(audit.zeroProgramCategoryCounts.other).toBe(1)
+      expect(audit.suspiciousZeros).toContain(suspiciousPath)
+      expect(audit.zeroProgramClassifications.length).toBe(6)
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true })
     }
-  });
-
-  it('should still classify effect submodule imports with zero programs as suspicious zeros', { timeout: 15_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'submodule-effect-zero-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const suspiciousPath = join(dir, 'helpers.ts');
-    try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(suspiciousPath, [
-        'import * as Effect from "effect/Effect";',
-        '',
-        'export type MyEffect = Effect.Effect<number>;',
-        '',
-      ].join('\n'));
-
-      const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
-
-      expect(audit.suspiciousZeros).toContain(suspiciousPath);
-      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(1);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('should not classify inline type-only effect submodule imports as suspicious zeros', { timeout: 15_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'submodule-effect-type-only-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const typeOnlyPath = join(dir, 'helpers.ts');
-    try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(typeOnlyPath, [
-        'import { type Effect } from "effect/Effect";',
-        '',
-        'export type MyEffect = Effect<number>;',
-        '',
-      ].join('\n'));
-
-      const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
-
-      expect(audit.suspiciousZeros).not.toContain(typeOnlyPath);
-      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(0);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('classifies zero-program files into expected buckets and suspicious', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'zero-buckets-'));
-    const tsconfigPath = join(dir, 'tsconfig.json');
-    const indexPath = join(dir, 'index.ts');
-    const configPath = join(dir, 'vitest.config.ts');
-    const testPath = join(dir, 'example.test.ts');
-    const typeOnlyPath = join(dir, 'types.ts');
-    const suspiciousPath = join(dir, 'imports-effect-no-programs.ts');
-    const otherPath = join(dir, 'plain.ts');
-    try {
-      writeFileSync(tsconfigPath, JSON.stringify({ compilerOptions: { strict: true }, include: ['**/*.ts'] }));
-      writeFileSync(indexPath, 'export { x } from "./plain";\n');
-      writeFileSync(configPath, 'export default {};\n');
-      writeFileSync(testPath, 'export const n = 1;\n');
-      writeFileSync(typeOnlyPath, 'export interface User { id: string }\nexport type Id = string\n');
-      writeFileSync(suspiciousPath, "import { Effect } from 'effect';\n// no programs here\n");
-      writeFileSync(otherPath, 'export const answer = 42;\n');
-
-      const audit = await Effect.runPromise(
-        runCoverageAudit(dir, { tsconfig: tsconfigPath }),
-      );
-
-      expect(audit.failed).toBe(0);
-      expect(audit.zeroPrograms).toBe(6);
-      expect(audit.zeroProgramCategoryCounts.barrel_or_index).toBe(1);
-      expect(audit.zeroProgramCategoryCounts.config_or_build).toBe(1);
-      expect(audit.zeroProgramCategoryCounts.test_or_dtslint).toBe(1);
-      expect(audit.zeroProgramCategoryCounts.type_only).toBe(1);
-      expect(audit.zeroProgramCategoryCounts.suspicious).toBe(1);
-      expect(audit.zeroProgramCategoryCounts.other).toBe(1);
-      expect(audit.suspiciousZeros).toContain(suspiciousPath);
-      expect(audit.zeroProgramClassifications.length).toBe(6);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
+  })
+})

@@ -1,55 +1,55 @@
-import { describe, expect, it } from 'vitest';
-import { detectServiceCycles } from './service-cycles';
-import type { ProjectServiceMap, ServiceArtifact } from './types';
+import { describe, expect, it } from "vitest"
+import { detectServiceCycles } from "./service-cycles"
+import type { ProjectServiceMap, ServiceArtifact } from "./types"
 
-const artifact = (serviceId: string, deps: readonly string[]): ServiceArtifact => ({
+const artifact = (serviceId: string, deps: ReadonlyArray<string>): ServiceArtifact => ({
   serviceId,
   className: serviceId,
-  definitionFilePath: '/tmp/x.ts',
-  definitionLocation: { filePath: '/tmp/x.ts', line: 1, column: 1 },
+  definitionFilePath: "/tmp/x.ts",
+  definitionLocation: { filePath: "/tmp/x.ts", line: 1, column: 1 },
   definition: { methods: [], properties: [] },
   layerImplementations: [],
   consumers: [],
-  dependencies: deps,
-});
+  dependencies: deps
+})
 
-describe('detectServiceCycles', () => {
-  it('detects multi-node cycles', () => {
+describe("detectServiceCycles", () => {
+  it("detects multi-node cycles", () => {
     const map: ProjectServiceMap = {
       services: new Map([
-        ['A', artifact('A', ['B'])],
-        ['B', artifact('B', ['C'])],
-        ['C', artifact('C', ['A'])],
+        ["A", artifact("A", ["B"])],
+        ["B", artifact("B", ["C"])],
+        ["C", artifact("C", ["A"])]
       ]),
       unresolvedServices: [],
-      topologicalOrder: [],
-    };
-    const cycles = detectServiceCycles(map);
-    expect(cycles).toHaveLength(1);
-    expect(cycles[0]?.services).toEqual(['A', 'B', 'C']);
-  });
+      topologicalOrder: []
+    }
+    const cycles = detectServiceCycles(map)
+    expect(cycles).toHaveLength(1)
+    expect(cycles[0]?.services).toEqual(["A", "B", "C"])
+  })
 
-  it('detects self-loops', () => {
+  it("detects self-loops", () => {
     const map: ProjectServiceMap = {
-      services: new Map([['A', artifact('A', ['A'])]]),
+      services: new Map([["A", artifact("A", ["A"])]]),
       unresolvedServices: [],
-      topologicalOrder: [],
-    };
-    const cycles = detectServiceCycles(map);
-    expect(cycles).toHaveLength(1);
-    expect(cycles[0]?.services).toEqual(['A']);
-  });
+      topologicalOrder: []
+    }
+    const cycles = detectServiceCycles(map)
+    expect(cycles).toHaveLength(1)
+    expect(cycles[0]?.services).toEqual(["A"])
+  })
 
-  it('returns empty for acyclic graphs', () => {
+  it("returns empty for acyclic graphs", () => {
     const map: ProjectServiceMap = {
       services: new Map([
-        ['A', artifact('A', ['B'])],
-        ['B', artifact('B', ['C'])],
-        ['C', artifact('C', [])],
+        ["A", artifact("A", ["B"])],
+        ["B", artifact("B", ["C"])],
+        ["C", artifact("C", [])]
       ]),
       unresolvedServices: [],
-      topologicalOrder: ['C', 'B', 'A'],
-    };
-    expect(detectServiceCycles(map)).toEqual([]);
-  });
-});
+      topologicalOrder: ["C", "B", "A"]
+    }
+    expect(detectServiceCycles(map)).toEqual([])
+  })
+})

@@ -1,24 +1,24 @@
-import { describe, expect, it } from 'vitest';
-import type { StaticEffectIR, StaticFlowNode } from './types';
-import { computeDiagramFidelity } from './diagram-fidelity';
-import { assessIRFidelity } from './fidelity-findings';
-import { indexIR } from './ir';
-import { renderMermaidWithRuntimeTrace } from './output/mermaid';
-import { traceFromOpenTelemetry } from './runtime-trace';
+import { describe, expect, it } from "vitest"
+import { computeDiagramFidelity } from "./diagram-fidelity"
+import { assessIRFidelity } from "./fidelity-findings"
+import { indexIR } from "./ir"
+import { renderMermaidWithRuntimeTrace } from "./output/mermaid"
+import { traceFromOpenTelemetry } from "./runtime-trace"
+import type { StaticEffectIR, StaticFlowNode } from "./types"
 
-const makeIR = (children: readonly StaticFlowNode[]): StaticEffectIR => ({
+const makeIR = (children: ReadonlyArray<StaticFlowNode>): StaticEffectIR => ({
   root: {
-    id: 'root',
-    type: 'program',
-    programName: 'program',
-    source: 'direct',
+    id: "root",
+    type: "program",
+    programName: "program",
+    source: "direct",
     children,
     dependencies: [],
-    errorTypes: [],
+    errorTypes: []
   },
   metadata: {
     analyzedAt: 0,
-    filePath: 'program.ts',
+    filePath: "program.ts",
     warnings: [],
     stats: {
       totalEffects: 0,
@@ -37,93 +37,93 @@ const makeIR = (children: readonly StaticFlowNode[]): StaticEffectIR => ({
       switchCount: 0,
       tryCatchCount: 0,
       terminalCount: 0,
-      opaqueCount: 0,
-    },
+      opaqueCount: 0
+    }
   },
-  references: new Map(),
-});
+  references: new Map()
+})
 
-describe('diagram fidelity and runtime overlay', () => {
-  it('indexes nested Effect v4 span names in runtime order', () => {
+describe("diagram fidelity and runtime overlay", () => {
+  it("indexes nested Effect v4 span names in runtime order", () => {
     const ir = makeIR([{
-      id: 'op',
-      type: 'effect',
-      callee: 'Effect.succeed',
-      spanName: 'child',
-      spanNames: ['parent', 'child'],
-    }]);
+      id: "op",
+      type: "effect",
+      callee: "Effect.succeed",
+      spanName: "child",
+      spanNames: ["parent", "child"]
+    }])
 
-    const index = indexIR(ir);
-    expect(index.idsBySpanPath.get('parent')).toEqual(['op']);
-    expect(index.idsBySpanPath.get('parent\u001fchild')).toEqual(['op']);
-    expect(computeDiagramFidelity(ir).exact).toBe(true);
-  });
+    const index = indexIR(ir)
+    expect(index.idsBySpanPath.get("parent")).toEqual(["op"])
+    expect(index.idsBySpanPath.get("parent\u001fchild")).toEqual(["op"])
+    expect(computeDiagramFidelity(ir).exact).toBe(true)
+  })
 
-  it('reports unresolved, dynamic, and ambiguous source honestly', () => {
+  it("reports unresolved, dynamic, and ambiguous source honestly", () => {
     const ir = makeIR([
-      { id: 'a', type: 'effect', callee: 'Effect.succeed', spanName: 'duplicate' },
-      { id: 'b', type: 'effect', callee: 'Effect.fail', spanName: 'duplicate' },
-      { id: 'c', type: 'effect', callee: 'Effect.withSpan', spanNameDynamic: true },
-      { id: 'd', type: 'unknown', reason: 'unsupported-call', expression: 'custom()' },
-    ]);
+      { id: "a", type: "effect", callee: "Effect.succeed", spanName: "duplicate" },
+      { id: "b", type: "effect", callee: "Effect.fail", spanName: "duplicate" },
+      { id: "c", type: "effect", callee: "Effect.withSpan", spanNameDynamic: true },
+      { id: "d", type: "unknown", reason: "unsupported-call", expression: "custom()" }
+    ])
 
-    const report = computeDiagramFidelity(ir);
-    expect(report.exact).toBe(false);
-    expect(report.ambiguousRuntimeNodes).toBe(2);
-    expect(report.unresolvedNodes).toBe(2);
+    const report = computeDiagramFidelity(ir)
+    expect(report.exact).toBe(false)
+    expect(report.ambiguousRuntimeNodes).toBe(2)
+    expect(report.unresolvedNodes).toBe(2)
     expect(report.issues.map((issue) => issue.kind)).toEqual([
-      'dynamic-span-name',
-      'unknown-node',
-      'duplicate-span-path',
-      'duplicate-span-path',
-    ]);
+      "dynamic-span-name",
+      "unknown-node",
+      "duplicate-span-path",
+      "duplicate-span-path"
+    ])
 
-    const assessment = assessIRFidelity(ir);
+    const assessment = assessIRFidelity(ir)
     expect(assessment.sourceRepresentation).toMatchObject({
       exact: false,
       resolved: 3,
       total: 4,
-      rate: 0.75,
-    });
+      rate: 0.75
+    })
     expect(assessment.runtimeJoinability).toMatchObject({
       exact: false,
       resolved: 0,
       total: 3,
-      rate: 0,
-    });
-  });
+      rate: 0
+    })
+  })
 
-  it('normalizes OpenTelemetry spans and overlays exact paths', () => {
+  it("normalizes OpenTelemetry spans and overlays exact paths", () => {
     const ir = makeIR([{
-      id: 'op',
-      type: 'effect',
-      callee: 'Effect.succeed',
-      spanName: 'child',
-      spanNames: ['parent', 'child'],
-    }]);
+      id: "op",
+      type: "effect",
+      callee: "Effect.succeed",
+      spanName: "child",
+      spanNames: ["parent", "child"]
+    }])
     const spans = [
       {
-        name: 'parent',
-        spanContext: () => ({ spanId: 'p' }),
+        name: "parent",
+        spanContext: () => ({ spanId: "p" }),
         status: { code: 1 },
         startTime: [1, 0] as const,
-        endTime: [1, 1_000_000] as const,
+        endTime: [1, 1_000_000] as const
       },
       {
-        name: 'child',
-        spanContext: () => ({ spanId: 'c' }),
-        parentSpanContext: { spanId: 'p' },
-        status: { code: 2 },
-      },
-    ];
+        name: "child",
+        spanContext: () => ({ spanId: "c" }),
+        parentSpanContext: { spanId: "p" },
+        status: { code: 2 }
+      }
+    ]
 
-    const trace = traceFromOpenTelemetry(spans);
-    expect(trace.spans[0]?.durationMs).toBe(1);
-    expect(trace.spans[1]?.path).toEqual(['parent', 'child']);
+    const trace = traceFromOpenTelemetry(spans)
+    expect(trace.spans[0]?.durationMs).toBe(1)
+    expect(trace.spans[1]?.path).toEqual(["parent", "child"])
 
-    const overlay = renderMermaidWithRuntimeTrace(ir, trace);
-    expect(overlay.matchedSpanIds).toEqual(['p', 'c']);
-    expect(overlay.unmatchedSpanIds).toEqual([]);
-    expect(overlay.mermaid).toContain('classDef trace_error');
-  });
-});
+    const overlay = renderMermaidWithRuntimeTrace(ir, trace)
+    expect(overlay.matchedSpanIds).toEqual(["p", "c"])
+    expect(overlay.unmatchedSpanIds).toEqual([])
+    expect(overlay.mermaid).toContain("classDef trace_error")
+  })
+})

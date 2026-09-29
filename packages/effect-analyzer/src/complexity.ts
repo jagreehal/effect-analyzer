@@ -8,14 +8,9 @@
  * - Depth and breadth metrics
  */
 
-import { Option } from 'effect';
-import { getStaticChildren } from './types';
-import type {
-  StaticEffectIR,
-  StaticFlowNode,
-  ComplexityMetrics,
-  ComplexityThresholds,
-} from './types';
+import { Option } from "effect"
+import { getStaticChildren } from "./types"
+import type { ComplexityMetrics, ComplexityThresholds, StaticEffectIR, StaticFlowNode } from "./types"
 
 // =============================================================================
 // Default Thresholds
@@ -25,22 +20,22 @@ export const DEFAULT_THRESHOLDS: ComplexityThresholds = {
   cyclomaticWarning: 10,
   cyclomaticError: 20,
   pathCountWarning: 50,
-  maxDepthWarning: 5,
-};
+  maxDepthWarning: 5
+}
 
 // =============================================================================
 // Main Calculator
 // =============================================================================
 
 export function calculateComplexity(ir: StaticEffectIR): ComplexityMetrics {
-  const nodes = ir.root.children;
+  const nodes = ir.root.children
 
-  const cyclomatic = calculateCyclomaticComplexity(nodes);
-  const cognitive = calculateCognitiveComplexity(nodes);
-  const pathCount = calculatePathCount(nodes);
-  const maxDepth = calculateMaxDepth(nodes);
-  const maxParallelBreadth = calculateMaxParallelBreadth(nodes);
-  const decisionPoints = countDecisionPoints(nodes);
+  const cyclomatic = calculateCyclomaticComplexity(nodes)
+  const cognitive = calculateCognitiveComplexity(nodes)
+  const pathCount = calculatePathCount(nodes)
+  const maxDepth = calculateMaxDepth(nodes)
+  const maxParallelBreadth = calculateMaxParallelBreadth(nodes)
+  const decisionPoints = countDecisionPoints(nodes)
 
   return {
     cyclomaticComplexity: cyclomatic,
@@ -48,8 +43,8 @@ export function calculateComplexity(ir: StaticEffectIR): ComplexityMetrics {
     pathCount,
     maxDepth,
     maxParallelBreadth,
-    decisionPoints,
-  };
+    decisionPoints
+  }
 }
 
 // =============================================================================
@@ -57,127 +52,127 @@ export function calculateComplexity(ir: StaticEffectIR): ComplexityMetrics {
 // =============================================================================
 
 function calculateCyclomaticComplexity(
-  nodes: readonly StaticFlowNode[],
+  nodes: ReadonlyArray<StaticFlowNode>
 ): number {
-  let complexity = 1;
+  let complexity = 1
   for (const node of nodes) {
-    complexity += countDecisionPointsInNode(node);
+    complexity += countDecisionPointsInNode(node)
   }
-  return complexity;
+  return complexity
 }
 
 function countDecisionPointsInNode(node: StaticFlowNode): number {
-  const children = getStaticChildren(node);
-  const childList = Option.getOrElse(children, () => [] as readonly StaticFlowNode[]);
+  const children = getStaticChildren(node)
+  const childList = Option.getOrElse(children, () => [] as ReadonlyArray<StaticFlowNode>)
 
-  let count = 0;
+  let count = 0
 
   switch (node.type) {
-    case 'conditional':
-      count += 1;
+    case "conditional":
+      count += 1
       for (const child of childList) {
-        count += countDecisionPointsInNode(child);
+        count += countDecisionPointsInNode(child)
       }
-      break;
+      break
 
-    case 'race':
-      count += Math.max(0, node.children.length - 1);
+    case "race":
+      count += Math.max(0, node.children.length - 1)
       for (const child of node.children) {
-        count += countDecisionPointsInNode(child);
+        count += countDecisionPointsInNode(child)
       }
-      break;
+      break
 
-    case 'loop':
-      count += 1;
-      count += countDecisionPointsInNode(node.body);
-      break;
+    case "loop":
+      count += 1
+      count += countDecisionPointsInNode(node.body)
+      break
 
-    case 'generator':
-    case 'pipe':
-    case 'parallel':
-    case 'error-handler':
-    case 'retry':
-    case 'timeout':
-    case 'resource':
-    case 'layer':
+    case "generator":
+    case "pipe":
+    case "parallel":
+    case "error-handler":
+    case "retry":
+    case "timeout":
+    case "resource":
+    case "layer":
       for (const child of childList) {
-        count += countDecisionPointsInNode(child);
+        count += countDecisionPointsInNode(child)
       }
-      break;
+      break
 
-    case 'decision':
-      count += 1;
+    case "decision":
+      count += 1
       for (const child of childList) {
-        count += countDecisionPointsInNode(child);
+        count += countDecisionPointsInNode(child)
       }
-      break;
+      break
 
-    case 'switch':
-      count += Math.max(0, node.cases.length - 1);
+    case "switch":
+      count += Math.max(0, node.cases.length - 1)
       for (const child of childList) {
-        count += countDecisionPointsInNode(child);
+        count += countDecisionPointsInNode(child)
       }
-      break;
+      break
 
-    case 'try-catch':
-      count += 1;
+    case "try-catch":
+      count += 1
       for (const child of childList) {
-        count += countDecisionPointsInNode(child);
+        count += countDecisionPointsInNode(child)
       }
-      break;
+      break
 
-    case 'terminal':
-    case 'opaque':
+    case "terminal":
+    case "opaque":
       for (const child of childList) {
-        count += countDecisionPointsInNode(child);
+        count += countDecisionPointsInNode(child)
       }
-      break;
+      break
 
-    case 'match':
+    case "match":
       if (node.matchedTags && node.matchedTags.length > 1) {
-        count += node.matchedTags.length - 1;
+        count += node.matchedTags.length - 1
       }
-      break;
+      break
 
-    case 'interruption':
+    case "interruption":
       if (node.handler) {
-        count += 1;
-        count += countDecisionPointsInNode(node.handler);
+        count += 1
+        count += countDecisionPointsInNode(node.handler)
       }
       if (node.source) {
-        count += countDecisionPointsInNode(node.source);
+        count += countDecisionPointsInNode(node.source)
       }
-      break;
+      break
 
-    case 'cause':
+    case "cause":
       if (node.children) {
         for (const child of node.children) {
-          count += countDecisionPointsInNode(child);
+          count += countDecisionPointsInNode(child)
         }
       }
-      break;
+      break
 
-    case 'transform':
+    case "transform":
       if (node.source) {
-        count += countDecisionPointsInNode(node.source);
+        count += countDecisionPointsInNode(node.source)
       }
-      break;
+      break
 
-    case 'channel':
-    case 'sink':
+    case "channel":
+    case "sink":
       if (node.source) {
-        count += countDecisionPointsInNode(node.source);
+        count += countDecisionPointsInNode(node.source)
       }
-      break;
+      break
 
-    case 'exit':
-    case 'schedule':
-    case 'effect':
-    case 'unknown':
-      break;
+    case "exit":
+    case "schedule":
+    case "effect":
+    case "unknown":
+      break
   }
 
-  return count;
+  return count
 }
 
 // =============================================================================
@@ -185,155 +180,155 @@ function countDecisionPointsInNode(node: StaticFlowNode): number {
 // =============================================================================
 
 function calculateCognitiveComplexity(
-  nodes: readonly StaticFlowNode[],
+  nodes: ReadonlyArray<StaticFlowNode>
 ): number {
-  return calculateCognitiveForNodes(nodes, 0);
+  return calculateCognitiveForNodes(nodes, 0)
 }
 
 function calculateCognitiveForNodes(
-  nodes: readonly StaticFlowNode[],
-  nestingDepth: number,
+  nodes: ReadonlyArray<StaticFlowNode>,
+  nestingDepth: number
 ): number {
-  let complexity = 0;
+  let complexity = 0
   for (const node of nodes) {
-    complexity += calculateCognitiveForNode(node, nestingDepth);
+    complexity += calculateCognitiveForNode(node, nestingDepth)
   }
-  return complexity;
+  return complexity
 }
 
 function calculateCognitiveForNode(
   node: StaticFlowNode,
-  nestingDepth: number,
+  nestingDepth: number
 ): number {
-  const children = getStaticChildren(node);
-  const childList = Option.getOrElse(children, () => [] as readonly StaticFlowNode[]);
+  const children = getStaticChildren(node)
+  const childList = Option.getOrElse(children, () => [] as ReadonlyArray<StaticFlowNode>)
 
-  let complexity = 0;
+  let complexity = 0
 
   switch (node.type) {
-    case 'conditional':
-      complexity += 1 + nestingDepth;
-      complexity += calculateCognitiveForNode(node.onTrue, nestingDepth + 1);
+    case "conditional":
+      complexity += 1 + nestingDepth
+      complexity += calculateCognitiveForNode(node.onTrue, nestingDepth + 1)
       if (node.onFalse) {
-        complexity += calculateCognitiveForNode(node.onFalse, nestingDepth + 1);
+        complexity += calculateCognitiveForNode(node.onFalse, nestingDepth + 1)
       }
-      break;
+      break
 
-    case 'loop':
-      complexity += 1 + nestingDepth;
-      complexity += calculateCognitiveForNode(node.body, nestingDepth + 1);
-      break;
+    case "loop":
+      complexity += 1 + nestingDepth
+      complexity += calculateCognitiveForNode(node.body, nestingDepth + 1)
+      break
 
-    case 'race':
-      complexity += node.children.length;
+    case "race":
+      complexity += node.children.length
       for (const child of node.children) {
-        complexity += calculateCognitiveForNode(child, nestingDepth + 1);
+        complexity += calculateCognitiveForNode(child, nestingDepth + 1)
       }
-      break;
+      break
 
-    case 'parallel':
-      complexity += Math.max(0, node.children.length - 1);
+    case "parallel":
+      complexity += Math.max(0, node.children.length - 1)
       for (const child of node.children) {
-        complexity += calculateCognitiveForNode(child, nestingDepth);
+        complexity += calculateCognitiveForNode(child, nestingDepth)
       }
-      break;
+      break
 
-    case 'generator':
-    case 'pipe':
-    case 'error-handler':
-    case 'retry':
-    case 'timeout':
-    case 'resource':
-    case 'layer':
+    case "generator":
+    case "pipe":
+    case "error-handler":
+    case "retry":
+    case "timeout":
+    case "resource":
+    case "layer":
       for (const child of childList) {
-        complexity += calculateCognitiveForNode(child, nestingDepth);
+        complexity += calculateCognitiveForNode(child, nestingDepth)
       }
-      break;
+      break
 
-    case 'decision':
-      complexity += 1 + nestingDepth;
+    case "decision":
+      complexity += 1 + nestingDepth
       for (const child of node.onTrue) {
-        complexity += calculateCognitiveForNode(child, nestingDepth + 1);
+        complexity += calculateCognitiveForNode(child, nestingDepth + 1)
       }
       if (node.onFalse) {
         for (const child of node.onFalse) {
-          complexity += calculateCognitiveForNode(child, nestingDepth + 1);
+          complexity += calculateCognitiveForNode(child, nestingDepth + 1)
         }
       }
-      break;
+      break
 
-    case 'switch':
-      complexity += 1 + nestingDepth;
+    case "switch":
+      complexity += 1 + nestingDepth
       for (const caseItem of node.cases) {
         for (const child of caseItem.body) {
-          complexity += calculateCognitiveForNode(child, nestingDepth + 1);
+          complexity += calculateCognitiveForNode(child, nestingDepth + 1)
         }
       }
-      break;
+      break
 
-    case 'try-catch':
-      complexity += 1 + nestingDepth;
+    case "try-catch":
+      complexity += 1 + nestingDepth
       for (const child of childList) {
-        complexity += calculateCognitiveForNode(child, nestingDepth + 1);
+        complexity += calculateCognitiveForNode(child, nestingDepth + 1)
       }
-      break;
+      break
 
-    case 'terminal':
+    case "terminal":
       if (node.value) {
         for (const child of node.value) {
-          complexity += calculateCognitiveForNode(child, nestingDepth);
+          complexity += calculateCognitiveForNode(child, nestingDepth)
         }
       }
-      break;
+      break
 
-    case 'opaque':
-      break;
+    case "opaque":
+      break
 
-    case 'match':
+    case "match":
       if (node.matchedTags && node.matchedTags.length > 0) {
-        complexity += 1 + nestingDepth;
+        complexity += 1 + nestingDepth
       }
-      break;
+      break
 
-    case 'interruption':
+    case "interruption":
       if (node.handler) {
-        complexity += 1 + nestingDepth;
-        complexity += calculateCognitiveForNode(node.handler, nestingDepth + 1);
+        complexity += 1 + nestingDepth
+        complexity += calculateCognitiveForNode(node.handler, nestingDepth + 1)
       }
       if (node.source) {
-        complexity += calculateCognitiveForNode(node.source, nestingDepth);
+        complexity += calculateCognitiveForNode(node.source, nestingDepth)
       }
-      break;
+      break
 
-    case 'cause':
+    case "cause":
       if (node.children) {
         for (const child of node.children) {
-          complexity += calculateCognitiveForNode(child, nestingDepth);
+          complexity += calculateCognitiveForNode(child, nestingDepth)
         }
       }
-      break;
+      break
 
-    case 'transform':
+    case "transform":
       if (node.source) {
-        complexity += calculateCognitiveForNode(node.source, nestingDepth);
+        complexity += calculateCognitiveForNode(node.source, nestingDepth)
       }
-      break;
+      break
 
-    case 'channel':
-    case 'sink':
+    case "channel":
+    case "sink":
       if (node.source) {
-        complexity += calculateCognitiveForNode(node.source, nestingDepth);
+        complexity += calculateCognitiveForNode(node.source, nestingDepth)
       }
-      break;
+      break
 
-    case 'exit':
-    case 'schedule':
-    case 'effect':
-    case 'unknown':
-      break;
+    case "exit":
+    case "schedule":
+    case "effect":
+    case "unknown":
+      break
   }
 
-  return complexity;
+  return complexity
 }
 
 // =============================================================================
@@ -341,282 +336,282 @@ function calculateCognitiveForNode(
 // =============================================================================
 
 function calculatePathCount(
-  nodes: readonly StaticFlowNode[],
-): number | 'unbounded' {
-  let pathCount = 1;
-  let hasUnbounded = false;
+  nodes: ReadonlyArray<StaticFlowNode>
+): number | "unbounded" {
+  let pathCount = 1
+  let hasUnbounded = false
 
   for (const node of nodes) {
-    const result = pathCountForNode(node);
-    if (result === 'unbounded') {
-      hasUnbounded = true;
+    const result = pathCountForNode(node)
+    if (result === "unbounded") {
+      hasUnbounded = true
     } else {
-      pathCount *= result;
+      pathCount *= result
     }
   }
 
-  return hasUnbounded ? 'unbounded' : pathCount;
+  return hasUnbounded ? "unbounded" : pathCount
 }
 
-function pathCountForNode(node: StaticFlowNode): number | 'unbounded' {
-  const children = getStaticChildren(node);
-  const childList = Option.getOrElse(children, () => [] as readonly StaticFlowNode[]);
+function pathCountForNode(node: StaticFlowNode): number | "unbounded" {
+  const children = getStaticChildren(node)
+  const childList = Option.getOrElse(children, () => [] as ReadonlyArray<StaticFlowNode>)
 
   switch (node.type) {
-    case 'conditional': {
-      const truePaths = pathCountForNodes([node.onTrue]);
+    case "conditional": {
+      const truePaths = pathCountForNodes([node.onTrue])
       const falsePaths = node.onFalse
         ? pathCountForNodes([node.onFalse])
-        : 1;
-      if (truePaths === 'unbounded' || falsePaths === 'unbounded') {
-        return 'unbounded';
+        : 1
+      if (truePaths === "unbounded" || falsePaths === "unbounded") {
+        return "unbounded"
       }
-      return truePaths + falsePaths;
+      return truePaths + falsePaths
     }
 
-    case 'race': {
-      let total = 0;
+    case "race": {
+      let total = 0
       for (const child of node.children) {
-        const childPaths = pathCountForNode(child);
-        if (childPaths === 'unbounded') return 'unbounded';
-        total += childPaths;
+        const childPaths = pathCountForNode(child)
+        if (childPaths === "unbounded") return "unbounded"
+        total += childPaths
       }
-      return Math.max(1, total);
+      return Math.max(1, total)
     }
 
-    case 'parallel': {
-      let product = 1;
+    case "parallel": {
+      let product = 1
       for (const child of node.children) {
-        const childPaths = pathCountForNode(child);
-        if (childPaths === 'unbounded') return 'unbounded';
-        product *= childPaths;
+        const childPaths = pathCountForNode(child)
+        if (childPaths === "unbounded") return "unbounded"
+        product *= childPaths
       }
-      return product;
+      return product
     }
 
-    case 'loop':
-      return 'unbounded';
+    case "loop":
+      return "unbounded"
 
-    case 'generator':
-    case 'pipe':
-    case 'error-handler':
-    case 'retry':
-    case 'timeout':
-    case 'resource':
-    case 'layer':
-      return pathCountForNodes(childList);
+    case "generator":
+    case "pipe":
+    case "error-handler":
+    case "retry":
+    case "timeout":
+    case "resource":
+    case "layer":
+      return pathCountForNodes(childList)
 
-    case 'effect':
-    case 'unknown':
-    case 'opaque':
-      return 1;
+    case "effect":
+    case "unknown":
+    case "opaque":
+      return 1
 
-    case 'decision': {
-      const truePaths = pathCountForNodes([...node.onTrue]);
+    case "decision": {
+      const truePaths = pathCountForNodes([...node.onTrue])
       const falsePaths = node.onFalse
         ? pathCountForNodes([...node.onFalse])
-        : 1;
-      if (truePaths === 'unbounded' || falsePaths === 'unbounded') {
-        return 'unbounded';
+        : 1
+      if (truePaths === "unbounded" || falsePaths === "unbounded") {
+        return "unbounded"
       }
-      return truePaths + falsePaths;
+      return truePaths + falsePaths
     }
 
-    case 'switch': {
-      let total = 0;
+    case "switch": {
+      let total = 0
       for (const c of node.cases) {
-        const casePaths = pathCountForNodes([...c.body]);
-        if (casePaths === 'unbounded') return 'unbounded';
-        total += casePaths;
+        const casePaths = pathCountForNodes([...c.body])
+        if (casePaths === "unbounded") return "unbounded"
+        total += casePaths
       }
-      return Math.max(1, total);
+      return Math.max(1, total)
     }
 
-    case 'try-catch':
-    case 'terminal':
-    case 'stream':
-    case 'concurrency-primitive':
-    case 'fiber':
-    case 'interruption':
-    case 'transform':
-    case 'match':
-    case 'cause':
-    case 'exit':
-    case 'schedule':
-    case 'channel':
-    case 'sink':
-      return pathCountForNodes(childList);
+    case "try-catch":
+    case "terminal":
+    case "stream":
+    case "concurrency-primitive":
+    case "fiber":
+    case "interruption":
+    case "transform":
+    case "match":
+    case "cause":
+    case "exit":
+    case "schedule":
+    case "channel":
+    case "sink":
+      return pathCountForNodes(childList)
   }
 }
 
 function pathCountForNodes(
-  nodes: readonly StaticFlowNode[],
-): number | 'unbounded' {
-  let product = 1;
+  nodes: ReadonlyArray<StaticFlowNode>
+): number | "unbounded" {
+  let product = 1
   for (const node of nodes) {
-    const paths = pathCountForNode(node);
-    if (paths === 'unbounded') return 'unbounded';
-    product *= paths;
+    const paths = pathCountForNode(node)
+    if (paths === "unbounded") return "unbounded"
+    product *= paths
   }
-  return product;
+  return product
 }
 
 // =============================================================================
 // Depth
 // =============================================================================
 
-function calculateMaxDepth(nodes: readonly StaticFlowNode[]): number {
-  let maxDepth = 0;
+function calculateMaxDepth(nodes: ReadonlyArray<StaticFlowNode>): number {
+  let maxDepth = 0
   for (const node of nodes) {
-    maxDepth = Math.max(maxDepth, depthOfNode(node, 0));
+    maxDepth = Math.max(maxDepth, depthOfNode(node, 0))
   }
-  return maxDepth;
+  return maxDepth
 }
 
 function depthOfNode(node: StaticFlowNode, currentDepth: number): number {
-  const children = getStaticChildren(node);
-  const childList = Option.getOrElse(children, () => [] as readonly StaticFlowNode[]);
+  const children = getStaticChildren(node)
+  const childList = Option.getOrElse(children, () => [] as ReadonlyArray<StaticFlowNode>)
 
-  let maxChildDepth = currentDepth;
+  let maxChildDepth = currentDepth
 
   switch (node.type) {
-    case 'conditional':
+    case "conditional":
       maxChildDepth = Math.max(
         maxChildDepth,
-        depthOfNode(node.onTrue, currentDepth + 1),
-      );
+        depthOfNode(node.onTrue, currentDepth + 1)
+      )
       if (node.onFalse) {
         maxChildDepth = Math.max(
           maxChildDepth,
-          depthOfNode(node.onFalse, currentDepth + 1),
-        );
+          depthOfNode(node.onFalse, currentDepth + 1)
+        )
       }
-      break;
+      break
 
-    case 'loop':
+    case "loop":
       maxChildDepth = Math.max(
         maxChildDepth,
-        depthOfNode(node.body, currentDepth + 1),
-      );
-      break;
+        depthOfNode(node.body, currentDepth + 1)
+      )
+      break
 
-    case 'parallel':
-    case 'race':
+    case "parallel":
+    case "race":
       for (const child of node.children) {
         maxChildDepth = Math.max(
           maxChildDepth,
-          depthOfNode(child, currentDepth + 1),
-        );
+          depthOfNode(child, currentDepth + 1)
+        )
       }
-      break;
+      break
 
-    case 'generator':
-    case 'pipe':
-    case 'error-handler':
-    case 'retry':
-    case 'timeout':
-    case 'resource':
-    case 'layer':
+    case "generator":
+    case "pipe":
+    case "error-handler":
+    case "retry":
+    case "timeout":
+    case "resource":
+    case "layer":
       for (const child of childList) {
         maxChildDepth = Math.max(
           maxChildDepth,
-          depthOfNode(child, currentDepth),
-        );
+          depthOfNode(child, currentDepth)
+        )
       }
-      break;
+      break
 
-    case 'decision':
+    case "decision":
       for (const child of node.onTrue) {
         maxChildDepth = Math.max(
           maxChildDepth,
-          depthOfNode(child, currentDepth + 1),
-        );
+          depthOfNode(child, currentDepth + 1)
+        )
       }
       if (node.onFalse) {
         for (const child of node.onFalse) {
           maxChildDepth = Math.max(
             maxChildDepth,
-            depthOfNode(child, currentDepth + 1),
-          );
+            depthOfNode(child, currentDepth + 1)
+          )
         }
       }
-      break;
+      break
 
-    case 'switch':
+    case "switch":
       for (const caseItem of node.cases) {
         for (const child of caseItem.body) {
           maxChildDepth = Math.max(
             maxChildDepth,
-            depthOfNode(child, currentDepth + 1),
-          );
+            depthOfNode(child, currentDepth + 1)
+          )
         }
       }
-      break;
+      break
 
-    case 'try-catch':
+    case "try-catch":
       for (const child of childList) {
         maxChildDepth = Math.max(
           maxChildDepth,
-          depthOfNode(child, currentDepth + 1),
-        );
+          depthOfNode(child, currentDepth + 1)
+        )
       }
-      break;
+      break
 
-    case 'terminal':
+    case "terminal":
       if (node.value) {
         for (const child of node.value) {
           maxChildDepth = Math.max(
             maxChildDepth,
-            depthOfNode(child, currentDepth),
-          );
+            depthOfNode(child, currentDepth)
+          )
         }
       }
-      break;
+      break
 
-    case 'opaque':
-      break;
+    case "opaque":
+      break
 
-    case 'match':
-      break;
+    case "match":
+      break
 
-    case 'interruption':
+    case "interruption":
       if (node.source) {
-        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.source, currentDepth + 1));
+        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.source, currentDepth + 1))
       }
       if (node.handler) {
-        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.handler, currentDepth + 1));
+        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.handler, currentDepth + 1))
       }
-      break;
+      break
 
-    case 'cause':
+    case "cause":
       if (node.children) {
         for (const child of node.children) {
-          maxChildDepth = Math.max(maxChildDepth, depthOfNode(child, currentDepth));
+          maxChildDepth = Math.max(maxChildDepth, depthOfNode(child, currentDepth))
         }
       }
-      break;
+      break
 
-    case 'transform':
+    case "transform":
       if (node.source) {
-        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.source, currentDepth));
+        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.source, currentDepth))
       }
-      break;
+      break
 
-    case 'channel':
-    case 'sink':
+    case "channel":
+    case "sink":
       if (node.source) {
-        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.source, currentDepth));
+        maxChildDepth = Math.max(maxChildDepth, depthOfNode(node.source, currentDepth))
       }
-      break;
+      break
 
-    case 'exit':
-    case 'schedule':
-    case 'effect':
-    case 'unknown':
-      break;
+    case "exit":
+    case "schedule":
+    case "effect":
+    case "unknown":
+      break
   }
 
-  return maxChildDepth;
+  return maxChildDepth
 }
 
 // =============================================================================
@@ -624,140 +619,140 @@ function depthOfNode(node: StaticFlowNode, currentDepth: number): number {
 // =============================================================================
 
 function calculateMaxParallelBreadth(
-  nodes: readonly StaticFlowNode[],
+  nodes: ReadonlyArray<StaticFlowNode>
 ): number {
-  let maxBreadth = 0;
+  let maxBreadth = 0
   for (const node of nodes) {
-    maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node));
+    maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node))
   }
-  return maxBreadth;
+  return maxBreadth
 }
 
 function parallelBreadthOfNode(node: StaticFlowNode): number {
-  const children = getStaticChildren(node);
-  const childList = Option.getOrElse(children, () => [] as readonly StaticFlowNode[]);
+  const children = getStaticChildren(node)
+  const childList = Option.getOrElse(children, () => [] as ReadonlyArray<StaticFlowNode>)
 
-  let maxBreadth = 0;
+  let maxBreadth = 0
 
   switch (node.type) {
-    case 'parallel':
-    case 'race':
-      maxBreadth = node.children.length;
+    case "parallel":
+    case "race":
+      maxBreadth = node.children.length
       for (const child of node.children) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
       }
-      break;
+      break
 
-    case 'conditional':
+    case "conditional":
       maxBreadth = Math.max(
         parallelBreadthOfNode(node.onTrue),
-        node.onFalse ? parallelBreadthOfNode(node.onFalse) : 0,
-      );
-      break;
+        node.onFalse ? parallelBreadthOfNode(node.onFalse) : 0
+      )
+      break
 
-    case 'loop':
-      maxBreadth = parallelBreadthOfNode(node.body);
-      break;
+    case "loop":
+      maxBreadth = parallelBreadthOfNode(node.body)
+      break
 
-    case 'generator':
-    case 'pipe':
-    case 'error-handler':
-    case 'retry':
-    case 'timeout':
-    case 'resource':
-    case 'layer':
+    case "generator":
+    case "pipe":
+    case "error-handler":
+    case "retry":
+    case "timeout":
+    case "resource":
+    case "layer":
       for (const child of childList) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
       }
-      break;
+      break
 
-    case 'decision':
+    case "decision":
       for (const child of node.onTrue) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
       }
       if (node.onFalse) {
         for (const child of node.onFalse) {
-          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
         }
       }
-      break;
+      break
 
-    case 'switch':
+    case "switch":
       for (const caseItem of node.cases) {
         for (const child of caseItem.body) {
-          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
         }
       }
-      break;
+      break
 
-    case 'try-catch':
+    case "try-catch":
       for (const child of childList) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
       }
-      break;
+      break
 
-    case 'terminal':
+    case "terminal":
       if (node.value) {
         for (const child of node.value) {
-          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
         }
       }
-      break;
+      break
 
-    case 'opaque':
-      break;
+    case "opaque":
+      break
 
-    case 'interruption':
+    case "interruption":
       if (node.source) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.source));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.source))
       }
       if (node.handler) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.handler));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.handler))
       }
-      break;
+      break
 
-    case 'cause':
+    case "cause":
       if (node.children) {
         for (const child of node.children) {
-          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child));
+          maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(child))
         }
       }
-      break;
+      break
 
-    case 'transform':
+    case "transform":
       if (node.source) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.source));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.source))
       }
-      break;
+      break
 
-    case 'channel':
-    case 'sink':
+    case "channel":
+    case "sink":
       if (node.source) {
-        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.source));
+        maxBreadth = Math.max(maxBreadth, parallelBreadthOfNode(node.source))
       }
-      break;
+      break
 
-    case 'match':
-    case 'exit':
-    case 'schedule':
-    case 'effect':
-    case 'unknown':
-      break;
+    case "match":
+    case "exit":
+    case "schedule":
+    case "effect":
+    case "unknown":
+      break
   }
 
-  return maxBreadth;
+  return maxBreadth
 }
 
 // =============================================================================
 // Decision Points
 // =============================================================================
 
-function countDecisionPoints(nodes: readonly StaticFlowNode[]): number {
-  let count = 0;
+function countDecisionPoints(nodes: ReadonlyArray<StaticFlowNode>): number {
+  let count = 0
   for (const node of nodes) {
-    count += countDecisionPointsInNode(node);
+    count += countDecisionPointsInNode(node)
   }
-  return count;
+  return count
 }
 
 // =============================================================================
@@ -765,90 +760,92 @@ function countDecisionPoints(nodes: readonly StaticFlowNode[]): number {
 // =============================================================================
 
 export interface ComplexityAssessment {
-  level: 'low' | 'medium' | 'high' | 'very-high';
-  warnings: ComplexityWarning[];
-  recommendations: string[];
+  level: "low" | "medium" | "high" | "very-high"
+  warnings: Array<ComplexityWarning>
+  recommendations: Array<string>
 }
 
 export interface ComplexityWarning {
-  type: 'cyclomatic' | 'cognitive' | 'paths' | 'depth' | 'breadth';
-  message: string;
-  severity: 'warning' | 'error';
+  type: "cyclomatic" | "cognitive" | "paths" | "depth" | "breadth"
+  message: string
+  severity: "warning" | "error"
 }
 
 export function assessComplexity(
   metrics: ComplexityMetrics,
-  thresholds: ComplexityThresholds = DEFAULT_THRESHOLDS,
+  thresholds: ComplexityThresholds = DEFAULT_THRESHOLDS
 ): ComplexityAssessment {
-  const warnings: ComplexityWarning[] = [];
-  const recommendations: string[] = [];
+  const warnings: Array<ComplexityWarning> = []
+  const recommendations: Array<string> = []
 
   if (metrics.cyclomaticComplexity >= thresholds.cyclomaticError) {
     warnings.push({
-      type: 'cyclomatic',
-      message: `Cyclomatic complexity (${metrics.cyclomaticComplexity}) exceeds error threshold (${thresholds.cyclomaticError})`,
-      severity: 'error',
-    });
+      type: "cyclomatic",
+      message:
+        `Cyclomatic complexity (${metrics.cyclomaticComplexity}) exceeds error threshold (${thresholds.cyclomaticError})`,
+      severity: "error"
+    })
     recommendations.push(
-      'Consider breaking this program into smaller effects',
-    );
+      "Consider breaking this program into smaller effects"
+    )
   } else if (metrics.cyclomaticComplexity >= thresholds.cyclomaticWarning) {
     warnings.push({
-      type: 'cyclomatic',
-      message: `Cyclomatic complexity (${metrics.cyclomaticComplexity}) exceeds warning threshold (${thresholds.cyclomaticWarning})`,
-      severity: 'warning',
-    });
+      type: "cyclomatic",
+      message:
+        `Cyclomatic complexity (${metrics.cyclomaticComplexity}) exceeds warning threshold (${thresholds.cyclomaticWarning})`,
+      severity: "warning"
+    })
     recommendations.push(
-      'Consider simplifying conditional logic or extracting sub-effects',
-    );
+      "Consider simplifying conditional logic or extracting sub-effects"
+    )
   }
 
-  if (metrics.pathCount === 'unbounded') {
+  if (metrics.pathCount === "unbounded") {
     warnings.push({
-      type: 'paths',
-      message: 'Program has unbounded paths due to loops',
-      severity: 'warning',
-    });
+      type: "paths",
+      message: "Program has unbounded paths due to loops",
+      severity: "warning"
+    })
     recommendations.push(
-      'Ensure loop termination conditions are well-tested',
-    );
+      "Ensure loop termination conditions are well-tested"
+    )
   } else if (metrics.pathCount >= thresholds.pathCountWarning) {
     warnings.push({
-      type: 'paths',
+      type: "paths",
       message: `Path count (${metrics.pathCount}) exceeds threshold (${thresholds.pathCountWarning})`,
-      severity: 'warning',
-    });
+      severity: "warning"
+    })
     recommendations.push(
-      'High path count makes exhaustive testing difficult - consider simplifying',
-    );
+      "High path count makes exhaustive testing difficult - consider simplifying"
+    )
   }
 
   if (metrics.maxDepth >= thresholds.maxDepthWarning) {
     warnings.push({
-      type: 'depth',
+      type: "depth",
       message: `Nesting depth (${metrics.maxDepth}) exceeds threshold (${thresholds.maxDepthWarning})`,
-      severity: 'warning',
-    });
+      severity: "warning"
+    })
     recommendations.push(
-      'Deep nesting reduces readability - consider flattening or extracting',
-    );
+      "Deep nesting reduces readability - consider flattening or extracting"
+    )
   }
 
-  let level: ComplexityAssessment['level'] = 'low';
-  const hasError = warnings.some((w) => w.severity === 'error');
-  const hasWarning = warnings.some((w) => w.severity === 'warning');
+  let level: ComplexityAssessment["level"] = "low"
+  const hasError = warnings.some((w) => w.severity === "error")
+  const hasWarning = warnings.some((w) => w.severity === "warning")
 
   if (hasError) {
-    level = 'very-high';
+    level = "very-high"
   } else if (hasWarning) {
-    level = warnings.length >= 2 ? 'high' : 'medium';
+    level = warnings.length >= 2 ? "high" : "medium"
   }
 
   return {
     level,
     warnings,
-    recommendations,
-  };
+    recommendations
+  }
 }
 
 // =============================================================================
@@ -857,44 +854,44 @@ export function assessComplexity(
 
 export function formatComplexitySummary(
   metrics: ComplexityMetrics,
-  assessment: ComplexityAssessment,
+  assessment: ComplexityAssessment
 ): string {
-  const lines: string[] = [];
+  const lines: Array<string> = []
 
-  lines.push('## Effect Program Complexity Report');
-  lines.push('');
-  lines.push(`**Overall Complexity:** ${assessment.level.toUpperCase()}`);
-  lines.push('');
-  lines.push('### Metrics');
-  lines.push('');
-  lines.push('| Metric | Value |');
-  lines.push('|--------|-------|');
-  lines.push(`| Cyclomatic Complexity | ${metrics.cyclomaticComplexity} |`);
-  lines.push(`| Cognitive Complexity | ${metrics.cognitiveComplexity} |`);
-  lines.push(`| Unique Paths | ${metrics.pathCount} |`);
-  lines.push(`| Max Nesting Depth | ${metrics.maxDepth} |`);
-  lines.push(`| Max Parallel Breadth | ${metrics.maxParallelBreadth} |`);
-  lines.push(`| Decision Points | ${metrics.decisionPoints} |`);
-  lines.push('');
+  lines.push("## Effect Program Complexity Report")
+  lines.push("")
+  lines.push(`**Overall Complexity:** ${assessment.level.toUpperCase()}`)
+  lines.push("")
+  lines.push("### Metrics")
+  lines.push("")
+  lines.push("| Metric | Value |")
+  lines.push("|--------|-------|")
+  lines.push(`| Cyclomatic Complexity | ${metrics.cyclomaticComplexity} |`)
+  lines.push(`| Cognitive Complexity | ${metrics.cognitiveComplexity} |`)
+  lines.push(`| Unique Paths | ${metrics.pathCount} |`)
+  lines.push(`| Max Nesting Depth | ${metrics.maxDepth} |`)
+  lines.push(`| Max Parallel Breadth | ${metrics.maxParallelBreadth} |`)
+  lines.push(`| Decision Points | ${metrics.decisionPoints} |`)
+  lines.push("")
 
   if (assessment.warnings.length > 0) {
-    lines.push('### Warnings');
-    lines.push('');
+    lines.push("### Warnings")
+    lines.push("")
     for (const warning of assessment.warnings) {
-      const icon = warning.severity === 'error' ? 'ERROR' : 'WARNING';
-      lines.push(`- **${icon}:** ${warning.message}`);
+      const icon = warning.severity === "error" ? "ERROR" : "WARNING"
+      lines.push(`- **${icon}:** ${warning.message}`)
     }
-    lines.push('');
+    lines.push("")
   }
 
   if (assessment.recommendations.length > 0) {
-    lines.push('### Recommendations');
-    lines.push('');
+    lines.push("### Recommendations")
+    lines.push("")
     for (const rec of assessment.recommendations) {
-      lines.push(`- ${rec}`);
+      lines.push(`- ${rec}`)
     }
-    lines.push('');
+    lines.push("")
   }
 
-  return lines.join('\n');
+  return lines.join("\n")
 }

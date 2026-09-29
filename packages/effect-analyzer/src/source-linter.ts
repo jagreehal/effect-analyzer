@@ -9,93 +9,93 @@
  * The output shape matches `LintIssue` from effect-linter so reports compose.
  */
 
-import type { SourceFile, Node, CallExpression } from 'ts-morph';
-import { loadTsMorph } from './ts-morph-loader';
-import type { LintIssue } from './effect-linter';
-import { RULE_DOCS } from './source-linter-docs';
+import type { CallExpression, Node, SourceFile } from "ts-morph"
+import type { LintIssue } from "./effect-linter"
+import { RULE_DOCS } from "./source-linter-docs"
+import { loadTsMorph } from "./ts-morph-loader"
 
 interface SourceLintContext {
-  readonly filePath: string;
+  readonly filePath: string
 }
 
 const makeLocation = (
   node: Node,
-  filePath: string,
-): LintIssue['location'] => {
-  const start = node.getStart();
-  const sf = node.getSourceFile();
-  const { line, column } = sf.getLineAndColumnAtPos(start);
+  filePath: string
+): LintIssue["location"] => {
+  const start = node.getStart()
+  const sf = node.getSourceFile()
+  const { line, column } = sf.getLineAndColumnAtPos(start)
   return {
     filePath,
     line,
-    column,
-  };
-};
+    column
+  }
+}
 
 /**
  * Resolve the receiver of a call expression like `a.b.c(...)` to its leading text,
  * e.g. `Effect.runPromise` for `Effect.runPromise(eff).then(...)`.
  */
 const calleeText = (call: CallExpression): string => {
-  const expr = call.getExpression();
-  return expr.getText();
-};
+  const expr = call.getExpression()
+  return expr.getText()
+}
 
 const isInsideEffectGen = (node: Node): boolean => {
-  let current: Node | undefined = node.getParent();
+  let current: Node | undefined = node.getParent()
   while (current) {
-    if (current.getKindName() === 'CallExpression') {
-      const txt = (current as CallExpression).getExpression().getText();
-      if (txt === 'Effect.gen' || txt === 'Stream.gen' || txt === 'Layer.effect') {
-        return true;
+    if (current.getKindName() === "CallExpression") {
+      const txt = (current as CallExpression).getExpression().getText()
+      if (txt === "Effect.gen" || txt === "Stream.gen" || txt === "Layer.effect") {
+        return true
       }
     }
-    current = current.getParent();
+    current = current.getParent()
   }
-  return false;
-};
+  return false
+}
 
 const isInsideEffectSyncOrTry = (node: Node): boolean => {
-  let current: Node | undefined = node.getParent();
+  let current: Node | undefined = node.getParent()
   while (current) {
-    if (current.getKindName() === 'CallExpression') {
-      const txt = (current as CallExpression).getExpression().getText();
+    if (current.getKindName() === "CallExpression") {
+      const txt = (current as CallExpression).getExpression().getText()
       if (
-        txt === 'Effect.sync' ||
-        txt === 'Effect.try' ||
-        txt === 'Effect.tryPromise' ||
-        txt === 'Effect.promise'
+        txt === "Effect.sync" ||
+        txt === "Effect.try" ||
+        txt === "Effect.tryPromise" ||
+        txt === "Effect.promise"
       ) {
-        return true;
+        return true
       }
     }
-    current = current.getParent();
+    current = current.getParent()
   }
-  return false;
-};
+  return false
+}
 
 const isInsideParallelEffect = (node: Node): boolean => {
-  let current: Node | undefined = node.getParent();
+  let current: Node | undefined = node.getParent()
   while (current) {
-    if (current.getKindName() === 'CallExpression') {
-      const txt = (current as CallExpression).getExpression().getText();
+    if (current.getKindName() === "CallExpression") {
+      const txt = (current as CallExpression).getExpression().getText()
       if (
-        txt === 'Effect.all' ||
-        txt === 'Effect.allWith' ||
-        txt === 'Effect.fork' ||
-        txt === 'Effect.forkDaemon' ||
-        txt === 'Effect.forkScoped' ||
-        txt === 'Effect.forEach' ||
-        txt === 'Effect.race' ||
-        txt === 'Effect.raceAll'
+        txt === "Effect.all" ||
+        txt === "Effect.allWith" ||
+        txt === "Effect.fork" ||
+        txt === "Effect.forkDaemon" ||
+        txt === "Effect.forkScoped" ||
+        txt === "Effect.forEach" ||
+        txt === "Effect.race" ||
+        txt === "Effect.raceAll"
       ) {
-        return true;
+        return true
       }
     }
-    current = current.getParent();
+    current = current.getParent()
   }
-  return false;
-};
+  return false
+}
 
 // ===========================================================================
 // untagged-throw
@@ -107,84 +107,84 @@ const isInsideParallelEffect = (node: Node): boolean => {
  * idiomatic (Effect.try with catch) or a real defect/escape.
  */
 const findImmediateEffectCallContext = (
-  node: Node,
+  node: Node
 ): { calleeText: string; call: CallExpression } | undefined => {
-  let cur: Node | undefined = node.getParent();
+  let cur: Node | undefined = node.getParent()
   while (cur) {
-    if (cur.getKindName() === 'CallExpression') {
-      const call = cur as CallExpression;
-      const txt = call.getExpression().getText();
+    if (cur.getKindName() === "CallExpression") {
+      const call = cur as CallExpression
+      const txt = call.getExpression().getText()
       if (
-        txt === 'Effect.gen' ||
-        txt === 'Stream.gen' ||
-        txt === 'Layer.effect' ||
-        txt === 'Effect.sync' ||
-        txt === 'Effect.try' ||
-        txt === 'Effect.tryPromise' ||
-        txt === 'Effect.promise' ||
-        txt === 'Effect.callback' ||
-        txt === 'Effect.asyncEffect'
+        txt === "Effect.gen" ||
+        txt === "Stream.gen" ||
+        txt === "Layer.effect" ||
+        txt === "Effect.sync" ||
+        txt === "Effect.try" ||
+        txt === "Effect.tryPromise" ||
+        txt === "Effect.promise" ||
+        txt === "Effect.callback" ||
+        txt === "Effect.asyncEffect"
       ) {
-        return { calleeText: txt, call };
+        return { calleeText: txt, call }
       }
     }
-    cur = cur.getParent();
+    cur = cur.getParent()
   }
-  return undefined;
-};
+  return undefined
+}
 
 const tryHasCatchField = (call: CallExpression): boolean => {
-  const { SyntaxKind } = loadTsMorph();
-  const args = call.getArguments();
-  const first = args[0];
-  if (first?.getKindName() !== 'ObjectLiteralExpression') return false;
-  const obj = first.asKindOrThrow(SyntaxKind.ObjectLiteralExpression);
+  const { SyntaxKind } = loadTsMorph()
+  const args = call.getArguments()
+  const first = args[0]
+  if (first?.getKindName() !== "ObjectLiteralExpression") return false
+  const obj = first.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
   return obj.getProperties().some((p) => {
-    if (p.getKindName() !== 'PropertyAssignment' && p.getKindName() !== 'ShorthandPropertyAssignment') return false;
-    const name =
-      p.getKindName() === 'PropertyAssignment'
-        ? p.asKindOrThrow(SyntaxKind.PropertyAssignment).getName()
-        : p.asKindOrThrow(SyntaxKind.ShorthandPropertyAssignment).getName();
-    return name === 'catch';
-  });
-};
+    if (p.getKindName() !== "PropertyAssignment" && p.getKindName() !== "ShorthandPropertyAssignment") return false
+    const name = p.getKindName() === "PropertyAssignment"
+      ? p.asKindOrThrow(SyntaxKind.PropertyAssignment).getName()
+      : p.asKindOrThrow(SyntaxKind.ShorthandPropertyAssignment).getName()
+    return name === "catch"
+  })
+}
 
 const checkUntaggedThrow = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const stmt of sf.getDescendantsOfKind(SyntaxKind.ThrowStatement)) {
-    const expr = stmt.getExpression();
-    if (expr?.getKindName() !== 'NewExpression') continue;
-    const newExpr = expr.asKindOrThrow(SyntaxKind.NewExpression);
-    const name = newExpr.getExpression().getText();
-    if (name !== 'Error' && name !== 'TypeError' && name !== 'RangeError') continue;
+    const expr = stmt.getExpression()
+    if (expr?.getKindName() !== "NewExpression") continue
+    const newExpr = expr.asKindOrThrow(SyntaxKind.NewExpression)
+    const name = newExpr.getExpression().getText()
+    if (name !== "Error" && name !== "TypeError" && name !== "RangeError") continue
 
-    const ctxCall = findImmediateEffectCallContext(stmt);
-    if (!ctxCall) continue;
+    const ctxCall = findImmediateEffectCallContext(stmt)
+    if (!ctxCall) continue
 
     // Throws inside Effect.try({ try, catch }) or Effect.tryPromise({ try, catch })
     // are IDIOMATIC — the catch handler maps them to a typed error. Don't flag.
     if (
-      (ctxCall.calleeText === 'Effect.try' || ctxCall.calleeText === 'Effect.tryPromise') &&
+      (ctxCall.calleeText === "Effect.try" || ctxCall.calleeText === "Effect.tryPromise") &&
       tryHasCatchField(ctxCall.call)
     ) {
-      continue;
+      continue
     }
 
     issues.push({
-      rule: 'untagged-throw',
-      message: `throw new ${name}(...) inside ${ctxCall.calleeText} — escapes the typed error channel; use Effect.fail with a tagged error or add a catch handler.`,
-      severity: 'warning',
+      rule: "untagged-throw",
+      message:
+        `throw new ${name}(...) inside ${ctxCall.calleeText} — escapes the typed error channel; use Effect.fail with a tagged error or add a catch handler.`,
+      severity: "warning",
       location: makeLocation(stmt, ctx.filePath),
       suggestion:
-        'Define a Data.TaggedError class and use Effect.fail(new MyError({...})), or, inside Effect.try/tryPromise, add a catch handler that maps the thrown value to a typed error.',
-    });
+        "Define a Data.TaggedError class and use Effect.fail(new MyError({...})), or, inside Effect.try/tryPromise, add a catch handler that maps the thrown value to a typed error."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // mutable-in-concurrent
@@ -192,90 +192,90 @@ const checkUntaggedThrow = (
 
 const checkMutableInConcurrent = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
 
   // Look for AssignmentExpression with a binary operator that mutates, inside a parallel context.
   // Heuristic: find BinaryExpression where operator is '=' / '+=' / etc., LHS identifier resolves to outer `let`.
   for (const bin of sf.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
-    const op = bin.getOperatorToken().getText();
+    const op = bin.getOperatorToken().getText()
     if (
-      op !== '=' &&
-      op !== '+=' &&
-      op !== '-=' &&
-      op !== '*=' &&
-      op !== '/=' &&
-      op !== '%='
+      op !== "=" &&
+      op !== "+=" &&
+      op !== "-=" &&
+      op !== "*=" &&
+      op !== "/=" &&
+      op !== "%="
     ) {
-      continue;
+      continue
     }
-    if (!isInsideParallelEffect(bin)) continue;
+    if (!isInsideParallelEffect(bin)) continue
 
-    const lhs = bin.getLeft();
-    if (lhs.getKindName() !== 'Identifier') continue;
-    const id = lhs.asKindOrThrow(SyntaxKind.Identifier);
-    const sym = id.getSymbol();
-    if (!sym) continue;
-    const decls = sym.getDeclarations();
-    if (decls.length === 0) continue;
+    const lhs = bin.getLeft()
+    if (lhs.getKindName() !== "Identifier") continue
+    const id = lhs.asKindOrThrow(SyntaxKind.Identifier)
+    const sym = id.getSymbol()
+    if (!sym) continue
+    const decls = sym.getDeclarations()
+    if (decls.length === 0) continue
     // Check if any declaration is a VariableDeclaration with `let` flag (not const).
     const isLet = decls.some((d) => {
-      const vd = d.asKind(SyntaxKind.VariableDeclaration);
-      if (!vd) return false;
-      const list = vd.getParent();
-      if (!list) return false;
+      const vd = d.asKind(SyntaxKind.VariableDeclaration)
+      if (!vd) return false
+      const list = vd.getParent()
+      if (!list) return false
       // VariableDeclarationList text starts with 'let ' or 'var '
-      const txt = list.getText();
-      return /^\s*(let|var)\b/.test(txt);
-    });
-    if (!isLet) continue;
+      const txt = list.getText()
+      return /^\s*(let|var)\b/.test(txt)
+    })
+    if (!isLet) continue
 
     // Skip if the let was declared inside the same callback as this assignment.
     // (i.e. the let is not shared across branches.)
-    const letDecl = decls[0];
-    if (!letDecl) continue;
+    const letDecl = decls[0]
+    if (!letDecl) continue
     // If the closest CallExpression ancestor of the assignment is the same as
     // the closest CallExpression ancestor of the declaration, treat as local.
     const findParallelAncestor = (n: Node): Node | undefined => {
-      let cur: Node | undefined = n.getParent();
+      let cur: Node | undefined = n.getParent()
       while (cur) {
-        if (cur.getKindName() === 'CallExpression') {
-          const txt = (cur as CallExpression).getExpression().getText();
+        if (cur.getKindName() === "CallExpression") {
+          const txt = (cur as CallExpression).getExpression().getText()
           if (
-            txt === 'Effect.all' ||
-            txt === 'Effect.allWith' ||
-            txt === 'Effect.fork' ||
-            txt === 'Effect.forkDaemon' ||
-            txt === 'Effect.forkScoped' ||
-            txt === 'Effect.forEach' ||
-            txt === 'Effect.race' ||
-            txt === 'Effect.raceAll'
+            txt === "Effect.all" ||
+            txt === "Effect.allWith" ||
+            txt === "Effect.fork" ||
+            txt === "Effect.forkDaemon" ||
+            txt === "Effect.forkScoped" ||
+            txt === "Effect.forEach" ||
+            txt === "Effect.race" ||
+            txt === "Effect.raceAll"
           ) {
-            return cur;
+            return cur
           }
         }
-        cur = cur.getParent();
+        cur = cur.getParent()
       }
-      return undefined;
-    };
-    const binParallel = findParallelAncestor(bin);
-    const declParallel = findParallelAncestor(letDecl);
-    if (binParallel === declParallel) continue; // declared and used inside the same parallel — still suspicious but skip
+      return undefined
+    }
+    const binParallel = findParallelAncestor(bin)
+    const declParallel = findParallelAncestor(letDecl)
+    if (binParallel === declParallel) continue // declared and used inside the same parallel — still suspicious but skip
 
     issues.push({
-      rule: 'mutable-in-concurrent',
+      rule: "mutable-in-concurrent",
       message: `Mutable variable "${id.getText()}" assigned inside a parallel/forked Effect — race-prone.`,
-      severity: 'warning',
+      severity: "warning",
       location: makeLocation(bin, ctx.filePath),
       suggestion:
-        'Replace shared let/var with Ref.make + Ref.update, or Atomic primitives, or return values from each branch.',
-    });
+        "Replace shared let/var with Ref.make + Ref.update, or Atomic primitives, or return values from each branch."
+    })
   }
 
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // runPromise-then-chain
@@ -283,31 +283,31 @@ const checkMutableInConcurrent = (
 
 const checkRunPromiseThenChain = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Effect.runPromise' && name !== 'Effect.runPromiseExit') continue;
+    const name = calleeText(call)
+    if (name !== "Effect.runPromise" && name !== "Effect.runPromiseExit") continue
     // Look at the parent: is it a property-access like `.then`, `.catch`, `.finally`?
-    const parent = call.getParent();
-    if (!parent) continue;
-    if (parent.getKindName() !== 'PropertyAccessExpression') continue;
-    const pa = parent.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
-    const propName = pa.getName();
-    if (propName !== 'then' && propName !== 'catch' && propName !== 'finally') continue;
+    const parent = call.getParent()
+    if (!parent) continue
+    if (parent.getKindName() !== "PropertyAccessExpression") continue
+    const pa = parent.asKindOrThrow(SyntaxKind.PropertyAccessExpression)
+    const propName = pa.getName()
+    if (propName !== "then" && propName !== "catch" && propName !== "finally") continue
     issues.push({
-      rule: 'runPromise-then-chain',
+      rule: "runPromise-then-chain",
       message: `${name}(...).${propName}() — leaving Effect to chain Promise methods loses error typing and tracing.`,
-      severity: 'info',
+      severity: "info",
       location: makeLocation(call, ctx.filePath),
       suggestion:
-        'Use Effect.map / Effect.flatMap / Effect.catch BEFORE runPromise. If you must escape, do it at the entry point.',
-    });
+        "Use Effect.map / Effect.flatMap / Effect.catch BEFORE runPromise. If you must escape, do it at the entry point."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // runSync-on-async
@@ -315,133 +315,127 @@ const checkRunPromiseThenChain = (
 
 const checkRunSyncOnAsync = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   const isAsyncEffectText = (text: string): boolean =>
     /Effect\.promise\b/.test(text) ||
     /Effect\.tryPromise\b/.test(text) ||
     /Effect\.async\b/.test(text) ||
     /Effect\.asyncEffect\b/.test(text) ||
-    /Effect\.sleep\b/.test(text);
+    /Effect\.sleep\b/.test(text)
 
   // Build a set of file-level identifiers that look async-tainted: variables initialised
   // with Effect.promise / Effect.tryPromise / Effect.callback* / Effect.sleep.
-  const asyncIdents = new Set<string>();
+  const asyncIdents = new Set<string>()
   for (const vd of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-    const init = vd.getInitializer();
-    if (!init) continue;
-    const text = init.getText();
+    const init = vd.getInitializer()
+    if (!init) continue
+    const text = init.getText()
     if (isAsyncEffectText(text)) {
-      const name = vd.getName();
-      asyncIdents.add(name);
+      const name = vd.getName()
+      asyncIdents.add(name)
     }
   }
 
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const callee = calleeText(call);
-    if (callee !== 'Effect.runSync' && callee !== 'Effect.runSyncExit') continue;
-    const args = call.getArguments();
-    if (args.length === 0) continue;
-    const argText = args[0]?.getText() ?? '';
+    const callee = calleeText(call)
+    if (callee !== "Effect.runSync" && callee !== "Effect.runSyncExit") continue
+    const args = call.getArguments()
+    if (args.length === 0) continue
+    const argText = args[0]?.getText() ?? ""
     // Direct uses
     if (isAsyncEffectText(argText)) {
       issues.push({
-        rule: callee === 'Effect.runSync' ? 'runSync-on-async' : 'runSyncExit-on-async',
+        rule: callee === "Effect.runSync" ? "runSync-on-async" : "runSyncExit-on-async",
         message: `${callee} on an effect that uses Effect.promise/tryPromise/async/sleep — will throw at runtime.`,
-        severity: 'error',
+        severity: "error",
         location: makeLocation(call, ctx.filePath),
-        suggestion:
-          callee === 'Effect.runSync'
-            ? 'Use Effect.runPromise (or Effect.runPromiseExit) for async effects.'
-            : 'Use Effect.runPromiseExit for async effects.',
-      });
-      continue;
+        suggestion: callee === "Effect.runSync"
+          ? "Use Effect.runPromise (or Effect.runPromiseExit) for async effects."
+          : "Use Effect.runPromiseExit for async effects."
+      })
+      continue
     }
     // Refers to a known async-tainted identifier
-    const referenced = argText.split(/[^A-Za-z0-9_$]/).filter(Boolean);
+    const referenced = argText.split(/[^A-Za-z0-9_$]/).filter(Boolean)
     if (referenced.some((id) => asyncIdents.has(id))) {
       issues.push({
-        rule: callee === 'Effect.runSync' ? 'runSync-on-async' : 'runSyncExit-on-async',
+        rule: callee === "Effect.runSync" ? "runSync-on-async" : "runSyncExit-on-async",
         message: `${callee} on "${argText}" — that effect transitively uses Effect.promise/tryPromise/async.`,
-        severity: 'error',
+        severity: "error",
         location: makeLocation(call, ctx.filePath),
-        suggestion:
-          callee === 'Effect.runSync'
-            ? 'Use Effect.runPromise (or Effect.runPromiseExit) for async effects.'
-            : 'Use Effect.runPromiseExit for async effects.',
-      });
+        suggestion: callee === "Effect.runSync"
+          ? "Use Effect.runPromise (or Effect.runPromiseExit) for async effects."
+          : "Use Effect.runPromiseExit for async effects."
+      })
     }
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // live-layer-in-test
 // ===========================================================================
 
-const TEST_FILE_PATTERN = /\.(test|spec)\.(ts|tsx|js|jsx|mts|cts)$/;
-const TEST_DIR_PATTERN = /(^|[\\/])(__tests__|test|tests)([\\/]|$)/;
+const TEST_FILE_PATTERN = /\.(test|spec)\.(ts|tsx|js|jsx|mts|cts)$/
+const TEST_DIR_PATTERN = /(^|[\\/])(__tests__|test|tests)([\\/]|$)/
 const isTestFilePath = (filePath: string): boolean =>
-  TEST_FILE_PATTERN.test(filePath) || TEST_DIR_PATTERN.test(filePath);
+  TEST_FILE_PATTERN.test(filePath) || TEST_DIR_PATTERN.test(filePath)
 
 const checkLiveLayerInTest = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  if (!isTestFilePath(ctx.filePath)) return [];
-  const issues: LintIssue[] = [];
-  const seen = new Set<string>();
-  const isIntegrationTest =
-    /(^|[\\/])(integration)([\\/]|[.])/i.test(ctx.filePath);
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  if (!isTestFilePath(ctx.filePath)) return []
+  const issues: Array<LintIssue> = []
+  const seen = new Set<string>()
+  const isIntegrationTest = /(^|[\\/])(integration)([\\/]|[.])/i.test(ctx.filePath)
   const isRuntimeUse = (node: Node): boolean => {
-    const parent = node.getParent();
-    if (!parent) return true;
-    const pk = parent.getKindName();
+    const parent = node.getParent()
+    if (!parent) return true
+    const pk = parent.getKindName()
     if (
-      pk === 'ImportSpecifier' ||
-      pk === 'ImportClause' ||
-      pk === 'NamespaceImport' ||
-      pk === 'NamedImports' ||
-      pk === 'TypeReference' ||
-      pk === 'TypeAliasDeclaration' ||
-      pk === 'InterfaceDeclaration' ||
-      pk === 'TypeLiteral'
+      pk === "ImportSpecifier" ||
+      pk === "ImportClause" ||
+      pk === "NamespaceImport" ||
+      pk === "NamedImports" ||
+      pk === "TypeReference" ||
+      pk === "TypeAliasDeclaration" ||
+      pk === "InterfaceDeclaration" ||
+      pk === "TypeLiteral"
     ) {
-      return false;
+      return false
     }
-    return true;
-  };
+    return true
+  }
   for (const id of sf.getDescendantsOfKind(SyntaxKind.Identifier)) {
-    const name = id.getText();
-    if (!name.endsWith("Live")) continue;
-    if (name === 'Live') continue;
+    const name = id.getText()
+    if (!name.endsWith("Live")) continue
+    if (name === "Live") continue
     // Live LAYERS are PascalCase constants (UserRepoLive, DbLive).
     // Skip camelCase helpers (runLive, connectLive) and TTL API methods
     // like describeTimeToLive / updateTimeToLive.
-    if (!/^[A-Z]/.test(name)) continue;
-    if (name.endsWith("TimeToLive")) continue;
-    if (seen.has(name)) continue;
-    const refs = id.findReferencesAsNodes().filter((ref) =>
-      ref.getSourceFile().getFilePath() === sf.getFilePath(),
-    );
-    const runtimeRef = refs.find((ref) => isRuntimeUse(ref));
-    if (!runtimeRef) continue;
-    seen.add(name);
+    if (!/^[A-Z]/.test(name)) continue
+    if (name.endsWith("TimeToLive")) continue
+    if (seen.has(name)) continue
+    const refs = id.findReferencesAsNodes().filter((ref) => ref.getSourceFile().getFilePath() === sf.getFilePath())
+    const runtimeRef = refs.find((ref) => isRuntimeUse(ref))
+    if (!runtimeRef) continue
+    seen.add(name)
     issues.push({
-      rule: 'live-layer-in-test',
+      rule: "live-layer-in-test",
       message: `Test file references "${name}" — a Live layer should not be wired into tests.`,
-      severity: isIntegrationTest ? 'info' : 'warning',
+      severity: isIntegrationTest ? "info" : "warning",
       location: makeLocation(runtimeRef, ctx.filePath),
-      suggestion:
-        'Provide a Test layer (e.g. ServiceTest) or use Layer.succeed with a stub implementation.',
-    });
+      suggestion: "Provide a Test layer (e.g. ServiceTest) or use Layer.succeed with a stub implementation."
+    })
     // Only flag the first occurrence per identifier per file.
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // nondeterministic-test-api
@@ -449,43 +443,42 @@ const checkLiveLayerInTest = (
 
 const checkNondeterministicTestApi = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  if (!isTestFilePath(ctx.filePath)) return [];
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  if (!isTestFilePath(ctx.filePath)) return []
+  const issues: Array<LintIssue> = []
 
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name === 'Date.now' || name === 'Math.random') {
+    const name = calleeText(call)
+    if (name === "Date.now" || name === "Math.random") {
       issues.push({
-        rule: 'nondeterministic-test-api',
+        rule: "nondeterministic-test-api",
         message: `${name}() in test code introduces non-determinism.`,
-        severity: 'warning',
+        severity: "warning",
         location: makeLocation(call, ctx.filePath),
-        suggestion:
-          name === 'Date.now'
-            ? 'Use Effect Clock/TestClock or inject a deterministic timestamp source.'
-            : 'Inject a deterministic RNG or use Effect Random/Test services in tests.',
-      });
+        suggestion: name === "Date.now"
+          ? "Use Effect Clock/TestClock or inject a deterministic timestamp source."
+          : "Inject a deterministic RNG or use Effect Random/Test services in tests."
+      })
     }
   }
 
   for (const ctor of sf.getDescendantsOfKind(SyntaxKind.NewExpression)) {
-    if (ctor.getExpression().getText() !== 'Date') continue;
-    const args = ctor.getArguments();
-    if (args.length > 0) continue;
+    if (ctor.getExpression().getText() !== "Date") continue
+    const args = ctor.getArguments()
+    if (args.length > 0) continue
     issues.push({
-      rule: 'nondeterministic-test-api',
-      message: 'new Date() in test code introduces non-determinism.',
-      severity: 'warning',
+      rule: "nondeterministic-test-api",
+      message: "new Date() in test code introduces non-determinism.",
+      severity: "warning",
       location: makeLocation(ctor, ctx.filePath),
-      suggestion: 'Use a fixed date literal or inject time via Effect Clock/TestClock.',
-    });
+      suggestion: "Use a fixed date literal or inject time via Effect Clock/TestClock."
+    })
   }
 
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // detached-fiber-in-test
@@ -493,33 +486,33 @@ const checkNondeterministicTestApi = (
 
 const checkDetachedFiberInTest = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  if (!isTestFilePath(ctx.filePath)) return [];
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  if (!isTestFilePath(ctx.filePath)) return []
+  const issues: Array<LintIssue> = []
 
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
+    const name = calleeText(call)
     if (
-      name !== 'Effect.runFork' &&
-      name !== 'Effect.runForkWith' &&
-      name !== 'Runtime.runFork'
+      name !== "Effect.runFork" &&
+      name !== "Effect.runForkWith" &&
+      name !== "Runtime.runFork"
     ) {
-      continue;
+      continue
     }
     issues.push({
-      rule: 'detached-fiber-in-test',
+      rule: "detached-fiber-in-test",
       message: `${name}(...) in test code can outlive the test and cause flakiness.`,
-      severity: 'warning',
+      severity: "warning",
       location: makeLocation(call, ctx.filePath),
       suggestion:
-        'Prefer runPromise/runPromiseExit and await completion, or keep and join/interrupt the returned Fiber explicitly.',
-    });
+        "Prefer runPromise/runPromiseExit and await completion, or keep and join/interrupt the returned Fiber explicitly."
+    })
   }
 
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // sleep-without-testclock
@@ -527,66 +520,66 @@ const checkDetachedFiberInTest = (
 
 const checkSleepWithoutTestClockInTest = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  if (!isTestFilePath(ctx.filePath)) return [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  if (!isTestFilePath(ctx.filePath)) return []
   const hasTestClock = sf
     .getDescendantsOfKind(SyntaxKind.Identifier)
-    .some((id) => id.getText() === 'TestClock');
-  if (hasTestClock) return [];
-  const issues: LintIssue[] = [];
+    .some((id) => id.getText() === "TestClock")
+  if (hasTestClock) return []
+  const issues: Array<LintIssue> = []
 
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Effect.sleep') continue;
+    const name = calleeText(call)
+    if (name !== "Effect.sleep") continue
     issues.push({
-      rule: 'sleep-without-testclock',
-      message: 'Effect.sleep(...) in test code without TestClock usage makes tests slow and timing-sensitive.',
-      severity: 'info',
+      rule: "sleep-without-testclock",
+      message: "Effect.sleep(...) in test code without TestClock usage makes tests slow and timing-sensitive.",
+      severity: "info",
       location: makeLocation(call, ctx.filePath),
-      suggestion:
-        'Use TestClock.adjust/adjustTo and provide test clock services to keep tests deterministic and fast.',
-    });
+      suggestion: "Use TestClock.adjust/adjustTo and provide test clock services to keep tests deterministic and fast."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // promise-api-in-gen
 // ===========================================================================
 
 const PROMISE_API_REPLACEMENTS: Record<string, string> = {
-  'Promise.all': 'Effect.all',
-  'Promise.allSettled': 'Effect.all (with { mode: "either" })',
-  'Promise.race': 'Effect.race / Effect.raceAll',
-  'Promise.any': 'Effect.raceAll',
-  'Promise.resolve': 'Effect.succeed',
-  'Promise.reject': 'Effect.fail',
-};
+  "Promise.all": "Effect.all",
+  "Promise.allSettled": "Effect.all (with { mode: \"either\" })",
+  "Promise.race": "Effect.race / Effect.raceAll",
+  "Promise.any": "Effect.raceAll",
+  "Promise.resolve": "Effect.succeed",
+  "Promise.reject": "Effect.fail"
+}
 
 const checkPromiseApiInGen = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    const replacement = PROMISE_API_REPLACEMENTS[name];
-    if (!replacement) continue;
-    if (!isInsideEffectGen(call)) continue;
-    if (isInsideEffectSyncOrTry(call)) continue;
+    const name = calleeText(call)
+    const replacement = PROMISE_API_REPLACEMENTS[name]
+    if (!replacement) continue
+    if (!isInsideEffectGen(call)) continue
+    if (isInsideEffectSyncOrTry(call)) continue
     issues.push({
-      rule: 'promise-api-in-gen',
-      message: `${name}(...) inside Effect.gen — Promise APIs bypass interruption and typed errors; use ${replacement}.`,
-      severity: 'warning',
+      rule: "promise-api-in-gen",
+      message:
+        `${name}(...) inside Effect.gen — Promise APIs bypass interruption and typed errors; use ${replacement}.`,
+      severity: "warning",
       location: makeLocation(call, ctx.filePath),
-      suggestion: `Replace ${name}(...) with ${replacement}(...) so Effect can manage concurrency and interruption.`,
-    });
+      suggestion: `Replace ${name}(...) with ${replacement}(...) so Effect can manage concurrency and interruption.`
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // forEach-without-concurrency
@@ -594,28 +587,28 @@ const checkPromiseApiInGen = (
 
 const checkForEachWithoutConcurrency = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Effect.forEach' && name !== 'Stream.runForEach') continue;
-    const args = call.getArguments();
+    const name = calleeText(call)
+    if (name !== "Effect.forEach" && name !== "Stream.runForEach") continue
+    const args = call.getArguments()
     // Two-arg form: Effect.forEach(iterable, fn) — no options object.
     // Three-arg form: Effect.forEach(iterable, fn, options) — explicit.
-    if (args.length !== 2) continue;
+    if (args.length !== 2) continue
     issues.push({
-      rule: 'forEach-without-concurrency',
+      rule: "forEach-without-concurrency",
       message: `${name}(...) without options — defaults to sequential execution; make the choice explicit.`,
-      severity: 'info',
+      severity: "info",
       location: makeLocation(call, ctx.filePath),
       suggestion:
-        'Pass an explicit options object: { concurrency: "unbounded" } for parallel, or { concurrency: 1 } if sequential is intentional.',
-    });
+        "Pass an explicit options object: { concurrency: \"unbounded\" } for parallel, or { concurrency: 1 } if sequential is intentional."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // identity-catch
@@ -627,68 +620,69 @@ const checkForEachWithoutConcurrency = (
  * without changing semantics and are usually leftover from refactors.
  */
 
-const CATCH_RECEIVERS: Record<string, 'Effect.fail' | 'Effect.failCause' | 'Effect.die'> = {
-  'Effect.catch': 'Effect.fail',
-  'Effect.catchCause': 'Effect.failCause',
-  'Effect.catchDefect': 'Effect.die',
-  'Effect.catchTag': 'Effect.fail',
-};
+const CATCH_RECEIVERS: Record<string, "Effect.fail" | "Effect.failCause" | "Effect.die"> = {
+  "Effect.catch": "Effect.fail",
+  "Effect.catchCause": "Effect.failCause",
+  "Effect.catchDefect": "Effect.die",
+  "Effect.catchTag": "Effect.fail"
+}
 
 const isIdentityHandler = (
   argNode: Node,
-  expectedReFail: 'Effect.fail' | 'Effect.failCause' | 'Effect.die',
+  expectedReFail: "Effect.fail" | "Effect.failCause" | "Effect.die"
 ): boolean => {
-  const kind = argNode.getKindName();
-  if (kind !== 'ArrowFunction' && kind !== 'FunctionExpression') return false;
-  const text = argNode.getText();
+  const kind = argNode.getKindName()
+  if (kind !== "ArrowFunction" && kind !== "FunctionExpression") return false
+  const text = argNode.getText()
   // (NAME) => Effect.fail(NAME) — optional type annotation, optional braces.
-  const arrow = /^\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*(?::[^)]*)?\)\s*=>\s*([\s\S]*)$/.exec(text);
-  const fn = /^function\s*\*?\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*(?::[^)]*)?\)\s*\{\s*return\s+([\s\S]+?);?\s*\}$/.exec(text);
-  const match = arrow ?? fn;
-  if (!match) return false;
-  const param = match[1];
-  let body = (match[2] ?? '').trim();
+  const arrow = /^\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*(?::[^)]*)?\)\s*=>\s*([\s\S]*)$/.exec(text)
+  const fn = /^function\s*\*?\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*(?::[^)]*)?\)\s*\{\s*return\s+([\s\S]+?);?\s*\}$/
+    .exec(text)
+  const match = arrow ?? fn
+  if (!match) return false
+  const param = match[1]
+  let body = (match[2] ?? "").trim()
   // Strip leading `{ return ` / trailing `; }` if the arrow uses a block body.
-  const block = /^\{\s*return\s+([\s\S]+?);?\s*\}$/.exec(body);
-  if (block) body = block[1]!.trim();
-  body = body.replace(/;\s*$/, '');
-  return body === `${expectedReFail}(${param})`;
-};
+  const block = /^\{\s*return\s+([\s\S]+?);?\s*\}$/.exec(body)
+  if (block) body = block[1]!.trim()
+  body = body.replace(/;\s*$/, "")
+  return body === `${expectedReFail}(${param})`
+}
 
 const findFunctionArg = (call: CallExpression): Node | undefined => {
   // Scan from the end — the handler is conventionally the last argument.
-  const args = call.getArguments();
+  const args = call.getArguments()
   for (let i = args.length - 1; i >= 0; i--) {
-    const arg = args[i]!;
-    const k = arg.getKindName();
-    if (k === 'ArrowFunction' || k === 'FunctionExpression') return arg;
+    const arg = args[i]!
+    const k = arg.getKindName()
+    if (k === "ArrowFunction" || k === "FunctionExpression") return arg
   }
-  return undefined;
-};
+  return undefined
+}
 
 const checkIdentityCatch = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    const expectedReFail = CATCH_RECEIVERS[name];
-    if (!expectedReFail) continue;
-    const handler = findFunctionArg(call);
-    if (!handler) continue;
-    if (!isIdentityHandler(handler, expectedReFail)) continue;
+    const name = calleeText(call)
+    const expectedReFail = CATCH_RECEIVERS[name]
+    if (!expectedReFail) continue
+    const handler = findFunctionArg(call)
+    if (!handler) continue
+    if (!isIdentityHandler(handler, expectedReFail)) continue
     issues.push({
-      rule: 'identity-catch',
+      rule: "identity-catch",
       message: `${name}(...) handler just re-fails the same value — the catch is a no-op.`,
-      severity: 'warning',
+      severity: "warning",
       location: makeLocation(call, ctx.filePath),
-      suggestion: `Remove the ${name}(...) call, or replace it with a real recovery / mapping handler.`,
-    });
+      suggestion: `Remove the ${name}(...) call, or replace it with a real recovery / mapping handler.`
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // empty-effect-all
@@ -696,36 +690,38 @@ const checkIdentityCatch = (
 
 const checkEmptyEffectAll = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Effect.all' && name !== 'Effect.allWith') continue;
-    const first = call.getArguments()[0];
-    if (!first) continue;
-    const k = first.getKindName();
-    let empty = false;
-    if (k === 'ArrayLiteralExpression') {
-      const arr = first.asKindOrThrow(SyntaxKind.ArrayLiteralExpression);
-      empty = arr.getElements().length === 0;
-    } else if (k === 'ObjectLiteralExpression') {
-      const obj = first.asKindOrThrow(SyntaxKind.ObjectLiteralExpression);
-      empty = obj.getProperties().length === 0;
+    const name = calleeText(call)
+    if (name !== "Effect.all" && name !== "Effect.allWith") continue
+    const first = call.getArguments()[0]
+    if (!first) continue
+    const k = first.getKindName()
+    let empty = false
+    if (k === "ArrayLiteralExpression") {
+      const arr = first.asKindOrThrow(SyntaxKind.ArrayLiteralExpression)
+      empty = arr.getElements().length === 0
+    } else if (k === "ObjectLiteralExpression") {
+      const obj = first.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
+      empty = obj.getProperties().length === 0
     }
-    if (!empty) continue;
+    if (!empty) continue
     issues.push({
-      rule: 'empty-effect-all',
-      message: `${name}(${k === 'ArrayLiteralExpression' ? '[]' : '{}'}) — always succeeds with an empty result; usually dead code.`,
-      severity: 'info',
+      rule: "empty-effect-all",
+      message: `${name}(${
+        k === "ArrayLiteralExpression" ? "[]" : "{}"
+      }) — always succeeds with an empty result; usually dead code.`,
+      severity: "info",
       location: makeLocation(call, ctx.filePath),
       suggestion:
-        'Remove this branch, or replace with Effect.succeed([]) / Effect.succeed({}) if a literal empty value is intentional.',
-    });
+        "Remove this branch, or replace with Effect.succeed([]) / Effect.succeed({}) if a literal empty value is intentional."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // layer-duplicate-merge
@@ -733,37 +729,36 @@ const checkEmptyEffectAll = (
 
 const checkLayerDuplicateMerge = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Layer.merge' && name !== 'Layer.mergeAll' && name !== 'Layer.provideMerge') continue;
-    const args = call.getArguments();
-    if (args.length < 2) continue;
-    const seen = new Map<string, number>();
+    const name = calleeText(call)
+    if (name !== "Layer.merge" && name !== "Layer.mergeAll" && name !== "Layer.provideMerge") continue
+    const args = call.getArguments()
+    if (args.length < 2) continue
+    const seen = new Map<string, number>()
     args.forEach((arg, idx) => {
-      const text = arg.getText().trim();
+      const text = arg.getText().trim()
       // Only flag clearly identifier-like arguments — skip inline Layer.succeed/effect calls.
-      if (!/^[A-Za-z_$][A-Za-z0-9_$.]*$/.test(text)) return;
-      const prev = seen.get(text);
+      if (!/^[A-Za-z_$][A-Za-z0-9_$.]*$/.test(text)) return
+      const prev = seen.get(text)
       if (prev === undefined) {
-        seen.set(text, idx);
+        seen.set(text, idx)
       } else {
         issues.push({
-          rule: 'layer-duplicate-merge',
+          rule: "layer-duplicate-merge",
           message: `${name}(...) lists "${text}" more than once — later occurrences override earlier ones.`,
-          severity: 'warning',
+          severity: "warning",
           location: makeLocation(arg, ctx.filePath),
-          suggestion:
-            'Remove the duplicate, or rename the second argument if you meant a different layer.',
-        });
+          suggestion: "Remove the duplicate, or rename the second argument if you meant a different layer."
+        })
       }
-    });
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // schedule-unbounded
@@ -780,57 +775,57 @@ const checkLayerDuplicateMerge = (
  * expression. False negatives are preferred to false positives.
  */
 const SCHEDULE_BOUNDS = [
-  'Schedule.upTo',
-  'Schedule.recurs',
-  'Schedule.intersect',
-  'Schedule.intersectWith',
-  'Schedule.compose',
-  'Schedule.union',
-  'Schedule.unionWith',
-  'Schedule.upToFirstAttempt',
-];
+  "Schedule.upTo",
+  "Schedule.recurs",
+  "Schedule.intersect",
+  "Schedule.intersectWith",
+  "Schedule.compose",
+  "Schedule.union",
+  "Schedule.unionWith",
+  "Schedule.upToFirstAttempt"
+]
 
 const findEnclosingPipeOrChain = (node: Node): Node | undefined => {
-  let cur: Node | undefined = node.getParent();
+  let cur: Node | undefined = node.getParent()
   while (cur) {
-    const k = cur.getKindName();
-    if (k === 'CallExpression') {
-      const expr = (cur as CallExpression).getExpression().getText();
-      if (expr === 'pipe' || expr.endsWith('.pipe')) return cur;
+    const k = cur.getKindName()
+    if (k === "CallExpression") {
+      const expr = (cur as CallExpression).getExpression().getText()
+      if (expr === "pipe" || expr.endsWith(".pipe")) return cur
     }
-    if (k === 'PropertyAccessExpression') {
-      cur = cur.getParent();
-      continue;
+    if (k === "PropertyAccessExpression") {
+      cur = cur.getParent()
+      continue
     }
-    if (k === 'SourceFile' || k === 'Block' || k === 'VariableStatement' || k === 'ExpressionStatement') {
-      return undefined;
+    if (k === "SourceFile" || k === "Block" || k === "VariableStatement" || k === "ExpressionStatement") {
+      return undefined
     }
-    cur = cur.getParent();
+    cur = cur.getParent()
   }
-  return undefined;
-};
+  return undefined
+}
 
 const checkScheduleUnbounded = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
-  const candidates: { node: Node; label: string }[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
+  const candidates: Array<{ node: Node; label: string }> = []
 
   // Schedule.forever (an identifier / property access, not a call)
   for (const pa of sf.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
-    if (pa.getText() === 'Schedule.forever') {
+    if (pa.getText() === "Schedule.forever") {
       // If parent is a property access (e.g. Schedule.forever.foo), skip — covered separately.
-      const parent = pa.getParent();
-      if (parent?.getKindName() === 'PropertyAccessExpression') continue;
-      candidates.push({ node: pa, label: 'Schedule.forever' });
+      const parent = pa.getParent()
+      if (parent?.getKindName() === "PropertyAccessExpression") continue
+      candidates.push({ node: pa, label: "Schedule.forever" })
     }
   }
   // Schedule.spaced(...) — a call.
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (calleeText(call) === 'Schedule.spaced') {
-      candidates.push({ node: call, label: 'Schedule.spaced(...)' });
+    if (calleeText(call) === "Schedule.spaced") {
+      candidates.push({ node: call, label: "Schedule.spaced(...)" })
     }
   }
 
@@ -838,246 +833,250 @@ const checkScheduleUnbounded = (
     // Stream context: Stream.repeat / fromSchedule / tick — infinite is by design.
     // The stream consumer controls demand; the schedule does not "retry forever" — it
     // emits forever, and `Stream.take(n)` etc. bound it at the consumer.
-    let isStreamScheduleConsumer = false;
+    let isStreamScheduleConsumer = false
     {
-      let cur: Node | undefined = node.getParent();
+      let cur: Node | undefined = node.getParent()
       while (cur) {
-        if (cur.getKindName() === 'CallExpression') {
-          const callee = (cur as CallExpression).getExpression().getText();
+        if (cur.getKindName() === "CallExpression") {
+          const callee = (cur as CallExpression).getExpression().getText()
           if (
-            callee === 'Stream.repeat' ||
-            callee === 'Stream.repeatEffect' ||
-            callee === 'Stream.repeatEffectOption' ||
-            callee === 'Stream.fromSchedule' ||
-            callee === 'Stream.tick' ||
-            callee === 'Stream.repeatValue'
+            callee === "Stream.repeat" ||
+            callee === "Stream.repeatEffect" ||
+            callee === "Stream.repeatEffectOption" ||
+            callee === "Stream.fromSchedule" ||
+            callee === "Stream.tick" ||
+            callee === "Stream.repeatValue"
           ) {
-            isStreamScheduleConsumer = true;
-            break;
+            isStreamScheduleConsumer = true
+            break
           }
         }
-        cur = cur.getParent();
+        cur = cur.getParent()
       }
     }
-    if (isStreamScheduleConsumer) continue;
+    if (isStreamScheduleConsumer) continue
 
-    const pipeOrChain = findEnclosingPipeOrChain(node);
-    let containerText = pipeOrChain ? pipeOrChain.getText() : '';
+    const pipeOrChain = findEnclosingPipeOrChain(node)
+    let containerText = pipeOrChain ? pipeOrChain.getText() : ""
     if (!containerText) {
       // Look at the enclosing variable / argument expression as a fallback.
-      let cur: Node | undefined = node.getParent();
+      let cur: Node | undefined = node.getParent()
       while (cur) {
-        const k = cur.getKindName();
+        const k = cur.getKindName()
         if (
-          k === 'VariableDeclaration' ||
-          k === 'ReturnStatement' ||
-          k === 'PropertyAssignment' ||
-          k === 'CallExpression'
+          k === "VariableDeclaration" ||
+          k === "ReturnStatement" ||
+          k === "PropertyAssignment" ||
+          k === "CallExpression"
         ) {
-          containerText = cur.getText();
-          break;
+          containerText = cur.getText()
+          break
         }
-        cur = cur.getParent();
+        cur = cur.getParent()
       }
     }
-    const bounded = SCHEDULE_BOUNDS.some((b) => containerText.includes(b));
-    if (bounded) continue;
+    const bounded = SCHEDULE_BOUNDS.some((b) => containerText.includes(b))
+    if (bounded) continue
     issues.push({
-      rule: 'schedule-unbounded',
+      rule: "schedule-unbounded",
       message: `${label} is not composed with a bounding combinator — retries can run forever.`,
-      severity: 'info',
+      severity: "info",
       location: makeLocation(node, ctx.filePath),
       suggestion:
-        'Compose with Schedule.upTo / Schedule.recurs / Schedule.intersect to cap total elapsed time or attempt count.',
-    });
+        "Compose with Schedule.upTo / Schedule.recurs / Schedule.intersect to cap total elapsed time or attempt count."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // config-secret-without-redacted
 // ===========================================================================
 
 const SECRET_TOKENS = [
-  'password',
-  'passwd',
-  'secret',
-  'token',
-  'api_key',
-  'apikey',
-  'private_key',
-  'privatekey',
-  'credential',
-  'auth_key',
-  'authkey',
-  'access_key',
-  'accesskey',
-  'session_key',
-  'sessionkey',
-  'client_secret',
-  'refresh_token',
-];
+  "password",
+  "passwd",
+  "secret",
+  "token",
+  "api_key",
+  "apikey",
+  "private_key",
+  "privatekey",
+  "credential",
+  "auth_key",
+  "authkey",
+  "access_key",
+  "accesskey",
+  "session_key",
+  "sessionkey",
+  "client_secret",
+  "refresh_token"
+]
 
 const stringLiteralValue = (node: Node): string | undefined => {
-  const k = node.getKindName();
-  if (k !== 'StringLiteral' && k !== 'NoSubstitutionTemplateLiteral') return undefined;
+  const k = node.getKindName()
+  if (k !== "StringLiteral" && k !== "NoSubstitutionTemplateLiteral") return undefined
   // Strip the surrounding quotes from the raw text.
-  const raw = node.getText();
-  return raw.slice(1, -1);
-};
+  const raw = node.getText()
+  return raw.slice(1, -1)
+}
 
 const looksLikeSecret = (value: string): string | undefined => {
-  const lower = value.toLowerCase();
+  const lower = value.toLowerCase()
   for (const tok of SECRET_TOKENS) {
-    if (lower.includes(tok)) return tok;
+    if (lower.includes(tok)) return tok
   }
-  return undefined;
-};
+  return undefined
+}
 
 const checkConfigSecretWithoutRedacted = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    // Only flag the explicitly-cleartext readers; Config.redacted is fine.
+    const name = calleeText(call)
+    // Only flag the explicitly-cleartext readers; Config.Redacted is fine.
     if (
-      name !== 'Config.string' &&
-      name !== 'Config.nonEmptyString' &&
-      name !== 'Config.secret' // older Effect alias, also visible-in-logs
+      name !== "Config.String" &&
+      name !== "Config.NonEmptyString" &&
+      name !== "Config.secret" // older Effect alias, also visible-in-logs
     ) {
-      continue;
+      continue
     }
-    const first = call.getArguments()[0];
-    if (!first) continue;
-    const lit = stringLiteralValue(first);
-    if (!lit) continue;
-    const matched = looksLikeSecret(lit);
-    if (!matched) continue;
+    const first = call.getArguments()[0]
+    if (!first) continue
+    const lit = stringLiteralValue(first)
+    if (!lit) continue
+    const matched = looksLikeSecret(lit)
+    if (!matched) continue
     issues.push({
-      rule: 'config-secret-without-redacted',
-      message: `${name}(${JSON.stringify(lit)}) reads a likely-secret env var as plain text — leaks through logs/errors.`,
-      severity: 'warning',
+      rule: "config-secret-without-redacted",
+      message: `${name}(${
+        JSON.stringify(lit)
+      }) reads a likely-secret env var as plain text — leaks through logs/errors.`,
+      severity: "warning",
       location: makeLocation(call, ctx.filePath),
-      suggestion: `Use Config.redacted(${JSON.stringify(lit)}) so the value is hidden from logs/inspect (matched on "${matched}").`,
-    });
+      suggestion: `Use Config.Redacted(${
+        JSON.stringify(lit)
+      }) so the value is hidden from logs/inspect (matched on "${matched}").`
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // return-effect-from-sync
 // ===========================================================================
 
 const EFFECT_CONSTRUCTOR_NAMES = new Set<string>([
-  'Effect.succeed',
-  'Effect.fail',
-  'Effect.die',
-  'Effect.failSync',
-  'Effect.gen',
-  'Effect.sync',
-  'Effect.try',
-  'Effect.promise',
-  'Effect.tryPromise',
-  'Effect.callback',
-  'Effect.asyncEffect',
-  'Effect.flatMap',
-  'Effect.map',
-  'Effect.tap',
-  'Effect.all',
-  'Effect.zip',
-  'Effect.zipWith',
-  'Effect.race',
-  'Effect.raceAll',
-  'Effect.forEach',
-  'Effect.fromOption',
-  'Effect.fromEither',
-  'Effect.fromNullable',
-  'Effect.never',
-  'Effect.suspend',
-]);
+  "Effect.succeed",
+  "Effect.fail",
+  "Effect.die",
+  "Effect.failSync",
+  "Effect.gen",
+  "Effect.sync",
+  "Effect.try",
+  "Effect.promise",
+  "Effect.tryPromise",
+  "Effect.callback",
+  "Effect.asyncEffect",
+  "Effect.flatMap",
+  "Effect.map",
+  "Effect.tap",
+  "Effect.all",
+  "Effect.zip",
+  "Effect.zipWith",
+  "Effect.race",
+  "Effect.raceAll",
+  "Effect.forEach",
+  "Effect.fromOption",
+  "Effect.fromEither",
+  "Effect.fromNullable",
+  "Effect.never",
+  "Effect.suspend"
+])
 
 const checkReturnEffectFromSync = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Effect.sync' && name !== 'Effect.try') continue;
+    const name = calleeText(call)
+    if (name !== "Effect.sync" && name !== "Effect.try") continue
     // Effect.try can take an object form { try, catch } — use first non-options arrow.
-    let arrow: Node | undefined;
+    let arrow: Node | undefined
     for (const arg of call.getArguments()) {
-      const k = arg.getKindName();
-      if (k === 'ArrowFunction' || k === 'FunctionExpression') {
-        arrow = arg;
-        break;
+      const k = arg.getKindName()
+      if (k === "ArrowFunction" || k === "FunctionExpression") {
+        arrow = arg
+        break
       }
-      if (k === 'ObjectLiteralExpression') {
-        const obj = arg.asKindOrThrow(SyntaxKind.ObjectLiteralExpression);
+      if (k === "ObjectLiteralExpression") {
+        const obj = arg.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
         for (const p of obj.getProperties()) {
-          if (p.getKindName() !== 'PropertyAssignment') continue;
-          const pa = p.asKindOrThrow(SyntaxKind.PropertyAssignment);
-          if (pa.getName() !== 'try') continue;
-          const init = pa.getInitializer();
-          if (!init) continue;
-          const initK = init.getKindName();
-          if (initK === 'ArrowFunction' || initK === 'FunctionExpression') {
-            arrow = init;
+          if (p.getKindName() !== "PropertyAssignment") continue
+          const pa = p.asKindOrThrow(SyntaxKind.PropertyAssignment)
+          if (pa.getName() !== "try") continue
+          const init = pa.getInitializer()
+          if (!init) continue
+          const initK = init.getKindName()
+          if (initK === "ArrowFunction" || initK === "FunctionExpression") {
+            arrow = init
           }
         }
       }
-      if (arrow) break;
+      if (arrow) break
     }
-    if (!arrow) continue;
+    if (!arrow) continue
     // Look at the body expression. We want to flag when the body's outermost
     // call expression's callee is an Effect.* constructor.
-    let bodyExpr: Node | undefined;
-    if (arrow.getKindName() === 'ArrowFunction') {
-      const fn = arrow.asKindOrThrow(SyntaxKind.ArrowFunction);
-      const b = fn.getBody();
-      const bk = b.getKindName();
-      if (bk === 'Block') {
+    let bodyExpr: Node | undefined
+    if (arrow.getKindName() === "ArrowFunction") {
+      const fn = arrow.asKindOrThrow(SyntaxKind.ArrowFunction)
+      const b = fn.getBody()
+      const bk = b.getKindName()
+      if (bk === "Block") {
         // function-style body: find a single `return X;` and grab X.
-        const block = b.asKindOrThrow(SyntaxKind.Block);
-        const stmts = block.getStatements();
-        if (stmts.length !== 1) continue;
-        const only = stmts[0]!;
-        if (only.getKindName() !== 'ReturnStatement') continue;
-        bodyExpr = only.asKindOrThrow(SyntaxKind.ReturnStatement).getExpression();
+        const block = b.asKindOrThrow(SyntaxKind.Block)
+        const stmts = block.getStatements()
+        if (stmts.length !== 1) continue
+        const only = stmts[0]!
+        if (only.getKindName() !== "ReturnStatement") continue
+        bodyExpr = only.asKindOrThrow(SyntaxKind.ReturnStatement).getExpression()
       } else {
-        bodyExpr = b;
+        bodyExpr = b
       }
     } else {
-      const fn = arrow.asKindOrThrow(SyntaxKind.FunctionExpression);
-      const block = fn.getBody().asKind(SyntaxKind.Block);
-      if (!block) continue;
-      const stmts = block.getStatements();
-      if (stmts.length !== 1) continue;
-      const only = stmts[0]!;
-      if (only.getKindName() !== 'ReturnStatement') continue;
-      bodyExpr = only.asKindOrThrow(SyntaxKind.ReturnStatement).getExpression();
+      const fn = arrow.asKindOrThrow(SyntaxKind.FunctionExpression)
+      const block = fn.getBody().asKind(SyntaxKind.Block)
+      if (!block) continue
+      const stmts = block.getStatements()
+      if (stmts.length !== 1) continue
+      const only = stmts[0]!
+      if (only.getKindName() !== "ReturnStatement") continue
+      bodyExpr = only.asKindOrThrow(SyntaxKind.ReturnStatement).getExpression()
     }
-    if (bodyExpr?.getKindName() !== 'CallExpression') continue;
-    const inner = bodyExpr.asKindOrThrow(SyntaxKind.CallExpression);
-    const innerName = inner.getExpression().getText();
-    if (!EFFECT_CONSTRUCTOR_NAMES.has(innerName)) continue;
+    if (bodyExpr?.getKindName() !== "CallExpression") continue
+    const inner = bodyExpr.asKindOrThrow(SyntaxKind.CallExpression)
+    const innerName = inner.getExpression().getText()
+    if (!EFFECT_CONSTRUCTOR_NAMES.has(innerName)) continue
     issues.push({
-      rule: 'return-effect-from-sync',
-      message: `${name}(() => ${innerName}(...)) — wraps an Effect inside an Effect; result type becomes Effect<Effect<...>>.`,
-      severity: 'warning',
+      rule: "return-effect-from-sync",
+      message:
+        `${name}(() => ${innerName}(...)) — wraps an Effect inside an Effect; result type becomes Effect<Effect<...>>.`,
+      severity: "warning",
       location: makeLocation(call, ctx.filePath),
-      suggestion:
-        name === 'Effect.sync'
-          ? `Drop the Effect.sync wrapper and use ${innerName}(...) directly, or use Effect.suspend(() => ${innerName}(...)) if you need lazy evaluation.`
-          : `Use Effect.suspend(() => ${innerName}(...)) for lazy evaluation, or Effect.flatMap if you need the inner Effect to run.`,
-    });
+      suggestion: name === "Effect.sync"
+        ? `Drop the Effect.sync wrapper and use ${innerName}(...) directly, or use Effect.suspend(() => ${innerName}(...)) if you need lazy evaluation.`
+        : `Use Effect.suspend(() => ${innerName}(...)) for lazy evaluation, or Effect.flatMap if you need the inner Effect to run.`
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // yield-promise
@@ -1091,84 +1090,83 @@ const checkReturnEffectFromSync = (
  */
 const checkYieldPromise = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
 
   // YieldExpressions whose asterisk is set (i.e. `yield* x`) and operand looks like a Promise.
   for (const ye of sf.getDescendantsOfKind(SyntaxKind.YieldExpression)) {
-    if (!ye.getAsteriskToken()) continue;
-    if (!isInsideEffectGen(ye)) continue;
-    const operand = ye.getExpression();
-    if (!operand) continue;
-    const k = operand.getKindName();
+    if (!ye.getAsteriskToken()) continue
+    if (!isInsideEffectGen(ye)) continue
+    const operand = ye.getExpression()
+    if (!operand) continue
+    const k = operand.getKindName()
 
     // `yield* new Promise(...)`
-    if (k === 'NewExpression') {
-      const ne = operand.asKindOrThrow(SyntaxKind.NewExpression);
-      if (ne.getExpression().getText() === 'Promise') {
+    if (k === "NewExpression") {
+      const ne = operand.asKindOrThrow(SyntaxKind.NewExpression)
+      if (ne.getExpression().getText() === "Promise") {
         issues.push({
-          rule: 'yield-promise',
-          message: 'yield* new Promise(...) — Effect.gen requires an Effect, not a Promise; this throws at runtime.',
-          severity: 'error',
+          rule: "yield-promise",
+          message: "yield* new Promise(...) — Effect.gen requires an Effect, not a Promise; this throws at runtime.",
+          severity: "error",
           location: makeLocation(operand, ctx.filePath),
           suggestion:
-            'Wrap the Promise: yield* Effect.promise(() => new Promise(...)) or Effect.tryPromise({ try, catch }).',
-        });
-        continue;
+            "Wrap the Promise: yield* Effect.promise(() => new Promise(...)) or Effect.tryPromise({ try, catch })."
+        })
+        continue
       }
     }
 
     // `yield* Promise.all(...)`, `Promise.resolve(...)`, etc., or `yield* fetch(...)`.
-    if (k === 'CallExpression') {
-      const ce = operand.asKindOrThrow(SyntaxKind.CallExpression);
-      const calleeExpr = ce.getExpression();
-      const callee = calleeExpr.getText();
-      const isPromiseStatic =
-        callee === 'Promise.all' ||
-        callee === 'Promise.allSettled' ||
-        callee === 'Promise.race' ||
-        callee === 'Promise.any' ||
-        callee === 'Promise.resolve' ||
-        callee === 'Promise.reject';
+    if (k === "CallExpression") {
+      const ce = operand.asKindOrThrow(SyntaxKind.CallExpression)
+      const calleeExpr = ce.getExpression()
+      const callee = calleeExpr.getText()
+      const isPromiseStatic = callee === "Promise.all" ||
+        callee === "Promise.allSettled" ||
+        callee === "Promise.race" ||
+        callee === "Promise.any" ||
+        callee === "Promise.resolve" ||
+        callee === "Promise.reject"
       // For `fetch`, verify the identifier resolves to the GLOBAL fetch — not
       // a local destructure, parameter, or function variable. A symbol with
       // local declarations means it's shadowed; skip to avoid a false-positive
       // "runtime crash" diagnostic on legitimate Effect-returning helpers
       // named `fetch` (common in HTTP-client wrappers like Effect platform).
-      let isGlobalFetch = false;
-      if (callee === 'fetch' && calleeExpr.getKindName() === 'Identifier') {
-        const ident = calleeExpr.asKindOrThrow(SyntaxKind.Identifier);
-        const sym = ident.getSymbol();
+      let isGlobalFetch = false
+      if (callee === "fetch" && calleeExpr.getKindName() === "Identifier") {
+        const ident = calleeExpr.asKindOrThrow(SyntaxKind.Identifier)
+        const sym = ident.getSymbol()
         if (!sym) {
-          isGlobalFetch = true;
+          isGlobalFetch = true
         } else {
-          const decls = sym.getDeclarations();
+          const decls = sym.getDeclarations()
           // If none of the declarations are local to a TS source file (or the
           // only declarations are ambient lib.dom.d.ts entries), treat as global.
           const hasLocalDecl = decls.some((d) => {
-            const sf2 = d.getSourceFile();
-            return !sf2.isDeclarationFile();
-          });
-          isGlobalFetch = !hasLocalDecl;
+            const sf2 = d.getSourceFile()
+            return !sf2.isDeclarationFile()
+          })
+          isGlobalFetch = !hasLocalDecl
         }
       }
       if (isPromiseStatic || isGlobalFetch) {
         issues.push({
-          rule: 'yield-promise',
+          rule: "yield-promise",
           message: `yield* ${callee}(...) — this returns a Promise, not an Effect; throws at runtime in Effect.gen.`,
-          severity: 'error',
+          severity: "error",
           location: makeLocation(operand, ctx.filePath),
           suggestion: isGlobalFetch
-            ? 'Use yield* Effect.tryPromise({ try: () => fetch(...), catch: (e) => e }).'
-            : `Use yield* Effect.tryPromise({ try: () => ${callee}(...), catch: (e) => e }) or the matching Effect.* combinator.`,
-        });
+            ? "Use yield* Effect.tryPromise({ try: () => fetch(...), catch: (e) => e })."
+            : `Use yield* Effect.tryPromise({ try: () => ${callee}(...), catch: (e) => e }) or the matching Effect.* combinator.`
+        })
       }
     }
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // barrel-import-from-effect
@@ -1186,15 +1184,15 @@ const checkYieldPromise = (
  */
 
 const BARREL_PACKAGES = new Set<string>([
-  'effect',
-  '@effect/platform',
-  '@effect/platform-node',
-  '@effect/platform-bun',
-  '@effect/platform-browser',
-  '@effect/sql',
-  '@effect/cluster',
-  '@effect/rpc',
-]);
+  "effect",
+  "@effect/platform",
+  "@effect/platform-node",
+  "@effect/platform-bun",
+  "@effect/platform-browser",
+  "@effect/sql",
+  "@effect/cluster",
+  "@effect/rpc"
+])
 
 /**
  * Test/dtslint files are exempt from the tree-shaking rule — that matches the
@@ -1203,38 +1201,39 @@ const BARREL_PACKAGES = new Set<string>([
 const isTestOrFixtureFile = (filePath: string): boolean =>
   /\.(test|spec)\.(ts|tsx|mts|cts|js|jsx)$/i.test(filePath) ||
   /\.tst\.ts$/i.test(filePath) ||
-  /(^|\/)(test|tests|__tests__|integration|dtslint|fixtures?|examples?|scratchpad|test-utils)\//i.test(filePath);
+  /(^|\/)(test|tests|__tests__|integration|dtslint|fixtures?|examples?|scratchpad|test-utils)\//i.test(filePath)
 
 const checkBarrelImportFromEffect = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
+  ctx: SourceLintContext
+): Array<LintIssue> => {
   // Match the Effect team's own ESLint scope: only `packages/*/src/**/*`.
   // Skip tests, dtslint, fixtures, examples.
-  if (isTestOrFixtureFile(ctx.filePath)) return [];
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  if (isTestOrFixtureFile(ctx.filePath)) return []
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const decl of sf.getDescendantsOfKind(SyntaxKind.ImportDeclaration)) {
     // Skip type-only imports — those have no bundling cost.
-    if (decl.isTypeOnly()) continue;
-    const spec = decl.getModuleSpecifierValue();
-    if (!spec || !BARREL_PACKAGES.has(spec)) continue;
-    const named = decl.getNamedImports();
+    if (decl.isTypeOnly()) continue
+    const spec = decl.getModuleSpecifierValue()
+    if (!spec || !BARREL_PACKAGES.has(spec)) continue
+    const named = decl.getNamedImports()
     for (const ni of named) {
-      if (ni.isTypeOnly()) continue;
-      const moduleName = ni.getName();
-      const localName = ni.getAliasNode()?.getText() ?? moduleName;
+      if (ni.isTypeOnly()) continue
+      const moduleName = ni.getName()
+      const localName = ni.getAliasNode()?.getText() ?? moduleName
       issues.push({
-        rule: 'barrel-import-from-effect',
-        message: `import { ${moduleName} } from "${spec}" — barrel imports defeat tree-shaking; the Effect team's own ESLint config flags this.`,
-        severity: 'info',
+        rule: "barrel-import-from-effect",
+        message:
+          `import { ${moduleName} } from "${spec}" — barrel imports defeat tree-shaking; the Effect team's own ESLint config flags this.`,
+        severity: "info",
         location: makeLocation(ni, ctx.filePath),
-        suggestion: `Replace with: import * as ${localName} from "${spec}/${moduleName}"`,
-      });
+        suggestion: `Replace with: import * as ${localName} from "${spec}/${moduleName}"`
+      })
     }
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // array-push-spread
@@ -1250,29 +1249,29 @@ const checkBarrelImportFromEffect = (
  */
 const checkArrayPushSpread = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const expr = call.getExpression();
-    if (expr.getKindName() !== 'PropertyAccessExpression') continue;
-    const pa = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
-    if (pa.getName() !== 'push') continue;
-    const args = call.getArguments();
-    const hasSpread = args.some((a) => a.getKindName() === 'SpreadElement');
-    if (!hasSpread) continue;
+    const expr = call.getExpression()
+    if (expr.getKindName() !== "PropertyAccessExpression") continue
+    const pa = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression)
+    if (pa.getName() !== "push") continue
+    const args = call.getArguments()
+    const hasSpread = args.some((a) => a.getKindName() === "SpreadElement")
+    if (!hasSpread) continue
     issues.push({
-      rule: 'array-push-spread',
-      message: 'arr.push(...xs) — spreading onto Array#push can stack-overflow on large arrays (V8 footgun; Effect-team enforced).',
-      severity: 'warning',
+      rule: "array-push-spread",
+      message:
+        "arr.push(...xs) — spreading onto Array#push can stack-overflow on large arrays (V8 footgun; Effect-team enforced).",
+      severity: "warning",
       location: makeLocation(call, ctx.filePath),
-      suggestion:
-        'Use a loop (for (const x of xs) arr.push(x)) or arr = arr.concat(xs) for unbounded inputs.',
-    });
+      suggestion: "Use a loop (for (const x of xs) arr.push(x)) or arr = arr.concat(xs) for unbounded inputs."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // unsafe-api-usage
@@ -1284,32 +1283,32 @@ const checkArrayPushSpread = (
  * attempt whole-program flow analysis.
  */
 const isUnsafeApiCallee = (callee: string): boolean =>
-  callee.startsWith('Effect.unsafe') ||
-  callee.startsWith('Runtime.unsafe') ||
-  callee.includes('.unsafeRun') ||
-  callee.includes('.unsafeFork') ||
-  callee.includes('.unsafeRunPromise');
+  callee.startsWith("Effect.unsafe") ||
+  callee.startsWith("Runtime.unsafe") ||
+  callee.includes(".unsafeRun") ||
+  callee.includes(".unsafeFork") ||
+  callee.includes(".unsafeRunPromise")
 
 const checkUnsafeApiUsage = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (!isUnsafeApiCallee(name)) continue;
+    const name = calleeText(call)
+    if (!isUnsafeApiCallee(name)) continue
     issues.push({
-      rule: 'unsafe-api-usage',
+      rule: "unsafe-api-usage",
       message: `${name}(...) uses an unsafe runtime API; prefer safe constructors/combinators when possible.`,
-      severity: 'warning',
+      severity: "warning",
       location: makeLocation(call, ctx.filePath),
       suggestion:
-        'Use safe Effect APIs (Effect.gen / Effect.scoped / Effect.runPromise) or isolate this call behind a well-reviewed boundary.',
-    });
+        "Use safe Effect APIs (Effect.gen / Effect.scoped / Effect.runPromise) or isolate this call behind a well-reviewed boundary."
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // tryPromise-without-catch
@@ -1331,75 +1330,75 @@ const checkUnsafeApiUsage = (
  */
 const checkTryPromiseWithoutCatch = (
   sf: SourceFile,
-  ctx: SourceLintContext,
-): LintIssue[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const issues: LintIssue[] = [];
+  ctx: SourceLintContext
+): Array<LintIssue> => {
+  const { SyntaxKind } = loadTsMorph()
+  const issues: Array<LintIssue> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const name = calleeText(call);
-    if (name !== 'Effect.tryPromise' && name !== 'Effect.try') continue;
-    const args = call.getArguments();
-    if (args.length !== 1) continue;
-    const first = args[0]!;
-    const k = first.getKindName();
+    const name = calleeText(call)
+    if (name !== "Effect.tryPromise" && name !== "Effect.try") continue
+    const args = call.getArguments()
+    if (args.length !== 1) continue
+    const first = args[0]!
+    const k = first.getKindName()
     // Object literal form { try, catch } — the recommended shape.
-    if (k === 'ObjectLiteralExpression') continue;
+    if (k === "ObjectLiteralExpression") continue
     // Anything else (ArrowFunction / FunctionExpression / Identifier referencing a fn)
     // is the short form — flag it.
     issues.push({
-      rule: 'tryPromise-without-catch',
+      rule: "tryPromise-without-catch",
       message: `${name}(fn) short form — thrown errors collapse to UnknownException; the typed error channel is lost.`,
-      severity: 'info',
+      severity: "info",
       location: makeLocation(call, ctx.filePath),
-      suggestion: `Use ${name}({ try: () => ..., catch: (e) => new MyError({ cause: e }) }) to preserve typed errors.`,
-    });
+      suggestion: `Use ${name}({ try: () => ..., catch: (e) => new MyError({ cause: e }) }) to preserve typed errors.`
+    })
   }
-  return issues;
-};
+  return issues
+}
 
 // ===========================================================================
 // Runner
 // ===========================================================================
 
 export interface SourceLintResult {
-  readonly filePath: string;
-  readonly issues: readonly LintIssue[];
+  readonly filePath: string
+  readonly issues: ReadonlyArray<LintIssue>
 }
 
 export const lintSourceFile = (
   sf: SourceFile,
-  filePath?: string,
+  filePath?: string
 ): SourceLintResult => {
-  const fp = filePath ?? sf.getFilePath();
+  const fp = filePath ?? sf.getFilePath()
   // Skip dtslint type-test files entirely. These intentionally use degenerate
   // runtime patterns (Effect.all({}), Effect.fail(new Error(...))) purely to
   // assert on inferred types via twoslash/dtslint, not as runtime code.
   if (/\.tst\.ts$/i.test(fp)) {
-    return { filePath: fp, issues: [] };
+    return { filePath: fp, issues: [] }
   }
-  const ctx: SourceLintContext = { filePath: fp };
-  const issues: LintIssue[] = [];
-  issues.push(...checkUntaggedThrow(sf, ctx));
-  issues.push(...checkMutableInConcurrent(sf, ctx));
-  issues.push(...checkRunPromiseThenChain(sf, ctx));
-  issues.push(...checkRunSyncOnAsync(sf, ctx));
-  issues.push(...checkLiveLayerInTest(sf, ctx));
-  issues.push(...checkNondeterministicTestApi(sf, ctx));
-  issues.push(...checkDetachedFiberInTest(sf, ctx));
-  issues.push(...checkSleepWithoutTestClockInTest(sf, ctx));
-  issues.push(...checkPromiseApiInGen(sf, ctx));
-  issues.push(...checkForEachWithoutConcurrency(sf, ctx));
-  issues.push(...checkIdentityCatch(sf, ctx));
-  issues.push(...checkEmptyEffectAll(sf, ctx));
-  issues.push(...checkLayerDuplicateMerge(sf, ctx));
-  issues.push(...checkScheduleUnbounded(sf, ctx));
-  issues.push(...checkConfigSecretWithoutRedacted(sf, ctx));
-  issues.push(...checkReturnEffectFromSync(sf, ctx));
-  issues.push(...checkYieldPromise(sf, ctx));
-  issues.push(...checkBarrelImportFromEffect(sf, ctx));
-  issues.push(...checkArrayPushSpread(sf, ctx));
-  issues.push(...checkTryPromiseWithoutCatch(sf, ctx));
-  issues.push(...checkUnsafeApiUsage(sf, ctx));
+  const ctx: SourceLintContext = { filePath: fp }
+  const issues: Array<LintIssue> = []
+  issues.push(...checkUntaggedThrow(sf, ctx))
+  issues.push(...checkMutableInConcurrent(sf, ctx))
+  issues.push(...checkRunPromiseThenChain(sf, ctx))
+  issues.push(...checkRunSyncOnAsync(sf, ctx))
+  issues.push(...checkLiveLayerInTest(sf, ctx))
+  issues.push(...checkNondeterministicTestApi(sf, ctx))
+  issues.push(...checkDetachedFiberInTest(sf, ctx))
+  issues.push(...checkSleepWithoutTestClockInTest(sf, ctx))
+  issues.push(...checkPromiseApiInGen(sf, ctx))
+  issues.push(...checkForEachWithoutConcurrency(sf, ctx))
+  issues.push(...checkIdentityCatch(sf, ctx))
+  issues.push(...checkEmptyEffectAll(sf, ctx))
+  issues.push(...checkLayerDuplicateMerge(sf, ctx))
+  issues.push(...checkScheduleUnbounded(sf, ctx))
+  issues.push(...checkConfigSecretWithoutRedacted(sf, ctx))
+  issues.push(...checkReturnEffectFromSync(sf, ctx))
+  issues.push(...checkYieldPromise(sf, ctx))
+  issues.push(...checkBarrelImportFromEffect(sf, ctx))
+  issues.push(...checkArrayPushSpread(sf, ctx))
+  issues.push(...checkTryPromiseWithoutCatch(sf, ctx))
+  issues.push(...checkUnsafeApiUsage(sf, ctx))
 
   // Disable pragmas. Build a map keyed by line: lineNumber -> Set<rule|"all">
   // Recognised forms (looked at on the immediately preceding line):
@@ -1413,106 +1412,106 @@ export const lintSourceFile = (
   // For our rule-mapping we also accept `no-restricted-syntax` as an alias
   // for `array-push-spread`, since the Effect codebase uses that ESLint rule
   // name to suppress the same V8 footgun.
-  const sourceText = sf.getFullText();
-  const lineStarts: number[] = [0];
+  const sourceText = sf.getFullText()
+  const lineStarts: Array<number> = [0]
   for (let i = 0; i < sourceText.length; i++) {
-    if (sourceText[i] === '\n') lineStarts.push(i + 1);
+    if (sourceText[i] === "\n") lineStarts.push(i + 1)
   }
-  const disablesByLine = new Map<number, Set<string>>();
-  const PRAGMA_RE = /\/\/\s*(eslint|effect-analyzer)-disable-(next-line|line)\b([^\n]*)/g;
-  let m: RegExpExecArray | null;
+  const disablesByLine = new Map<number, Set<string>>()
+  const PRAGMA_RE = /\/\/\s*(eslint|effect-analyzer)-disable-(next-line|line)\b([^\n]*)/g
+  let m: RegExpExecArray | null
   while ((m = PRAGMA_RE.exec(sourceText)) !== null) {
-    const pos = m.index;
+    const pos = m.index
     // Compute line containing this comment (1-based).
-    let line = 1;
+    let line = 1
     for (let i = 1; i < lineStarts.length; i++) {
-      if (lineStarts[i]! > pos) break;
-      line = i + 1;
+      if (lineStarts[i]! > pos) break
+      line = i + 1
     }
-    const targetLine = m[2] === 'next-line' ? line + 1 : line;
+    const targetLine = m[2] === "next-line" ? line + 1 : line
     // Parse rule names after the directive — strip leading punctuation, take
     // the first whitespace-separated token sequence up to a `//` or `/*` or EOL.
-    const rest = (m[3] ?? '').replace(/^[\s:,-]+/, '').replace(/\/\*[\s\S]*$/, '').trim();
-    const rules = rest === '' ? ['*'] : rest.split(/[\s,]+/).filter(Boolean);
-    const set = disablesByLine.get(targetLine) ?? new Set<string>();
-    for (const r of rules) set.add(r);
-    disablesByLine.set(targetLine, set);
+    const rest = (m[3] ?? "").replace(/^[\s:,-]+/, "").replace(/\/\*[\s\S]*$/, "").trim()
+    const rules = rest === "" ? ["*"] : rest.split(/[\s,]+/).filter(Boolean)
+    const set = disablesByLine.get(targetLine) ?? new Set<string>()
+    for (const r of rules) set.add(r)
+    disablesByLine.set(targetLine, set)
   }
-  const RULE_ALIASES: Record<string, string[]> = {
-    'array-push-spread': ['no-restricted-syntax'],
-  };
+  const RULE_ALIASES: Record<string, Array<string>> = {
+    "array-push-spread": ["no-restricted-syntax"]
+  }
   const isSuppressed = (rule: string, line: number | undefined): boolean => {
-    if (line === undefined) return false;
-    const set = disablesByLine.get(line);
-    if (!set) return false;
-    if (set.has('*')) return true;
-    if (set.has(rule)) return true;
-    const aliases = RULE_ALIASES[rule];
-    if (aliases?.some((a) => set.has(a))) return true;
-    return false;
-  };
-  const filteredIssues = issues.filter((i) => !isSuppressed(i.rule, i.location?.line));
+    if (line === undefined) return false
+    const set = disablesByLine.get(line)
+    if (!set) return false
+    if (set.has("*")) return true
+    if (set.has(rule)) return true
+    const aliases = RULE_ALIASES[rule]
+    if (aliases?.some((a) => set.has(a))) return true
+    return false
+  }
+  const filteredIssues = issues.filter((i) => !isSuppressed(i.rule, i.location?.line))
 
-  const severityRank = (severity: LintIssue['severity']): number => {
-    if (severity === 'error') return 0;
-    if (severity === 'warning') return 1;
-    return 2;
-  };
+  const severityRank = (severity: LintIssue["severity"]): number => {
+    if (severity === "error") return 0
+    if (severity === "warning") return 1
+    return 2
+  }
   const canonicalIssues = [...filteredIssues].sort((a, b) => {
-    const aPath = a.location?.filePath ?? '';
-    const bPath = b.location?.filePath ?? '';
-    if (aPath !== bPath) return aPath.localeCompare(bPath);
-    const aLine = a.location?.line ?? Number.MAX_SAFE_INTEGER;
-    const bLine = b.location?.line ?? Number.MAX_SAFE_INTEGER;
-    if (aLine !== bLine) return aLine - bLine;
-    const aCol = a.location?.column ?? Number.MAX_SAFE_INTEGER;
-    const bCol = b.location?.column ?? Number.MAX_SAFE_INTEGER;
-    if (aCol !== bCol) return aCol - bCol;
-    if (a.rule !== b.rule) return a.rule.localeCompare(b.rule);
-    const sevCmp = severityRank(a.severity) - severityRank(b.severity);
-    if (sevCmp !== 0) return sevCmp;
-    if (a.message !== b.message) return a.message.localeCompare(b.message);
-    return (a.suggestion ?? '').localeCompare(b.suggestion ?? '');
-  });
-  const dedupedIssues: LintIssue[] = [];
-  const seen = new Set<string>();
+    const aPath = a.location?.filePath ?? ""
+    const bPath = b.location?.filePath ?? ""
+    if (aPath !== bPath) return aPath.localeCompare(bPath)
+    const aLine = a.location?.line ?? Number.MAX_SAFE_INTEGER
+    const bLine = b.location?.line ?? Number.MAX_SAFE_INTEGER
+    if (aLine !== bLine) return aLine - bLine
+    const aCol = a.location?.column ?? Number.MAX_SAFE_INTEGER
+    const bCol = b.location?.column ?? Number.MAX_SAFE_INTEGER
+    if (aCol !== bCol) return aCol - bCol
+    if (a.rule !== b.rule) return a.rule.localeCompare(b.rule)
+    const sevCmp = severityRank(a.severity) - severityRank(b.severity)
+    if (sevCmp !== 0) return sevCmp
+    if (a.message !== b.message) return a.message.localeCompare(b.message)
+    return (a.suggestion ?? "").localeCompare(b.suggestion ?? "")
+  })
+  const dedupedIssues: Array<LintIssue> = []
+  const seen = new Set<string>()
   for (const issue of canonicalIssues) {
     const key = [
       issue.rule,
       issue.severity,
-      issue.location?.filePath ?? '',
-      String(issue.location?.line ?? ''),
-      String(issue.location?.column ?? ''),
+      issue.location?.filePath ?? "",
+      String(issue.location?.line ?? ""),
+      String(issue.location?.column ?? ""),
       issue.message,
-      issue.suggestion ?? '',
-    ].join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
+      issue.suggestion ?? ""
+    ].join("|")
+    if (seen.has(key)) continue
+    seen.add(key)
     // Attach docsUrl + Bad/Good example if the rule has registry entries.
     // Per-rule code already populates these explicitly is preserved.
-    const docs = RULE_DOCS[issue.rule];
+    const docs = RULE_DOCS[issue.rule]
     if (docs && (issue.docsUrl === undefined || issue.example === undefined)) {
       dedupedIssues.push({
         ...issue,
         docsUrl: issue.docsUrl ?? docs.docsUrl,
-        example: issue.example ?? docs.example,
-      });
+        example: issue.example ?? docs.example
+      })
     } else {
-      dedupedIssues.push(issue);
+      dedupedIssues.push(issue)
     }
   }
-  return { filePath: fp, issues: dedupedIssues };
-};
+  return { filePath: fp, issues: dedupedIssues }
+}
 
 /**
  * Lint a TypeScript source string. Convenience wrapper for tests/CLI.
  */
-export const lintSourceCode = (code: string, filePath = 'temp.ts'): SourceLintResult => {
-  const { Project } = loadTsMorph();
+export const lintSourceCode = (code: string, filePath = "temp.ts"): SourceLintResult => {
+  const { Project } = loadTsMorph()
   const project = new Project({
     useInMemoryFileSystem: true,
-    compilerOptions: { strict: true, esModuleInterop: true },
-  });
-  const sf = project.createSourceFile(filePath, code);
-  return lintSourceFile(sf, filePath);
-};
+    compilerOptions: { strict: true, esModuleInterop: true }
+  })
+  const sf = project.createSourceFile(filePath, code)
+  return lintSourceFile(sf, filePath)
+}

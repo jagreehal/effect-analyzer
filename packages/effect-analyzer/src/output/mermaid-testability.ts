@@ -1,7 +1,7 @@
-import type { StaticEffectIR } from '../types';
+import type { StaticEffectIR } from "../types"
 
 interface TestabilityOptions {
-  readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
+  readonly direction?: "TB" | "LR" | "BT" | "RL"
 }
 
 /**
@@ -12,52 +12,52 @@ interface TestabilityOptions {
  */
 export function renderTestabilityMermaid(
   ir: StaticEffectIR,
-  options: TestabilityOptions = {},
+  options: TestabilityOptions = {}
 ): string {
-  const direction = options.direction ?? 'LR';
-  const services = ir.root.requiredServices ?? [];
-  const deps = ir.root.dependencies;
+  const direction = options.direction ?? "LR"
+  const services = ir.root.requiredServices ?? []
+  const deps = ir.root.dependencies
 
   if (services.length === 0) {
-    return `flowchart ${direction}\n  NoMocks((No services to mock - pure computation))`;
+    return `flowchart ${direction}\n  NoMocks((No services to mock - pure computation))`
   }
 
   // Build a set of layer dependency names for classification
-  const layerNames = new Set(deps.filter(d => d.isLayer).map(d => d.name));
+  const layerNames = new Set(deps.filter((d) => d.isLayer).map((d) => d.name))
 
-  const lines: string[] = [`flowchart ${direction}`];
-  const easyIds: string[] = [];
-  const hardIds: string[] = [];
+  const lines: Array<string> = [`flowchart ${direction}`]
+  const easyIds: Array<string> = []
+  const hardIds: Array<string> = []
 
   for (let i = 0; i < services.length; i++) {
-    const sid = `S${i}`;
-    const service = services[i];
-    if (!service) continue;
-    lines.push(`  Prog[${ir.root.programName}] -->|needs mock| ${sid}{{"${service.serviceId}"}}`);
+    const sid = `S${i}`
+    const service = services[i]
+    if (!service) continue
+    lines.push(`  Prog[${ir.root.programName}] -->|needs mock| ${sid}{{"${service.serviceId}"}}`)
 
     if (layerNames.has(service.serviceId)) {
-      hardIds.push(sid);
+      hardIds.push(sid)
     } else {
-      easyIds.push(sid);
+      easyIds.push(sid)
     }
   }
 
   // Add class definitions
-  lines.push('');
-  lines.push('  classDef easy fill:#C8E6C9');
-  lines.push('  classDef hard fill:#FFE0B2');
+  lines.push("")
+  lines.push("  classDef easy fill:#C8E6C9")
+  lines.push("  classDef hard fill:#FFE0B2")
 
   if (easyIds.length > 0) {
-    lines.push(`  class ${easyIds.join(',')} easy`);
+    lines.push(`  class ${easyIds.join(",")} easy`)
   }
   if (hardIds.length > 0) {
-    lines.push(`  class ${hardIds.join(',')} hard`);
+    lines.push(`  class ${hardIds.join(",")} hard`)
   }
 
   // Summary note
-  const mockWord = services.length === 1 ? 'mock' : 'mocks';
-  lines.push('');
-  lines.push(`  Note[Requires ${services.length} service ${mockWord}]`);
+  const mockWord = services.length === 1 ? "mock" : "mocks"
+  lines.push("")
+  lines.push(`  Note[Requires ${services.length} service ${mockWord}]`)
 
-  return lines.join('\n');
+  return lines.join("\n")
 }

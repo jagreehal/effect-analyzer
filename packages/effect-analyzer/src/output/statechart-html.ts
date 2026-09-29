@@ -1,51 +1,54 @@
-import type { StateMachine } from '../state-machine';
-import type { StateMachineCoverage } from '../state-machine-coverage';
-import { renderCoverageReport } from './statechart-coverage';
-import { renderStatechartSVG } from './svg-statechart';
-import { renderXStateConfig } from './xstate-config';
+import type { StateMachine } from "../state-machine"
+import type { StateMachineCoverage } from "../state-machine-coverage"
+import { renderCoverageReport } from "./statechart-coverage"
+import { renderStatechartSVG } from "./svg-statechart"
+import { renderXStateConfig } from "./xstate-config"
 
 const esc = (text: string): string =>
   text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
 
-const pct = (ratio: number): string => `${Math.round(ratio * 100)}%`;
+const pct = (ratio: number): string => `${Math.round(ratio * 100)}%`
 
 export function renderStatechartVisualizerHTML(
-  machines: readonly StateMachine[],
-  coverages: readonly StateMachineCoverage[],
+  machines: ReadonlyArray<StateMachine>,
+  coverages: ReadonlyArray<StateMachineCoverage>
 ): string {
-  const byName = new Map(coverages.map((coverage) => [coverage.machine, coverage]));
+  const byName = new Map(coverages.map((coverage) => [coverage.machine, coverage]))
   const cards = machines.map((machine) => {
-    const coverage = byName.get(machine.name);
-    const warnings =
-      coverage?.findings.filter((finding) => finding.severity === 'warning').length ?? 0;
-    const config = renderXStateConfig(machine);
+    const coverage = byName.get(machine.name)
+    const warnings = coverage?.findings.filter((finding) => finding.severity === "warning").length ?? 0
+    const config = renderXStateConfig(machine)
     return `<section class="machine" id="${esc(machine.name)}">
   <header>
     <div>
       <h2>${esc(machine.name)}</h2>
       <p>${machine.source} / ${machine.transitions.length} transitions / ${machine.states.length} states</p>
     </div>
-    <div class="${warnings > 0 ? 'badge warn' : 'badge'}">${coverage ? pct(coverage.coverageRatio) : 'n/a'} coverage</div>
+    <div class="${warnings > 0 ? "badge warn" : "badge"}">${
+      coverage ? pct(coverage.coverageRatio) : "n/a"
+    } coverage</div>
   </header>
   <div class="grid">
     <div class="diagram">${renderStatechartSVG(machine, coverage)}</div>
     <aside>
       <h3>Coverage</h3>
       <ul>
-        <li>${warnings} warning${warnings === 1 ? '' : 's'}</li>
-        <li>${coverage?.alphabetKnown ? `alphabet: ${coverage.alphabetSource ?? 'known'}` : 'alphabet: observed only'}</li>
-        <li>initial: ${esc(machine.initial ?? 'unknown')}</li>
+        <li>${warnings} warning${warnings === 1 ? "" : "s"}</li>
+        <li>${
+      coverage?.alphabetKnown ? `alphabet: ${coverage.alphabetSource ?? "known"}` : "alphabet: observed only"
+    }</li>
+        <li>initial: ${esc(machine.initial ?? "unknown")}</li>
       </ul>
       <h3>XState export</h3>
       <pre><code>${esc(config)}</code></pre>
     </aside>
   </div>
-</section>`;
-  });
+</section>`
+  })
 
   return `<!doctype html>
 <html>
@@ -86,11 +89,11 @@ svg{max-width:none}
       <h1>Effect Statecharts</h1>
       <p>Plain Effect source, XState-style visualization, no XState runtime dependency.</p>
     </div>
-    <div class="badge">${machines.length} machine${machines.length === 1 ? '' : 's'}</div>
+    <div class="badge">${machines.length} machine${machines.length === 1 ? "" : "s"}</div>
   </section>
   <pre class="summary">${esc(renderCoverageReport(coverages))}</pre>
-  ${cards.join('\n')}
+  ${cards.join("\n")}
 </main>
 </body>
-</html>`;
+</html>`
 }

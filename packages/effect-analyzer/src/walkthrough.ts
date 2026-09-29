@@ -12,35 +12,30 @@
  * pretending.
  */
 
-import { Option } from 'effect';
-import {
-  getStaticChildren,
-  isStaticErrorHandlerNode,
-  type StaticEffectIR,
-  type StaticFlowNode,
-} from './types';
+import { Option } from "effect"
+import { getStaticChildren, isStaticErrorHandlerNode, type StaticEffectIR, type StaticFlowNode } from "./types"
 
 export type ChoiceKind =
-  | 'sequence'
-  | 'success'
-  | 'failure'
-  | 'condition'
-  | 'branch'
-  | 'opaque';
+  | "sequence"
+  | "success"
+  | "failure"
+  | "condition"
+  | "branch"
+  | "opaque"
 
 export interface WalkChoice {
-  readonly id: string;
-  readonly label: string;
-  readonly kind: ChoiceKind;
+  readonly id: string
+  readonly label: string
+  readonly kind: ChoiceKind
   /** The node this choice would step onto. */
-  readonly nodeId: string;
+  readonly nodeId: string
 }
 
 export interface WalkStep {
-  readonly nodeId: string;
-  readonly label: string;
+  readonly nodeId: string
+  readonly label: string
   /** How this step was reached; absent for the plain sequential case. */
-  readonly via?: ChoiceKind;
+  readonly via?: ChoiceKind
 }
 
 /**
@@ -51,11 +46,11 @@ export interface WalkStep {
  * `rewind`.
  */
 export interface Walkthrough {
-  readonly timeline: readonly WalkStep[];
+  readonly timeline: ReadonlyArray<WalkStep>
   /** What can happen next. Empty exactly when `done`. */
-  readonly choices: readonly WalkChoice[];
-  readonly done: boolean;
-  readonly [CursorId]: Cursor;
+  readonly choices: ReadonlyArray<WalkChoice>
+  readonly done: boolean
+  readonly [CursorId]: Cursor
 }
 
 /**
@@ -64,173 +59,171 @@ export interface Walkthrough {
  *
  * @internal
  */
-export const CursorId: unique symbol = Symbol('effect-analyzer/walkthrough-cursor');
+export const CursorId: unique symbol = Symbol("effect-analyzer/walkthrough-cursor")
 
 interface Cursor {
   /** Nodes still to visit, outermost first. */
-  readonly frontier: readonly StaticFlowNode[];
+  readonly frontier: ReadonlyArray<StaticFlowNode>
   /** The IR being walked, so `rewind` can replay from the start. */
-  readonly ir: StaticEffectIR;
+  readonly ir: StaticEffectIR
   /** Choice ids taken so far, replayed by `rewind`. */
-  readonly taken: readonly string[];
+  readonly taken: ReadonlyArray<string>
 }
 
 /** Wrappers that carry no step of their own — step into their children. */
-const isTransparent = (node: StaticFlowNode): boolean =>
-  node.type === 'generator' || node.type === 'pipe';
+const isTransparent = (node: StaticFlowNode): boolean => node.type === "generator" || node.type === "pipe"
 
 const labelOf = (node: StaticFlowNode): string => {
-  const named = node as { displayName?: string; name?: string; callee?: string };
-  return named.displayName ?? named.name ?? named.callee ?? node.type;
-};
-
-const childrenOf = (node: StaticFlowNode): readonly StaticFlowNode[] =>
-  Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
-
-/** Expand wrappers until the head of the frontier is a node worth showing. */
-function normalize(frontier: readonly StaticFlowNode[]): readonly StaticFlowNode[] {
-  const [head, ...rest] = frontier;
-  if (head === undefined) return [];
-  if (!isTransparent(head)) return frontier;
-  return normalize([...childrenOf(head), ...rest]);
+  const named = node as { displayName?: string; name?: string; callee?: string }
+  return named.displayName ?? named.name ?? named.callee ?? node.type
 }
 
-function choicesFor(frontier: readonly StaticFlowNode[]): readonly WalkChoice[] {
-  const [head, ...rest] = frontier;
-  if (head === undefined) return [];
+const childrenOf = (node: StaticFlowNode): ReadonlyArray<StaticFlowNode> =>
+  Option.getOrElse(getStaticChildren(node), () => [] as ReadonlyArray<StaticFlowNode>)
+
+/** Expand wrappers until the head of the frontier is a node worth showing. */
+function normalize(frontier: ReadonlyArray<StaticFlowNode>): ReadonlyArray<StaticFlowNode> {
+  const [head, ...rest] = frontier
+  if (head === undefined) return []
+  if (!isTransparent(head)) return frontier
+  return normalize([...childrenOf(head), ...rest])
+}
+
+function choicesFor(frontier: ReadonlyArray<StaticFlowNode>): ReadonlyArray<WalkChoice> {
+  const [head, ...rest] = frontier
+  if (head === undefined) return []
 
   if (isStaticErrorHandlerNode(head)) {
     const success: WalkChoice = {
       id: `${head.id}:success`,
       label: `${labelOf(head)} — succeeds`,
-      kind: 'success',
-      nodeId: head.source.id,
-    };
-    if (!head.handler) return [success];
+      kind: "success",
+      nodeId: head.source.id
+    }
+    if (!head.handler) return [success]
     return [
       success,
       {
         id: `${head.id}:failure`,
         label: `${labelOf(head)} — fails, handler runs`,
-        kind: 'failure',
-        nodeId: head.handler.id,
-      },
-    ];
+        kind: "failure",
+        nodeId: head.handler.id
+      }
+    ]
   }
 
-  if (head.type === 'conditional' || head.type === 'decision' || head.type === 'switch') {
+  if (head.type === "conditional" || head.type === "decision" || head.type === "switch") {
     return childrenOf(head).map((child, index) => ({
       id: `${head.id}:cond:${index}`,
       label: `${labelOf(head)} — ${labelOf(child)}`,
-      kind: 'condition' as const,
-      nodeId: child.id,
-    }));
+      kind: "condition" as const,
+      nodeId: child.id
+    }))
   }
 
-  if (head.type === 'race' || head.type === 'parallel') {
+  if (head.type === "race" || head.type === "parallel") {
     return childrenOf(head).map((child, index) => ({
       id: `${head.id}:branch:${index}`,
       label: `${labelOf(head)} — ${labelOf(child)}`,
-      kind: 'branch' as const,
-      nodeId: child.id,
-    }));
+      kind: "branch" as const,
+      nodeId: child.id
+    }))
   }
 
-  if (head.type === 'unknown' || head.type === 'opaque') {
+  if (head.type === "unknown" || head.type === "opaque") {
     return [
       {
         id: `${head.id}:opaque`,
         label: `${labelOf(head)} — not analyzable, contents unknown`,
-        kind: 'opaque',
-        nodeId: head.id,
-      },
-    ];
+        kind: "opaque",
+        nodeId: head.id
+      }
+    ]
   }
 
-  void rest;
+  void rest
   return [
     {
       id: `${head.id}:next`,
       label: labelOf(head),
-      kind: 'sequence',
-      nodeId: head.id,
-    },
-  ];
+      kind: "sequence",
+      nodeId: head.id
+    }
+  ]
 }
 
 const build = (
   ir: StaticEffectIR,
-  frontier: readonly StaticFlowNode[],
-  timeline: readonly WalkStep[],
-  taken: readonly string[],
+  frontier: ReadonlyArray<StaticFlowNode>,
+  timeline: ReadonlyArray<WalkStep>,
+  taken: ReadonlyArray<string>
 ): Walkthrough => {
-  const normalized = normalize(frontier);
-  const choices = choicesFor(normalized);
+  const normalized = normalize(frontier)
+  const choices = choicesFor(normalized)
   return {
     timeline,
     choices,
     done: choices.length === 0,
-    [CursorId]: { frontier: normalized, ir, taken },
-  };
-};
+    [CursorId]: { frontier: normalized, ir, taken }
+  }
+}
 
-const cursorOf = (walk: Walkthrough): Cursor => walk[CursorId];
+const cursorOf = (walk: Walkthrough): Cursor => walk[CursorId]
 
 /** Start at the top of a program with nothing taken yet. */
 export function beginWalkthrough(ir: StaticEffectIR): Walkthrough {
-  return build(ir, ir.root.children, [], []);
+  return build(ir, ir.root.children, [], [])
 }
 
 /** Take one offered choice. Throws if the id is not currently on offer. */
 export function advance(walk: Walkthrough, choiceId: string): Walkthrough {
-  const choice = walk.choices.find((c) => c.id === choiceId);
+  const choice = walk.choices.find((c) => c.id === choiceId)
   if (!choice) {
     throw new Error(
-      `Choice "${choiceId}" is not available. On offer: ${walk.choices.map((c) => c.id).join(', ') || '(none)'}`,
-    );
+      `Choice "${choiceId}" is not available. On offer: ${walk.choices.map((c) => c.id).join(", ") || "(none)"}`
+    )
   }
 
-  const { frontier, ir, taken } = cursorOf(walk);
-  const [head, ...rest] = frontier;
-  if (head === undefined) return walk;
+  const { frontier, ir, taken } = cursorOf(walk)
+  const [head, ...rest] = frontier
+  if (head === undefined) return walk
 
-  const next = ((): readonly StaticFlowNode[] => {
+  const next = ((): ReadonlyArray<StaticFlowNode> => {
     if (isStaticErrorHandlerNode(head)) {
-      return choice.kind === 'failure' && head.handler
+      return choice.kind === "failure" && head.handler
         ? [head.source, head.handler, ...rest]
-        : [head.source, ...rest];
+        : [head.source, ...rest]
     }
-    if (choice.kind === 'condition' || choice.kind === 'branch') {
-      const child = childrenOf(head).find((c) => c.id === choice.nodeId);
-      return child ? [child, ...rest] : rest;
+    if (choice.kind === "condition" || choice.kind === "branch") {
+      const child = childrenOf(head).find((c) => c.id === choice.nodeId)
+      return child ? [child, ...rest] : rest
     }
-    return rest;
-  })();
+    return rest
+  })()
 
   // The error-handler frontier is re-entered rather than consumed, so the step
   // is recorded only once the concrete node underneath is taken.
-  const timeline =
-    head.type === 'error-handler'
-      ? walk.timeline
-      : [
-          ...walk.timeline,
-          {
-            nodeId: choice.nodeId,
-            label: labelOf(head),
-            ...(choice.kind === 'sequence' ? {} : { via: choice.kind }),
-          },
-        ];
+  const timeline = head.type === "error-handler"
+    ? walk.timeline
+    : [
+      ...walk.timeline,
+      {
+        nodeId: choice.nodeId,
+        label: labelOf(head),
+        ...(choice.kind === "sequence" ? {} : { via: choice.kind })
+      }
+    ]
 
-  return build(ir, next, timeline, [...taken, choiceId]);
+  return build(ir, next, timeline, [...taken, choiceId])
 }
 
 /** Follow the program while exactly one thing can happen next. */
 export function advanceWhileLinear(walk: Walkthrough): Walkthrough {
-  let current = walk;
+  let current = walk
   for (let only = current.choices[0]; current.choices.length === 1 && only; only = current.choices[0]) {
-    current = advance(current, only.id);
+    current = advance(current, only.id)
   }
-  return current;
+  return current
 }
 
 /**
@@ -239,12 +232,12 @@ export function advanceWhileLinear(walk: Walkthrough): Walkthrough {
  * advanced down a different branch.
  */
 export function rewind(walk: Walkthrough, stepCount: number): Walkthrough {
-  if (stepCount >= walk.timeline.length) return walk;
-  const { ir, taken } = cursorOf(walk);
-  let current = beginWalkthrough(ir);
+  if (stepCount >= walk.timeline.length) return walk
+  const { ir, taken } = cursorOf(walk)
+  let current = beginWalkthrough(ir)
   for (const choiceId of taken) {
-    if (current.timeline.length >= stepCount) break;
-    current = advance(current, choiceId);
+    if (current.timeline.length >= stepCount) break
+    current = advance(current, choiceId)
   }
-  return current;
+  return current
 }

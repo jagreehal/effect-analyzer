@@ -1,89 +1,84 @@
-import { describe, it, expect } from 'vitest';
-import { generatePathsWithMetadata } from './path-generator';
-import { createEmptyStats } from './analysis-utils';
-import type {
-  StaticEffectIR,
-  StaticFlowNode,
-  StaticDecisionNode,
-  StaticTerminalNode,
-} from './types';
+import { describe, expect, it } from "vitest"
+import { createEmptyStats } from "./analysis-utils"
+import { generatePathsWithMetadata } from "./path-generator"
+import type { StaticDecisionNode, StaticEffectIR, StaticFlowNode, StaticTerminalNode } from "./types"
 
-function makeIr(children: readonly StaticFlowNode[]): StaticEffectIR {
+function makeIr(children: ReadonlyArray<StaticFlowNode>): StaticEffectIR {
   return {
     root: {
-      id: 'program-1',
-      type: 'program',
-      programName: 'test-program',
-      source: 'direct',
+      id: "program-1",
+      type: "program",
+      programName: "test-program",
+      source: "direct",
       children,
       dependencies: [],
-      errorTypes: [],
+      errorTypes: []
     },
     metadata: {
       analyzedAt: Date.now(),
-      filePath: '/tmp/test.ts',
+      filePath: "/tmp/test.ts",
       warnings: [],
-      stats: createEmptyStats(),
+      stats: createEmptyStats()
     },
-    references: new Map(),
-  };
+    references: new Map()
+  }
 }
 
 function effectNode(id: string, name = id): StaticFlowNode {
   return {
     id,
-    type: 'effect',
+    type: "effect",
     callee: name,
-    name,
-  };
+    name
+  }
 }
 
-describe('path-generator control-flow regressions', () => {
-  it('return terminal should stop later sibling nodes from appearing in the same path', () => {
+describe("path-generator control-flow regressions", () => {
+  it("return terminal should stop later sibling nodes from appearing in the same path", () => {
     const terminal: StaticTerminalNode = {
-      id: 'ret-1',
-      type: 'terminal',
-      terminalKind: 'return',
-      value: [effectNode('value-effect', 'computeReturn')],
-    };
+      id: "ret-1",
+      type: "terminal",
+      terminalKind: "return",
+      value: [effectNode("value-effect", "computeReturn")]
+    }
 
     const ir = makeIr([
-      effectNode('before', 'before'),
+      effectNode("before", "before"),
       terminal,
-      effectNode('after', 'after'),
-    ]);
+      effectNode("after", "after")
+    ])
 
-    const { paths } = generatePathsWithMetadata(ir);
-    expect(paths).toHaveLength(1);
+    const { paths } = generatePathsWithMetadata(ir)
+    expect(paths).toHaveLength(1)
 
-    const names = paths[0]!.steps.map((s) => s.name);
-    expect(names).toContain('before');
-    expect(names).toContain('computeReturn');
-    expect(names).toContain('return');
-    expect(names).not.toContain('after');
-  });
+    const names = paths[0]!.steps.map((s) => s.name)
+    expect(names).toContain("before")
+    expect(names).toContain("computeReturn")
+    expect(names).toContain("return")
+    expect(names).not.toContain("after")
+  })
 
-  it('if-without-else decision should preserve the false condition on the fallthrough path', () => {
+  it("if-without-else decision should preserve the false condition on the fallthrough path", () => {
     const decision: StaticDecisionNode = {
-      id: 'dec-1',
-      type: 'decision',
-      decisionId: 'd1',
-      label: 'flag',
-      condition: 'flag',
-      source: 'raw-if',
-      onTrue: [effectNode('true-branch', 'trueStep')],
-      onFalse: undefined,
-    };
+      id: "dec-1",
+      type: "decision",
+      decisionId: "d1",
+      label: "flag",
+      condition: "flag",
+      source: "raw-if",
+      onTrue: [effectNode("true-branch", "trueStep")],
+      onFalse: undefined
+    }
 
-    const ir = makeIr([decision, effectNode('after', 'after')]);
-    const { paths } = generatePathsWithMetadata(ir);
+    const ir = makeIr([decision, effectNode("after", "after")])
+    const { paths } = generatePathsWithMetadata(ir)
 
-    expect(paths).toHaveLength(2);
+    expect(paths).toHaveLength(2)
 
-    const truePath = paths.find((p) => p.conditions.some((c) => c.expression === 'flag' && c.mustBe));
-    const falsePath = paths.find((p) => p.conditions.some((c) => c.expression === 'flag' && !c.mustBe));
+    const truePath = paths.find((p) => p.conditions.some((c) => c.expression === "flag" && c.mustBe))
+    const falsePath = paths.find((p) => p.conditions.some((c) => c.expression === "flag" && !c.mustBe))
 
-    expect(truePath).toBeDefined();
-    expect(falsePath).toBeDefined();
-  });
-});
+    expect(truePath).toBeDefined()
+    expect(falsePath).toBeDefined()
+  })
+})

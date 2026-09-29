@@ -1,61 +1,61 @@
-import { describe, it, expect } from 'vitest';
-import { lintSourceCode } from './source-linter';
-import { RULE_DOCS } from './source-linter-docs';
+import { describe, expect, it } from "vitest"
+import { lintSourceCode } from "./source-linter"
+import { RULE_DOCS } from "./source-linter-docs"
 
-describe('source-linter: untagged-throw', () => {
-  it('does NOT flag throw inside Effect.try({ try, catch }) — idiomatic', () => {
+describe("source-linter: untagged-throw", () => {
+  it("does NOT flag throw inside Effect.try({ try, catch }) — idiomatic", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        class MyError extends Error {}
        export const p = Effect.try({
          try: () => { throw new Error('boom'); },
          catch: (cause) => new MyError(),
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'untagged-throw')).toEqual([]);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "untagged-throw")).toEqual([])
+  })
 
-  it('does NOT flag throw inside Effect.tryPromise({ try, catch }) — idiomatic', () => {
+  it("does NOT flag throw inside Effect.tryPromise({ try, catch }) — idiomatic", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.tryPromise({
          try: async () => { throw new Error('boom'); },
          catch: (e) => e,
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'untagged-throw')).toEqual([]);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "untagged-throw")).toEqual([])
+  })
 
-  it('flags throw inside Effect.sync (becomes a defect)', () => {
+  it("flags throw inside Effect.sync (becomes a defect)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.sync(() => { throw new Error('boom'); });`,
-    );
-    expect(issues.filter((i) => i.rule === 'untagged-throw').length).toBe(1);
-  });
+       export const p = Effect.sync(() => { throw new Error('boom'); });`
+    )
+    expect(issues.filter((i) => i.rule === "untagged-throw").length).toBe(1)
+  })
 
-  it('flags throw inside Effect.gen body', () => {
+  it("flags throw inside Effect.gen body", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          throw new Error('escape');
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'untagged-throw').length).toBe(1);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "untagged-throw").length).toBe(1)
+  })
 
-  it('does not flag throw outside Effect context', () => {
+  it("does not flag throw outside Effect context", () => {
     const { issues } = lintSourceCode(
       `export function noop() {
          throw new Error('outside effect');
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'untagged-throw').length).toBe(0);
-  });
-});
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "untagged-throw").length).toBe(0)
+  })
+})
 
-describe('source-linter: mutable-in-concurrent', () => {
-  it('flags let mutation inside Effect.all', () => {
+describe("source-linter: mutable-in-concurrent", () => {
+  it("flags let mutation inside Effect.all", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
@@ -65,129 +65,129 @@ describe('source-linter: mutable-in-concurrent', () => {
            Effect.sync(() => { counter = counter + 1; }),
          ], { concurrency: 'unbounded' });
          return counter;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'mutable-in-concurrent').length).toBeGreaterThan(0);
-  });
-});
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "mutable-in-concurrent").length).toBeGreaterThan(0)
+  })
+})
 
-describe('source-linter: runPromise-then-chain', () => {
-  it('flags .then on Effect.runPromise', () => {
+describe("source-linter: runPromise-then-chain", () => {
+  it("flags .then on Effect.runPromise", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const main = () => Effect.runPromise(Effect.succeed(1)).then((n) => n + 1);`,
-    );
-    expect(issues.filter((i) => i.rule === 'runPromise-then-chain').length).toBe(1);
-  });
-});
+       export const main = () => Effect.runPromise(Effect.succeed(1)).then((n) => n + 1);`
+    )
+    expect(issues.filter((i) => i.rule === "runPromise-then-chain").length).toBe(1)
+  })
+})
 
-describe('source-linter: runSync-on-async', () => {
-  it('flags Effect.runSync directly on Effect.tryPromise', () => {
+describe("source-linter: runSync-on-async", () => {
+  it("flags Effect.runSync directly on Effect.tryPromise", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const x = Effect.runSync(Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e }));`,
-    );
-    expect(issues.filter((i) => i.rule === 'runSync-on-async').length).toBe(1);
-  });
+       export const x = Effect.runSync(Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e }));`
+    )
+    expect(issues.filter((i) => i.rule === "runSync-on-async").length).toBe(1)
+  })
 
-  it('flags Effect.runSync on a tainted identifier', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       const asyncEff = Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e });
-       export const x = Effect.runSync(asyncEff);`,
-    );
-    expect(issues.filter((i) => i.rule === 'runSync-on-async').length).toBe(1);
-  });
-
-  it('does not flag Effect.runSync on a pure effect', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const x = Effect.runSync(Effect.succeed(1));`,
-    );
-    expect(issues.filter((i) => i.rule === 'runSync-on-async')).toEqual([]);
-  });
-
-  it('flags Effect.runSyncExit directly on Effect.tryPromise', () => {
-    const { issues } = lintSourceCode(
-      `import { Effect } from 'effect';
-       export const x = Effect.runSyncExit(Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e }));`,
-    );
-    expect(issues.filter((i) => i.rule === 'runSyncExit-on-async').length).toBe(1);
-  });
-
-  it('flags Effect.runSyncExit on a tainted identifier', () => {
+  it("flags Effect.runSync on a tainted identifier", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        const asyncEff = Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e });
-       export const x = Effect.runSyncExit(asyncEff);`,
-    );
-    expect(issues.filter((i) => i.rule === 'runSyncExit-on-async').length).toBe(1);
-  });
-});
+       export const x = Effect.runSync(asyncEff);`
+    )
+    expect(issues.filter((i) => i.rule === "runSync-on-async").length).toBe(1)
+  })
 
-describe('source-linter: live-layer-in-test', () => {
-  it('flags references to *Live in .test.ts files', () => {
+  it("does not flag Effect.runSync on a pure effect", () => {
+    const { issues } = lintSourceCode(
+      `import { Effect } from 'effect';
+       export const x = Effect.runSync(Effect.succeed(1));`
+    )
+    expect(issues.filter((i) => i.rule === "runSync-on-async")).toEqual([])
+  })
+
+  it("flags Effect.runSyncExit directly on Effect.tryPromise", () => {
+    const { issues } = lintSourceCode(
+      `import { Effect } from 'effect';
+       export const x = Effect.runSyncExit(Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e }));`
+    )
+    expect(issues.filter((i) => i.rule === "runSyncExit-on-async").length).toBe(1)
+  })
+
+  it("flags Effect.runSyncExit on a tainted identifier", () => {
+    const { issues } = lintSourceCode(
+      `import { Effect } from 'effect';
+       const asyncEff = Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e });
+       export const x = Effect.runSyncExit(asyncEff);`
+    )
+    expect(issues.filter((i) => i.rule === "runSyncExit-on-async").length).toBe(1)
+  })
+})
+
+describe("source-linter: live-layer-in-test", () => {
+  it("flags references to *Live in .test.ts files", () => {
     const { issues } = lintSourceCode(
       `import { UserRepoLive } from './user-repo';
        export const test = UserRepoLive;`,
-      'foo.test.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'live-layer-in-test').length).toBeGreaterThan(0);
-  });
+      "foo.test.ts"
+    )
+    expect(issues.filter((i) => i.rule === "live-layer-in-test").length).toBeGreaterThan(0)
+  })
 
-  it('does not flag in non-test files', () => {
+  it("does not flag in non-test files", () => {
     const { issues } = lintSourceCode(
       `import { UserRepoLive } from './user-repo';
        export const x = UserRepoLive;`,
-      'foo.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'live-layer-in-test')).toEqual([]);
-  });
+      "foo.ts"
+    )
+    expect(issues.filter((i) => i.rule === "live-layer-in-test")).toEqual([])
+  })
 
-  it('does not flag camelCase helpers ending in Live (e.g. runLive)', () => {
+  it("does not flag camelCase helpers ending in Live (e.g. runLive)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        declare const runLive: <A>(eff: Effect.Effect<A>) => Promise<A>;
        export const t = runLive(Effect.succeed(1));`,
-      'foo.test.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'live-layer-in-test')).toEqual([]);
-  });
+      "foo.test.ts"
+    )
+    expect(issues.filter((i) => i.rule === "live-layer-in-test")).toEqual([])
+  })
 
-  it('does not flag AWS TimeToLive API methods', () => {
+  it("does not flag AWS TimeToLive API methods", () => {
     const { issues } = lintSourceCode(
       `declare const dynamodb: { describeTimeToLive: () => Promise<unknown>; updateTimeToLive: () => Promise<unknown> };
        export const t = async () => {
          await dynamodb.describeTimeToLive();
          await dynamodb.updateTimeToLive();
        };`,
-      'ttl.test.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'live-layer-in-test')).toEqual([]);
-  });
+      "ttl.test.ts"
+    )
+    expect(issues.filter((i) => i.rule === "live-layer-in-test")).toEqual([])
+  })
 
-  it('flags in __tests__ directory files without .test suffix', () => {
+  it("flags in __tests__ directory files without .test suffix", () => {
     const { issues } = lintSourceCode(
       `import { UserRepoLive } from './user-repo';
        export const x = UserRepoLive;`,
-      'src/__tests__/user-repo.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'live-layer-in-test').length).toBeGreaterThan(0);
-  });
+      "src/__tests__/user-repo.ts"
+    )
+    expect(issues.filter((i) => i.rule === "live-layer-in-test").length).toBeGreaterThan(0)
+  })
 
-  it('downgrades live-layer-in-test to info for integration tests', () => {
+  it("downgrades live-layer-in-test to info for integration tests", () => {
     const { issues } = lintSourceCode(
       `import { UserRepoLive } from './user-repo';
        export const layer = UserRepoLive;`,
-      'integration/user-repo.integration.test.ts',
-    );
-    const found = issues.find((i) => i.rule === 'live-layer-in-test');
-    expect(found?.severity).toBe('info');
-  });
-});
+      "integration/user-repo.integration.test.ts"
+    )
+    const found = issues.find((i) => i.rule === "live-layer-in-test")
+    expect(found?.severity).toBe("info")
+  })
+})
 
-describe('source-linter: deterministic ordering', () => {
-  it('sorts issues canonically by location then rule/message', () => {
+describe("source-linter: deterministic ordering", () => {
+  it("sorts issues canonically by location then rule/message", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
@@ -195,18 +195,18 @@ describe('source-linter: deterministic ordering', () => {
          const a = Date.now();
          return yield* Effect.succeed([a, b]);
        });`,
-      'order.test.ts',
-    );
-    const raw = issues.filter((i) => i.rule === 'nondeterministic-test-api');
-    expect(raw.length).toBe(2);
-    expect(raw[0]?.location?.line).toBeLessThan(raw[1]?.location?.line ?? Number.MAX_SAFE_INTEGER);
-    expect(raw[0]?.message).toMatch(/Math\.random|Date\.now/);
-    expect(raw[1]?.message).toMatch(/Math\.random|Date\.now/);
-  });
-});
+      "order.test.ts"
+    )
+    const raw = issues.filter((i) => i.rule === "nondeterministic-test-api")
+    expect(raw.length).toBe(2)
+    expect(raw[0]?.location?.line).toBeLessThan(raw[1]?.location?.line ?? Number.MAX_SAFE_INTEGER)
+    expect(raw[0]?.message).toMatch(/Math\.random|Date\.now/)
+    expect(raw[1]?.message).toMatch(/Math\.random|Date\.now/)
+  })
+})
 
-describe('source-linter: nondeterministic-test-api', () => {
-  it('flags Date.now, new Date() and Math.random in test files', () => {
+describe("source-linter: nondeterministic-test-api", () => {
+  it("flags Date.now, new Date() and Math.random in test files", () => {
     const { issues } = lintSourceCode(
       `export const t = () => {
         const now = Date.now();
@@ -214,141 +214,141 @@ describe('source-linter: nondeterministic-test-api', () => {
         const d = new Date();
         return { now, r, d };
       };`,
-      'time.spec.ts',
-    );
-    const flagged = issues.filter((i) => i.rule === 'nondeterministic-test-api');
-    expect(flagged.length).toBe(3);
-  });
+      "time.spec.ts"
+    )
+    const flagged = issues.filter((i) => i.rule === "nondeterministic-test-api")
+    expect(flagged.length).toBe(3)
+  })
 
-  it('does not flag deterministic Date construction in tests', () => {
+  it("does not flag deterministic Date construction in tests", () => {
     const { issues } = lintSourceCode(
       `export const t = () => new Date('2020-01-01T00:00:00.000Z');`,
-      'time.test.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'nondeterministic-test-api')).toEqual([]);
-  });
+      "time.test.ts"
+    )
+    expect(issues.filter((i) => i.rule === "nondeterministic-test-api")).toEqual([])
+  })
 
-  it('does not flag these APIs in non-test files', () => {
+  it("does not flag these APIs in non-test files", () => {
     const { issues } = lintSourceCode(
       `export const t = Date.now() + Math.random();`,
-      'runtime.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'nondeterministic-test-api')).toEqual([]);
-  });
+      "runtime.ts"
+    )
+    expect(issues.filter((i) => i.rule === "nondeterministic-test-api")).toEqual([])
+  })
 
-  it('flags in test directory files without .test suffix', () => {
+  it("flags in test directory files without .test suffix", () => {
     const { issues } = lintSourceCode(
       `export const t = Date.now();`,
-      'test/runtime.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'nondeterministic-test-api').length).toBe(1);
-  });
+      "test/runtime.ts"
+    )
+    expect(issues.filter((i) => i.rule === "nondeterministic-test-api").length).toBe(1)
+  })
 
-  it('flags in tests directory files without .test suffix', () => {
+  it("flags in tests directory files without .test suffix", () => {
     const { issues } = lintSourceCode(
       `export const t = Date.now();`,
-      'tests/runtime.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'nondeterministic-test-api').length).toBe(1);
-  });
-});
+      "tests/runtime.ts"
+    )
+    expect(issues.filter((i) => i.rule === "nondeterministic-test-api").length).toBe(1)
+  })
+})
 
-describe('source-linter: detached-fiber-in-test', () => {
-  it('flags Effect.runFork in test files', () => {
+describe("source-linter: detached-fiber-in-test", () => {
+  it("flags Effect.runFork in test files", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const t = () => Effect.runFork(Effect.never);`,
-      'fork.test.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'detached-fiber-in-test').length).toBe(1);
-  });
+      "fork.test.ts"
+    )
+    expect(issues.filter((i) => i.rule === "detached-fiber-in-test").length).toBe(1)
+  })
 
-  it('flags Runtime.runFork in test files', () => {
+  it("flags Runtime.runFork in test files", () => {
     const { issues } = lintSourceCode(
       `import { Runtime, Effect } from 'effect';
        declare const rt: Runtime.Runtime<never>;
        export const t = () => Runtime.runFork(rt)(Effect.never);`,
-      'fork.spec.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'detached-fiber-in-test').length).toBe(1);
-  });
+      "fork.spec.ts"
+    )
+    expect(issues.filter((i) => i.rule === "detached-fiber-in-test").length).toBe(1)
+  })
 
-  it('does not flag in non-test files', () => {
+  it("does not flag in non-test files", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const main = () => Effect.runFork(Effect.never);`,
-      'main.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'detached-fiber-in-test')).toEqual([]);
-  });
-});
+      "main.ts"
+    )
+    expect(issues.filter((i) => i.rule === "detached-fiber-in-test")).toEqual([])
+  })
+})
 
-describe('source-linter: unsafe-api-usage', () => {
-  it('flags Effect.unsafe* calls', () => {
+describe("source-linter: unsafe-api-usage", () => {
+  it("flags Effect.unsafe* calls", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const s = Effect.unsafeMakeSemaphore(1);`,
-      'runtime.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'unsafe-api-usage').length).toBe(1);
-  });
+      "runtime.ts"
+    )
+    expect(issues.filter((i) => i.rule === "unsafe-api-usage").length).toBe(1)
+  })
 
-  it('flags Runtime.unsafe* calls', () => {
+  it("flags Runtime.unsafe* calls", () => {
     const { issues } = lintSourceCode(
       `import { Runtime, Effect } from 'effect';
        declare const rt: Runtime.Runtime<never>;
        export const x = Runtime.unsafeRunSync(rt)(Effect.succeed(1));`,
-      'runtime.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'unsafe-api-usage').length).toBe(2);
-  });
+      "runtime.ts"
+    )
+    expect(issues.filter((i) => i.rule === "unsafe-api-usage").length).toBe(2)
+  })
 
-  it('does not flag safe APIs', () => {
+  it("does not flag safe APIs", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const x = Effect.runPromise(Effect.succeed(1));`,
-      'runtime.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'unsafe-api-usage')).toEqual([]);
-  });
-});
+      "runtime.ts"
+    )
+    expect(issues.filter((i) => i.rule === "unsafe-api-usage")).toEqual([])
+  })
+})
 
-describe('source-linter: promise-api-in-gen', () => {
-  it('flags Promise.all inside Effect.gen', () => {
+describe("source-linter: promise-api-in-gen", () => {
+  it("flags Promise.all inside Effect.gen", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          const xs = Promise.all([Promise.resolve(1), Promise.resolve(2)]);
          return yield* Effect.succeed(xs);
-       });`,
-    );
-    const flagged = issues.filter((i) => i.rule === 'promise-api-in-gen');
-    expect(flagged.some((i) => i.message.includes('Promise.all'))).toBe(true);
-  });
+       });`
+    )
+    const flagged = issues.filter((i) => i.rule === "promise-api-in-gen")
+    expect(flagged.some((i) => i.message.includes("Promise.all"))).toBe(true)
+  })
 
-  it('flags Promise.race inside Effect.gen', () => {
+  it("flags Promise.race inside Effect.gen", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          const x = Promise.race([Promise.resolve(1)]);
          return yield* Effect.succeed(x);
-       });`,
-    );
+       });`
+    )
     expect(
       issues.some(
-        (i) => i.rule === 'promise-api-in-gen' && i.message.includes('Promise.race'),
-      ),
-    ).toBe(true);
-  });
+        (i) => i.rule === "promise-api-in-gen" && i.message.includes("Promise.race")
+      )
+    ).toBe(true)
+  })
 
-  it('does not flag Promise.all outside Effect.gen', () => {
+  it("does not flag Promise.all outside Effect.gen", () => {
     const { issues } = lintSourceCode(
-      `export const main = () => Promise.all([Promise.resolve(1)]);`,
-    );
-    expect(issues.filter((i) => i.rule === 'promise-api-in-gen')).toEqual([]);
-  });
+      `export const main = () => Promise.all([Promise.resolve(1)]);`
+    )
+    expect(issues.filter((i) => i.rule === "promise-api-in-gen")).toEqual([])
+  })
 
-  it('does not flag Promise.all wrapped in Effect.tryPromise', () => {
+  it("does not flag Promise.all wrapped in Effect.tryPromise", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
@@ -357,313 +357,313 @@ describe('source-linter: promise-api-in-gen', () => {
            catch: (e) => e,
          });
          return xs;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'promise-api-in-gen')).toEqual([]);
-  });
-});
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "promise-api-in-gen")).toEqual([])
+  })
+})
 
-describe('source-linter: forEach-without-concurrency', () => {
-  it('flags Effect.forEach with no options', () => {
+describe("source-linter: forEach-without-concurrency", () => {
+  it("flags Effect.forEach with no options", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.forEach([1, 2, 3], (n) => Effect.succeed(n + 1));`,
-    );
-    expect(issues.filter((i) => i.rule === 'forEach-without-concurrency').length).toBe(1);
-  });
+       export const p = Effect.forEach([1, 2, 3], (n) => Effect.succeed(n + 1));`
+    )
+    expect(issues.filter((i) => i.rule === "forEach-without-concurrency").length).toBe(1)
+  })
 
-  it('does not flag Effect.forEach with options object', () => {
+  it("does not flag Effect.forEach with options object", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.forEach(
          [1, 2, 3],
          (n) => Effect.succeed(n + 1),
          { concurrency: 'unbounded' },
-       );`,
-    );
-    expect(issues.filter((i) => i.rule === 'forEach-without-concurrency')).toEqual([]);
-  });
+       );`
+    )
+    expect(issues.filter((i) => i.rule === "forEach-without-concurrency")).toEqual([])
+  })
 
-  it('flags Stream.runForEach with no options', () => {
+  it("flags Stream.runForEach with no options", () => {
     const { issues } = lintSourceCode(
       `import { Stream, Effect } from 'effect';
-       export const p = Stream.runForEach(Stream.make(1, 2, 3), (n) => Effect.succeed(n));`,
-    );
-    expect(issues.filter((i) => i.rule === 'forEach-without-concurrency').length).toBe(1);
-  });
-});
+       export const p = Stream.runForEach(Stream.make(1, 2, 3), (n) => Effect.succeed(n));`
+    )
+    expect(issues.filter((i) => i.rule === "forEach-without-concurrency").length).toBe(1)
+  })
+})
 
-describe('source-linter: identity-catch', () => {
-  it('flags Effect.catch(e => Effect.fail(e))', () => {
+describe("source-linter: identity-catch", () => {
+  it("flags Effect.catch(e => Effect.fail(e))", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catch(Effect.succeed(1), (e) => Effect.fail(e));`,
-    );
-    expect(issues.filter((i) => i.rule === 'identity-catch').length).toBe(1);
-  });
+       export const p = Effect.catch(Effect.succeed(1), (e) => Effect.fail(e));`
+    )
+    expect(issues.filter((i) => i.rule === "identity-catch").length).toBe(1)
+  })
 
-  it('flags Effect.catchCause(c => Effect.failCause(c))', () => {
+  it("flags Effect.catchCause(c => Effect.failCause(c))", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catchCause(Effect.succeed(1), (c) => Effect.failCause(c));`,
-    );
-    expect(issues.filter((i) => i.rule === 'identity-catch').length).toBe(1);
-  });
+       export const p = Effect.catchCause(Effect.succeed(1), (c) => Effect.failCause(c));`
+    )
+    expect(issues.filter((i) => i.rule === "identity-catch").length).toBe(1)
+  })
 
-  it('flags Effect.catchTag("Foo", e => Effect.fail(e))', () => {
+  it("flags Effect.catchTag(\"Foo\", e => Effect.fail(e))", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catchTag(Effect.succeed(1), 'Foo', (e) => Effect.fail(e));`,
-    );
-    expect(issues.filter((i) => i.rule === 'identity-catch').length).toBe(1);
-  });
+       export const p = Effect.catchTag(Effect.succeed(1), 'Foo', (e) => Effect.fail(e));`
+    )
+    expect(issues.filter((i) => i.rule === "identity-catch").length).toBe(1)
+  })
 
-  it('does not flag a real recovery handler', () => {
+  it("does not flag a real recovery handler", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catch(Effect.succeed(1), () => Effect.succeed(0));`,
-    );
-    expect(issues.filter((i) => i.rule === 'identity-catch')).toEqual([]);
-  });
+       export const p = Effect.catch(Effect.succeed(1), () => Effect.succeed(0));`
+    )
+    expect(issues.filter((i) => i.rule === "identity-catch")).toEqual([])
+  })
 
-  it('does not flag when handler re-fails a different value', () => {
+  it("does not flag when handler re-fails a different value", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.catch(Effect.succeed(1), (e) => Effect.fail(\`wrap:\${String(e)}\`));`,
-    );
-    expect(issues.filter((i) => i.rule === 'identity-catch')).toEqual([]);
-  });
-});
+       export const p = Effect.catch(Effect.succeed(1), (e) => Effect.fail(\`wrap:\${String(e)}\`));`
+    )
+    expect(issues.filter((i) => i.rule === "identity-catch")).toEqual([])
+  })
+})
 
-describe('source-linter: empty-effect-all', () => {
-  it('flags Effect.all([])', () => {
+describe("source-linter: empty-effect-all", () => {
+  it("flags Effect.all([])", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.all([]);`,
-    );
-    expect(issues.filter((i) => i.rule === 'empty-effect-all').length).toBe(1);
-  });
+       export const p = Effect.all([]);`
+    )
+    expect(issues.filter((i) => i.rule === "empty-effect-all").length).toBe(1)
+  })
 
-  it('flags Effect.all({})', () => {
+  it("flags Effect.all({})", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.all({});`,
-    );
-    expect(issues.filter((i) => i.rule === 'empty-effect-all').length).toBe(1);
-  });
+       export const p = Effect.all({});`
+    )
+    expect(issues.filter((i) => i.rule === "empty-effect-all").length).toBe(1)
+  })
 
-  it('does not flag a non-empty array', () => {
+  it("does not flag a non-empty array", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.all([Effect.succeed(1)]);`,
-    );
-    expect(issues.filter((i) => i.rule === 'empty-effect-all')).toEqual([]);
-  });
-});
+       export const p = Effect.all([Effect.succeed(1)]);`
+    )
+    expect(issues.filter((i) => i.rule === "empty-effect-all")).toEqual([])
+  })
+})
 
-describe('source-linter: layer-duplicate-merge', () => {
-  it('flags Layer.merge(A, A)', () => {
+describe("source-linter: layer-duplicate-merge", () => {
+  it("flags Layer.merge(A, A)", () => {
     const { issues } = lintSourceCode(
       `import { Layer } from 'effect';
        declare const A: Layer.Layer<never>;
-       export const L = Layer.merge(A, A);`,
-    );
-    expect(issues.filter((i) => i.rule === 'layer-duplicate-merge').length).toBe(1);
-  });
+       export const L = Layer.merge(A, A);`
+    )
+    expect(issues.filter((i) => i.rule === "layer-duplicate-merge").length).toBe(1)
+  })
 
-  it('flags Layer.mergeAll(A, B, A)', () => {
-    const { issues } = lintSourceCode(
-      `import { Layer } from 'effect';
-       declare const A: Layer.Layer<never>;
-       declare const B: Layer.Layer<never>;
-       export const L = Layer.mergeAll(A, B, A);`,
-    );
-    expect(issues.filter((i) => i.rule === 'layer-duplicate-merge').length).toBe(1);
-  });
-
-  it('does not flag distinct layers', () => {
+  it("flags Layer.mergeAll(A, B, A)", () => {
     const { issues } = lintSourceCode(
       `import { Layer } from 'effect';
        declare const A: Layer.Layer<never>;
        declare const B: Layer.Layer<never>;
-       export const L = Layer.merge(A, B);`,
-    );
-    expect(issues.filter((i) => i.rule === 'layer-duplicate-merge')).toEqual([]);
-  });
+       export const L = Layer.mergeAll(A, B, A);`
+    )
+    expect(issues.filter((i) => i.rule === "layer-duplicate-merge").length).toBe(1)
+  })
 
-  it('does not flag inline expressions even if identical', () => {
+  it("does not flag distinct layers", () => {
+    const { issues } = lintSourceCode(
+      `import { Layer } from 'effect';
+       declare const A: Layer.Layer<never>;
+       declare const B: Layer.Layer<never>;
+       export const L = Layer.merge(A, B);`
+    )
+    expect(issues.filter((i) => i.rule === "layer-duplicate-merge")).toEqual([])
+  })
+
+  it("does not flag inline expressions even if identical", () => {
     // Inline Layer.succeed calls produce non-identifier text — we intentionally
     // skip those to avoid false positives.
     const { issues } = lintSourceCode(
       `import { Layer, Context } from 'effect';
        class S extends Context.Tag('S')<S, { readonly x: number }>() {}
-       export const L = Layer.merge(Layer.succeed(S, { x: 1 }), Layer.succeed(S, { x: 1 }));`,
-    );
-    expect(issues.filter((i) => i.rule === 'layer-duplicate-merge')).toEqual([]);
-  });
-});
+       export const L = Layer.merge(Layer.succeed(S, { x: 1 }), Layer.succeed(S, { x: 1 }));`
+    )
+    expect(issues.filter((i) => i.rule === "layer-duplicate-merge")).toEqual([])
+  })
+})
 
-describe('source-linter: schedule-unbounded', () => {
-  it('flags bare Schedule.forever passed to retry', () => {
+describe("source-linter: schedule-unbounded", () => {
+  it("flags bare Schedule.forever passed to retry", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Schedule } from 'effect';
-       export const p = Effect.retry(Effect.succeed(1), Schedule.forever);`,
-    );
-    expect(issues.filter((i) => i.rule === 'schedule-unbounded').length).toBe(1);
-  });
+       export const p = Effect.retry(Effect.succeed(1), Schedule.forever);`
+    )
+    expect(issues.filter((i) => i.rule === "schedule-unbounded").length).toBe(1)
+  })
 
-  it('flags bare Schedule.spaced(...) passed to retry', () => {
+  it("flags bare Schedule.spaced(...) passed to retry", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Schedule, Duration } from 'effect';
-       export const p = Effect.retry(Effect.succeed(1), Schedule.spaced(Duration.seconds(1)));`,
-    );
-    expect(issues.filter((i) => i.rule === 'schedule-unbounded').length).toBe(1);
-  });
+       export const p = Effect.retry(Effect.succeed(1), Schedule.spaced(Duration.seconds(1)));`
+    )
+    expect(issues.filter((i) => i.rule === "schedule-unbounded").length).toBe(1)
+  })
 
-  it('does not flag Schedule.forever composed with upTo via pipe', () => {
+  it("does not flag Schedule.forever composed with upTo via pipe", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Schedule, Duration, pipe } from 'effect';
-       export const s = pipe(Schedule.forever, Schedule.upTo(Duration.seconds(30)));`,
-    );
-    expect(issues.filter((i) => i.rule === 'schedule-unbounded')).toEqual([]);
-  });
+       export const s = pipe(Schedule.forever, Schedule.upTo(Duration.seconds(30)));`
+    )
+    expect(issues.filter((i) => i.rule === "schedule-unbounded")).toEqual([])
+  })
 
-  it('does not flag Schedule.spaced composed with recurs', () => {
+  it("does not flag Schedule.spaced composed with recurs", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Schedule, Duration, pipe } from 'effect';
-       export const s = pipe(Schedule.spaced(Duration.seconds(1)), Schedule.intersect(Schedule.recurs(3)));`,
-    );
-    expect(issues.filter((i) => i.rule === 'schedule-unbounded')).toEqual([]);
-  });
-});
+       export const s = pipe(Schedule.spaced(Duration.seconds(1)), Schedule.intersect(Schedule.recurs(3)));`
+    )
+    expect(issues.filter((i) => i.rule === "schedule-unbounded")).toEqual([])
+  })
+})
 
-describe('source-linter: config-secret-without-redacted', () => {
-  it('flags Config.string("DATABASE_PASSWORD")', () => {
+describe("source-linter: config-secret-without-redacted", () => {
+  it("flags Config.String(\"DATABASE_PASSWORD\")", () => {
     const { issues } = lintSourceCode(
       `import { Config } from 'effect';
-       export const c = Config.string('DATABASE_PASSWORD');`,
-    );
-    const flagged = issues.filter((i) => i.rule === 'config-secret-without-redacted');
-    expect(flagged.length).toBe(1);
-    expect(flagged[0]?.suggestion).toMatch(/Config\.redacted/);
-  });
+       export const c = Config.String('DATABASE_PASSWORD');`
+    )
+    const flagged = issues.filter((i) => i.rule === "config-secret-without-redacted")
+    expect(flagged.length).toBe(1)
+    expect(flagged[0]?.suggestion).toMatch(/Config\.Redacted/)
+  })
 
-  it('flags Config.string("API_TOKEN")', () => {
+  it("flags Config.String(\"API_TOKEN\")", () => {
     const { issues } = lintSourceCode(
       `import { Config } from 'effect';
-       export const c = Config.string('API_TOKEN');`,
-    );
-    expect(issues.filter((i) => i.rule === 'config-secret-without-redacted').length).toBe(1);
-  });
+       export const c = Config.String('API_TOKEN');`
+    )
+    expect(issues.filter((i) => i.rule === "config-secret-without-redacted").length).toBe(1)
+  })
 
-  it('flags Config.nonEmptyString("CLIENT_SECRET")', () => {
+  it("flags Config.NonEmptyString(\"CLIENT_SECRET\")", () => {
     const { issues } = lintSourceCode(
       `import { Config } from 'effect';
-       export const c = Config.nonEmptyString('CLIENT_SECRET');`,
-    );
-    expect(issues.filter((i) => i.rule === 'config-secret-without-redacted').length).toBe(1);
-  });
+       export const c = Config.NonEmptyString('CLIENT_SECRET');`
+    )
+    expect(issues.filter((i) => i.rule === "config-secret-without-redacted").length).toBe(1)
+  })
 
-  it('does not flag Config.redacted("PASSWORD")', () => {
+  it("does not flag Config.Redacted(\"PASSWORD\")", () => {
     const { issues } = lintSourceCode(
       `import { Config } from 'effect';
-       export const c = Config.redacted('PASSWORD');`,
-    );
-    expect(issues.filter((i) => i.rule === 'config-secret-without-redacted')).toEqual([]);
-  });
+       export const c = Config.Redacted('PASSWORD');`
+    )
+    expect(issues.filter((i) => i.rule === "config-secret-without-redacted")).toEqual([])
+  })
 
-  it('does not flag Config.string for non-secret names', () => {
+  it("does not flag Config.String for non-secret names", () => {
     const { issues } = lintSourceCode(
       `import { Config } from 'effect';
-       export const c = Config.string('PORT');`,
-    );
-    expect(issues.filter((i) => i.rule === 'config-secret-without-redacted')).toEqual([]);
-  });
-});
+       export const c = Config.String('PORT');`
+    )
+    expect(issues.filter((i) => i.rule === "config-secret-without-redacted")).toEqual([])
+  })
+})
 
-describe('source-linter: return-effect-from-sync', () => {
-  it('flags Effect.sync(() => Effect.succeed(...))', () => {
+describe("source-linter: return-effect-from-sync", () => {
+  it("flags Effect.sync(() => Effect.succeed(...))", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.sync(() => Effect.succeed(1));`,
-    );
-    const flagged = issues.filter((i) => i.rule === 'return-effect-from-sync');
-    expect(flagged.length).toBe(1);
-    expect(flagged[0]?.message).toMatch(/Effect\.succeed/);
-  });
+       export const p = Effect.sync(() => Effect.succeed(1));`
+    )
+    const flagged = issues.filter((i) => i.rule === "return-effect-from-sync")
+    expect(flagged.length).toBe(1)
+    expect(flagged[0]?.message).toMatch(/Effect\.succeed/)
+  })
 
-  it('flags Effect.sync(() => { return Effect.fail(...); })', () => {
+  it("flags Effect.sync(() => { return Effect.fail(...); })", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.sync(() => { return Effect.fail('boom'); });`,
-    );
-    expect(issues.filter((i) => i.rule === 'return-effect-from-sync').length).toBe(1);
-  });
+       export const p = Effect.sync(() => { return Effect.fail('boom'); });`
+    )
+    expect(issues.filter((i) => i.rule === "return-effect-from-sync").length).toBe(1)
+  })
 
-  it('flags Effect.try({ try: () => Effect.flatMap(...) })', () => {
+  it("flags Effect.try({ try: () => Effect.flatMap(...) })", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.try({
          try: () => Effect.flatMap(Effect.succeed(1), () => Effect.succeed(2)),
          catch: (e) => e,
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'return-effect-from-sync').length).toBe(1);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "return-effect-from-sync").length).toBe(1)
+  })
 
-  it('does not flag Effect.sync(() => plainValue)', () => {
+  it("does not flag Effect.sync(() => plainValue)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.sync(() => 42);`,
-    );
-    expect(issues.filter((i) => i.rule === 'return-effect-from-sync')).toEqual([]);
-  });
+       export const p = Effect.sync(() => 42);`
+    )
+    expect(issues.filter((i) => i.rule === "return-effect-from-sync")).toEqual([])
+  })
 
-  it('does not flag Effect.sync returning a non-Effect call', () => {
+  it("does not flag Effect.sync returning a non-Effect call", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        declare function compute(): number;
-       export const p = Effect.sync(() => compute());`,
-    );
-    expect(issues.filter((i) => i.rule === 'return-effect-from-sync')).toEqual([]);
-  });
-});
+       export const p = Effect.sync(() => compute());`
+    )
+    expect(issues.filter((i) => i.rule === "return-effect-from-sync")).toEqual([])
+  })
+})
 
-describe('source-linter: yield-promise', () => {
-  it('flags yield* new Promise(...)', () => {
+describe("source-linter: yield-promise", () => {
+  it("flags yield* new Promise(...)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          const x = yield* new Promise((r) => r(1));
          return x;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'yield-promise').length).toBe(1);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "yield-promise").length).toBe(1)
+  })
 
-  it('flags yield* Promise.resolve(...)', () => {
+  it("flags yield* Promise.resolve(...)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          const x = yield* Promise.resolve(1);
          return x;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'yield-promise').length).toBe(1);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "yield-promise").length).toBe(1)
+  })
 
-  it('flags yield* fetch(...)', () => {
+  it("flags yield* fetch(...)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          const r = yield* fetch('/x');
          return r;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'yield-promise').length).toBe(1);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "yield-promise").length).toBe(1)
+  })
 
-  it('does not flag yield* fetch where fetch is a local destructure', () => {
+  it("does not flag yield* fetch where fetch is a local destructure", () => {
     // Real alchemy-effect pattern: a container helper returns { fetch }
     // where the local `fetch` is an Effect-returning HTTP client method.
     const { issues } = lintSourceCode(
@@ -673,406 +673,406 @@ describe('source-linter: yield-promise', () => {
          const { fetch } = yield* container.getTcpPort(3000);
          const r = yield* fetch('/x');
          return r;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'yield-promise')).toEqual([]);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "yield-promise")).toEqual([])
+  })
 
-  it('does not flag yield* fetch where fetch is a local parameter', () => {
+  it("does not flag yield* fetch where fetch is a local parameter", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const paginate = <T>(fetch: (t?: string) => Effect.Effect<T>) =>
          Effect.gen(function* () {
            const page = yield* fetch(undefined);
            return page;
-         });`,
-    );
-    expect(issues.filter((i) => i.rule === 'yield-promise')).toEqual([]);
-  });
+         });`
+    )
+    expect(issues.filter((i) => i.rule === "yield-promise")).toEqual([])
+  })
 
-  it('does not flag yield* Effect.tryPromise(...)', () => {
+  it("does not flag yield* Effect.tryPromise(...)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          const x = yield* Effect.tryPromise({ try: () => fetch('/x'), catch: (e) => e });
          return x;
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'yield-promise')).toEqual([]);
-  });
-});
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "yield-promise")).toEqual([])
+  })
+})
 
-describe('source-linter: barrel-import-from-effect', () => {
-  it('flags import { Effect } from "effect"', () => {
+describe("source-linter: barrel-import-from-effect", () => {
+  it("flags import { Effect } from \"effect\"", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const x = Effect.succeed(1);`,
-    );
-    const flagged = issues.filter((i) => i.rule === 'barrel-import-from-effect');
-    expect(flagged.length).toBe(1);
-    expect(flagged[0]?.suggestion).toMatch(/import \* as Effect from "effect\/Effect"/);
-  });
+       export const x = Effect.succeed(1);`
+    )
+    const flagged = issues.filter((i) => i.rule === "barrel-import-from-effect")
+    expect(flagged.length).toBe(1)
+    expect(flagged[0]?.suggestion).toMatch(/import \* as Effect from "effect\/Effect"/)
+  })
 
-  it('flags each named specifier separately', () => {
+  it("flags each named specifier separately", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Layer, Context } from 'effect';
-       export const x = Effect.succeed(1);`,
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect').length).toBe(3);
-  });
+       export const x = Effect.succeed(1);`
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect").length).toBe(3)
+  })
 
-  it('flags @effect/platform barrel imports', () => {
+  it("flags @effect/platform barrel imports", () => {
     const { issues } = lintSourceCode(
       `import { HttpClient } from '@effect/platform';
-       declare const x: typeof HttpClient;`,
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect').length).toBe(1);
-  });
+       declare const x: typeof HttpClient;`
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect").length).toBe(1)
+  })
 
-  it('respects aliased imports in the suggestion', () => {
+  it("respects aliased imports in the suggestion", () => {
     const { issues } = lintSourceCode(
       `import { Effect as E } from 'effect';
-       export const x = E.succeed(1);`,
-    );
-    const flagged = issues.find((i) => i.rule === 'barrel-import-from-effect');
-    expect(flagged?.suggestion).toMatch(/import \* as E from "effect\/Effect"/);
-  });
+       export const x = E.succeed(1);`
+    )
+    const flagged = issues.find((i) => i.rule === "barrel-import-from-effect")
+    expect(flagged?.suggestion).toMatch(/import \* as E from "effect\/Effect"/)
+  })
 
-  it('does not flag namespace imports', () => {
+  it("does not flag namespace imports", () => {
     const { issues } = lintSourceCode(
       `import * as Effect from 'effect/Effect';
-       export const x = Effect.succeed(1);`,
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect')).toEqual([]);
-  });
+       export const x = Effect.succeed(1);`
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect")).toEqual([])
+  })
 
-  it('does not flag type-only imports', () => {
+  it("does not flag type-only imports", () => {
     const { issues } = lintSourceCode(
       `import type { Effect } from 'effect';
-       declare const x: Effect.Effect<number>;`,
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect')).toEqual([]);
-  });
+       declare const x: Effect.Effect<number>;`
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect")).toEqual([])
+  })
 
-  it('does not flag type-only named specifiers', () => {
+  it("does not flag type-only named specifiers", () => {
     const { issues } = lintSourceCode(
       `import { type Effect, Layer } from 'effect';
        declare const x: Effect.Effect<number>;
-       export const y = Layer.empty;`,
-    );
-    const flagged = issues.filter((i) => i.rule === 'barrel-import-from-effect');
-    expect(flagged.length).toBe(1);
-    expect(flagged[0]?.message).toMatch(/Layer/);
-  });
+       export const y = Layer.empty;`
+    )
+    const flagged = issues.filter((i) => i.rule === "barrel-import-from-effect")
+    expect(flagged.length).toBe(1)
+    expect(flagged[0]?.message).toMatch(/Layer/)
+  })
 
-  it('does not flag non-Effect packages', () => {
+  it("does not flag non-Effect packages", () => {
     const { issues } = lintSourceCode(
       `import { describe } from 'vitest';
-       describe('x', () => {});`,
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect')).toEqual([]);
-  });
-});
+       describe('x', () => {});`
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect")).toEqual([])
+  })
+})
 
-describe('source-linter: array-push-spread', () => {
-  it('flags arr.push(...xs)', () => {
+describe("source-linter: array-push-spread", () => {
+  it("flags arr.push(...xs)", () => {
     const { issues } = lintSourceCode(
       `export function append(arr: number[], xs: number[]) {
          arr.push(...xs);
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'array-push-spread').length).toBe(1);
-  });
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "array-push-spread").length).toBe(1)
+  })
 
-  it('flags arr.push(a, ...xs) (mixed args)', () => {
+  it("flags arr.push(a, ...xs) (mixed args)", () => {
     const { issues } = lintSourceCode(
       `export function append(arr: number[], xs: number[]) {
          arr.push(1, ...xs);
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'array-push-spread').length).toBe(1);
-  });
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "array-push-spread").length).toBe(1)
+  })
 
-  it('does not flag arr.push(x) without spread', () => {
+  it("does not flag arr.push(x) without spread", () => {
     const { issues } = lintSourceCode(
       `export function append(arr: number[], x: number) {
          arr.push(x);
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'array-push-spread')).toEqual([]);
-  });
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "array-push-spread")).toEqual([])
+  })
 
-  it('does not flag other methods with spread', () => {
+  it("does not flag other methods with spread", () => {
     const { issues } = lintSourceCode(
       `export function combine(xs: number[], ys: number[]) {
          return xs.concat(...ys);
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'array-push-spread')).toEqual([]);
-  });
-});
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "array-push-spread")).toEqual([])
+  })
+})
 
-describe('source-linter: tryPromise-without-catch', () => {
-  it('flags Effect.tryPromise(fn) short form', () => {
+describe("source-linter: tryPromise-without-catch", () => {
+  it("flags Effect.tryPromise(fn) short form", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        declare const load: () => Promise<string>;
-       export const p = Effect.tryPromise(load);`,
-    );
-    const flagged = issues.filter((i) => i.rule === 'tryPromise-without-catch');
-    expect(flagged.length).toBe(1);
-    expect(flagged[0]?.message).toMatch(/UnknownException/);
-  });
+       export const p = Effect.tryPromise(load);`
+    )
+    const flagged = issues.filter((i) => i.rule === "tryPromise-without-catch")
+    expect(flagged.length).toBe(1)
+    expect(flagged[0]?.message).toMatch(/UnknownException/)
+  })
 
-  it('flags Effect.tryPromise(() => fn()) short form', () => {
+  it("flags Effect.tryPromise(() => fn()) short form", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.tryPromise(() => fetch('/x'));`,
-    );
-    expect(issues.filter((i) => i.rule === 'tryPromise-without-catch').length).toBe(1);
-  });
+       export const p = Effect.tryPromise(() => fetch('/x'));`
+    )
+    expect(issues.filter((i) => i.rule === "tryPromise-without-catch").length).toBe(1)
+  })
 
-  it('flags Effect.try(fn) short form', () => {
+  it("flags Effect.try(fn) short form", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        declare const compute: () => number;
-       export const p = Effect.try(compute);`,
-    );
-    expect(issues.filter((i) => i.rule === 'tryPromise-without-catch').length).toBe(1);
-  });
+       export const p = Effect.try(compute);`
+    )
+    expect(issues.filter((i) => i.rule === "tryPromise-without-catch").length).toBe(1)
+  })
 
-  it('does not flag Effect.tryPromise({ try, catch })', () => {
+  it("does not flag Effect.tryPromise({ try, catch })", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.tryPromise({
          try: () => fetch('/x'),
          catch: (e) => e,
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'tryPromise-without-catch')).toEqual([]);
-  });
-});
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "tryPromise-without-catch")).toEqual([])
+  })
+})
 
-describe('source-linter: schedule-unbounded (Stream context suppression)', () => {
-  it('does not flag Schedule.spaced inside Stream.repeat', () => {
+describe("source-linter: schedule-unbounded (Stream context suppression)", () => {
+  it("does not flag Schedule.spaced inside Stream.repeat", () => {
     const { issues } = lintSourceCode(
       `import { Schedule, Stream, Duration } from 'effect';
        export const heartbeat = Stream.repeat(
          Stream.succeed(1),
          Schedule.spaced(Duration.seconds(30)),
-       );`,
-    );
-    expect(issues.filter((i) => i.rule === 'schedule-unbounded')).toEqual([]);
-  });
+       );`
+    )
+    expect(issues.filter((i) => i.rule === "schedule-unbounded")).toEqual([])
+  })
 
-  it('does not flag Schedule.forever inside Stream.fromSchedule', () => {
+  it("does not flag Schedule.forever inside Stream.fromSchedule", () => {
     const { issues } = lintSourceCode(
       `import { Schedule, Stream } from 'effect';
-       export const s = Stream.fromSchedule(Schedule.forever);`,
-    );
-    expect(issues.filter((i) => i.rule === 'schedule-unbounded')).toEqual([]);
-  });
+       export const s = Stream.fromSchedule(Schedule.forever);`
+    )
+    expect(issues.filter((i) => i.rule === "schedule-unbounded")).toEqual([])
+  })
 
-  it('still flags Schedule.spaced in Effect.retry context', () => {
+  it("still flags Schedule.spaced in Effect.retry context", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Schedule, Duration } from 'effect';
-       export const p = Effect.retry(Effect.succeed(1), Schedule.spaced(Duration.seconds(1)));`,
-    );
-    expect(issues.filter((i) => i.rule === 'schedule-unbounded').length).toBe(1);
-  });
-});
+       export const p = Effect.retry(Effect.succeed(1), Schedule.spaced(Duration.seconds(1)));`
+    )
+    expect(issues.filter((i) => i.rule === "schedule-unbounded").length).toBe(1)
+  })
+})
 
-describe('source-linter: sleep-without-testclock', () => {
-  it('flags Effect.sleep in test files when TestClock is not used', () => {
+describe("source-linter: sleep-without-testclock", () => {
+  it("flags Effect.sleep in test files when TestClock is not used", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Duration } from 'effect';
        export const t = Effect.sleep(Duration.seconds(1));`,
-      'sleep.test.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'sleep-without-testclock').length).toBe(1);
-  });
+      "sleep.test.ts"
+    )
+    expect(issues.filter((i) => i.rule === "sleep-without-testclock").length).toBe(1)
+  })
 
-  it('does not flag when TestClock is present', () => {
+  it("does not flag when TestClock is present", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Duration, TestClock } from 'effect';
        export const t = Effect.gen(function* () {
          yield* TestClock.adjust(Duration.seconds(1));
          return yield* Effect.sleep(Duration.seconds(1));
        });`,
-      'sleep.spec.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'sleep-without-testclock')).toEqual([]);
-  });
-});
+      "sleep.spec.ts"
+    )
+    expect(issues.filter((i) => i.rule === "sleep-without-testclock")).toEqual([])
+  })
+})
 
-describe('source-linter: docs + example enrichment', () => {
-  it('attaches docsUrl + example to untagged-throw', () => {
+describe("source-linter: docs + example enrichment", () => {
+  it("attaches docsUrl + example to untagged-throw", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const p = Effect.sync(() => { throw new Error('boom'); });`,
-    );
-    const flagged = issues.find((i) => i.rule === 'untagged-throw');
-    expect(flagged?.docsUrl).toBe('https://effect.website/docs/error-management/expected-errors/');
-    expect(flagged?.example?.bad).toMatch(/throw new Error/);
-    expect(flagged?.example?.good).toMatch(/Data\.TaggedError/);
-  });
+       export const p = Effect.sync(() => { throw new Error('boom'); });`
+    )
+    const flagged = issues.find((i) => i.rule === "untagged-throw")
+    expect(flagged?.docsUrl).toBe("https://effect.website/docs/error-management/expected-errors/")
+    expect(flagged?.example?.bad).toMatch(/throw new Error/)
+    expect(flagged?.example?.good).toMatch(/Data\.TaggedError/)
+  })
 
-  it('attaches docsUrl + example to config-secret-without-redacted', () => {
+  it("attaches docsUrl + example to config-secret-without-redacted", () => {
     const { issues } = lintSourceCode(
       `import { Config } from 'effect';
-       export const c = Config.string('API_TOKEN');`,
-    );
-    const flagged = issues.find((i) => i.rule === 'config-secret-without-redacted');
-    expect(flagged?.docsUrl).toBe('https://effect.website/docs/configuration/');
-    expect(flagged?.example?.good).toMatch(/Config\.redacted/);
-  });
+       export const c = Config.String('API_TOKEN');`
+    )
+    const flagged = issues.find((i) => i.rule === "config-secret-without-redacted")
+    expect(flagged?.docsUrl).toBe("https://effect.website/docs/configuration/")
+    expect(flagged?.example?.good).toMatch(/Config\.Redacted/)
+  })
 
-  it('attaches docsUrl + example to schedule-unbounded', () => {
+  it("attaches docsUrl + example to schedule-unbounded", () => {
     const { issues } = lintSourceCode(
       `import { Effect, Schedule, Duration } from 'effect';
-       export const p = Effect.retry(Effect.succeed(1), Schedule.spaced(Duration.seconds(1)));`,
-    );
-    const flagged = issues.find((i) => i.rule === 'schedule-unbounded');
-    expect(flagged?.docsUrl).toMatch(/scheduling/);
-    expect(flagged?.example?.good).toMatch(/Schedule\.recurs|Schedule\.intersect/);
-  });
+       export const p = Effect.retry(Effect.succeed(1), Schedule.spaced(Duration.seconds(1)));`
+    )
+    const flagged = issues.find((i) => i.rule === "schedule-unbounded")
+    expect(flagged?.docsUrl).toMatch(/scheduling/)
+    expect(flagged?.example?.good).toMatch(/Schedule\.recurs|Schedule\.intersect/)
+  })
 
-  it('attaches docsUrl + example to barrel-import-from-effect', () => {
+  it("attaches docsUrl + example to barrel-import-from-effect", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
-       export const x = Effect.succeed(1);`,
-    );
-    const flagged = issues.find((i) => i.rule === 'barrel-import-from-effect');
-    expect(flagged?.docsUrl).toMatch(/importing-effect/);
-    expect(flagged?.example?.good).toMatch(/import \* as Effect/);
-  });
+       export const x = Effect.succeed(1);`
+    )
+    const flagged = issues.find((i) => i.rule === "barrel-import-from-effect")
+    expect(flagged?.docsUrl).toMatch(/importing-effect/)
+    expect(flagged?.example?.good).toMatch(/import \* as Effect/)
+  })
 
-  it('every emitted rule id has a docs entry', () => {
-    const seenRules = new Set<string>();
+  it("every emitted rule id has a docs entry", () => {
+    const seenRules = new Set<string>()
     const fixtures = [
       `import { Effect } from 'effect';
        export const a = Effect.fail(new Error('x'));`,
       `import { Effect, Config } from 'effect';
-       export const b = Config.string('SECRET');
+       export const b = Config.String('SECRET');
        export const c = Effect.try(() => 1);
        export const d = pipe(1);`,
       `import { Layer } from 'effect';
        declare const A: Layer.Layer<never>;
-       export const L = Layer.merge(A, A);`,
-    ];
+       export const L = Layer.merge(A, A);`
+    ]
     for (const code of fixtures) {
-      for (const i of lintSourceCode(code).issues) seenRules.add(i.rule);
+      for (const i of lintSourceCode(code).issues) seenRules.add(i.rule)
     }
     for (const rule of seenRules) {
-      expect(RULE_DOCS, `missing docs for ${rule}`).toHaveProperty(rule);
+      expect(RULE_DOCS, `missing docs for ${rule}`).toHaveProperty(rule)
     }
-  });
-});
+  })
+})
 
-describe('source-linter: noise-reduction scoping', () => {
-  it('does not flag barrel-import-from-effect in test files', () => {
+describe("source-linter: noise-reduction scoping", () => {
+  it("does not flag barrel-import-from-effect in test files", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`,
-      '/repo/packages/foo/test/Bar.test.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect')).toEqual([]);
-  });
+      "/repo/packages/foo/test/Bar.test.ts"
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect")).toEqual([])
+  })
 
-  it('does not flag barrel-import-from-effect inside __tests__ dirs', () => {
+  it("does not flag barrel-import-from-effect inside __tests__ dirs", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`,
-      '/repo/src/__tests__/User.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect')).toEqual([]);
-  });
+      "/repo/src/__tests__/User.ts"
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect")).toEqual([])
+  })
 
-  it('still flags barrel-import-from-effect in src files', () => {
+  it("still flags barrel-import-from-effect in src files", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`,
-      '/repo/packages/foo/src/Bar.ts',
-    );
-    expect(issues.filter((i) => i.rule === 'barrel-import-from-effect').length).toBe(1);
-  });
+      "/repo/packages/foo/src/Bar.ts"
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect").length).toBe(1)
+  })
 
-  it('emits zero issues for .tst.ts dtslint files', () => {
+  it("emits zero issues for .tst.ts dtslint files", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const x = Effect.all({});
        export const y = Effect.fail(new Error('boom'));`,
-      '/repo/effect/dtslint/Effect.tst.ts',
-    );
-    expect(issues).toEqual([]);
-  });
-});
+      "/repo/effect/dtslint/Effect.tst.ts"
+    )
+    expect(issues).toEqual([])
+  })
+})
 
-describe('source-linter: disable pragmas', () => {
-  it('honours // eslint-disable-next-line array-push-spread', () => {
+describe("source-linter: disable pragmas", () => {
+  it("honours // eslint-disable-next-line array-push-spread", () => {
     const { issues } = lintSourceCode(
       `export function append(arr: number[], xs: number[]) {
          // eslint-disable-next-line array-push-spread
          arr.push(...xs);
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'array-push-spread')).toEqual([]);
-  });
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "array-push-spread")).toEqual([])
+  })
 
-  it('honours // eslint-disable-next-line no-restricted-syntax as alias for array-push-spread', () => {
+  it("honours // eslint-disable-next-line no-restricted-syntax as alias for array-push-spread", () => {
     // The Effect team uses ESLint's `no-restricted-syntax` rule name to
     // suppress the same V8 footgun; we accept it as an alias.
     const { issues } = lintSourceCode(
       `export function append(arr: number[], xs: number[]) {
          // eslint-disable-next-line no-restricted-syntax
          arr.push(...xs);
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'array-push-spread')).toEqual([]);
-  });
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "array-push-spread")).toEqual([])
+  })
 
-  it('honours // effect-analyzer-disable-next-line for any rule', () => {
+  it("honours // effect-analyzer-disable-next-line for any rule", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          // effect-analyzer-disable-next-line promise-api-in-gen
          const r = Promise.all([]);
          return yield* Effect.succeed(1);
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'promise-api-in-gen')).toEqual([]);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "promise-api-in-gen")).toEqual([])
+  })
 
-  it('honours // effect-analyzer-disable-next-line with no rule (disables all)', () => {
+  it("honours // effect-analyzer-disable-next-line with no rule (disables all)", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          // effect-analyzer-disable-next-line
          const r = Promise.all([]);
          return yield* Effect.succeed(1);
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'promise-api-in-gen')).toEqual([]);
-  });
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "promise-api-in-gen")).toEqual([])
+  })
 
-  it('honours trailing // eslint-disable-line', () => {
+  it("honours trailing // eslint-disable-line", () => {
     const { issues } = lintSourceCode(
       `export function append(arr: number[], xs: number[]) {
          arr.push(...xs); // eslint-disable-line array-push-spread
-       }`,
-    );
-    expect(issues.filter((i) => i.rule === 'array-push-spread')).toEqual([]);
-  });
+       }`
+    )
+    expect(issues.filter((i) => i.rule === "array-push-spread")).toEqual([])
+  })
 
-  it('does not suppress other rules when a different rule is disabled', () => {
+  it("does not suppress other rules when a different rule is disabled", () => {
     const { issues } = lintSourceCode(
       `import { Effect } from 'effect';
        export const p = Effect.gen(function* () {
          // eslint-disable-next-line array-push-spread
          const r = Promise.all([]);
          return yield* Effect.succeed(1);
-       });`,
-    );
-    expect(issues.filter((i) => i.rule === 'promise-api-in-gen').length).toBe(1);
-  });
-});
+       });`
+    )
+    expect(issues.filter((i) => i.rule === "promise-api-in-gen").length).toBe(1)
+  })
+})

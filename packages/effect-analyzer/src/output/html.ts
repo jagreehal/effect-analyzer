@@ -11,17 +11,17 @@
  * - 6-theme system with system preference detection and localStorage persistence
  */
 
-import type { StaticEffectIR } from '../types';
-import { renderStaticMermaid } from './mermaid';
-import { generatePaths } from '../path-generator';
-import { calculateComplexity } from '../complexity';
+import { calculateComplexity } from "../complexity"
+import { generatePaths } from "../path-generator"
+import type { StaticEffectIR } from "../types"
+import { renderStaticMermaid } from "./mermaid"
 
-export type HtmlTheme = 'midnight' | 'ocean' | 'ember' | 'forest' | 'daylight' | 'paper';
+export type HtmlTheme = "midnight" | "ocean" | "ember" | "forest" | "daylight" | "paper"
 
 export interface HtmlOutputOptions {
-  readonly title?: string | undefined;
+  readonly title?: string | undefined
   /** Named theme, or legacy 'light'/'dark' aliases (mapped to daylight/midnight). */
-  readonly theme?: HtmlTheme | 'light' | 'dark' | undefined;
+  readonly theme?: HtmlTheme | "light" | "dark" | undefined
 }
 
 /**
@@ -29,46 +29,48 @@ export interface HtmlOutputOptions {
  * Returns the theme name unchanged if it's already a named theme.
  */
 export function resolveThemeName(
-  theme: HtmlTheme | 'light' | 'dark' | undefined,
+  theme: HtmlTheme | "light" | "dark" | undefined
 ): HtmlTheme | undefined {
-  if (theme === 'light') return 'daylight';
-  if (theme === 'dark') return 'midnight';
-  return theme;
+  if (theme === "light") return "daylight"
+  if (theme === "dark") return "midnight"
+  return theme
 }
-
 
 /**
  * Render IR as a self-contained HTML page with interactive features.
  */
 export function renderInteractiveHTML(
   ir: StaticEffectIR,
-  options: HtmlOutputOptions = {},
+  options: HtmlOutputOptions = {}
 ): string {
-  const title = options.title ?? `${ir.root.programName} - Effect Analysis`;
-  const resolvedTheme = resolveThemeName(options.theme);
-  const mermaidCode = renderStaticMermaid(ir).replace(/<\/script>/gi, '<\\/script>');
+  const title = options.title ?? `${ir.root.programName} - Effect Analysis`
+  const resolvedTheme = resolveThemeName(options.theme)
+  const mermaidCode = renderStaticMermaid(ir).replace(/<\/script>/gi, "<\\/script>")
 
   // Generate paths and complexity for embedding
-  const paths = generatePaths(ir);
-  const complexity = calculateComplexity(ir);
+  const paths = generatePaths(ir)
+  const complexity = calculateComplexity(ir)
 
   // Also generate the data-flow and error-flow overlay versions
-  const mermaidWithDataFlow = renderStaticMermaid(ir, { dataFlowOverlay: true }).replace(/<\/script>/gi, '<\\/script>');
-  const mermaidWithErrorFlow = renderStaticMermaid(ir, { errorFlowOverlay: true }).replace(/<\/script>/gi, '<\\/script>');
+  const mermaidWithDataFlow = renderStaticMermaid(ir, { dataFlowOverlay: true }).replace(/<\/script>/gi, "<\\/script>")
+  const mermaidWithErrorFlow = renderStaticMermaid(ir, { errorFlowOverlay: true }).replace(
+    /<\/script>/gi,
+    "<\\/script>"
+  )
 
   const irJson = JSON.stringify(ir, null, 2)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e');
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
 
   const pathsJson = JSON.stringify(paths, null, 2)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e');
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
 
   const complexityJson = JSON.stringify(complexity, null, 2)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e');
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
 
-  const initialThemeJs = resolvedTheme ? `"${resolvedTheme}"` : 'null';
+  const initialThemeJs = resolvedTheme ? `"${resolvedTheme}"` : "null"
 
   return `<!DOCTYPE html>
 <html lang="en" data-theme="midnight">
@@ -76,7 +78,7 @@ export function renderInteractiveHTML(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></scr` + `ipt>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   <style>
     /* Shared font stacks — system-first so the artifact works offline / from file:// */
     :root {
@@ -716,15 +718,15 @@ export function renderInteractiveHTML(
       });
       obs.observe(el, { childList: true, subtree: true });
     })();
-  </scr` + `ipt>
+  </script>
 </body>
-</html>`;
+</html>`
 }
 
 function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
 }

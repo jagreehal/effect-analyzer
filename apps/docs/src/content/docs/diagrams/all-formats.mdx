@@ -21,7 +21,7 @@ effect-analyzer supports over 25 output formats. Use `--format <name>` on the CL
 | Error flow | `--format mermaid-errors` | Producers, what each handler does (caught / mapped / defect / swallowed), what reaches the caller | Reviewing error handling |
 | Decision tree | `--format mermaid-decisions` | Conditional branching visualization | Programs with many `if`/`match` |
 | Cause hierarchy | `--format mermaid-causes` | Cause and Exit wrapping structure | Cause/Exit pattern analysis |
-| Concurrency | `--format mermaid-concurrency` | Parallel and race fork/join structure | Programs with `Effect.all`/`Effect.race` |
+| Concurrency | `--format mermaid-concurrency` | Parallel and race fork/join structure, bounded loops | Programs with `Effect.all`, `Effect.race` or `Effect.forEach({ concurrency })` |
 | Timeline | `--format mermaid-timeline` | Step sequence as a timeline | Temporal ordering of steps |
 | Layer graph | `--format mermaid-layers` | Layer composition and dependencies | Layer architecture review |
 | Retry strategy | `--format mermaid-retry` | Retry and timeout policy visualization | Programs with retry/timeout |
@@ -112,7 +112,7 @@ npx effect-analyze ./src/program.ts --format json --compact --no-colocate
 # Control flow direction
 npx effect-analyze ./src/program.ts --format mermaid --direction LR --no-colocate
 
-# Include trivial programs (schemas, thin wrappers, Effect.runPromise)
+# Include trivial programs (schemas, single-call programs, Effect.runPromise)
 npx effect-analyze ./src/program.ts --include-trivial
 ```
 

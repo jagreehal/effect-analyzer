@@ -10,18 +10,21 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "lint": "turbo lint",
+    "lint": "turbo lint && dprint check",
+    "format": "dprint fmt",
+    "format:check": "dprint check",
     "test": "turbo test",
     "type-check": "turbo type-check",
     "tc:examples": "pnpm --dir packages/effect-analyzer exec tsc -p ../../examples/migrate-one-file/tsconfig.json",
     "clean": "turbo clean",
-    "quality": "turbo run build --concurrency=1 && turbo run lint && turbo run type-check && turbo run test && pnpm run tc:examples",
+    "quality": "turbo run build --concurrency=1 && turbo run lint && dprint check && turbo run type-check && turbo run test && pnpm run tc:examples",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
+    "dprint": "^0.57.4",
     "turbo": "^2.10.12"
   }
 }

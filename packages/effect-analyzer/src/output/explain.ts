@@ -5,115 +5,107 @@
  * describing what an Effect program does.
  */
 
-import type {
-  StaticEffectIR,
-  StaticFlowNode,
-  StaticEffectProgram,
-} from '../types';
-import {
-  DEFAULT_LABEL_MAX,
-  canonicalizeServiceDisplayName,
-  truncateDisplayText,
-} from '../analysis-utils';
+import { canonicalizeServiceDisplayName, DEFAULT_LABEL_MAX, isConcurrent, truncateDisplayText } from "../analysis-utils"
+import type { StaticEffectIR, StaticEffectProgram, StaticFlowNode } from "../types"
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-const indent = (depth: number): string => '  '.repeat(depth);
+const indent = (depth: number): string => "  ".repeat(depth)
 
 /** Summarise a node in a short inline phrase (no newline). */
 function shortLabel(node: StaticFlowNode): string {
-  const t = (s: string, max = DEFAULT_LABEL_MAX) => truncateDisplayText(s, max);
+  const t = (s: string, max = DEFAULT_LABEL_MAX) => truncateDisplayText(s, max)
   switch (node.type) {
-    case 'effect': {
-      if (node.constructorKind === 'callback') return t(node.tracedName ?? node.displayName ?? node.callee);
+    case "effect": {
+      if (node.constructorKind === "callback") return t(node.tracedName ?? node.displayName ?? node.callee)
       if (node.usePattern) {
-        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName;
-        return t(`${wrapper}.use`);
+        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName
+        return t(`${wrapper}.use`)
       }
       if (node.serviceCall) {
-        return t(`${node.serviceCall.serviceType}.${node.serviceCall.methodName}`);
+        return t(`${node.serviceCall.serviceType}.${node.serviceCall.methodName}`)
       }
-      return t(node.displayName ?? node.callee);
+      return t(node.displayName ?? node.callee)
     }
-    case 'generator':
-      return 'Effect.gen block';
-    case 'pipe':
-      return t(`pipe(${shortLabel(node.initial)})`);
-    case 'parallel':
-      return t(`${node.callee}(${node.children.length} effects)`);
-    case 'race':
-      return t(`${node.callee}(${node.children.length} effects)`);
-    case 'error-handler':
-      return node.handlerType;
-    case 'retry':
-      return 'retry';
-    case 'timeout':
-      return node.duration ? `timeout(${node.duration})` : 'timeout';
-    case 'resource':
-      return 'acquireRelease';
-    case 'conditional':
-      return `if ${node.conditionLabel ?? node.condition}`;
-    case 'loop':
+    case "generator":
+      return "Effect.gen block"
+    case "pipe":
+      return t(`pipe(${shortLabel(node.initial)})`)
+    case "parallel":
+      return t(`${node.callee}(${node.children.length} effects)`)
+    case "race":
+      return t(`${node.callee}(${node.children.length} effects)`)
+    case "error-handler":
+      return node.handlerType
+    case "retry":
+      return "retry"
+    case "timeout":
+      return node.duration ? `timeout(${node.duration})` : "timeout"
+    case "resource":
+      return "acquireRelease"
+    case "conditional":
+      return `if ${node.conditionLabel ?? node.condition}`
+    case "loop":
       return t(
-        `${node.loopType}${node.iterSource ? `(${node.iterSource})` : ''}`,
-      );
-    case 'layer':
-      return node.provides ? `Layer(${node.provides.join(', ')})` : 'Layer';
-    case 'stream':
+        `${node.loopType}${node.iterSource ? `(${node.iterSource})` : ""}`
+      )
+    case "layer":
+      return node.provides ? `Layer(${node.provides.join(", ")})` : "Layer"
+    case "stream":
       return node.pipeline.length > 0
-        ? `Stream.${node.pipeline.map((op) => op.operation).join(' -> ')}`
-        : 'Stream';
-    case 'fiber':
-      return `Fiber.${node.operation}`;
-    case 'concurrency-primitive':
-      return `${node.primitive}.${node.operation}`;
-    case 'decision':
-      return `if ${node.condition}`;
-    case 'switch':
-      return `switch(${node.expression})`;
-    case 'try-catch':
-      return 'try/catch';
-    case 'terminal':
-      return node.terminalKind;
-    case 'match':
-      return node.matchedTags ? `Match(${node.matchedTags.join(', ')})` : 'Match';
-    case 'transform':
-      return node.transformType;
-    case 'channel':
-      return 'Channel';
-    case 'sink':
-      return 'Sink';
-    case 'cause':
-      return `Cause.${node.causeOp}`;
-    case 'exit':
-      return `Exit.${node.exitOp}`;
-    case 'schedule':
-      return `Schedule.${node.scheduleOp}`;
-    case 'interruption':
-      return node.interruptionType;
-    case 'opaque':
-      return `(opaque: ${node.reason})`;
-    case 'unknown':
-      return `(unknown: ${node.reason})`;
+        ? `Stream.${node.pipeline.map((op) => op.operation).join(" -> ")}`
+        : "Stream"
+    case "fiber":
+      return `Fiber.${node.operation}`
+    case "concurrency-primitive":
+      return `${node.primitive}.${node.operation}`
+    case "decision":
+      return `if ${node.condition}`
+    case "switch":
+      return `switch(${node.expression})`
+    case "try-catch":
+      return "try/catch"
+    case "terminal":
+      return node.terminalKind
+    case "match":
+      return node.matchedTags ? `Match(${node.matchedTags.join(", ")})` : "Match"
+    case "transform":
+      return node.transformType
+    case "channel":
+      return "Channel"
+    case "sink":
+      return "Sink"
+    case "cause":
+      return `Cause.${node.causeOp}`
+    case "exit":
+      return `Exit.${node.exitOp}`
+    case "schedule":
+      return `Schedule.${node.scheduleOp}`
+    case "interruption":
+      return node.interruptionType
+    case "opaque":
+      return `(opaque: ${node.reason})`
+    case "unknown":
+      return `(unknown: ${node.reason})`
   }
 }
 
 /** Track whether parallel/race nodes are encountered during a walk. */
 interface WalkState {
-  hasParallelism: boolean;
-  serviceCallsSeen: Set<string>;
+  hasParallelism: boolean
+  serviceCallsSeen: Set<string>
 }
 
-const shouldSuppressExplainEffectNode = (node: Extract<StaticFlowNode, { type: 'effect' }>): boolean => {
-  if (node.serviceCall || node.usePattern || node.constructorKind === 'callback') return false;
-  if (node.constructorKind === 'fn' || node.constructorKind === 'fnUntraced') return true;
-  if (node.description === 'function-lift' || node.callee === 'fn' || node.callee === 'Effect.fn') {
-    return true;
+const shouldSuppressExplainEffectNode = (node: Extract<StaticFlowNode, { type: "effect" }>): boolean => {
+  if (node.serviceCall || node.usePattern || node.constructorKind === "callback") return false
+  if (node.constructorKind === "fn" || node.constructorKind === "fnUntraced") return true
+  if (node.description === "function-lift" || node.callee === "fn" || node.callee === "Effect.fn") {
+    return true
   }
-  return false;
-};
+  return false
+}
 
 // ---------------------------------------------------------------------------
 // Core recursive walker
@@ -125,510 +117,520 @@ const shouldSuppressExplainEffectNode = (node: Extract<StaticFlowNode, { type: '
 export function explainNode(
   node: StaticFlowNode,
   depth: number,
-  state: WalkState = { hasParallelism: false, serviceCallsSeen: new Set() },
-): string[] {
-  const pad = indent(depth);
-  const lines: string[] = [];
+  state: WalkState = { hasParallelism: false, serviceCallsSeen: new Set() }
+): Array<string> {
+  const pad = indent(depth)
+  const lines: Array<string> = []
 
   switch (node.type) {
     // ----- effect -----------------------------------------------------------
-    case 'effect': {
-      if (shouldSuppressExplainEffectNode(node)) break;
-      if (node.constructorKind === 'callback') {
+    case "effect": {
+      if (shouldSuppressExplainEffectNode(node)) break
+      if (node.constructorKind === "callback") {
         const label = truncateDisplayText(
           node.tracedName ?? node.displayName ?? node.callee,
-          DEFAULT_LABEL_MAX,
-        );
-        lines.push(`${pad}Registers callback bridge: ${label}`);
+          DEFAULT_LABEL_MAX
+        )
+        lines.push(`${pad}Registers callback bridge: ${label}`)
         if (node.asyncCallback) {
           lines.push(
-            `${pad}  Callback: ${node.asyncCallback.resumeCallCount} resume call${node.asyncCallback.resumeCallCount === 1 ? '' : 's'}${node.asyncCallback.returnsCanceller ? ', returns cleanup' : ''}`,
-          );
+            `${pad}  Callback: ${node.asyncCallback.resumeCallCount} resume call${
+              node.asyncCallback.resumeCallCount === 1 ? "" : "s"
+            }${node.asyncCallback.returnsCanceller ? ", returns cleanup" : ""}`
+          )
         }
         if (node.callbackBody && node.callbackBody.length > 0) {
-          lines.push(`${pad}  Inner effects:`);
+          lines.push(`${pad}  Inner effects:`)
           for (const child of node.callbackBody) {
-            lines.push(...explainNode(child, depth + 2, state));
+            lines.push(...explainNode(child, depth + 2, state))
           }
         }
-        break;
+        break
       }
       if (node.usePattern) {
-        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName;
-        state.serviceCallsSeen.add(canonicalizeServiceDisplayName(wrapper));
-        const desc = node.description ? ` — ${node.description}` : '';
-        lines.push(`${pad}Uses ${wrapper} via .use callback${desc}`);
+        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName
+        state.serviceCallsSeen.add(canonicalizeServiceDisplayName(wrapper))
+        const desc = node.description ? ` — ${node.description}` : ""
+        lines.push(`${pad}Uses ${wrapper} via .use callback${desc}`)
         if (node.callbackBody && node.callbackBody.length > 0) {
-          lines.push(`${pad}  Callback:`);
+          lines.push(`${pad}  Callback:`)
           for (const child of node.callbackBody) {
-            lines.push(...explainNode(child, depth + 2, state));
+            lines.push(...explainNode(child, depth + 2, state))
           }
         }
-        break;
+        break
       }
       if (node.serviceCall) {
         state.serviceCallsSeen.add(
-          canonicalizeServiceDisplayName(node.serviceCall.serviceType),
-        );
+          canonicalizeServiceDisplayName(node.serviceCall.serviceType)
+        )
         // Tag-style service acquisition (e.g. yield* Logger)
         if (
-          node.callee.includes('Tag') ||
-          node.callee.includes('Context') ||
+          node.callee.includes("Tag") ||
+          node.callee.includes("Context") ||
           node.callee === node.serviceCall.serviceType
         ) {
-          lines.push(`${pad}Acquires ${node.serviceCall.serviceType} service`);
+          lines.push(`${pad}Acquires ${node.serviceCall.serviceType} service`)
         } else {
-          const desc = node.description ? ` — ${node.description}` : '';
+          const desc = node.description ? ` — ${node.description}` : ""
           lines.push(
-            `${pad}Calls ${node.serviceCall.serviceType}.${node.serviceCall.methodName}${desc}`,
-          );
+            `${pad}Calls ${node.serviceCall.serviceType}.${node.serviceCall.methodName}${desc}`
+          )
         }
       } else {
         const label = truncateDisplayText(
           node.displayName ?? node.callee,
-          DEFAULT_LABEL_MAX,
-        );
-        const desc = node.description ? ` — ${node.description}` : '';
+          DEFAULT_LABEL_MAX
+        )
+        const desc = node.description ? ` — ${node.description}` : ""
         // If displayName has a binding arrow (e.g. "logger <- Logger"), it's a service yield
-        if (label.includes(' <- ')) {
-          lines.push(`${pad}Yields ${label}`);
+        if (label.includes(" <- ")) {
+          lines.push(`${pad}Yields ${label}`)
         } else {
-          lines.push(`${pad}Calls ${label}${desc}`);
+          lines.push(`${pad}Calls ${label}${desc}`)
         }
       }
       if (node.callbackBody && node.callbackBody.length > 0) {
-        lines.push(`${pad}  Callback:`);
+        lines.push(`${pad}  Callback:`)
         for (const child of node.callbackBody) {
-          lines.push(...explainNode(child, depth + 2, state));
+          lines.push(...explainNode(child, depth + 2, state))
         }
       }
-      break;
+      break
     }
 
     // ----- generator --------------------------------------------------------
-    case 'generator': {
+    case "generator": {
       for (const y of node.yields) {
-        const childLines = explainNode(y.effect, depth, state);
+        const childLines = explainNode(y.effect, depth, state)
         // If variableName and the displayName already contains it (e.g. "logger <- Logger"),
         // skip adding it again. Otherwise prefix with "varName = ..."
-        const firstChild = childLines[0];
+        const firstChild = childLines[0]
         if (y.variableName && firstChild !== undefined) {
-          const trimmed = firstChild.trimStart();
-          const alreadyHasBinding = trimmed.includes(`${y.variableName} <-`) || trimmed.includes(`${y.variableName} =`);
+          const trimmed = firstChild.trimStart()
+          const alreadyHasBinding = trimmed.includes(`${y.variableName} <-`) || trimmed.includes(`${y.variableName} =`)
           if (!alreadyHasBinding) {
-            childLines[0] = `${pad}${y.variableName} = ${trimmed.replace(/^Calls /, '')}`;
+            childLines[0] = `${pad}${y.variableName} = ${trimmed.replace(/^Calls /, "")}`
           }
         }
-        lines.push(...childLines);
+        lines.push(...childLines)
       }
       if (node.returnNode) {
-        const retLines = explainNode(node.returnNode, depth, state);
-        const firstRet = retLines[0];
+        const retLines = explainNode(node.returnNode, depth, state)
+        const firstRet = retLines[0]
         if (firstRet !== undefined) {
-          const trimmed = firstRet.trimStart();
-          retLines[0] = `${pad}Returns ${trimmed.replace(/^Calls /, '')}`;
-          lines.push(...retLines);
+          const trimmed = firstRet.trimStart()
+          retLines[0] = `${pad}Returns ${trimmed.replace(/^Calls /, "")}`
+          lines.push(...retLines)
         }
       }
-      break;
+      break
     }
 
     // ----- pipe -------------------------------------------------------------
-    case 'pipe': {
-      lines.push(`${pad}Pipes ${shortLabel(node.initial)} through:`);
-      const initLines = explainNode(node.initial, depth + 1, state);
-      lines.push(...initLines);
+    case "pipe": {
+      lines.push(`${pad}Pipes ${shortLabel(node.initial)} through:`)
+      const initLines = explainNode(node.initial, depth + 1, state)
+      lines.push(...initLines)
       for (const t of node.transformations) {
-        const tLines = explainNode(t, depth + 1, state);
-        lines.push(...tLines);
+        const tLines = explainNode(t, depth + 1, state)
+        lines.push(...tLines)
       }
-      break;
+      break
     }
 
     // ----- parallel ---------------------------------------------------------
-    case 'parallel': {
-      state.hasParallelism = true;
-      const concDesc =
-        node.concurrency !== undefined && node.concurrency !== 'sequential'
-          ? ` (concurrency: ${node.concurrency})`
-          : '';
+    case "parallel": {
+      if (node.mode === "parallel") state.hasParallelism = true
+      const concDesc = node.concurrency !== undefined && node.concurrency !== "sequential"
+        ? ` (concurrency: ${node.concurrency})`
+        : ""
       lines.push(
-        `${pad}Runs ${node.children.length} effects in ${node.mode}${concDesc}:`,
-      );
+        `${pad}Runs ${node.children.length} effects in ${node.mode}${concDesc}:`
+      )
       for (const child of node.children) {
-        lines.push(...explainNode(child, depth + 1, state));
+        lines.push(...explainNode(child, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- race -------------------------------------------------------------
-    case 'race': {
-      state.hasParallelism = true;
-      lines.push(`${pad}Races ${node.children.length} effects:`);
+    case "race": {
+      state.hasParallelism = true
+      lines.push(`${pad}Races ${node.children.length} effects:`)
       for (const child of node.children) {
-        lines.push(...explainNode(child, depth + 1, state));
+        lines.push(...explainNode(child, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- error-handler ----------------------------------------------------
-    case 'error-handler': {
+    case "error-handler": {
       const tagInfo = node.errorTag
         ? ` "${node.errorTag}"`
         : node.errorTags && node.errorTags.length > 0
-          ? ` [${node.errorTags.join(', ')}]`
-          : '';
+        ? ` [${node.errorTags.join(", ")}]`
+        : ""
       switch (node.handlerType) {
-        case 'catch':
-          lines.push(`${pad}Catches all errors on:`);
-          break;
-        case 'catchTag':
-          lines.push(`${pad}Catches tag${tagInfo} on:`);
-          break;
-        case 'catchTags':
-          lines.push(`${pad}Catches tags${tagInfo} on:`);
-          break;
-        case 'orElse':
-          lines.push(`${pad}Falls back (orElse) on error:`);
-          break;
-        case 'orDie':
-          lines.push(`${pad}Converts errors to defects (orDie):`);
-          break;
-        case 'mapError':
-          lines.push(`${pad}Maps error on:`);
-          break;
-        case 'ignore':
-          lines.push(`${pad}Ignores errors on:`);
-          break;
+        case "catch":
+          lines.push(`${pad}Catches all errors on:`)
+          break
+        case "catchTag":
+          lines.push(`${pad}Catches tag${tagInfo} on:`)
+          break
+        case "catchTags":
+          lines.push(`${pad}Catches tags${tagInfo} on:`)
+          break
+        case "orElse":
+          lines.push(`${pad}Falls back (orElse) on error:`)
+          break
+        case "orDie":
+          lines.push(`${pad}Converts errors to defects (orDie):`)
+          break
+        case "mapError":
+          lines.push(`${pad}Maps error on:`)
+          break
+        case "ignore":
+          lines.push(`${pad}Ignores errors on:`)
+          break
         default:
-          lines.push(`${pad}Handles errors (${node.handlerType})${tagInfo}:`);
+          lines.push(`${pad}Handles errors (${node.handlerType})${tagInfo}:`)
       }
-      lines.push(...explainNode(node.source, depth + 1, state));
+      if (node.source.type === "effect" && node.source.description === "pipe-input") {
+        lines.push(`${pad}  (the piped effect)`)
+      } else {
+        lines.push(...explainNode(node.source, depth + 1, state))
+      }
       if (node.handler) {
-        lines.push(`${pad}  Handler:`);
-        lines.push(...explainNode(node.handler, depth + 2, state));
+        lines.push(`${pad}  Handler:`)
+        lines.push(...explainNode(node.handler, depth + 2, state))
       }
-      break;
+      for (const { tag, handler } of node.tagHandlers ?? []) {
+        lines.push(`${pad}  Handler (${tag}):`)
+        lines.push(...explainNode(handler, depth + 2, state))
+      }
+      break
     }
 
     // ----- retry ------------------------------------------------------------
-    case 'retry': {
+    case "retry": {
       if (node.scheduleInfo) {
-        const maxPart =
-          node.scheduleInfo.maxRetries !== undefined
-            ? `max ${node.scheduleInfo.maxRetries}`
-            : '';
-        const stratPart = node.scheduleInfo.baseStrategy;
-        const parts = [maxPart, stratPart].filter(Boolean).join(', ');
-        lines.push(`${pad}Retries (${parts}):`);
+        const maxPart = node.scheduleInfo.maxRetries !== undefined
+          ? `max ${node.scheduleInfo.maxRetries}`
+          : ""
+        const stratPart = node.scheduleInfo.baseStrategy
+        const parts = [maxPart, stratPart].filter(Boolean).join(", ")
+        lines.push(`${pad}Retries (${parts}):`)
       } else if (node.schedule) {
-        lines.push(`${pad}Retries with ${node.schedule}:`);
+        lines.push(`${pad}Retries with ${node.schedule}:`)
       } else {
-        lines.push(`${pad}Retries:`);
+        lines.push(`${pad}Retries:`)
       }
-      lines.push(...explainNode(node.source, depth + 1, state));
+      lines.push(...explainNode(node.source, depth + 1, state))
       if (node.hasFallback) {
-        lines.push(`${pad}  (with fallback on exhaustion)`);
+        lines.push(`${pad}  (with fallback on exhaustion)`)
       }
-      break;
+      break
     }
 
     // ----- timeout ----------------------------------------------------------
-    case 'timeout': {
-      const dur = node.duration ? ` after ${node.duration}` : '';
-      lines.push(`${pad}Times out${dur}:`);
-      lines.push(...explainNode(node.source, depth + 1, state));
+    case "timeout": {
+      const dur = node.duration ? ` after ${node.duration}` : ""
+      lines.push(`${pad}Times out${dur}:`)
+      lines.push(...explainNode(node.source, depth + 1, state))
       if (node.hasFallback) {
-        lines.push(`${pad}  (with fallback on timeout)`);
+        lines.push(`${pad}  (with fallback on timeout)`)
       }
-      break;
+      break
     }
 
     // ----- resource ---------------------------------------------------------
-    case 'resource': {
-      lines.push(`${pad}Acquires resource:`);
-      lines.push(...explainNode(node.acquire, depth + 1, state));
+    case "resource": {
+      lines.push(`${pad}Acquires resource:`)
+      lines.push(...explainNode(node.acquire, depth + 1, state))
       if (node.use) {
-        lines.push(`${pad}  Uses:`);
-        lines.push(...explainNode(node.use, depth + 2, state));
+        lines.push(`${pad}  Uses:`)
+        lines.push(...explainNode(node.use, depth + 2, state))
       }
-      lines.push(`${pad}  Then releases:`);
-      lines.push(...explainNode(node.release, depth + 2, state));
-      break;
+      lines.push(`${pad}  Then releases:`)
+      lines.push(...explainNode(node.release, depth + 2, state))
+      break
     }
 
     // ----- conditional ------------------------------------------------------
-    case 'conditional': {
-      const label = node.conditionLabel ?? node.condition;
-      lines.push(`${pad}If ${label}:`);
-      lines.push(...explainNode(node.onTrue, depth + 1, state));
+    case "conditional": {
+      const label = node.conditionLabel ?? node.condition
+      lines.push(`${pad}If ${label}:`)
+      lines.push(...explainNode(node.onTrue, depth + 1, state))
       if (node.onFalse) {
-        lines.push(`${pad}Else:`);
-        lines.push(...explainNode(node.onFalse, depth + 1, state));
+        lines.push(`${pad}Else:`)
+        lines.push(...explainNode(node.onFalse, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- decision ---------------------------------------------------------
-    case 'decision': {
-      lines.push(`${pad}If ${node.condition}:`);
+    case "decision": {
+      lines.push(`${pad}If ${node.condition}:`)
       for (const child of node.onTrue) {
-        lines.push(...explainNode(child, depth + 1, state));
+        lines.push(...explainNode(child, depth + 1, state))
       }
       if (node.onFalse && node.onFalse.length > 0) {
-        lines.push(`${pad}Else:`);
+        lines.push(`${pad}Else:`)
         for (const child of node.onFalse) {
-          lines.push(...explainNode(child, depth + 1, state));
+          lines.push(...explainNode(child, depth + 1, state))
         }
       }
-      break;
+      break
     }
 
     // ----- switch -----------------------------------------------------------
-    case 'switch': {
-      lines.push(`${pad}Switch on ${node.expression}:`);
+    case "switch": {
+      lines.push(`${pad}Switch on ${node.expression}:`)
       for (const c of node.cases) {
         const caseLabel = c.isDefault
-          ? 'default'
-          : c.labels.join(', ');
-        lines.push(`${pad}  Case ${caseLabel}:`);
+          ? "default"
+          : c.labels.join(", ")
+        lines.push(`${pad}  Case ${caseLabel}:`)
         for (const child of c.body) {
-          lines.push(...explainNode(child, depth + 2, state));
+          lines.push(...explainNode(child, depth + 2, state))
         }
       }
-      break;
+      break
     }
 
     // ----- try-catch --------------------------------------------------------
-    case 'try-catch': {
-      lines.push(`${pad}Try:`);
+    case "try-catch": {
+      lines.push(`${pad}Try:`)
       for (const child of node.tryBody) {
-        lines.push(...explainNode(child, depth + 1, state));
+        lines.push(...explainNode(child, depth + 1, state))
       }
       if (node.catchBody && node.catchBody.length > 0) {
-        lines.push(`${pad}Catch:`);
+        lines.push(`${pad}Catch:`)
         for (const child of node.catchBody) {
-          lines.push(...explainNode(child, depth + 1, state));
+          lines.push(...explainNode(child, depth + 1, state))
         }
       }
       if (node.finallyBody && node.finallyBody.length > 0) {
-        lines.push(`${pad}Finally:`);
+        lines.push(`${pad}Finally:`)
         for (const child of node.finallyBody) {
-          lines.push(...explainNode(child, depth + 1, state));
+          lines.push(...explainNode(child, depth + 1, state))
         }
       }
-      break;
+      break
     }
 
     // ----- terminal ---------------------------------------------------------
-    case 'terminal': {
+    case "terminal": {
       switch (node.terminalKind) {
-        case 'return': {
+        case "return": {
           if (node.value && node.value.length > 0) {
-            lines.push(`${pad}Returns:`);
+            lines.push(`${pad}Returns:`)
             for (const child of node.value) {
-              lines.push(...explainNode(child, depth + 1, state));
+              lines.push(...explainNode(child, depth + 1, state))
             }
           } else {
-            lines.push(`${pad}Returns`);
+            lines.push(`${pad}Returns`)
           }
-          break;
+          break
         }
-        case 'throw':
-          lines.push(`${pad}Throws`);
-          break;
-        case 'break':
-          lines.push(`${pad}Breaks`);
-          break;
-        case 'continue':
-          lines.push(`${pad}Continues`);
-          break;
+        case "throw":
+          lines.push(`${pad}Throws`)
+          break
+        case "break":
+          lines.push(`${pad}Breaks`)
+          break
+        case "continue":
+          lines.push(`${pad}Continues`)
+          break
       }
-      break;
+      break
     }
 
     // ----- loop -------------------------------------------------------------
-    case 'loop': {
+    case "loop": {
       const src = node.iterSource
         ? ` over ${truncateDisplayText(node.iterSource, DEFAULT_LABEL_MAX)}`
-        : '';
-      lines.push(`${pad}Iterates (${node.loopType})${src}:`);
-      lines.push(...explainNode(node.body, depth + 1, state));
+        : ""
+      const concurrent = isConcurrent(node.concurrency)
+      if (concurrent) state.hasParallelism = true
+      const conc = concurrent ? ` (concurrency: ${node.concurrency})` : ""
+      lines.push(`${pad}Iterates (${node.loopType})${src}${conc}:`)
+      lines.push(...explainNode(node.body, depth + 1, state))
       if (node.callbackBody && node.callbackBody.length > 0) {
-        lines.push(`${pad}  Callback:`);
+        lines.push(`${pad}  Callback:`)
         for (const child of node.callbackBody) {
-          lines.push(...explainNode(child, depth + 2, state));
+          lines.push(...explainNode(child, depth + 2, state))
         }
       }
-      break;
+      break
     }
 
     // ----- layer ------------------------------------------------------------
-    case 'layer': {
-      const provides =
-        node.provides && node.provides.length > 0
-          ? ` providing ${node.provides.join(', ')}`
-          : '';
-      const requires =
-        node.requires && node.requires.length > 0
-          ? ` (requires ${node.requires.join(', ')})`
-          : '';
-      lines.push(`${pad}Provides layer${provides}${requires}:`);
+    case "layer": {
+      const provides = node.provides && node.provides.length > 0
+        ? ` providing ${node.provides.join(", ")}`
+        : ""
+      const requires = node.requires && node.requires.length > 0
+        ? ` (requires ${node.requires.join(", ")})`
+        : ""
+      lines.push(`${pad}Provides layer${provides}${requires}:`)
       for (const op of node.operations) {
-        lines.push(...explainNode(op, depth + 1, state));
+        lines.push(...explainNode(op, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- stream -----------------------------------------------------------
-    case 'stream': {
-      const ops = node.pipeline.map((o) => o.operation).join(' -> ');
-      const sinkPart = node.sink ? ` -> ${node.sink}` : '';
-      const serviceStreamSource =
-        node.source.type === 'effect' &&
-        node.source.serviceCall?.methodName.startsWith('stream')
-          ? `${node.source.serviceCall.serviceType}.${node.source.serviceCall.methodName}`
-          : undefined;
-      const isReactor =
-        node.pipeline.some((op) => op.operation === 'runForEach') &&
-        (node.constructorType === 'fromPubSub' ||
-          node.constructorType === 'fromSubscriptionRef' ||
-          node.constructorType === 'fromEventListener' ||
-          serviceStreamSource !== undefined);
+    case "stream": {
+      const ops = node.pipeline.map((o) => o.operation).join(" -> ")
+      const sinkPart = node.sink && node.pipeline.at(-1)?.operation !== node.sink ? ` -> ${node.sink}` : ""
+      const serviceStreamSource = node.source.type === "effect" &&
+          node.source.serviceCall?.methodName.startsWith("stream")
+        ? `${node.source.serviceCall.serviceType}.${node.source.serviceCall.methodName}`
+        : undefined
+      const isReactor = node.pipeline.some((op) => op.operation === "runForEach") &&
+        (node.constructorType === "fromPubSub" ||
+          node.constructorType === "fromSubscriptionRef" ||
+          node.constructorType === "fromEventListener" ||
+          serviceStreamSource !== undefined)
       if (isReactor) {
-        const sourceKind =
-          serviceStreamSource ??
-          node.constructorType?.replace(/^from/, '') ??
-          'event source';
-        lines.push(`${pad}Background stream reactor (${sourceKind}): ${ops}${sinkPart}`);
+        const sourceKind = serviceStreamSource ??
+          node.constructorType?.replace(/^from/, "") ??
+          "event source"
+        lines.push(`${pad}Background stream reactor (${sourceKind}): ${ops}${sinkPart}`)
       } else {
-        lines.push(`${pad}Stream: ${ops}${sinkPart}`);
+        lines.push(`${pad}Stream: ${ops}${sinkPart}`)
       }
-      lines.push(...explainNode(node.source, depth + 1, state));
+      lines.push(...explainNode(node.source, depth + 1, state))
       for (const op of node.pipeline) {
+        for (const branch of op.branches ?? []) {
+          lines.push(`${pad}  ${op.operation} branch:`)
+          lines.push(...explainNode(branch, depth + 2, state))
+        }
         if (op.callbackBody && op.callbackBody.length > 0) {
-          lines.push(`${pad}  ${op.operation} callback:`);
+          lines.push(`${pad}  ${op.operation} callback:`)
           for (const child of op.callbackBody) {
-            lines.push(...explainNode(child, depth + 2, state));
+            lines.push(...explainNode(child, depth + 2, state))
           }
         }
       }
-      break;
+      break
     }
 
     // ----- fiber ------------------------------------------------------------
-    case 'fiber': {
-      const scopeNote = node.isDaemon ? ' (daemon)' : node.isScoped ? ' (scoped)' : '';
-      lines.push(`${pad}Fiber ${node.operation}${scopeNote}:`);
+    case "fiber": {
+      const scopeNote = node.isDaemon ? " (daemon)" : node.isScoped ? " (scoped)" : ""
+      lines.push(`${pad}Fiber ${node.operation}${scopeNote}:`)
       if (node.fiberSource) {
-        lines.push(...explainNode(node.fiberSource, depth + 1, state));
+        lines.push(...explainNode(node.fiberSource, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- concurrency-primitive --------------------------------------------
-    case 'concurrency-primitive': {
-      const cap = node.capacity !== undefined ? ` (capacity: ${node.capacity})` : '';
-      lines.push(`${pad}${node.primitive}.${node.operation}${cap}`);
+    case "concurrency-primitive": {
+      const cap = node.capacity !== undefined ? ` (capacity: ${node.capacity})` : ""
+      lines.push(`${pad}${node.primitive}.${node.operation}${cap}`)
       if (node.source) {
-        lines.push(...explainNode(node.source, depth + 1, state));
+        lines.push(...explainNode(node.source, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- match ------------------------------------------------------------
-    case 'match': {
+    case "match": {
       if (node.matchedTags && node.matchedTags.length > 0) {
-        lines.push(`${pad}Matches tags: ${node.matchedTags.join(', ')}`);
+        lines.push(`${pad}Matches tags: ${node.matchedTags.join(", ")}`)
       } else {
-        lines.push(`${pad}Match (${node.matchOp})`);
+        lines.push(`${pad}Match (${node.matchOp})`)
       }
-      break;
+      break
     }
 
     // ----- transform --------------------------------------------------------
-    case 'transform': {
-      lines.push(`${pad}Transforms via ${node.transformType}`);
+    case "transform": {
+      lines.push(`${pad}Transforms via ${node.transformType}`)
       if (node.source) {
-        lines.push(...explainNode(node.source, depth + 1, state));
+        lines.push(...explainNode(node.source, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- cause ------------------------------------------------------------
-    case 'cause': {
-      lines.push(`${pad}Cause.${node.causeOp}`);
+    case "cause": {
+      lines.push(`${pad}Cause.${node.causeOp}`)
       if (node.children) {
         for (const child of node.children) {
-          lines.push(...explainNode(child, depth + 1, state));
+          lines.push(...explainNode(child, depth + 1, state))
         }
       }
-      break;
+      break
     }
 
     // ----- exit -------------------------------------------------------------
-    case 'exit': {
-      lines.push(`${pad}Exit.${node.exitOp}`);
-      break;
+    case "exit": {
+      lines.push(`${pad}Exit.${node.exitOp}`)
+      break
     }
 
     // ----- schedule ---------------------------------------------------------
-    case 'schedule': {
-      lines.push(`${pad}Schedule.${node.scheduleOp}`);
-      break;
+    case "schedule": {
+      lines.push(`${pad}Schedule.${node.scheduleOp}`)
+      break
     }
 
     // ----- channel ----------------------------------------------------------
-    case 'channel': {
-      const ops = node.pipeline.map((o) => o.operation).join(' -> ');
-      lines.push(`${pad}Channel${ops ? `: ${ops}` : ''}`);
+    case "channel": {
+      const ops = node.pipeline.map((o) => o.operation).join(" -> ")
+      lines.push(`${pad}Channel${ops ? `: ${ops}` : ""}`)
       if (node.source) {
-        lines.push(...explainNode(node.source, depth + 1, state));
+        lines.push(...explainNode(node.source, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- sink -------------------------------------------------------------
-    case 'sink': {
-      const ops = node.pipeline.map((o) => o.operation).join(' -> ');
-      lines.push(`${pad}Sink${ops ? `: ${ops}` : ''}`);
+    case "sink": {
+      const ops = node.pipeline.map((o) => o.operation).join(" -> ")
+      lines.push(`${pad}Sink${ops ? `: ${ops}` : ""}`)
       if (node.source) {
-        lines.push(...explainNode(node.source, depth + 1, state));
+        lines.push(...explainNode(node.source, depth + 1, state))
       }
-      break;
+      break
     }
 
     // ----- interruption -----------------------------------------------------
-    case 'interruption': {
-      lines.push(`${pad}${node.interruptionType}`);
+    case "interruption": {
+      lines.push(`${pad}${node.interruptionType}`)
       if (node.source) {
-        lines.push(...explainNode(node.source, depth + 1, state));
+        lines.push(...explainNode(node.source, depth + 1, state))
       }
       if (node.handler) {
-        lines.push(`${pad}  On interrupt:`);
-        lines.push(...explainNode(node.handler, depth + 2, state));
+        lines.push(`${pad}  On interrupt:`)
+        lines.push(...explainNode(node.handler, depth + 2, state))
       }
-      break;
+      break
     }
 
     // ----- opaque -----------------------------------------------------------
-    case 'opaque': {
-      if (node.reason === 'callback-body' || node.reason === 'predicate') {
-        lines.push(`${pad}${truncateDisplayText(node.sourceText, DEFAULT_LABEL_MAX)}`);
+    case "opaque": {
+      if (node.reason === "callback-body" || node.reason === "predicate" || node.reason === "stream-constructor") {
+        lines.push(`${pad}${truncateDisplayText(node.sourceText, DEFAULT_LABEL_MAX)}`)
       } else {
-        lines.push(`${pad}(opaque: ${node.reason})`);
+        lines.push(`${pad}(opaque: ${node.reason})`)
       }
-      break;
+      break
     }
 
     // ----- unknown ----------------------------------------------------------
-    case 'unknown': {
-      lines.push(`${pad}(unknown: ${node.reason})`);
-      break;
+    case "unknown": {
+      lines.push(`${pad}(unknown: ${node.reason})`)
+      break
     }
   }
 
-  return lines;
+  return lines
 }
 
 // ---------------------------------------------------------------------------
@@ -638,86 +640,88 @@ export function explainNode(
 function renderProgram(program: StaticEffectProgram, _ir: StaticEffectIR): string {
   const state: WalkState = {
     hasParallelism: false,
-    serviceCallsSeen: new Set(),
-  };
+    serviceCallsSeen: new Set()
+  }
 
   // Collect body lines from children
-  const bodyLines: string[] = [];
-  const visibleChildren =
-    program.children.length > 1 &&
-    program.children[0]?.type === 'effect' &&
-    (program.children[0].constructorKind === 'fn' ||
-      program.children[0].constructorKind === 'fnUntraced')
-      ? program.children.slice(1)
-      : program.children;
-  const childrenToRender =
-    visibleChildren.some((child) => child.type === 'generator')
-      ? visibleChildren.filter((child) => child.type === 'generator')
-      : visibleChildren;
+  const bodyLines: Array<string> = []
+  const visibleChildren = program.children.length > 1 &&
+      program.children[0]?.type === "effect" &&
+      (program.children[0].constructorKind === "fn" ||
+        program.children[0].constructorKind === "fnUntraced")
+    ? program.children.slice(1)
+    : program.children
+  // Beside a generator, keep the wrappers an outer `.pipe` applies to it.
+  const childrenToRender = visibleChildren.some((child) => child.type === "generator")
+    ? visibleChildren.filter((child) =>
+      child.type === "generator" || child.type === "error-handler" || child.type === "retry" ||
+      child.type === "timeout"
+    )
+    : visibleChildren
   for (const child of childrenToRender) {
-    bodyLines.push(...explainNode(child, 1, state));
+    bodyLines.push(...explainNode(child, 1, state))
   }
 
   // Number top-level steps
-  const numberedLines = numberTopLevelSteps(bodyLines);
+  const numberedLines = numberTopLevelSteps(bodyLines)
 
   // Header
-  const header = `${program.programName} (${program.source}):`;
+  const header = `${program.programName} (${program.source}):`
 
   // Footer sections
-  const footer: string[] = [];
+  const footer: Array<string> = []
 
   // Services required
-  const services = new Set<string>();
+  const services = new Set<string>()
   for (const dep of program.dependencies) {
-    if (dep.name !== 'Effect') {
-      services.add(canonicalizeServiceDisplayName(dep.name));
+    if (dep.name !== "Effect") {
+      services.add(canonicalizeServiceDisplayName(dep.name))
     }
   }
   Array.from(state.serviceCallsSeen).forEach((svc) => {
-    if (svc !== 'Effect') {
-      services.add(canonicalizeServiceDisplayName(svc));
+    if (svc !== "Effect") {
+      services.add(canonicalizeServiceDisplayName(svc))
     }
-  });
+  })
   if (services.size > 0) {
-    footer.push(`  Services required: ${Array.from(services).join(', ')}`);
+    footer.push(`  Services required: ${Array.from(services).join(", ")}`)
   }
 
   // Error paths
   if (program.errorTypes.length > 0) {
-    footer.push(`  Error paths: ${program.errorTypes.join(', ')}`);
+    footer.push(`  Error paths: ${program.errorTypes.join(", ")}`)
   }
 
   // Concurrency
   if (state.hasParallelism) {
-    footer.push('  Concurrency: uses parallelism / racing');
+    footer.push("  Concurrency: uses parallelism / racing")
   } else {
-    footer.push('  Concurrency: sequential (no parallelism)');
+    footer.push("  Concurrency: sequential (no parallelism)")
   }
 
-  const sections = [header, numberedLines.join('\n')];
+  const sections = [header, numberedLines.join("\n")]
   if (footer.length > 0) {
-    sections.push('');
-    sections.push(footer.join('\n'));
+    sections.push("")
+    sections.push(footer.join("\n"))
   }
 
-  return sections.join('\n');
+  return sections.join("\n")
 }
 
 /**
  * Numbers lines at depth=1 (2 leading spaces) as top-level steps,
  * leaving deeper lines unchanged.
  */
-function numberTopLevelSteps(lines: string[]): string[] {
-  let step = 0;
+function numberTopLevelSteps(lines: Array<string>): Array<string> {
+  let step = 0
   return lines.map((line) => {
     // Depth-1 lines start with exactly 2 spaces then a non-space character
     if (/^ {2}\S/.test(line)) {
-      step++;
-      return `  ${step}. ${line.trimStart()}`;
+      step++
+      return `  ${step}. ${line.trimStart()}`
     }
-    return line;
-  });
+    return line
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -728,12 +732,12 @@ function numberTopLevelSteps(lines: string[]): string[] {
  * Renders a full plain-English explanation for a single Effect IR program.
  */
 export function renderExplanation(ir: StaticEffectIR): string {
-  return renderProgram(ir.root, ir);
+  return renderProgram(ir.root, ir)
 }
 
 /**
  * Renders explanations for multiple programs, separated by `---`.
  */
-export function renderMultipleExplanations(irs: readonly StaticEffectIR[]): string {
-  return irs.map((ir) => renderExplanation(ir)).join('\n\n---\n\n');
+export function renderMultipleExplanations(irs: ReadonlyArray<StaticEffectIR>): string {
+  return irs.map((ir) => renderExplanation(ir)).join("\n\n---\n\n")
 }

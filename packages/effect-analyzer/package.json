@@ -62,8 +62,8 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "lint": "oxlint src --tsconfig tsconfig.lint.json && node scripts/check-imports.mjs",
-    "lint:fix": "oxlint src --tsconfig tsconfig.lint.json --fix && node scripts/check-imports.mjs",
+    "lint": "oxlint src --tsconfig tsconfig.lint.json --deny-warnings && node scripts/check-imports.mjs",
+    "lint:fix": "oxlint src --tsconfig tsconfig.lint.json --fix --deny-warnings && node scripts/check-imports.mjs",
     "clean": "rm -rf dist",
     "quality": "pnpm type-check && pnpm test && pnpm lint",
     "effect:fetch": "tsx scripts/fetch-effect-repo.ts",
@@ -94,7 +94,7 @@
   },
   "homepage": "https://github.com/jagreehal/effect-analyzer/tree/main/packages/effect-analyzer#readme",
   "peerDependencies": {
-    "effect": "^4.0.0-rc.112"
+    "effect": "^4.0.0-rc.118"
   },
   "peerDependenciesMeta": {
     "effect": {
@@ -102,7 +102,7 @@
     }
   },
   "dependencies": {
-    "@effect/tsgo": "0.39.1",
+    "@effect/tsgo": "0.46.1",
     "ts-morph": "^28.0.0",
     "tsx": "4.23.13"
   },
@@ -116,9 +116,9 @@
     "@total-typescript/ts-reset": "^0.6.1",
     "@typeonce/effect-machine": "0.31.2",
     "@types/node": "^26.4.1",
-    "effect": "4.0.0-rc.112",
-    "oxlint": "1.81.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "effect": "4.0.0-rc.118",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2003",
     "ts-morph": "^28.0.0",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",

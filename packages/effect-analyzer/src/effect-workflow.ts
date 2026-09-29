@@ -16,25 +16,23 @@
  * ```
  */
 
-import { analyze as baseAnalyze } from './analyze';
-import type { AnalyzerOptions } from './types';
+import { analyze as baseAnalyze } from "./analyze"
+import type { AnalyzerOptions } from "./types"
 
-const workflowOptions: AnalyzerOptions = { enableEffectWorkflow: true };
+const workflowOptions: AnalyzerOptions = { enableEffectWorkflow: true }
 
 /**
  * Analyze a file with effect-workflow patterns enabled (Workflow.make / Workflow.run).
  */
 export const analyze = (
   filePath: string,
-  options?: AnalyzerOptions,
-): ReturnType<typeof baseAnalyze> =>
-  baseAnalyze(filePath, { ...workflowOptions, ...options });
+  options?: AnalyzerOptions
+): ReturnType<typeof baseAnalyze> => baseAnalyze(filePath, { ...workflowOptions, ...options })
 
 analyze.source = (
   code: string,
-  options?: AnalyzerOptions,
-): ReturnType<typeof baseAnalyze.source> =>
-  baseAnalyze.source(code, { ...workflowOptions, ...options });
+  options?: AnalyzerOptions
+): ReturnType<typeof baseAnalyze.source> => baseAnalyze.source(code, { ...workflowOptions, ...options })
 
-export type { AnalyzeResult } from './analyze';
-export type { StaticEffectIR, AnalyzerOptions } from './types';
+export type { AnalyzeResult } from "./analyze"
+export type { AnalyzerOptions, StaticEffectIR } from "./types"

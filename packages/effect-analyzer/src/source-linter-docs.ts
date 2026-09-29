@@ -10,17 +10,17 @@
  */
 
 export interface RuleDocs {
-  readonly docsUrl?: string;
-  readonly example?: { readonly bad: string; readonly good: string };
+  readonly docsUrl?: string
+  readonly example?: { readonly bad: string; readonly good: string }
 }
 
-const D = 'https://effect.website/docs';
+const D = "https://effect.website/docs"
 
 export const RULE_DOCS: Readonly<Record<string, RuleDocs>> = {
   // -------------------------------------------------------------------------
   // Errors
   // -------------------------------------------------------------------------
-  'untagged-throw': {
+  "untagged-throw": {
     docsUrl: `${D}/error-management/expected-errors/`,
     example: {
       bad: `Effect.gen(function* () {
@@ -30,18 +30,18 @@ export const RULE_DOCS: Readonly<Record<string, RuleDocs>> = {
 
 Effect.gen(function* () {
   if (!user) return yield* Effect.fail(new UserNotFound());
-});`,
-    },
+});`
+    }
   },
-  'identity-catch': {
+  "identity-catch": {
     docsUrl: `${D}/error-management/fallback/`,
     example: {
       bad: `Effect.catch(eff, (e) => Effect.fail(e));`,
       good: `// Either drop the catch entirely, or actually recover:
-Effect.catch(eff, (e) => Effect.succeed(defaultValue));`,
-    },
+Effect.catch(eff, (e) => Effect.succeed(defaultValue));`
+    }
   },
-  'tryPromise-without-catch': {
+  "tryPromise-without-catch": {
     docsUrl: `${D}/error-management/unexpected-errors/`,
     example: {
       bad: `Effect.tryPromise(() => fetch("/x"));`,
@@ -50,14 +50,14 @@ Effect.catch(eff, (e) => Effect.succeed(defaultValue));`,
 Effect.tryPromise({
   try: () => fetch("/x"),
   catch: (e) => new FetchError({ cause: e }),
-});`,
-    },
+});`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Effect.gen / sync hygiene
   // -------------------------------------------------------------------------
-  'promise-api-in-gen': {
+  "promise-api-in-gen": {
     docsUrl: `${D}/getting-started/creating-effects/`,
     example: {
       bad: `Effect.gen(function* () {
@@ -67,20 +67,20 @@ Effect.tryPromise({
       good: `Effect.gen(function* () {
   const results = yield* Effect.all([a, b], { concurrency: "unbounded" });
   return results;
-});`,
-    },
+});`
+    }
   },
-  'return-effect-from-sync': {
+  "return-effect-from-sync": {
     docsUrl: `${D}/getting-started/creating-effects/`,
     example: {
       bad: `Effect.sync(() => Effect.succeed(1)); // Effect<Effect<number>>`,
       good: `// drop the sync wrapper:
 Effect.succeed(1);
 // or use suspend for lazy construction:
-Effect.suspend(() => Effect.succeed(1));`,
-    },
+Effect.suspend(() => Effect.succeed(1));`
+    }
   },
-  'yield-promise': {
+  "yield-promise": {
     docsUrl: `${D}/getting-started/creating-effects/`,
     example: {
       bad: `Effect.gen(function* () {
@@ -91,14 +91,14 @@ Effect.suspend(() => Effect.succeed(1));`,
     try: () => fetch("/x"),
     catch: (e) => new FetchError({ cause: e }),
   });
-});`,
-    },
+});`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Runners
   // -------------------------------------------------------------------------
-  'runPromise-then-chain': {
+  "runPromise-then-chain": {
     docsUrl: `${D}/getting-started/running-effects/`,
     example: {
       bad: `Effect.runPromise(eff).then((x) => x + 1).catch(console.error);`,
@@ -108,23 +108,23 @@ Effect.runPromise(
     Effect.map((x) => x + 1),
     Effect.catch((e) => Effect.logError(e)),
   ),
-);`,
-    },
+);`
+    }
   },
-  'runSync-on-async': {
+  "runSync-on-async": {
     docsUrl: `${D}/getting-started/running-effects/`,
     example: {
       bad: `Effect.runSync(Effect.tryPromise(() => fetch("/x"))); // throws`,
       good: `await Effect.runPromise(
   Effect.tryPromise({ try: () => fetch("/x"), catch: (e) => e }),
-);`,
-    },
+);`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Concurrency / state
   // -------------------------------------------------------------------------
-  'mutable-in-concurrent': {
+  "mutable-in-concurrent": {
     docsUrl: `${D}/state-management/ref/`,
     example: {
       bad: `let count = 0;
@@ -136,69 +136,69 @@ Effect.all(
 yield* Effect.all(
   [Ref.update(ref, (n) => n + 1), /* ... */],
   { concurrency: "unbounded" },
-);`,
-    },
+);`
+    }
   },
-  'forEach-without-concurrency': {
+  "forEach-without-concurrency": {
     docsUrl: `${D}/concurrency/basic-concurrency/`,
     example: {
       bad: `Effect.forEach(items, processItem); // sequential, silently`,
       good: `// parallel:
 Effect.forEach(items, processItem, { concurrency: "unbounded" });
 // or be explicit about sequential intent:
-Effect.forEach(items, processItem, { concurrency: 1 });`,
-    },
+Effect.forEach(items, processItem, { concurrency: 1 });`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Layers
   // -------------------------------------------------------------------------
-  'layer-duplicate-merge': {
+  "layer-duplicate-merge": {
     docsUrl: `${D}/requirements-management/layers/`,
     example: {
       bad: `Layer.merge(AppLayer, AppLayer); // last wins — usually a typo`,
-      good: `Layer.merge(AppLayer, LoggingLayer);`,
-    },
+      good: `Layer.merge(AppLayer, LoggingLayer);`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Scheduling
   // -------------------------------------------------------------------------
-  'schedule-unbounded': {
+  "schedule-unbounded": {
     docsUrl: `${D}/scheduling/schedule-combinators/`,
     example: {
       bad: `Effect.retry(eff, Schedule.spaced("1 second")); // forever`,
       good: `Effect.retry(
   eff,
   Schedule.spaced("1 second").pipe(Schedule.intersect(Schedule.recurs(5))),
-);`,
-    },
+);`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Effect.all / pipes
   // -------------------------------------------------------------------------
-  'empty-effect-all': {
+  "empty-effect-all": {
     docsUrl: `${D}/getting-started/building-pipelines/`,
     example: {
       bad: `Effect.all([]); // always succeeds with []`,
       good: `// remove the dead branch, or be explicit:
-Effect.succeed([] as const);`,
-    },
+Effect.succeed([] as const);`
+    }
   },
-  'config-secret-without-redacted': {
+  "config-secret-without-redacted": {
     docsUrl: `${D}/configuration/`,
     example: {
-      bad: `const token = yield* Config.string("API_TOKEN"); // logs as plain text`,
-      good: `const token = yield* Config.redacted("API_TOKEN");
-// Use Redacted.value(token) only at the boundary where you must send it.`,
-    },
+      bad: `const token = yield* Config.String("API_TOKEN"); // logs as plain text`,
+      good: `const token = yield* Config.Redacted("API_TOKEN");
+// Use Redacted.value(token) only at the boundary where you must send it.`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Test hygiene
   // -------------------------------------------------------------------------
-  'live-layer-in-test': {
+  "live-layer-in-test": {
     docsUrl: `${D}/requirements-management/layers/`,
     example: {
       bad: `// inside foo.test.ts
@@ -207,10 +207,10 @@ const result = await Effect.runPromise(program.pipe(Effect.provide(UserRepoLive)
   findById: () => Effect.succeed({ id: "1", name: "Test" }),
 });
 
-const result = await Effect.runPromise(program.pipe(Effect.provide(UserRepoTest)));`,
-    },
+const result = await Effect.runPromise(program.pipe(Effect.provide(UserRepoTest)));`
+    }
   },
-  'nondeterministic-test-api': {
+  "nondeterministic-test-api": {
     docsUrl: `${D}/testing/testclock/`,
     example: {
       bad: `it("expires after 5m", () => {
@@ -222,10 +222,10 @@ const result = await Effect.runPromise(program.pipe(Effect.provide(UserRepoTest)
     yield* TestClock.adjust("5 minutes");
     // assertions
   }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise),
-);`,
-    },
+);`
+    }
   },
-  'detached-fiber-in-test': {
+  "detached-fiber-in-test": {
     docsUrl: `${D}/concurrency/fibers/`,
     example: {
       bad: `it("forks", () => {
@@ -236,10 +236,10 @@ const result = await Effect.runPromise(program.pipe(Effect.provide(UserRepoTest)
     const fiber = yield* Effect.fork(longRunning);
     yield* Fiber.interrupt(fiber);
   }).pipe(Effect.runPromise),
-);`,
-    },
+);`
+    }
   },
-  'sleep-without-testclock': {
+  "sleep-without-testclock": {
     docsUrl: `${D}/testing/testclock/`,
     example: {
       bad: `it("debounces", () =>
@@ -250,29 +250,28 @@ const result = await Effect.runPromise(program.pipe(Effect.provide(UserRepoTest)
     yield* TestClock.adjust("1 second");
     yield* Fiber.join(fiber);
   }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise),
-);`,
-    },
+);`
+    }
   },
 
   // -------------------------------------------------------------------------
   // Effect-team standards (mirrored from @effect/eslint-plugin)
   // -------------------------------------------------------------------------
-  'barrel-import-from-effect': {
+  "barrel-import-from-effect": {
     docsUrl: `${D}/getting-started/importing-effect/`,
     example: {
       bad: `import { Effect } from "effect";`,
-      good: `import * as Effect from "effect/Effect";`,
-    },
+      good: `import * as Effect from "effect/Effect";`
+    }
   },
-  'array-push-spread': {
+  "array-push-spread": {
     // No specific Effect doc; link to the Effect-team's ESLint config rationale.
-    docsUrl:
-      'https://github.com/Effect-TS/effect/blob/main/eslint.config.mjs',
+    docsUrl: "https://github.com/Effect-TS/effect/blob/main/eslint.config.mjs",
     example: {
       bad: `arr.push(...xs); // stack-overflow risk on large xs`,
       good: `for (const x of xs) arr.push(x);
 // or, for unbounded inputs:
-arr = arr.concat(xs);`,
-    },
-  },
-};
+arr = arr.concat(xs);`
+    }
+  }
+}

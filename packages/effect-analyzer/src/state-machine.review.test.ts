@@ -1,13 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { Project } from 'ts-morph';
-import { renderXStateConfig } from './output/xstate-config';
-import { analyzeStateMachines } from './state-machine';
+import { Project } from "ts-morph"
+import { describe, expect, it } from "vitest"
+import { renderXStateConfig } from "./output/xstate-config"
+import { analyzeStateMachines } from "./state-machine"
 
-const analyze = (source: string) =>
-  analyzeStateMachines('/virtual/review-machine.ts', source).machines;
+const analyze = (source: string) => analyzeStateMachines("/virtual/review-machine.ts", source).machines
 
-describe('effect-machine review regressions', () => {
-  it('recognizes an aliased Machine import', () => {
+describe("effect-machine review regressions", () => {
+  it("recognizes an aliased Machine import", () => {
     const machines = analyze(`
       import { Machine as FSM } from '@typeonce/effect-machine';
 
@@ -16,12 +15,12 @@ describe('effect-machine review regressions', () => {
         events: [],
         initial: () => States.initial.Open(new Open()),
       });
-    `);
+    `)
 
-    expect(machines.map((machine) => machine.name)).toEqual(['Gate']);
-  });
+    expect(machines.map((machine) => machine.name)).toEqual(["Gate"])
+  })
 
-  it('does not recognize an unrelated object whose name ends in Machine', () => {
+  it("does not recognize an unrelated object whose name ends in Machine", () => {
     const machines = analyze(`
       const FakeMachine = {
         make: (config: unknown) => config,
@@ -32,12 +31,12 @@ describe('effect-machine review regressions', () => {
         events: [],
         initial: () => 'Open',
       });
-    `);
+    `)
 
-    expect(machines).toEqual([]);
-  });
+    expect(machines).toEqual([])
+  })
 
-  it('resolves the declared event alphabet through a local const', () => {
+  it("resolves the declared event alphabet through a local const", () => {
     const [machine] = analyze(`
       import { Machine } from '@typeonce/effect-machine';
 
@@ -47,12 +46,12 @@ describe('effect-machine review regressions', () => {
         events: Events,
         initial: () => States.initial.Closed(new Closed()),
       });
-    `);
+    `)
 
-    expect(machine?.declaredEvents).toEqual(['OpenDoor', 'CloseDoor']);
-  });
+    expect(machine?.declaredEvents).toEqual(["OpenDoor", "CloseDoor"])
+  })
 
-  it('records final states declared by the handler tree', () => {
+  it("records final states declared by the handler tree", () => {
     const [machine] = analyze(`
       import { Machine } from '@typeonce/effect-machine';
 
@@ -63,12 +62,12 @@ describe('effect-machine review regressions', () => {
       }).handle({
         Done: { type: 'final' },
       });
-    `);
+    `)
 
-    expect(machine?.finalStates).toEqual(['Done']);
-  });
+    expect(machine?.finalStates).toEqual(["Done"])
+  })
 
-  it('records every invoke returned by an invoke factory', () => {
+  it("records every invoke returned by an invoke factory", () => {
     const [machine] = analyze(`
       import { Machine } from '@typeonce/effect-machine';
 
@@ -83,17 +82,17 @@ describe('effect-machine review regressions', () => {
           invoke: () => [Load, Watch],
         },
       });
-    `);
+    `)
 
     expect(machine?.invokes).toEqual({
       Running: [
-        { src: 'load', id: 'load' },
-        { src: 'watch', id: 'watch' },
-      ],
-    });
-  });
+        { src: "load", id: "load" },
+        { src: "watch", id: "watch" }
+      ]
+    })
+  })
 
-  it('emits valid TypeScript when an anonymous machine id is not an identifier', () => {
+  it("emits valid TypeScript when an anonymous machine id is not an identifier", () => {
     const [machine] = analyze(`
       import { Machine } from '@typeonce/effect-machine';
 
@@ -103,16 +102,16 @@ describe('effect-machine review regressions', () => {
         events: [],
         initial: () => States.initial.Idle(new Idle()),
       });
-    `);
-    const rendered = renderXStateConfig(machine!);
-    const project = new Project({ useInMemoryFileSystem: true });
-    const output = project.createSourceFile('/virtual/output.ts', rendered);
+    `)
+    const rendered = renderXStateConfig(machine!)
+    const project = new Project({ useInMemoryFileSystem: true })
+    const output = project.createSourceFile("/virtual/output.ts", rendered)
 
     expect(
       project
         .getProgram()
         .getSyntacticDiagnostics(output)
-        .map((diagnostic) => diagnostic.getMessageText()),
-    ).toEqual([]);
-  });
-});
+        .map((diagnostic) => diagnostic.getMessageText())
+    ).toEqual([])
+  })
+})

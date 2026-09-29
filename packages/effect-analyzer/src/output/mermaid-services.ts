@@ -6,16 +6,16 @@
  * - Project-wide: `renderServicesMermaidFromMap(serviceMap)` — shows the full service dependency graph.
  */
 
-import type { StaticEffectIR, ProjectServiceMap } from '../types';
-import { analyzeServiceFlow } from '../service-flow';
-import { escapeMermaidLabel as escapeLabel } from '../analysis-utils';
+import { escapeMermaidLabel as escapeLabel } from "../analysis-utils"
+import { analyzeServiceFlow } from "../service-flow"
+import type { ProjectServiceMap, StaticEffectIR } from "../types"
 
 interface ServicesOptions {
-  readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
+  readonly direction?: "TB" | "LR" | "BT" | "RL"
 }
 
 function sanitizeId(text: string): string {
-  return text.replace(/[^a-zA-Z0-9_]/g, '_');
+  return text.replace(/[^a-zA-Z0-9_]/g, "_")
 }
 
 /**
@@ -27,57 +27,57 @@ function sanitizeId(text: string): string {
  */
 export function renderServicesMermaid(
   ir: StaticEffectIR,
-  options: ServicesOptions = {},
+  options: ServicesOptions = {}
 ): string {
-  const direction = options.direction ?? 'LR';
-  const { requiredServices, providedServices } = analyzeServiceFlow(ir);
+  const direction = options.direction ?? "LR"
+  const { requiredServices, providedServices } = analyzeServiceFlow(ir)
 
   // Also collect dependencies from the IR root (includes environment yields)
-  const depsFromIR = ir.root.dependencies;
-  const allServiceIds = new Set<string>();
-  for (const req of requiredServices) allServiceIds.add(req.serviceId);
-  for (const dep of depsFromIR) allServiceIds.add(dep.name);
+  const depsFromIR = ir.root.dependencies
+  const allServiceIds = new Set<string>()
+  for (const req of requiredServices) allServiceIds.add(req.serviceId)
+  for (const dep of depsFromIR) allServiceIds.add(dep.name)
 
   if (allServiceIds.size === 0 && providedServices.length === 0) {
-    return `flowchart ${direction}\n  NoServices((No services))`;
+    return `flowchart ${direction}\n  NoServices((No services))`
   }
 
-  const lines: string[] = [`flowchart ${direction}`];
-  const programName = escapeLabel(ir.root.programName);
+  const lines: Array<string> = [`flowchart ${direction}`]
+  const programName = escapeLabel(ir.root.programName)
 
-  lines.push(`  prog["${programName}"]`);
-  lines.push('');
+  lines.push(`  prog["${programName}"]`)
+  lines.push("")
 
   // Required services — hexagon nodes with requires edges
   // Combine from analyzeServiceFlow and IR root dependencies
   for (const serviceId of allServiceIds) {
-    const id = `svc_${sanitizeId(serviceId)}`;
-    const label = escapeLabel(serviceId);
-    lines.push(`  ${id}{{"${label}"}}`);
-    lines.push(`  prog -->|requires| ${id}`);
+    const id = `svc_${sanitizeId(serviceId)}`
+    const label = escapeLabel(serviceId)
+    lines.push(`  ${id}{{"${label}"}}`)
+    lines.push(`  prog -->|requires| ${id}`)
   }
 
   // Provided services — hexagon nodes with provides edges
   for (const prov of providedServices) {
-    const id = `prov_${sanitizeId(prov.serviceId)}`;
-    const label = escapeLabel(prov.serviceId);
-    lines.push(`  ${id}{{"${label}"}}`);
-    lines.push(`  ${id} -->|provides| prog`);
+    const id = `prov_${sanitizeId(prov.serviceId)}`
+    const label = escapeLabel(prov.serviceId)
+    lines.push(`  ${id}{{"${label}"}}`)
+    lines.push(`  ${id} -->|provides| prog`)
   }
 
-  lines.push('');
+  lines.push("")
 
   // Styling
-  lines.push('  classDef required fill:#E3F2FD,stroke:#1565C0,stroke-width:2px');
-  lines.push('  classDef provided fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px');
+  lines.push("  classDef required fill:#E3F2FD,stroke:#1565C0,stroke-width:2px")
+  lines.push("  classDef provided fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px")
   for (const req of requiredServices) {
-    lines.push(`  class svc_${sanitizeId(req.serviceId)} required`);
+    lines.push(`  class svc_${sanitizeId(req.serviceId)} required`)
   }
   for (const prov of providedServices) {
-    lines.push(`  class prov_${sanitizeId(prov.serviceId)} provided`);
+    lines.push(`  class prov_${sanitizeId(prov.serviceId)} provided`)
   }
 
-  return lines.join('\n');
+  return lines.join("\n")
 }
 
 /**
@@ -89,60 +89,59 @@ export function renderServicesMermaid(
  */
 export function renderServicesMermaidFromMap(
   serviceMap: ProjectServiceMap,
-  options: ServicesOptions = {},
+  options: ServicesOptions = {}
 ): string {
-  const direction = options.direction ?? 'TB';
-  const lines: string[] = [`flowchart ${direction}`];
-  lines.push('');
-  lines.push('  %% Service Dependency Graph');
-  lines.push('');
+  const direction = options.direction ?? "TB"
+  const lines: Array<string> = [`flowchart ${direction}`]
+  lines.push("")
+  lines.push("  %% Service Dependency Graph")
+  lines.push("")
 
   // Service nodes (hexagon shape)
   for (const [serviceId, artifact] of serviceMap.services) {
-    const id = sanitizeId(serviceId);
-    const methodCount = artifact.definition.methods.length;
-    const label =
-      methodCount > 0
-        ? `${serviceId}\\n(${methodCount} method${methodCount === 1 ? '' : 's'})`
-        : serviceId;
-    lines.push(`  ${id}{{"${label}"}}`);
+    const id = sanitizeId(serviceId)
+    const methodCount = artifact.definition.methods.length
+    const label = methodCount > 0
+      ? `${serviceId}\\n(${methodCount} method${methodCount === 1 ? "" : "s"})`
+      : serviceId
+    lines.push(`  ${id}{{"${label}"}}`)
   }
 
   // Unresolved services (dashed)
   for (const serviceId of serviceMap.unresolvedServices) {
-    const id = `unresolved_${sanitizeId(serviceId)}`;
-    lines.push(`  ${id}["? ${serviceId}"]`);
+    const id = `unresolved_${sanitizeId(serviceId)}`
+    lines.push(`  ${id}["? ${serviceId}"]`)
   }
-  lines.push('');
+  lines.push("")
 
   // Edges: service requires other services (via layers)
-  const edgesAdded = new Set<string>();
+  const edgesAdded = new Set<string>()
   for (const [serviceId, artifact] of serviceMap.services) {
     for (const layer of artifact.layerImplementations) {
       for (const req of layer.requires) {
-        const edgeKey = `${serviceId}->${req}`;
-        if (edgesAdded.has(edgeKey)) continue;
-        edgesAdded.add(edgeKey);
+        const edgeKey = `${serviceId}->${req}`
+        if (edgesAdded.has(edgeKey)) continue
+        edgesAdded.add(edgeKey)
 
-        const fromId = sanitizeId(serviceId);
+        const fromId = sanitizeId(serviceId)
         const toId = serviceMap.services.has(req)
           ? sanitizeId(req)
-          : `unresolved_${sanitizeId(req)}`;
-        lines.push(`  ${fromId} -->|"${layer.name}"| ${toId}`);
+          : `unresolved_${sanitizeId(req)}`
+        lines.push(`  ${fromId} -->|"${layer.name}"| ${toId}`)
       }
     }
   }
-  lines.push('');
+  lines.push("")
 
   // Styling
-  lines.push('  classDef service fill:#E3F2FD,stroke:#1565C0,stroke-width:2px');
-  lines.push('  classDef unresolved fill:#FFF3CD,stroke:#856404,stroke-dasharray:5');
+  lines.push("  classDef service fill:#E3F2FD,stroke:#1565C0,stroke-width:2px")
+  lines.push("  classDef unresolved fill:#FFF3CD,stroke:#856404,stroke-dasharray:5")
   for (const serviceId of serviceMap.services.keys()) {
-    lines.push(`  class ${sanitizeId(serviceId)} service`);
+    lines.push(`  class ${sanitizeId(serviceId)} service`)
   }
   for (const serviceId of serviceMap.unresolvedServices) {
-    lines.push(`  class unresolved_${sanitizeId(serviceId)} unresolved`);
+    lines.push(`  class unresolved_${sanitizeId(serviceId)} unresolved`)
   }
 
-  return lines.join('\n');
+  return lines.join("\n")
 }

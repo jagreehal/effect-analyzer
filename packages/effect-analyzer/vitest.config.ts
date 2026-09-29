@@ -1,4 +1,4 @@
-import { configDefaults, defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from "vitest/config"
 
 export default defineConfig({
   test: {
@@ -8,12 +8,12 @@ export default defineConfig({
     maxWorkers: 2,
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    setupFiles: ['./vitest.setup.ts'],
+    setupFiles: ["./vitest.setup.ts"],
     exclude: [
       ...configDefaults.exclude,
-      '**/.analysis-output/**',
-      '.analysis-output/**',
-      '**/.stryker-tmp/**',
-    ],
-  },
-});
+      "**/.analysis-output/**",
+      ".analysis-output/**",
+      "**/.stryker-tmp/**"
+    ]
+  }
+})

@@ -1,57 +1,63 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { describe, expect, it } from 'vitest';
+import { spawnSync } from "node:child_process"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
+import { describe, expect, it } from "vitest"
 
-describe('cli --assert-diagram-fidelity', () => {
-  it('fails for a dynamic Effect v4 span name', () => {
-    const root = mkdtempSync(join(tmpdir(), 'effect-fidelity-'));
-    const sourceFile = join(root, 'program.ts');
-    writeFileSync(sourceFile, `
+describe("cli --assert-diagram-fidelity", () => {
+  it("fails for a dynamic Effect v4 span name", () => {
+    const root = mkdtempSync(join(tmpdir(), "effect-fidelity-"))
+    const sourceFile = join(root, "program.ts")
+    writeFileSync(
+      sourceFile,
+      `
       import { Effect } from "effect";
       const spanName = process.argv[2] ?? "fallback";
       export const program = Effect.succeed(1).pipe(Effect.withSpan(spanName));
-    `);
+    `
+    )
     try {
       const result = spawnSync(
         process.execPath,
         [
-          resolve('dist/cli.js'),
+          resolve("dist/cli.js"),
           sourceFile,
-          '--assert-diagram-fidelity',
-          '--include-trivial',
-          '--quiet',
+          "--assert-diagram-fidelity",
+          "--include-trivial",
+          "--quiet"
         ],
-        { encoding: 'utf8' },
-      );
+        { encoding: "utf8" }
+      )
 
-      expect(result.status).toBe(1);
-      expect(result.stdout).toContain('dynamic-span-name');
-      expect(result.stderr).toContain('Diagram fidelity assertion failed');
+      expect(result.status).toBe(1)
+      expect(result.stdout).toContain("dynamic-span-name")
+      expect(result.stderr).toContain("Diagram fidelity assertion failed")
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true })
     }
-  });
+  })
 
-  it('fails when filtering left it nothing to assert', () => {
-    const root = mkdtempSync(join(tmpdir(), 'effect-fidelity-empty-'));
-    const sourceFile = join(root, 'program.ts');
-    writeFileSync(sourceFile, `
+  it("fails when filtering left it nothing to assert", () => {
+    const root = mkdtempSync(join(tmpdir(), "effect-fidelity-empty-"))
+    const sourceFile = join(root, "program.ts")
+    writeFileSync(
+      sourceFile,
+      `
       import { Effect } from "effect";
       export const program = Effect.succeed(1);
-    `);
+    `
+    )
     try {
       const result = spawnSync(
         process.execPath,
-        [resolve('dist/cli.js'), sourceFile, '--assert-diagram-fidelity', '--quiet'],
-        { encoding: 'utf8' },
-      );
+        [resolve("dist/cli.js"), sourceFile, "--assert-diagram-fidelity", "--quiet"],
+        { encoding: "utf8" }
+      )
 
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain('checked no programs');
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain("checked no programs")
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true })
     }
-  });
-});
+  })
+})

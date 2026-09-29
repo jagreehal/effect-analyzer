@@ -3,184 +3,203 @@
  * location/JSDoc extraction, dependency/error aggregation, program naming.
  */
 
+import { Option } from "effect"
 import type {
-  Node,
-  VariableDeclaration,
-  PropertyAssignment,
   CallExpression,
-  FunctionDeclaration,
   ClassDeclaration,
-  PropertyDeclaration,
-  MethodDeclaration,
+  FunctionDeclaration,
   GetAccessorDeclaration,
-} from 'ts-morph';
-import { Option } from 'effect';
-import { loadTsMorph } from './ts-morph-loader';
+  MethodDeclaration,
+  Node,
+  PropertyAssignment,
+  PropertyDeclaration,
+  VariableDeclaration
+} from "ts-morph"
+import { BUILT_IN_TYPE_NAMES, KNOWN_EFFECT_NAMESPACES } from "./analysis-patterns"
+import { loadTsMorph } from "./ts-morph-loader"
+import { splitTopLevelUnion } from "./type-extractor"
 import type {
   AnalysisStats,
   AnalyzerOptions,
+  ConcurrencyMode,
   DependencyInfo,
   JSDocTags,
   SemanticRole,
   SourceLocation,
-  StaticFlowNode,
-} from './types';
-import { getStaticChildren } from './types';
-import { splitTopLevelUnion } from './type-extractor';
-import { KNOWN_EFFECT_NAMESPACES, BUILT_IN_TYPE_NAMES } from './analysis-patterns';
+  StaticFlowNode
+} from "./types"
+import { getStaticChildren } from "./types"
 
 const EFFECT_RUNTIME_PRIMITIVE_NAMES = new Set([
-  'Ref',
-  'SynchronizedRef',
-  'FiberRef',
-  'TxRef',
-  'TRef',
-  'Queue',
-  'TQueue',
-  'TxQueue',
-  'PubSub',
-  'TPubSub',
-  'Deferred',
-  'TDeferred',
-  'Semaphore',
-  'TSemaphore',
-  'SubscriptionRef',
-  'Mailbox',
-]);
+  "Ref",
+  "SynchronizedRef",
+  "FiberRef",
+  "TxRef",
+  "TRef",
+  "Queue",
+  "TQueue",
+  "TxQueue",
+  "PubSub",
+  "TPubSub",
+  "Deferred",
+  "TDeferred",
+  "Semaphore",
+  "TSemaphore",
+  "SubscriptionRef",
+  "Mailbox"
+])
 
 const isRuntimePrimitiveDependency = (name: string): boolean => {
-  const firstSegment = name.split('.')[0] ?? name;
-  return EFFECT_RUNTIME_PRIMITIVE_NAMES.has(firstSegment);
-};
+  const firstSegment = name.split(".")[0] ?? name
+  return EFFECT_RUNTIME_PRIMITIVE_NAMES.has(firstSegment)
+}
 
 const CANONICAL_EFFECT_SERVICE_NAMES = new Map<string, string>([
-  ['FileSystem', 'FileSystem.FileSystem'],
-  ['Path', 'Path.Path'],
-  ['Terminal', 'Terminal.Terminal'],
-  ['Clock', 'Clock.Clock'],
-  ['Random', 'Random.Random'],
-  ['Console', 'Console.Console'],
-  ['Scope', 'Scope.Scope'],
-]);
+  ["FileSystem", "FileSystem.FileSystem"],
+  ["Path", "Path.Path"],
+  ["Terminal", "Terminal.Terminal"],
+  ["Clock", "Clock.Clock"],
+  ["Random", "Random.Random"],
+  ["Console", "Console.Console"],
+  ["Scope", "Scope.Scope"]
+])
 
-export const canonicalizeServiceDisplayName = (name: string): string =>
-  CANONICAL_EFFECT_SERVICE_NAMES.get(name) ?? name;
+export const canonicalizeServiceDisplayName = (name: string): string => CANONICAL_EFFECT_SERVICE_NAMES.get(name) ?? name
 
 // =============================================================================
 // Default Options
 // =============================================================================
 
 export const DEFAULT_OPTIONS: Required<AnalyzerOptions> = {
-  tsConfigPath: './tsconfig.json',
+  tsConfigPath: "./tsconfig.json",
   resolveReferences: true,
   maxReferenceDepth: 5,
   includeLocations: true,
   assumeImported: false,
   enableEffectWorkflow: false,
   knownEffectInternalsRoot: undefined,
-  minDiscoveryConfidence: 'low',
+  minDiscoveryConfidence: "low",
   onlyExportedPrograms: false,
-  enableEffectFlow: false,
-};
+  enableEffectFlow: false
+}
 
 // =============================================================================
 // ID Generation
 // =============================================================================
 
-let idCounter = 0;
+let idCounter = 0
 
 export const resetIdCounter = (): void => {
-  idCounter = 0;
-};
+  idCounter = 0
+}
 
-export const generateId = (): string => `effect-${++idCounter}`;
+export const generateId = (): string => `effect-${++idCounter}`
+
+/** True when a `concurrency` setting lets more than one fiber run at a time. */
+export const isConcurrent = (concurrency: ConcurrencyMode | undefined): boolean =>
+  concurrency !== undefined && concurrency !== "sequential" && concurrency !== 0 && concurrency !== 1
 
 // =============================================================================
 // Node text cache (reduce repeated getText() on large nodes - improve.md §7)
 // =============================================================================
 
-const nodeTextCache = new WeakMap<Node, string>();
+const nodeTextCache = new WeakMap<Node, string>()
 
 export function getNodeText(node: Node): string {
-  let text = nodeTextCache.get(node);
+  let text = nodeTextCache.get(node)
   if (text === undefined) {
-    text = node.getText();
-    nodeTextCache.set(node, text);
+    text = node.getText()
+    nodeTextCache.set(node, text)
   }
-  return text;
+  return text
 }
 
 // =============================================================================
 // Program-level aggregation (dependencies, error types)
 // =============================================================================
 
-export function collectErrorTypes(nodes: readonly StaticFlowNode[]): string[] {
-  const set = new Set<string>();
-  const visit = (list: readonly StaticFlowNode[]) => {
+/**
+ * A program's error channel. The checker's `E` for the program reflects its
+ * handlers (catchTag, catch, mapError, ...). The per-node union is the
+ * fallback when that type does not resolve.
+ */
+export function programErrorTypes(
+  programErrorType: string | undefined,
+  nodes: ReadonlyArray<StaticFlowNode>
+): Array<string> {
+  const err = programErrorType?.trim()
+  if (err === "never") return []
+  if (err && err !== "unknown" && err !== "any") return splitTopLevelUnion(err).sort()
+  return collectErrorTypes(nodes)
+}
+
+export function collectErrorTypes(nodes: ReadonlyArray<StaticFlowNode>): Array<string> {
+  const set = new Set<string>()
+  const visit = (list: ReadonlyArray<StaticFlowNode>) => {
     for (const node of list) {
-      if (node.type === 'effect') {
-        const err = node.typeSignature?.errorType?.trim();
-        if (err && err !== 'never') {
+      if (node.type === "effect") {
+        const err = node.typeSignature?.errorType?.trim()
+        if (err && err !== "never") {
           for (const part of splitTopLevelUnion(err)) {
-            set.add(part);
+            set.add(part)
           }
         }
       }
-      const children = Option.getOrElse(getStaticChildren(node), () => []);
-      if (children.length > 0) visit(children);
+      const children = Option.getOrElse(getStaticChildren(node), () => [])
+      if (children.length > 0) visit(children)
     }
-  };
-  visit(nodes);
-  return Array.from(set).sort();
+  }
+  visit(nodes)
+  return Array.from(set).sort()
 }
 
-export function collectDependencies(nodes: readonly StaticFlowNode[]): DependencyInfo[] {
-  const byName = new Map<string, DependencyInfo>();
-  const visit = (list: readonly StaticFlowNode[]) => {
+export function collectDependencies(nodes: ReadonlyArray<StaticFlowNode>): Array<DependencyInfo> {
+  const byName = new Map<string, DependencyInfo>()
+  const visit = (list: ReadonlyArray<StaticFlowNode>) => {
     for (const node of list) {
-      if (node.type === 'effect') {
-        const reqs = (node).requiredServices;
+      if (node.type === "effect") {
+        const reqs = node.requiredServices
         if (reqs) {
           for (const r of reqs) {
-            if (isRuntimePrimitiveDependency(r.serviceId)) continue;
-            const displayName = canonicalizeServiceDisplayName(r.serviceId);
+            if (isRuntimePrimitiveDependency(r.serviceId)) continue
+            const displayName = canonicalizeServiceDisplayName(r.serviceId)
             if (!byName.has(displayName)) {
               byName.set(displayName, {
                 name: displayName,
                 typeSignature: r.serviceType,
-                isLayer: false,
-              });
+                isLayer: false
+              })
             }
           }
         }
 
         // Also collect from environment/service yields (yield* ServiceTag pattern)
-        // Include both 'environment' role and service-like callees (e.g., FileSystem.FileSystem, Config.string)
-        if ((node.semanticRole === 'environment' || node.semanticRole === 'side-effect') && node.callee) {
-          const callee = node.callee;
+        // Include both 'environment' role and service-like callees (e.g., FileSystem.FileSystem, Config.String)
+        if ((node.semanticRole === "environment" || node.semanticRole === "side-effect") && node.callee) {
+          const callee = node.callee
           // Heuristic: service tags typically start with uppercase or are dotted identifiers like FileSystem.FileSystem
           // Skip known Effect/JS namespaces and built-in types
-          const firstSegment = callee.split('.')[0] ?? callee;
+          const firstSegment = callee.split(".")[0] ?? callee
           const looksLikeService = /^[A-Z]/.test(callee)
             && !KNOWN_EFFECT_NAMESPACES.has(firstSegment)
-            && !BUILT_IN_TYPE_NAMES.has(firstSegment);
-          if (isRuntimePrimitiveDependency(callee)) continue;
-          const displayName = canonicalizeServiceDisplayName(callee);
+            && !BUILT_IN_TYPE_NAMES.has(firstSegment)
+          if (isRuntimePrimitiveDependency(callee)) continue
+          const displayName = canonicalizeServiceDisplayName(callee)
           if (looksLikeService && !byName.has(displayName)) {
             byName.set(displayName, {
               name: displayName,
               typeSignature: node.typeSignature?.requirementsType,
-              isLayer: false,
-            });
+              isLayer: false
+            })
           }
         }
       }
-      const children = Option.getOrElse(getStaticChildren(node), () => []);
-      if (children.length > 0) visit(children);
+      const children = Option.getOrElse(getStaticChildren(node), () => [])
+      if (children.length > 0) visit(children)
     }
-  };
-  visit(nodes);
-  return Array.from(byName.values());
+  }
+  visit(nodes)
+  return Array.from(byName.values())
 }
 
 // =============================================================================
@@ -190,17 +209,17 @@ export function collectDependencies(nodes: readonly StaticFlowNode[]): Dependenc
 export const extractLocation = (
   node: Node,
   filePath: string,
-  includeLocations: boolean,
+  includeLocations: boolean
 ): SourceLocation | undefined => {
   if (!includeLocations) {
-    return undefined;
+    return undefined
   }
 
-  const sourceFile = node.getSourceFile();
-  const pos = node.getStart();
-  const { line, column } = sourceFile.getLineAndColumnAtPos(pos);
-  const endPos = node.getEnd();
-  const end = sourceFile.getLineAndColumnAtPos(endPos);
+  const sourceFile = node.getSourceFile()
+  const pos = node.getStart()
+  const { line, column } = sourceFile.getLineAndColumnAtPos(pos)
+  const endPos = node.getEnd()
+  const end = sourceFile.getLineAndColumnAtPos(endPos)
 
   return {
     filePath,
@@ -209,9 +228,9 @@ export const extractLocation = (
     endLine: end.line,
     endColumn: end.column,
     offset: pos,
-    endOffset: endPos,
-  };
-};
+    endOffset: endPos
+  }
+}
 
 // =============================================================================
 // JSDoc Extraction
@@ -226,77 +245,77 @@ export const extractJSDocDescription = (node: Node): string | undefined => {
   // Try to get JSDoc from the node directly using ts-morph
   const jsDocs = (
     node as unknown as {
-      getJsDocs?: () => {
-        getText: () => string;
-        getComment?: () => string | { text: string }[];
-      }[];
+      getJsDocs?: () => Array<{
+        getText: () => string
+        getComment?: () => string | Array<{ text: string }>
+      }>
     }
-  ).getJsDocs?.();
+  ).getJsDocs?.()
 
   if (jsDocs && jsDocs.length > 0) {
-    const firstJsDoc = jsDocs[0];
-    if (!firstJsDoc) return undefined;
-    const comment = firstJsDoc.getComment?.();
+    const firstJsDoc = jsDocs[0]
+    if (!firstJsDoc) return undefined
+    const comment = firstJsDoc.getComment?.()
 
     if (comment) {
       // Handle both string and array comment formats
-      let description: string;
-      if (typeof comment === 'string') {
-        description = comment;
+      let description: string
+      if (typeof comment === "string") {
+        description = comment
       } else if (Array.isArray(comment)) {
-        description = comment.map((c) => c.text).join('\n');
+        description = comment.map((c) => c.text).join("\n")
       } else {
-        return undefined;
+        return undefined
       }
 
       // Extract only the description (before first @tag)
-      const tagIndex = description.search(/\n\s*@/);
+      const tagIndex = description.search(/\n\s*@/)
       if (tagIndex !== -1) {
-        description = description.substring(0, tagIndex);
+        description = description.substring(0, tagIndex)
       }
 
-      return description.trim() || undefined;
+      return description.trim() || undefined
     }
 
     // Fallback to parsing the raw JSDoc text
-    const rawText = firstJsDoc.getText();
-    const descriptionMatch = /\/\*\*\s*\n?\s*\*\s*([^@]*?)(?=\n\s*\*\s*@|\*\/)/.exec(rawText);
+    const rawText = firstJsDoc.getText()
+    const descriptionMatch = /\/\*\*\s*\n?\s*\*\s*([^@]*?)(?=\n\s*\*\s*@|\*\/)/.exec(rawText)
     if (descriptionMatch?.[1]) {
       return (
-        descriptionMatch[1].replace(/\n\s*\*\s*/g, ' ').trim() || undefined
-      );
+        descriptionMatch[1].replace(/\n\s*\*\s*/g, " ").trim() || undefined
+      )
     }
   }
 
   // Fallback: use leading comment ranges
-  const leadingComments = node.getLeadingCommentRanges();
+  const leadingComments = node.getLeadingCommentRanges()
   if (leadingComments.length > 0) {
-    const lastComment = leadingComments[leadingComments.length - 1];
-    if (!lastComment) return undefined;
+    const lastComment = leadingComments[leadingComments.length - 1]
+    if (!lastComment) return undefined
 
-    const commentText = lastComment.getText();
+    const commentText = lastComment.getText()
 
     // Check if it's a JSDoc comment
-    if (commentText.startsWith('/**')) {
+    if (commentText.startsWith("/**")) {
       // Remove /** and */ and * prefixes
       const cleaned = commentText
-        .replace(/^\/\*\*\s*/, '')
-        .replace(/\s*\*\/\s*$/, '')
-        .replace(/^\s*\*\s?/gm, '')
-        .trim();
+        .replace(/^\/\*\*\s*/, "")
+        .replace(/\s*\*\/\s*$/, "")
+        .replace(/^\s*\*\s?/gm, "")
+        .trim()
 
       // Extract only the description (before first @tag)
-      const tagIndex = cleaned.search(/\n@/);
+      const tagIndex = cleaned.search(/\n@/)
       if (tagIndex !== -1) {
-        return cleaned.substring(0, tagIndex).trim() || undefined;
+        return cleaned.substring(0, tagIndex).trim() || undefined
       }
 
-      return cleaned || undefined;
+      return cleaned || undefined
     }
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 /**
  * Extract structured JSDoc tags (@param, @returns, @throws, @example) from a node.
@@ -306,44 +325,44 @@ export const extractJSDocTags = (node: Node): JSDocTags | undefined => {
   const tryGetJsDocText = (n: Node): string | undefined => {
     const jsDocs = (
       n as unknown as {
-        getJsDocs?: () => { getText: () => string }[];
+        getJsDocs?: () => Array<{ getText: () => string }>
       }
-    ).getJsDocs?.();
+    ).getJsDocs?.()
     if (jsDocs && jsDocs.length > 0) {
-      return jsDocs[0]!.getText();
+      return jsDocs[0]!.getText()
     }
     // Fallback: leading comment ranges
-    const leadingComments = n.getLeadingCommentRanges();
+    const leadingComments = n.getLeadingCommentRanges()
     if (leadingComments.length > 0) {
-      const lastComment = leadingComments[leadingComments.length - 1];
+      const lastComment = leadingComments[leadingComments.length - 1]
       if (lastComment) {
-        const commentText = lastComment.getText();
-        if (commentText.startsWith('/**')) return commentText;
+        const commentText = lastComment.getText()
+        if (commentText.startsWith("/**")) return commentText
       }
     }
-    return undefined;
-  };
+    return undefined
+  }
 
   // Try the node itself first
-  let text = tryGetJsDocText(node);
+  let text = tryGetJsDocText(node)
 
   // Walk up to find JSDoc on parent statement (same logic as getJSDocFromParentVariable)
   if (!text) {
-    const { SyntaxKind } = loadTsMorph();
-    let current = node.getParent();
+    const { SyntaxKind } = loadTsMorph()
+    let current = node.getParent()
     // Walk through CallExpression → ArrowFunction → VariableDeclaration → VariableDeclarationList → VariableStatement
     while (current && !text) {
-      const kind = current.getKind();
+      const kind = current.getKind()
       if (kind === SyntaxKind.VariableStatement) {
-        text = tryGetJsDocText(current);
-        break;
+        text = tryGetJsDocText(current)
+        break
       }
       if (kind === SyntaxKind.VariableDeclarationList) {
-        const grandparent = current.getParent();
+        const grandparent = current.getParent()
         if (grandparent) {
-          text = tryGetJsDocText(grandparent);
+          text = tryGetJsDocText(grandparent)
         }
-        break;
+        break
       }
       // Keep walking up through CallExpression, ArrowFunction, VariableDeclaration
       if (
@@ -352,69 +371,68 @@ export const extractJSDocTags = (node: Node): JSDocTags | undefined => {
         kind === SyntaxKind.VariableDeclaration ||
         kind === SyntaxKind.ParenthesizedExpression
       ) {
-        current = current.getParent();
+        current = current.getParent()
       } else {
-        break;
+        break
       }
     }
   }
 
-  if (!text) return undefined;
-  return parseJSDocTags(text);
-};
+  if (!text) return undefined
+  return parseJSDocTags(text)
+}
 
 function parseJSDocTags(rawText: string): JSDocTags | undefined {
   const cleaned = rawText
-    .replace(/^\/\*\*/, '')
-    .replace(/\*\/$/, '')
-    .split('\n')
-    .map(line => line.replace(/^\s*\*\s?/, ''))
-    .join('\n');
+    .replace(/^\/\*\*/, "")
+    .replace(/\*\/$/, "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*\*\s?/, ""))
+    .join("\n")
 
-  const params: { name: string; description?: string }[] = [];
-  let returns: string | undefined;
-  const throws: string[] = [];
-  let example: string | undefined;
+  const params: Array<{ name: string; description?: string }> = []
+  let returns: string | undefined
+  const throws: Array<string> = []
+  let example: string | undefined
 
-  const tagPattern = /@(param|returns?|throws?|exception|example)\s*(.*)/gi;
-  let match: RegExpExecArray | null;
+  const tagPattern = /@(param|returns?|throws?|exception|example)\s*(.*)/gi
+  let match: RegExpExecArray | null
 
   while ((match = tagPattern.exec(cleaned)) !== null) {
-    const tag = match[1]!.toLowerCase();
-    const rest = match[2]!.trim();
+    const tag = match[1]!.toLowerCase()
+    const rest = match[2]!.trim()
 
-    if (tag === 'param') {
-      const paramMatch =
-        /^(?:\{[^}]*\}\s*)?(\[?\w+(?:=[^\]]*)?]?)\s*(?:-\s*(.*))?$/.exec(rest);
+    if (tag === "param") {
+      const paramMatch = /^(?:\{[^}]*\}\s*)?(\[?\w+(?:=[^\]]*)?]?)\s*(?:-\s*(.*))?$/.exec(rest)
       if (paramMatch) {
-        const name = paramMatch[1]!.replace(/^\[|\]$/g, '').replace(/=.*/, '');
-        const description = paramMatch[2]?.trim();
-        params.push(description ? { name, description } : { name });
+        const name = paramMatch[1]!.replace(/^\[|\]$/g, "").replace(/=.*/, "")
+        const description = paramMatch[2]?.trim()
+        params.push(description ? { name, description } : { name })
       }
-    } else if (tag === 'returns' || tag === 'return') {
-      returns = rest.replace(/^\{[^}]*\}\s*/, '').trim() || undefined;
-    } else if (tag === 'throws' || tag === 'throw' || tag === 'exception') {
-      const value = rest.replace(/^\{[^}]*\}\s*/, '').trim();
-      if (value) throws.push(value);
-    } else if (tag === 'example') {
+    } else if (tag === "returns" || tag === "return") {
+      returns = rest.replace(/^\{[^}]*\}\s*/, "").trim() || undefined
+    } else if (tag === "throws" || tag === "throw" || tag === "exception") {
+      const value = rest.replace(/^\{[^}]*\}\s*/, "").trim()
+      if (value) throws.push(value)
+    } else if (tag === "example") {
       // @example may span multiple lines until next @tag or end of comment
-      const exampleStart = match.index + match[0].length;
-      const nextTagMatch = /\n\s*@\w/.exec(cleaned.slice(exampleStart));
+      const exampleStart = match.index + match[0].length
+      const nextTagMatch = /\n\s*@\w/.exec(cleaned.slice(exampleStart))
       if (nextTagMatch) {
-        const block = cleaned.slice(match.index + match[0].length - rest.length, exampleStart + nextTagMatch.index);
-        example = block.trim() || undefined;
+        const block = cleaned.slice(match.index + match[0].length - rest.length, exampleStart + nextTagMatch.index)
+        example = block.trim() || undefined
       } else {
-        const block = cleaned.slice(match.index + match[0].length - rest.length);
-        example = block.trim() || undefined;
+        const block = cleaned.slice(match.index + match[0].length - rest.length)
+        example = block.trim() || undefined
       }
     }
   }
 
   if (params.length === 0 && !returns && throws.length === 0 && !example) {
-    return undefined;
+    return undefined
   }
 
-  return { params, returns, throws, example };
+  return { params, returns, throws, example }
 }
 
 /**
@@ -422,27 +440,27 @@ function parseJSDocTags(rawText: string): JSDocTags | undefined {
  * Used to extract program-level JSDoc from the variable above an Effect program.
  */
 export const getJSDocFromParentVariable = (node: Node): string | undefined => {
-  const parent = node.getParent();
-  const { SyntaxKind } = loadTsMorph();
+  const parent = node.getParent()
+  const { SyntaxKind } = loadTsMorph()
 
   if (parent) {
-    const parentKind = parent.getKind();
+    const parentKind = parent.getKind()
 
     if (parentKind === SyntaxKind.VariableDeclaration) {
-      return extractJSDocDescription(parent);
+      return extractJSDocDescription(parent)
     }
 
     // Check for arrow function assignment
     if (parentKind === SyntaxKind.ArrowFunction) {
-      const grandparent = parent.getParent();
+      const grandparent = parent.getParent()
       if (grandparent?.getKind() === SyntaxKind.VariableDeclaration) {
-        return extractJSDocDescription(grandparent);
+        return extractJSDocDescription(grandparent)
       }
     }
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 // =============================================================================
 // Path / file helpers
@@ -450,7 +468,7 @@ export const getJSDocFromParentVariable = (node: Node): string | undefined => {
 
 /** Gap 6: .js/.jsx need allowJs and a minimal project so tsconfig does not exclude them. */
 export function isJsOrJsxPath(path: string): boolean {
-  return path.endsWith('.js') || path.endsWith('.jsx');
+  return path.endsWith(".js") || path.endsWith(".jsx")
 }
 
 // =============================================================================
@@ -458,12 +476,27 @@ export function isJsOrJsxPath(path: string): boolean {
 // =============================================================================
 
 export interface EffectProgram {
-  readonly name: string;
-  readonly discoveryConfidence?: 'high' | 'medium' | 'low';
-  readonly discoveryReason?: string;
-  readonly node: CallExpression | FunctionDeclaration | VariableDeclaration | ClassDeclaration
-    | PropertyDeclaration | MethodDeclaration | GetAccessorDeclaration;
-  readonly type: 'generator' | 'direct' | 'pipe' | 'run' | 'workflow-execute' | 'class' | 'classProperty' | 'classMethod' | 'functionDeclaration';
+  readonly name: string
+  readonly discoveryConfidence?: "high" | "medium" | "low"
+  readonly discoveryReason?: string
+  readonly node:
+    | CallExpression
+    | FunctionDeclaration
+    | VariableDeclaration
+    | ClassDeclaration
+    | PropertyDeclaration
+    | MethodDeclaration
+    | GetAccessorDeclaration
+  readonly type:
+    | "generator"
+    | "direct"
+    | "pipe"
+    | "run"
+    | "workflow-execute"
+    | "class"
+    | "classProperty"
+    | "classMethod"
+    | "functionDeclaration"
 }
 
 // =============================================================================
@@ -471,120 +504,120 @@ export interface EffectProgram {
 // =============================================================================
 
 export const extractYieldVariableName = (yieldNode: Node): string | undefined => {
-  const parent = yieldNode.getParent();
-  const { SyntaxKind } = loadTsMorph();
+  const parent = yieldNode.getParent()
+  const { SyntaxKind } = loadTsMorph()
 
   if (parent?.getKind() === SyntaxKind.VariableDeclaration) {
-    return (parent as VariableDeclaration).getName();
+    return (parent as VariableDeclaration).getName()
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 export const extractProgramName = (node: Node): string | undefined => {
-  const { SyntaxKind } = loadTsMorph();
+  const { SyntaxKind } = loadTsMorph()
   const getEnclosingVariableName = (start: Node): string | undefined => {
-    let current: Node | undefined = start;
+    let current: Node | undefined = start
     while (current !== undefined) {
       if (current.getKind() === SyntaxKind.VariableDeclaration) {
-        return (current as VariableDeclaration).getName();
+        return (current as VariableDeclaration).getName()
       }
-      current = current.getParent();
+      current = current.getParent()
     }
-    return undefined;
-  };
+    return undefined
+  }
 
   // Try to find the variable name this is assigned to
-  const parent = node.getParent();
+  const parent = node.getParent()
   if (parent) {
-    const parentKind = parent.getKind();
+    const parentKind = parent.getKind()
 
     if (parentKind === SyntaxKind.VariableDeclaration) {
-      return (parent as VariableDeclaration).getName();
+      return (parent as VariableDeclaration).getName()
     }
 
     if (parentKind === SyntaxKind.AwaitExpression) {
-      const grandparent = parent.getParent();
+      const grandparent = parent.getParent()
       if (grandparent?.getKind() === SyntaxKind.VariableDeclaration) {
-        return (grandparent as VariableDeclaration).getName();
+        return (grandparent as VariableDeclaration).getName()
       }
     }
 
     if (parentKind === SyntaxKind.PropertyAssignment) {
-      const property = parent as PropertyAssignment;
-      const propertyName = property.getName();
-      const containerName = getEnclosingVariableName(parent);
-      return containerName ? `${containerName}.${propertyName}` : propertyName;
+      const property = parent as PropertyAssignment
+      const propertyName = property.getName()
+      const containerName = getEnclosingVariableName(parent)
+      return containerName ? `${containerName}.${propertyName}` : propertyName
     }
 
     // Check for arrow function assignment
     if (parentKind === SyntaxKind.ArrowFunction) {
-      const grandparent = parent.getParent();
+      const grandparent = parent.getParent()
       if (grandparent?.getKind() === SyntaxKind.VariableDeclaration) {
-        return (grandparent as VariableDeclaration).getName();
+        return (grandparent as VariableDeclaration).getName()
       }
       if (grandparent?.getKind() === SyntaxKind.PropertyAssignment) {
-        const property = grandparent as PropertyAssignment;
-        const propertyName = property.getName();
-        const containerName = getEnclosingVariableName(grandparent);
-        return containerName ? `${containerName}.${propertyName}` : propertyName;
+        const property = grandparent as PropertyAssignment
+        const propertyName = property.getName()
+        const containerName = getEnclosingVariableName(grandparent)
+        return containerName ? `${containerName}.${propertyName}` : propertyName
       }
     }
   }
 
   // Walk further up through DIRECT wrappers (CallExpression, ArrowFunction, FunctionExpression)
   // Stop at function boundaries we're not an argument of
-  let ancestor: Node | undefined = node;
+  let ancestor: Node | undefined = node
   for (let depth = 0; ancestor && depth < 6; depth++) {
-    ancestor = ancestor.getParent();
-    if (!ancestor) break;
+    ancestor = ancestor.getParent()
+    if (!ancestor) break
 
-    const kind = ancestor.getKind();
+    const kind = ancestor.getKind()
 
     // Found a named container — use it
     if (kind === SyntaxKind.VariableDeclaration) {
-      return (ancestor as VariableDeclaration).getName();
+      return (ancestor as VariableDeclaration).getName()
     }
 
     if (kind === SyntaxKind.PropertyAssignment) {
-      const property = ancestor as PropertyAssignment;
-      const propertyName = property.getName();
-      const containerName = getEnclosingVariableName(ancestor);
-      return containerName ? `${containerName}.${propertyName}` : propertyName;
+      const property = ancestor as PropertyAssignment
+      const propertyName = property.getName()
+      const containerName = getEnclosingVariableName(ancestor)
+      return containerName ? `${containerName}.${propertyName}` : propertyName
     }
 
     // Stop walking up at Block/SourceFile — we've left the expression context
-    if (kind === SyntaxKind.Block || kind === SyntaxKind.SourceFile) break;
+    if (kind === SyntaxKind.Block || kind === SyntaxKind.SourceFile) break
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 /**
  * Walk up the AST from a node to find an enclosing Effect.fn("name") call.
  * Returns the name string if found, e.g., for Effect.gen inside Effect.fn("getUser").
  */
 export const extractEnclosingEffectFnName = (node: Node): string | undefined => {
-  const { SyntaxKind } = loadTsMorph();
-  let current: Node | undefined = node.getParent();
+  const { SyntaxKind } = loadTsMorph()
+  let current: Node | undefined = node.getParent()
   for (let depth = 0; current && depth < 10; depth++) {
     if (current.getKind() === SyntaxKind.CallExpression) {
-      const callExpr = current as CallExpression;
-      const exprText = callExpr.getExpression().getText();
-      if (exprText === 'Effect.fn' || exprText.endsWith('.fn')) {
-        const args = callExpr.getArguments();
+      const callExpr = current as CallExpression
+      const exprText = callExpr.getExpression().getText()
+      if (exprText === "Effect.fn" || exprText.endsWith(".fn")) {
+        const args = callExpr.getArguments()
         if (args.length > 0) {
-          const firstArg = args[0]!.getText();
+          const firstArg = args[0]!.getText()
           // Extract string literal: "name" or 'name'
-          const match = /^["'](.+)["']$/.exec(firstArg);
-          if (match?.[1]) return match[1];
+          const match = /^["'](.+)["']$/.exec(firstArg)
+          if (match?.[1]) return match[1]
         }
       }
     }
-    current = current.getParent();
+    current = current.getParent()
   }
-  return undefined;
-};
+  return undefined
+}
 
 // =============================================================================
 // Stats Helper
@@ -607,25 +640,25 @@ export const createEmptyStats = (): AnalysisStats => ({
   switchCount: 0,
   tryCatchCount: 0,
   terminalCount: 0,
-  opaqueCount: 0,
-});
+  opaqueCount: 0
+})
 
 // =============================================================================
 // Display Name & Semantic Role Computation
 // =============================================================================
 
 /** Default max length for user-visible labels (diagrams, explain, IR display names). */
-export const DEFAULT_LABEL_MAX = 60;
+export const DEFAULT_LABEL_MAX = 60
 
 /**
  * Truncate a string to `max` characters, appending an ellipsis if truncated.
  * Use for any user-facing label in output renderers.
  */
 export function truncateDisplayText(s: string, max: number = DEFAULT_LABEL_MAX): string {
-  return s.length <= max ? s : `${s.slice(0, max)}…`;
+  return s.length <= max ? s : `${s.slice(0, max)}…`
 }
 
-const truncate = truncateDisplayText;
+const truncate = truncateDisplayText
 
 /**
  * Escape a label for a Mermaid node. Labels come from source text that may wrap
@@ -633,12 +666,12 @@ const truncate = truncateDisplayText;
  */
 export function escapeMermaidLabel(text: string): string {
   return text
-    .replace(/\s+/g, ' ')
-    .replace(/"/g, '#quot;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/\(/g, '#lpar;')
-    .replace(/\)/g, '#rpar;');
+    .replace(/\s+/g, " ")
+    .replace(/"/g, "#quot;")
+    .replace(/</g, "#lt;")
+    .replace(/>/g, "#gt;")
+    .replace(/\(/g, "#lpar;")
+    .replace(/\)/g, "#rpar;")
 }
 
 /**
@@ -654,16 +687,16 @@ export function escapeMermaidLabel(text: string): string {
  */
 export function extractFunctionName(callee: string): string {
   // Remove anything after opening paren (arguments)
-  const withoutArgs = callee.replace(/\(.*$/, '');
-  const parts = withoutArgs.split('.');
-  if (parts.length <= 1) return withoutArgs;
+  const withoutArgs = callee.replace(/\(.*$/, "")
+  const parts = withoutArgs.split(".")
+  if (parts.length <= 1) return withoutArgs
   // Strip known Effect namespace prefixes (Effect.X → X, Schema.X → X)
-  const receiver = parts[0] ?? '';
+  const receiver = parts[0] ?? ""
   if (KNOWN_EFFECT_NAMESPACES.has(receiver) || BUILT_IN_TYPE_NAMES.has(receiver)) {
-    return parts[parts.length - 1] ?? withoutArgs;
+    return parts[parts.length - 1] ?? withoutArgs
   }
   // Keep receiver for user objects (deps.foo, config.bar)
-  return withoutArgs;
+  return withoutArgs
 }
 
 /**
@@ -674,116 +707,116 @@ export function extractFunctionName(callee: string): string {
  */
 export function computeDisplayName(node: StaticFlowNode, variableName?: string): string {
   switch (node.type) {
-    case 'effect': {
-      const fnName = extractFunctionName(node.callee);
+    case "effect": {
+      const fnName = extractFunctionName(node.callee)
       if (node.usePattern) {
-        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName;
-        return truncate(`${wrapper}.use`, 60);
+        const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName
+        return truncate(`${wrapper}.use`, 60)
       }
       if (variableName) {
-        return truncate(`${variableName} <- ${fnName}`, 60);
+        return truncate(`${variableName} <- ${fnName}`, 60)
       }
       if (node.name) {
-        return truncate(`${node.name} <- ${fnName}`, 60);
+        return truncate(`${node.name} <- ${fnName}`, 60)
       }
-      return truncate(fnName, 60);
+      return truncate(fnName, 60)
     }
 
-    case 'generator':
-      return `Generator (${node.yields.length} yields)`;
+    case "generator":
+      return `Generator (${node.yields.length} yields)`
 
-    case 'pipe':
-      return `Pipe (${node.transformations.length} steps)`;
+    case "pipe":
+      return `Pipe (${node.transformations.length} steps)`
 
-    case 'parallel':
-      return `${node.callee} (${node.children.length})`;
+    case "parallel":
+      return `${node.callee} (${node.children.length})`
 
-    case 'race':
-      return `${node.callee} (${node.children.length} racing)`;
+    case "race":
+      return `${node.callee} (${node.children.length} racing)`
 
-    case 'error-handler':
-      return node.name ? `${node.name}: ${node.handlerType}` : node.handlerType;
+    case "error-handler":
+      return node.name ? `${node.name}: ${node.handlerType}` : node.handlerType
 
-    case 'retry':
-      return node.schedule ? `retry: ${node.schedule}` : 'retry';
+    case "retry":
+      return node.schedule ? `retry: ${node.schedule}` : "retry"
 
-    case 'timeout':
-      return node.duration ? `timeout: ${node.duration}` : 'timeout';
+    case "timeout":
+      return node.duration ? `timeout: ${node.duration}` : "timeout"
 
-    case 'resource':
-      return 'Resource';
+    case "resource":
+      return "Resource"
 
-    case 'conditional':
-      return truncate(node.condition, 30);
+    case "conditional":
+      return truncate(node.condition, 30)
 
-    case 'loop':
-      return node.iterSource ? truncate(`${node.loopType}(${node.iterSource})`, 60) : node.loopType;
+    case "loop":
+      return node.iterSource ? truncate(`${node.loopType}(${node.iterSource})`, 60) : node.loopType
 
-    case 'layer':
-      return node.isMerged ? 'Layer (merged)' : 'Layer';
+    case "layer":
+      return node.isMerged ? "Layer (merged)" : "Layer"
 
-    case 'stream': {
-      const ops = node.pipeline.map((op) => op.operation);
-      const parts: string[] = ['Stream', ...ops];
-      if (node.sink) parts.push(node.sink);
-      return truncate(parts.join(' → '), 60);
+    case "stream": {
+      const ops = node.pipeline.map((op) => op.operation)
+      const parts: Array<string> = ["Stream", ...ops]
+      if (node.sink && ops.at(-1) !== node.sink) parts.push(node.sink)
+      return truncate(parts.join(" → "), 60)
     }
 
-    case 'concurrency-primitive':
-      return `${node.primitive}.${node.operation}`;
+    case "concurrency-primitive":
+      return `${node.primitive}.${node.operation}`
 
-    case 'fiber': {
-      const op = node.operation;
-      if (node.isDaemon) return `${op} (daemon)`;
-      if (node.isScoped) return `${op} (scoped)`;
-      return op;
+    case "fiber": {
+      const op = node.operation
+      if (node.isDaemon) return `${op} (daemon)`
+      if (node.isScoped) return `${op} (scoped)`
+      return op
     }
 
-    case 'transform':
-      return node.transformType;
+    case "transform":
+      return node.transformType
 
-    case 'match':
-      return `Match.${node.matchOp}`;
+    case "match":
+      return `Match.${node.matchOp}`
 
-    case 'cause':
-      return `Cause.${node.causeOp}`;
+    case "cause":
+      return `Cause.${node.causeOp}`
 
-    case 'exit':
-      return `Exit.${node.exitOp}`;
+    case "exit":
+      return `Exit.${node.exitOp}`
 
-    case 'schedule':
-      return `Schedule.${node.scheduleOp}`;
+    case "schedule":
+      return `Schedule.${node.scheduleOp}`
 
-    case 'interruption':
-      return node.interruptionType;
+    case "interruption":
+      return node.interruptionType
 
-    case 'channel': {
-      const channelOps = node.pipeline.map((op) => op.operation);
-      return channelOps.length > 0 ? `Channel: ${channelOps.join(' → ')}` : 'Channel';
+    case "channel": {
+      const channelOps = node.pipeline.map((op) => op.operation)
+      return channelOps.length > 0 ? `Channel: ${channelOps.join(" → ")}` : "Channel"
     }
 
-    case 'sink': {
-      const sinkOps = node.pipeline.map((op) => op.operation);
-      return sinkOps.length > 0 ? `Sink: ${sinkOps.join(' → ')}` : 'Sink';
+    case "sink": {
+      const sinkOps = node.pipeline.map((op) => op.operation)
+      return sinkOps.length > 0 ? `Sink: ${sinkOps.join(" → ")}` : "Sink"
     }
 
-    case 'decision':
-      return truncate(node.condition, 30);
+    case "decision":
+      return truncate(node.condition, 30)
 
-    case 'switch':
-      return `switch(${truncate(node.expression, 25)})`;
+    case "switch":
+      return `switch(${truncate(node.expression, 25)})`
 
-    case 'try-catch':
-      return 'try/catch';
+    case "try-catch":
+      return "try/catch"
 
-    case 'terminal':
-      return node.label ? `${node.terminalKind} ${node.label}` : node.terminalKind;
+    case "terminal":
+      return node.label ? `${node.terminalKind} ${node.label}` : node.terminalKind
 
-    case 'opaque':
-      return `Opaque: ${truncate(node.reason, 25)}`;
+    case "opaque":
+      return `Opaque: ${truncate(node.reason, 25)}`
 
-    case 'unknown':
-      return `Unknown: ${truncate(node.reason, 30)}`;
+    case "unknown":
+      return `Unknown: ${truncate(node.reason, 30)}`
   }
 }
 
@@ -794,114 +827,114 @@ export function computeDisplayName(node: StaticFlowNode, variableName?: string):
 /**
  * Count non-unknown nodes in an IR tree, recursing into children.
  */
-export const countMeaningfulNodes = (nodes: readonly StaticFlowNode[]): number => {
-  let count = 0;
-  const walk = (list: readonly StaticFlowNode[]) => {
+export const countMeaningfulNodes = (nodes: ReadonlyArray<StaticFlowNode>): number => {
+  let count = 0
+  const walk = (list: ReadonlyArray<StaticFlowNode>) => {
     for (const node of list) {
-      if (node.type !== 'unknown') count++;
-      const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
-      if (children.length > 0) walk(children);
+      if (node.type !== "unknown") count++
+      const children = Option.getOrElse(getStaticChildren(node), () => [] as ReadonlyArray<StaticFlowNode>)
+      if (children.length > 0) walk(children)
     }
-  };
-  walk(nodes);
-  return count;
-};
+  }
+  walk(nodes)
+  return count
+}
 
 /**
  * Classify a StaticFlowNode into a SemanticRole for display styling and filtering.
  */
 export function computeSemanticRole(node: StaticFlowNode): SemanticRole {
   switch (node.type) {
-    case 'effect': {
+    case "effect": {
       // Service call detection: explicit serviceCall/serviceMethod fields
-      if (node.serviceCall || node.serviceMethod || node.usePattern) return 'service-call';
+      if (node.serviceCall || node.serviceMethod || node.usePattern) return "service-call"
       // Description-based heuristic: descriptions mentioning "service" or "layer"
-      const desc = node.description?.toLowerCase() ?? '';
-      if (desc.includes('service')) return 'service-call';
-      if (desc.includes('layer') || node.provideKind === 'layer') return 'layer';
+      const desc = node.description?.toLowerCase() ?? ""
+      if (desc.includes("service")) return "service-call"
+      if (desc.includes("layer") || node.provideKind === "layer") return "layer"
       // Callee-based classification
-      const callee = node.callee.toLowerCase();
+      const callee = node.callee.toLowerCase()
       // Context/service tag access (yield* UserRepo / yield* AppConfig) is environment read, not side effect.
       if (/^[A-Z][A-Za-z0-9_]*$/.test(node.callee) && !node.constructorKind) {
-        return 'environment';
+        return "environment"
       }
       if (
-        callee.includes('sync') ||
-        callee.includes('promise') ||
-        callee.includes('async') ||
-        callee.includes('log') ||
-        callee.includes('console')
+        callee.includes("sync") ||
+        callee.includes("promise") ||
+        callee.includes("async") ||
+        callee.includes("log") ||
+        callee.includes("console")
       ) {
-        return 'side-effect';
+        return "side-effect"
       }
       if (
-        callee.includes('succeed') ||
-        callee.includes('fail') ||
-        callee.includes('die') ||
-        callee.includes('void') ||
-        callee.includes('never') ||
-        callee.includes('gen') ||
-        callee.includes('make') ||
+        callee.includes("succeed") ||
+        callee.includes("fail") ||
+        callee.includes("die") ||
+        callee.includes("void") ||
+        callee.includes("never") ||
+        callee.includes("gen") ||
+        callee.includes("make") ||
         node.constructorKind
       ) {
-        return 'constructor';
+        return "constructor"
       }
-      return 'side-effect';
+      return "side-effect"
     }
 
-    case 'generator':
-    case 'pipe':
-      return 'constructor';
+    case "generator":
+    case "pipe":
+      return "constructor"
 
-    case 'parallel':
-    case 'race':
-    case 'concurrency-primitive':
-      return 'concurrency';
+    case "parallel":
+    case "race":
+    case "concurrency-primitive":
+      return "concurrency"
 
-    case 'error-handler':
-    case 'cause':
-    case 'exit':
-      return 'error-handler';
+    case "error-handler":
+    case "cause":
+    case "exit":
+      return "error-handler"
 
-    case 'retry':
-    case 'timeout':
-    case 'schedule':
-      return 'scheduling';
+    case "retry":
+    case "timeout":
+    case "schedule":
+      return "scheduling"
 
-    case 'resource':
-      return 'resource';
+    case "resource":
+      return "resource"
 
-    case 'conditional':
-    case 'loop':
-    case 'match':
-    case 'decision':
-    case 'switch':
-    case 'terminal':
-      return 'control-flow';
+    case "conditional":
+    case "loop":
+    case "match":
+    case "decision":
+    case "switch":
+    case "terminal":
+      return "control-flow"
 
-    case 'try-catch':
-      return 'error-handler';
+    case "try-catch":
+      return "error-handler"
 
-    case 'opaque':
-      return 'unknown';
+    case "opaque":
+      return "unknown"
 
-    case 'layer':
-      return 'layer';
+    case "layer":
+      return "layer"
 
-    case 'stream':
-    case 'channel':
-    case 'sink':
-      return 'stream';
+    case "stream":
+    case "channel":
+    case "sink":
+      return "stream"
 
-    case 'fiber':
-    case 'interruption':
-      return 'fiber';
+    case "fiber":
+    case "interruption":
+      return "fiber"
 
-    case 'transform':
-      return 'transform';
+    case "transform":
+      return "transform"
 
-    case 'unknown':
-      return 'unknown';
+    case "unknown":
+      return "unknown"
   }
 }
 
@@ -918,7 +951,7 @@ export function computeSemanticRole(node: StaticFlowNode): SemanticRole {
  * from it. Both import this module, and this module imports neither.
  */
 export function unwrapExpression(expr: Node): Node {
-  const { SyntaxKind } = loadTsMorph();
+  const { SyntaxKind } = loadTsMorph()
   switch (expr.getKind()) {
     case SyntaxKind.ParenthesizedExpression:
     case SyntaxKind.AsExpression:
@@ -926,9 +959,9 @@ export function unwrapExpression(expr: Node): Node {
     case SyntaxKind.NonNullExpression:
     case SyntaxKind.SatisfiesExpression:
       return unwrapExpression(
-        (expr as unknown as { getExpression(): Node }).getExpression(),
-      );
+        (expr as unknown as { getExpression(): Node }).getExpression()
+      )
     default:
-      return expr;
+      return expr
   }
 }

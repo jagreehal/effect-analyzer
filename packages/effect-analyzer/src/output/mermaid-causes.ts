@@ -1,113 +1,113 @@
-import { Option } from 'effect';
-import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
-import { DEFAULT_LABEL_MAX, escapeMermaidLabel as escapeLabel, truncateDisplayText } from '../analysis-utils';
+import { Option } from "effect"
+import { DEFAULT_LABEL_MAX, escapeMermaidLabel as escapeLabel, truncateDisplayText } from "../analysis-utils"
+import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from "../types"
 
 interface CausesOptions {
-  readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
+  readonly direction?: "TB" | "LR" | "BT" | "RL"
 }
 
 /** Replace non-alphanumeric characters with underscores for Mermaid node IDs. */
 function sanitizeId(text: string): string {
-  return text.replace(/[^a-zA-Z0-9]/g, '_');
+  return text.replace(/[^a-zA-Z0-9]/g, "_")
 }
 
 /** Failure patterns for Effect callee matching. */
-const EFFECT_FAILURE_CALLEES = new Set(['Effect.fail', 'Effect.die', 'Effect.interrupt']);
+const EFFECT_FAILURE_CALLEES = new Set(["Effect.fail", "Effect.die", "Effect.interrupt"])
 
 interface FailureNode {
-  readonly id: string;
-  readonly kind: 'fail' | 'die' | 'interrupt' | 'parallel' | 'sequential';
-  readonly label: string;
-  readonly children: readonly FailureNode[];
+  readonly id: string
+  readonly kind: "fail" | "die" | "interrupt" | "parallel" | "sequential"
+  readonly label: string
+  readonly children: ReadonlyArray<FailureNode>
 }
 
 /** Extract error type label from an effect node. */
 function getErrorTypeLabel(node: StaticFlowNode): string | undefined {
-  if (node.type === 'effect') {
-    const raw = node.typeSignature?.errorType ?? node.errorType;
-    if (raw && raw !== 'never' && raw.trim() !== '') return raw;
+  if (node.type === "effect") {
+    const raw = node.typeSignature?.errorType ?? node.errorType
+    if (raw && raw !== "never" && raw.trim() !== "") return raw
   }
-  return undefined;
+  return undefined
 }
 
 /** Determine failure kind from an Effect callee. */
-function calleeToKind(callee: string): 'fail' | 'die' | 'interrupt' {
-  if (callee === 'Effect.die') return 'die';
-  if (callee === 'Effect.interrupt') return 'interrupt';
-  return 'fail';
+function calleeToKind(callee: string): "fail" | "die" | "interrupt" {
+  if (callee === "Effect.die") return "die"
+  if (callee === "Effect.interrupt") return "interrupt"
+  return "fail"
 }
 
 /** Recursively collect failure-related nodes from the IR tree. */
-function collectFailureNodes(node: StaticFlowNode): readonly FailureNode[] {
-  const results: FailureNode[] = [];
+function collectFailureNodes(node: StaticFlowNode): ReadonlyArray<FailureNode> {
+  const results: Array<FailureNode> = []
 
   // Check if this node is a failure source
-  if (node.type === 'cause' && node.isConstructor) {
-    const op = node.causeOp;
+  if (node.type === "cause" && node.isConstructor) {
+    const op = node.causeOp
 
-    if (op === 'parallel' || op === 'sequential') {
+    if (op === "parallel" || op === "sequential") {
       // Composite cause: collect children recursively
-      const childFailures: FailureNode[] = [];
-      const children = node.children ?? [];
+      const childFailures: Array<FailureNode> = []
+      const children = node.children ?? []
       for (const child of children) {
-        childFailures.push(...collectFailureNodes(child));
+        childFailures.push(...collectFailureNodes(child))
       }
       results.push({
         id: sanitizeId(node.id),
         kind: op,
         label: `Cause.${op}`,
-        children: childFailures,
-      });
-      return results;
+        children: childFailures
+      })
+      return results
     }
 
-    if (op === 'fail' || op === 'die' || op === 'interrupt') {
+    if (op === "fail" || op === "die" || op === "interrupt") {
       results.push({
         id: sanitizeId(node.id),
         kind: op,
         label: `Cause.${op}`,
-        children: [],
-      });
-      return results;
+        children: []
+      })
+      return results
     }
   }
 
-  if (node.type === 'exit' && node.isConstructor) {
-    const op = node.exitOp;
-    if (op === 'fail' || op === 'die' || op === 'interrupt') {
+  if (node.type === "exit" && node.isConstructor) {
+    const op = node.exitOp
+    if (op === "fail" || op === "die" || op === "interrupt") {
       results.push({
         id: sanitizeId(node.id),
-        kind: op === 'fail' ? 'fail' : op === 'die' ? 'die' : 'interrupt',
+        kind: op === "fail" ? "fail" : op === "die" ? "die" : "interrupt",
         label: `Exit.${op}`,
-        children: [],
-      });
-      return results;
+        children: []
+      })
+      return results
     }
   }
 
-  if (node.type === 'effect' && EFFECT_FAILURE_CALLEES.has(node.callee)) {
-    const kind = calleeToKind(node.callee);
-    const errorType = getErrorTypeLabel(node);
+  if (node.type === "effect" && EFFECT_FAILURE_CALLEES.has(node.callee)) {
+    const kind = calleeToKind(node.callee)
+    const errorType = getErrorTypeLabel(node)
     const label = truncateDisplayText(
       errorType ? `${node.callee}: ${errorType}` : node.callee,
-      DEFAULT_LABEL_MAX,
-    );
+      DEFAULT_LABEL_MAX
+    )
     results.push({
       id: sanitizeId(node.id),
       kind,
       label,
-      children: [],
-    });
-    return results;
+      children: []
+    })
+    return results
   }
 
   // Recurse into children for non-failure nodes
-  const children = Option.getOrElse(getStaticChildren(node), () => []);
+  const children = Option.getOrElse(getStaticChildren(node), () => [])
   for (const child of children) {
-    results.push(...collectFailureNodes(child));
+    results.push(...collectFailureNodes(child))
   }
 
-  return results;
+  return results
 }
 
 /** Render a single failure node and its edges into Mermaid lines. */
@@ -115,44 +115,44 @@ function renderFailureNode(
   node: FailureNode,
   parentId: string | undefined,
   edgeLabel: string | undefined,
-  lines: string[],
-  styledNodes: Map<string, 'fail' | 'die' | 'interrupt' | 'composite'>,
-  counter: { value: number },
+  lines: Array<string>,
+  styledNodes: Map<string, "fail" | "die" | "interrupt" | "composite">,
+  counter: { value: number }
 ): void {
-  const nodeId = `N${counter.value++}`;
-  const escaped = escapeLabel(node.label);
+  const nodeId = `N${counter.value++}`
+  const escaped = escapeLabel(node.label)
 
-  if (node.kind === 'parallel' || node.kind === 'sequential') {
+  if (node.kind === "parallel" || node.kind === "sequential") {
     // Composite node — light blue styling
-    lines.push(`  ${nodeId}[${escaped}]`);
-    styledNodes.set(nodeId, 'composite');
+    lines.push(`  ${nodeId}[${escaped}]`)
+    styledNodes.set(nodeId, "composite")
 
     if (parentId) {
-      const edge = edgeLabel ? ` -->|${edgeLabel}| ` : ' --> ';
-      lines.push(`  ${parentId}${edge}${nodeId}`);
+      const edge = edgeLabel ? ` -->|${edgeLabel}| ` : " --> "
+      lines.push(`  ${parentId}${edge}${nodeId}`)
     }
 
-    const childEdgeLabel = node.kind === 'parallel' ? 'parallel' : 'then';
+    const childEdgeLabel = node.kind === "parallel" ? "parallel" : "then"
     for (const child of node.children) {
-      renderFailureNode(child, nodeId, childEdgeLabel, lines, styledNodes, counter);
+      renderFailureNode(child, nodeId, childEdgeLabel, lines, styledNodes, counter)
     }
   } else {
     // Leaf failure node
-    if (node.kind === 'die') {
-      lines.push(`  ${nodeId}[${escaped}]`);
-      styledNodes.set(nodeId, 'die');
-    } else if (node.kind === 'interrupt') {
-      lines.push(`  ${nodeId}[${escaped}]`);
-      styledNodes.set(nodeId, 'interrupt');
+    if (node.kind === "die") {
+      lines.push(`  ${nodeId}[${escaped}]`)
+      styledNodes.set(nodeId, "die")
+    } else if (node.kind === "interrupt") {
+      lines.push(`  ${nodeId}[${escaped}]`)
+      styledNodes.set(nodeId, "interrupt")
     } else {
       // fail — rounded rect
-      lines.push(`  ${nodeId}(${escaped})`);
-      styledNodes.set(nodeId, 'fail');
+      lines.push(`  ${nodeId}(${escaped})`)
+      styledNodes.set(nodeId, "fail")
     }
 
     if (parentId) {
-      const edge = edgeLabel ? ` -->|${edgeLabel}| ` : ' --> ';
-      lines.push(`  ${parentId}${edge}${nodeId}`);
+      const edge = edgeLabel ? ` -->|${edgeLabel}| ` : " --> "
+      lines.push(`  ${parentId}${edge}${nodeId}`)
     }
   }
 }
@@ -165,61 +165,66 @@ function renderFailureNode(
  */
 export function renderCausesMermaid(
   ir: StaticEffectIR,
-  options: CausesOptions = {},
+  options: CausesOptions = {}
 ): string {
-  const direction = options.direction ?? 'TB';
+  const direction = options.direction ?? "TB"
 
   // Collect all failure nodes from the IR
-  const failureNodes: FailureNode[] = [];
+  const failureNodes: Array<FailureNode> = []
   for (const child of ir.root.children) {
-    failureNodes.push(...collectFailureNodes(child));
+    failureNodes.push(...collectFailureNodes(child))
   }
 
   if (failureNodes.length === 0) {
-    return `flowchart ${direction}\n  NoCauses((No failure causes))`;
+    return `flowchart ${direction}\n  NoCauses((No failure causes))`
   }
 
-  const lines: string[] = [`flowchart ${direction}`];
-  const styledNodes = new Map<string, 'fail' | 'die' | 'interrupt' | 'composite'>();
-  const counter = { value: 0 };
+  const lines: Array<string> = [`flowchart ${direction}`]
+  const styledNodes = new Map<string, "fail" | "die" | "interrupt" | "composite">()
+  const counter = { value: 0 }
 
   // Root node
-  const rootId = 'Root';
-  const programName = escapeLabel(ir.root.programName);
-  lines.push(`  ${rootId}((${programName}))`);
+  const rootId = "Root"
+  const programName = escapeLabel(ir.root.programName)
+  lines.push(`  ${rootId}((${programName}))`)
 
   // Render each top-level failure node
   for (const node of failureNodes) {
-    renderFailureNode(node, rootId, undefined, lines, styledNodes, counter);
+    renderFailureNode(node, rootId, undefined, lines, styledNodes, counter)
   }
 
   // Style definitions
-  lines.push('');
-  lines.push('  classDef failStyle fill:#FFCDD2,stroke:#C62828');
-  lines.push('  classDef dieStyle fill:#B71C1C,color:#fff');
-  lines.push('  classDef interruptStyle fill:#FFE0B2,stroke:#E65100');
-  lines.push('  classDef compositeStyle fill:#E3F2FD');
+  lines.push("")
+  lines.push("  classDef failStyle fill:#FFCDD2,stroke:#C62828")
+  lines.push("  classDef dieStyle fill:#B71C1C,color:#fff")
+  lines.push("  classDef interruptStyle fill:#FFE0B2,stroke:#E65100")
+  lines.push("  classDef compositeStyle fill:#E3F2FD")
 
   // Apply styles
-  const styleGroups: { failStyle: string[]; dieStyle: string[]; interruptStyle: string[]; compositeStyle: string[] } = {
+  const styleGroups: {
+    failStyle: Array<string>
+    dieStyle: Array<string>
+    interruptStyle: Array<string>
+    compositeStyle: Array<string>
+  } = {
     failStyle: [],
     dieStyle: [],
     interruptStyle: [],
-    compositeStyle: [],
-  };
+    compositeStyle: []
+  }
 
   for (const [nodeId, kind] of styledNodes) {
-    if (kind === 'fail') styleGroups.failStyle.push(nodeId);
-    else if (kind === 'die') styleGroups.dieStyle.push(nodeId);
-    else if (kind === 'interrupt') styleGroups.interruptStyle.push(nodeId);
-    else styleGroups.compositeStyle.push(nodeId);
+    if (kind === "fail") styleGroups.failStyle.push(nodeId)
+    else if (kind === "die") styleGroups.dieStyle.push(nodeId)
+    else if (kind === "interrupt") styleGroups.interruptStyle.push(nodeId)
+    else styleGroups.compositeStyle.push(nodeId)
   }
 
   for (const [className, nodeIds] of Object.entries(styleGroups)) {
     if (nodeIds.length > 0) {
-      lines.push(`  class ${nodeIds.join(',')} ${className}`);
+      lines.push(`  class ${nodeIds.join(",")} ${className}`)
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n")
 }
