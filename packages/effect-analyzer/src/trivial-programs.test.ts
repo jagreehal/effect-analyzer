@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { isTrivialProgram } from './trivial-programs';
-import type { StaticEffectIR, StaticEffectNode } from './types';
+import { describe, expect, it } from "vitest"
+import { isTrivialProgram } from "./trivial-programs"
+import type { StaticEffectIR } from "./types"
 
 const stats = {
   totalEffects: 0,
@@ -16,40 +16,57 @@ const stats = {
   unknownCount: 0,
   interruptionCount: 0,
   decisionCount: 0,
-  switchCount: 0,
-};
+  switchCount: 0
+}
 
 const ir = (
-  source: StaticEffectIR['root']['source'],
-  children: StaticEffectIR['root']['children'] = [],
+  source: StaticEffectIR["root"]["source"],
+  children: StaticEffectIR["root"]["children"] = []
 ): StaticEffectIR => ({
   root: {
-    id: 'p',
-    type: 'program',
-    programName: 'p',
+    id: "p",
+    type: "program",
+    programName: "p",
     source,
     children,
     dependencies: [],
-    errorTypes: [],
+    errorTypes: []
   },
-  metadata: { analyzedAt: 0, filePath: 't.ts', stats },
-  references: new Map(),
-});
+  metadata: { analyzedAt: 0, filePath: "t.ts", stats },
+  references: new Map()
+})
 
-describe('isTrivialProgram', () => {
-  it('treats Effect.runPromise entrypoints as trivial', () => {
-    expect(isTrivialProgram(ir('run', [{
-      id: 'n1',
-      type: 'effect',
-      callee: 'Effect.runPromise',
-    } as StaticEffectNode]))).toBe(true);
-  });
+describe("isTrivialProgram", () => {
+  it("treats Effect.runPromise entrypoints as trivial", () => {
+    expect(isTrivialProgram(ir("run", [{
+      id: "n1",
+      type: "effect",
+      callee: "Effect.runPromise"
+    }]))).toBe(true)
+  })
 
-  it('keeps a generator workflow', () => {
-    expect(isTrivialProgram(ir('generator', [{
-      id: 'g',
-      type: 'generator',
-      yields: [],
-    } as StaticEffectIR['root']['children'][number]]))).toBe(false);
-  });
-});
+  it("keeps a generator workflow", () => {
+    expect(isTrivialProgram(ir("generator", [{
+      id: "g",
+      type: "generator",
+      yields: []
+    }]))).toBe(false)
+  })
+
+  it("treats a single leaf call as trivial", () => {
+    expect(isTrivialProgram(ir("direct", [{ id: "e", type: "effect", callee: "Effect.succeed" }]))).toBe(true)
+  })
+
+  it("treats a single layer as trivial", () => {
+    expect(isTrivialProgram(ir("direct", [{ id: "l", type: "layer" } as StaticEffectIR["root"]["children"][number]])))
+      .toBe(true)
+  })
+
+  it("keeps a direct program whose one child is a pipe or stream", () => {
+    for (const type of ["pipe", "stream"] as const) {
+      expect(isTrivialProgram(ir("direct", [{ id: "c", type } as StaticEffectIR["root"]["children"][number]]))).toBe(
+        false
+      )
+    }
+  })
+})

@@ -10,33 +10,23 @@
  * behaviour is preserved exactly.
  */
 
-import { Effect } from 'effect';
+import { Effect } from "effect"
+import type { CallExpression, PropertyAccessExpression, SourceFile } from "ts-morph"
+import { parseScheduleInfo } from "./analysis-classifiers"
+import type { AnalysisContext } from "./analysis-context"
+import { SCHEDULE_OP_MAP } from "./analysis-patterns"
+import { computeDisplayName, computeSemanticRole, extractLocation, generateId, getNodeText } from "./analysis-utils"
+import { loadTsMorph } from "./ts-morph-loader"
 import type {
-  CallExpression,
-  SourceFile,
-  PropertyAccessExpression,
-} from 'ts-morph';
-import { loadTsMorph } from './ts-morph-loader';
-import type {
+  AnalysisError,
+  AnalysisStats,
+  AnalysisWarning,
+  AnalyzerOptions,
   StaticFlowNode,
   StaticRetryNode,
-  StaticTimeoutNode,
   StaticScheduleNode,
-  AnalyzerOptions,
-  AnalysisWarning,
-  AnalysisStats,
-  AnalysisError,
-} from './types';
-import {
-  generateId,
-  extractLocation,
-  computeDisplayName,
-  computeSemanticRole,
-  getNodeText,
-} from './analysis-utils';
-import { SCHEDULE_OP_MAP } from './analysis-patterns';
-import { parseScheduleInfo } from './analysis-classifiers';
-import type { AnalysisContext } from './analysis-context';
+  StaticTimeoutNode
+} from "./types"
 
 export const analyzeRetryCall = (
   deps: AnalysisContext,
@@ -44,42 +34,42 @@ export const analyzeRetryCall = (
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
-  stats: AnalysisStats,
+  warnings: Array<AnalysisWarning>,
+  stats: AnalysisStats
 ): Effect.Effect<StaticRetryNode, AnalysisError> =>
-  Effect.gen(function* () {
-    const args = call.getArguments();
-    let source: StaticFlowNode;
-    let schedule: string | undefined;
-    let scheduleNode: StaticFlowNode | undefined;
-    let hasFallback: boolean;
+  Effect.gen(function*() {
+    const args = call.getArguments()
+    let source: StaticFlowNode
+    let schedule: string | undefined
+    let scheduleNode: StaticFlowNode | undefined
+    let hasFallback: boolean
 
-    const expr = call.getExpression();
+    const expr = call.getExpression()
     if (expr.getKind() === loadTsMorph().SyntaxKind.PropertyAccessExpression) {
-      const propAccess = expr as PropertyAccessExpression;
-      const exprSource = propAccess.getExpression();
+      const propAccess = expr as PropertyAccessExpression
+      const exprSource = propAccess.getExpression()
       source = yield* deps.analyzeEffectExpression(
         exprSource,
         sourceFile,
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
 
       if (args.length > 0 && args[0]) {
-        schedule = args[0].getText();
+        schedule = args[0].getText()
         scheduleNode = yield* deps.analyzeEffectExpression(
           args[0],
           sourceFile,
           filePath,
           opts,
           warnings,
-          stats,
-        );
+          stats
+        )
       }
 
-      hasFallback = expr.getText().includes('retryOrElse');
+      hasFallback = expr.getText().includes("retryOrElse")
     } else {
       if (args.length > 0 && args[0]) {
         source = yield* deps.analyzeEffectExpression(
@@ -88,52 +78,52 @@ export const analyzeRetryCall = (
           filePath,
           opts,
           warnings,
-          stats,
-        );
+          stats
+        )
       } else {
         source = {
           id: generateId(),
-          type: 'unknown',
-          reason: 'Could not determine source effect',
-        };
+          type: "unknown",
+          reason: "Could not determine source effect"
+        }
       }
 
       if (args.length > 1 && args[1]) {
-        schedule = args[1].getText();
+        schedule = args[1].getText()
         scheduleNode = yield* deps.analyzeEffectExpression(
           args[1],
           sourceFile,
           filePath,
           opts,
           warnings,
-          stats,
-        );
+          stats
+        )
       }
 
-      hasFallback = args.length > 2;
+      hasFallback = args.length > 2
     }
 
-    stats.retryCount++;
+    stats.retryCount++
 
-    const scheduleInfo = schedule ? parseScheduleInfo(schedule) : undefined;
+    const scheduleInfo = schedule ? parseScheduleInfo(schedule) : undefined
 
     const retryNode: StaticRetryNode = {
       id: generateId(),
-      type: 'retry',
+      type: "retry",
       source,
       schedule,
       ...(scheduleNode !== undefined ? { scheduleNode } : {}),
       hasFallback,
       scheduleInfo,
-      retryEdgeLabel: schedule ? `retry: ${schedule}` : 'retry',
-      location: extractLocation(call, filePath, opts.includeLocations ?? false),
-    };
+      retryEdgeLabel: schedule ? `retry: ${schedule}` : "retry",
+      location: extractLocation(call, filePath, opts.includeLocations ?? false)
+    }
     return {
       ...retryNode,
       displayName: computeDisplayName(retryNode),
-      semanticRole: computeSemanticRole(retryNode),
-    };
-  });
+      semanticRole: computeSemanticRole(retryNode)
+    }
+  })
 
 export const analyzeTimeoutCall = (
   deps: AnalysisContext,
@@ -141,36 +131,35 @@ export const analyzeTimeoutCall = (
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
-  stats: AnalysisStats,
+  warnings: Array<AnalysisWarning>,
+  stats: AnalysisStats
 ): Effect.Effect<StaticTimeoutNode, AnalysisError> =>
-  Effect.gen(function* () {
-    const args = call.getArguments();
-    let source: StaticFlowNode;
-    let duration: string | undefined;
-    let hasFallback: boolean;
+  Effect.gen(function*() {
+    const args = call.getArguments()
+    let source: StaticFlowNode
+    let duration: string | undefined
+    let hasFallback: boolean
 
-    const expr = call.getExpression();
+    const expr = call.getExpression()
     if (expr.getKind() === loadTsMorph().SyntaxKind.PropertyAccessExpression) {
-      const propAccess = expr as PropertyAccessExpression;
-      const exprSource = propAccess.getExpression();
+      const propAccess = expr as PropertyAccessExpression
+      const exprSource = propAccess.getExpression()
       source = yield* deps.analyzeEffectExpression(
         exprSource,
         sourceFile,
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
 
       if (args.length > 0 && args[0]) {
-        duration = getNodeText(args[0]);
+        duration = getNodeText(args[0])
       }
 
-      const exprText = getNodeText(expr);
-      hasFallback =
-        exprText.includes('timeoutFail') ||
-        exprText.includes('timeoutTo');
+      const exprText = getNodeText(expr)
+      hasFallback = exprText.includes("timeoutFail") ||
+        exprText.includes("timeoutTo")
     } else {
       if (args.length > 0 && args[0]) {
         source = yield* deps.analyzeEffectExpression(
@@ -179,62 +168,61 @@ export const analyzeTimeoutCall = (
           filePath,
           opts,
           warnings,
-          stats,
-        );
+          stats
+        )
       } else {
         source = {
           id: generateId(),
-          type: 'unknown',
-          reason: 'Could not determine source effect',
-        };
+          type: "unknown",
+          reason: "Could not determine source effect"
+        }
       }
 
       if (args.length > 1 && args[1]) {
-        duration = getNodeText(args[1]);
+        duration = getNodeText(args[1])
       }
 
-      hasFallback = args.length > 2;
+      hasFallback = args.length > 2
     }
 
-    stats.timeoutCount++;
+    stats.timeoutCount++
 
     const timeoutNode: StaticTimeoutNode = {
       id: generateId(),
-      type: 'timeout',
+      type: "timeout",
       source,
       duration,
       hasFallback,
-      location: extractLocation(call, filePath, opts.includeLocations ?? false),
-    };
+      location: extractLocation(call, filePath, opts.includeLocations ?? false)
+    }
     return {
       ...timeoutNode,
       displayName: computeDisplayName(timeoutNode),
-      semanticRole: computeSemanticRole(timeoutNode),
-    };
-  });
+      semanticRole: computeSemanticRole(timeoutNode)
+    }
+  })
 
 /** Analyze Schedule.exponential / spaced / jittered / andThen / etc. (GAP 8 dedicated IR). */
 export const analyzeScheduleCall = (
   call: CallExpression,
   callee: string,
   filePath: string,
-  opts: Required<AnalyzerOptions>,
+  opts: Required<AnalyzerOptions>
 ): Effect.Effect<StaticScheduleNode, AnalysisError> =>
   Effect.sync(() => {
-    const scheduleOp: StaticScheduleNode['scheduleOp'] =
-      SCHEDULE_OP_MAP[callee] ?? 'other';
-    const scheduleText = call.getText();
-    const scheduleInfo = parseScheduleInfo(scheduleText);
+    const scheduleOp: StaticScheduleNode["scheduleOp"] = SCHEDULE_OP_MAP[callee] ?? "other"
+    const scheduleText = call.getText()
+    const scheduleInfo = parseScheduleInfo(scheduleText)
     const scheduleNode: StaticScheduleNode = {
       id: generateId(),
-      type: 'schedule',
+      type: "schedule",
       scheduleOp,
       ...(scheduleInfo ? { scheduleInfo } : {}),
-      location: extractLocation(call, filePath, opts.includeLocations ?? false),
-    };
+      location: extractLocation(call, filePath, opts.includeLocations ?? false)
+    }
     return {
       ...scheduleNode,
       displayName: computeDisplayName(scheduleNode),
-      semanticRole: computeSemanticRole(scheduleNode),
-    };
-  });
+      semanticRole: computeSemanticRole(scheduleNode)
+    }
+  })

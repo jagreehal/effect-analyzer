@@ -64,7 +64,7 @@ Migration Opportunities Found:
     Snippet: setTimeout(() => { console.log(`flushed analytics for ${user...
 
   before.ts:25:30  fetch()
-    →  effect/unstable/http HttpClient
+    →  effect/http HttpClient
     Snippet: fetch(`${this.baseUrl}/users/${id}`)...
 
   before.ts:20:1  class UserService (manual DI)
@@ -76,7 +76,7 @@ Migration Opportunities Found:
     Snippet: throw new Error(`Failed to fetch user ${id}: ${response.stat...
 
   before.ts:21:30  process.env
-    →  Config.string or Config.forEffect for typed config
+    →  Config.String or Config.schema for typed config
     Snippet: process.env...
 
 Total: 10 opportunities in 1 files
@@ -96,7 +96,7 @@ Work down the list. Each reported pattern maps to a well-known Effect idiom:
 
 1. **Class-based DI → `Context.Service` + `Layer`.** The two `*Service` classes become services with explicit, type-checked dependencies.
 
-2. **`process.env` → `Config`.** The base URL becomes declared, typed configuration: `Config.string('API_URL')`.
+2. **`process.env` → `Config`.** The base URL becomes declared, typed configuration: `Config.String('API_URL')`.
 
 3. **`try/catch` + `throw` → typed error channel.** `throw new Error(...)` becomes a `Data.TaggedError`, and the error flows in the `Effect<A, E>` error channel instead of as an exception.
 
@@ -120,7 +120,7 @@ export class UserService extends Context.Service<
   }
 >()('UserService') {}
 
-const baseUrl = Config.string('API_URL').pipe(
+const baseUrl = Config.String('API_URL').pipe(
   Config.withDefault('https://api.example.com'),
 );
 

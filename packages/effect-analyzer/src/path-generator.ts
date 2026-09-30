@@ -7,22 +7,22 @@
  */
 
 import type {
+  EffectPath,
+  PathCondition,
+  PathStepRef,
+  StaticCauseNode,
+  StaticChannelNode,
+  StaticDecisionNode,
   StaticEffectIR,
   StaticFlowNode,
-  StaticDecisionNode,
-  StaticSwitchNode,
-  StaticTryCatchNode,
-  StaticTerminalNode,
-  StaticCauseNode,
-  StaticMatchNode,
-  StaticTransformNode,
-  StaticChannelNode,
-  StaticSinkNode,
   StaticInterruptionNode,
-  EffectPath,
-  PathStepRef,
-  PathCondition,
-} from './types';
+  StaticMatchNode,
+  StaticSinkNode,
+  StaticSwitchNode,
+  StaticTerminalNode,
+  StaticTransformNode,
+  StaticTryCatchNode
+} from "./types"
 
 // =============================================================================
 // Options
@@ -30,18 +30,18 @@ import type {
 
 export interface PathGeneratorOptions {
   /** Maximum paths to generate (default: 1000) */
-  maxPaths?: number;
+  maxPaths?: number
   /** Whether to include loop iterations as separate paths (default: false) */
-  expandLoops?: boolean;
+  expandLoops?: boolean
   /** Maximum loop iterations to expand if expandLoops is true (default: 3) */
-  maxLoopIterations?: number;
+  maxLoopIterations?: number
 }
 
 const DEFAULT_OPTIONS: Required<PathGeneratorOptions> = {
   maxPaths: 1000,
   expandLoops: false,
-  maxLoopIterations: 3,
-};
+  maxLoopIterations: 3
+}
 
 // =============================================================================
 // Path Generation
@@ -49,9 +49,9 @@ const DEFAULT_OPTIONS: Required<PathGeneratorOptions> = {
 
 export interface PathGenerationResult {
   /** Generated effect paths */
-  paths: EffectPath[];
+  paths: Array<EffectPath>
   /** Whether the maxPaths limit was hit (truncation occurred) */
-  limitHit: boolean;
+  limitHit: boolean
 }
 
 /**
@@ -59,9 +59,9 @@ export interface PathGenerationResult {
  */
 export function generatePaths(
   ir: StaticEffectIR,
-  options: PathGeneratorOptions = {},
-): EffectPath[] {
-  return generatePathsWithMetadata(ir, options).paths;
+  options: PathGeneratorOptions = {}
+): Array<EffectPath> {
+  return generatePathsWithMetadata(ir, options).paths
 }
 
 /**
@@ -69,39 +69,39 @@ export function generatePaths(
  */
 export function generatePathsWithMetadata(
   ir: StaticEffectIR,
-  options: PathGeneratorOptions = {},
+  options: PathGeneratorOptions = {}
 ): PathGenerationResult {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const opts = { ...DEFAULT_OPTIONS, ...options }
 
   const context: PathContext = {
     opts,
     pathCount: 0,
     hasHitLimit: false,
-    controlStack: [],
-  };
+    controlStack: []
+  }
 
   const initialState: PathState = {
     steps: [],
     conditions: [],
     hasLoops: false,
-    hasUnresolvedRefs: false,
-  };
+    hasUnresolvedRefs: false
+  }
 
-  const states = generatePathsForNodes(ir.root.children, initialState, context);
+  const states = generatePathsForNodes(ir.root.children, initialState, context)
 
-  const paths: EffectPath[] = states.map((state, index) => ({
+  const paths: Array<EffectPath> = states.map((state, index) => ({
     id: `path-${index + 1}`,
     description: generatePathDescription(state),
     steps: state.steps,
     conditions: state.conditions,
     hasLoops: state.hasLoops,
-    hasUnresolvedRefs: state.hasUnresolvedRefs,
-  }));
+    hasUnresolvedRefs: state.hasUnresolvedRefs
+  }))
 
   return {
     paths,
-    limitHit: context.hasHitLimit,
-  };
+    limitHit: context.hasHitLimit
+  }
 }
 
 // =============================================================================
@@ -109,24 +109,24 @@ export function generatePathsWithMetadata(
 // =============================================================================
 
 interface ControlTarget {
-  readonly kind: 'loop' | 'switch' | 'block';
-  readonly label?: string;
-  readonly breakContinuationNodeId: string;
-  readonly continueContinuationNodeId?: string; // only for loops
+  readonly kind: "loop" | "switch" | "block"
+  readonly label?: string
+  readonly breakContinuationNodeId: string
+  readonly continueContinuationNodeId?: string // only for loops
 }
 
 interface PathContext {
-  opts: Required<PathGeneratorOptions>;
-  pathCount: number;
-  hasHitLimit: boolean;
-  controlStack: ControlTarget[];
+  opts: Required<PathGeneratorOptions>
+  pathCount: number
+  hasHitLimit: boolean
+  controlStack: Array<ControlTarget>
 }
 
 interface PathState {
-  steps: PathStepRef[];
-  conditions: PathCondition[];
-  hasLoops: boolean;
-  hasUnresolvedRefs: boolean;
+  steps: Array<PathStepRef>
+  conditions: Array<PathCondition>
+  hasLoops: boolean
+  hasUnresolvedRefs: boolean
 }
 
 // =============================================================================
@@ -134,476 +134,470 @@ interface PathState {
 // =============================================================================
 
 function generatePathsForNodes(
-  nodes: readonly StaticFlowNode[],
+  nodes: ReadonlyArray<StaticFlowNode>,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   if (nodes.length === 0) {
-    return [currentState];
+    return [currentState]
   }
 
-  let states: PathState[] = [currentState];
+  let states: Array<PathState> = [currentState]
 
   for (const node of nodes) {
-    const newStates: PathState[] = [];
+    const newStates: Array<PathState> = []
     for (const state of states) {
-      newStates.push(...generatePathsForNode(node, state, context));
+      newStates.push(...generatePathsForNode(node, state, context))
     }
-    states = newStates;
-    if (node.type === 'terminal') {
-      const term = node;
-      if (term.terminalKind === 'return' || term.terminalKind === 'throw') {
-        return states;
+    states = newStates
+    if (node.type === "terminal") {
+      const term = node
+      if (term.terminalKind === "return" || term.terminalKind === "throw") {
+        return states
       }
     }
   }
 
-  return states;
+  return states
 }
 
 function generatePathsForNode(
   node: StaticFlowNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   switch (node.type) {
-    case 'effect':
-      return handleEffectNode(node, currentState);
-    case 'generator':
-      return handleGeneratorNode(node, currentState, context);
-    case 'pipe':
-      return handlePipeNode(node, currentState, context);
-    case 'parallel':
-      return handleParallelNode(node, currentState, context);
-    case 'race':
-      return handleRaceNode(node, currentState, context);
-    case 'error-handler':
-      return handleErrorHandlerNode(node, currentState, context);
-    case 'retry':
-    case 'timeout':
-      return handleSingleChildNode(node, currentState, context);
-    case 'resource':
-      return handleResourceNode(node, currentState, context);
-    case 'conditional':
-      return handleConditionalNode(node, currentState, context);
-    case 'loop':
-      return handleLoopNode(node, currentState, context);
-    case 'layer':
-      return handleLayerNode(node, currentState, context);
-    case 'stream':
-      return handleStreamNode(node, currentState, context);
-    case 'concurrency-primitive':
-    case 'fiber':
-      return handleConcurrencyOrFiberNode(node, currentState, context);
-    case 'decision':
-      return handleDecisionNode(node, currentState, context);
-    case 'switch':
-      return handleSwitchNode(node, currentState, context);
-    case 'try-catch':
-      return handleTryCatchNode(node, currentState, context);
-    case 'terminal':
-      return handleTerminalNode(node, currentState, context);
-    case 'cause':
-      return handleCauseNode(node, currentState, context);
-    case 'exit':
-    case 'schedule':
-      return handleLeafStepNode(node, currentState);
-    case 'match':
-      return handleMatchNode(node, currentState, context);
-    case 'transform':
-      return handleTransformNode(node, currentState, context);
-    case 'channel':
-      return handleChannelNode(node, currentState, context);
-    case 'sink':
-      return handleSinkNode(node, currentState, context);
-    case 'interruption':
-      return handleInterruptionNode(node, currentState, context);
-    case 'opaque':
-      return [currentState]; // treat as no-op, path continues
-    case 'unknown':
-      return [currentState];
+    case "effect":
+      return handleEffectNode(node, currentState)
+    case "generator":
+      return handleGeneratorNode(node, currentState, context)
+    case "pipe":
+      return handlePipeNode(node, currentState, context)
+    case "parallel":
+      return handleParallelNode(node, currentState, context)
+    case "race":
+      return handleRaceNode(node, currentState, context)
+    case "error-handler":
+      return handleErrorHandlerNode(node, currentState, context)
+    case "retry":
+    case "timeout":
+      return handleSingleChildNode(node, currentState, context)
+    case "resource":
+      return handleResourceNode(node, currentState, context)
+    case "conditional":
+      return handleConditionalNode(node, currentState, context)
+    case "loop":
+      return handleLoopNode(node, currentState, context)
+    case "layer":
+      return handleLayerNode(node, currentState, context)
+    case "stream":
+      return handleStreamNode(node, currentState, context)
+    case "concurrency-primitive":
+    case "fiber":
+      return handleConcurrencyOrFiberNode(node, currentState, context)
+    case "decision":
+      return handleDecisionNode(node, currentState, context)
+    case "switch":
+      return handleSwitchNode(node, currentState, context)
+    case "try-catch":
+      return handleTryCatchNode(node, currentState, context)
+    case "terminal":
+      return handleTerminalNode(node, currentState, context)
+    case "cause":
+      return handleCauseNode(node, currentState, context)
+    case "exit":
+    case "schedule":
+      return handleLeafStepNode(node, currentState)
+    case "match":
+      return handleMatchNode(node, currentState, context)
+    case "transform":
+      return handleTransformNode(node, currentState, context)
+    case "channel":
+      return handleChannelNode(node, currentState, context)
+    case "sink":
+      return handleSinkNode(node, currentState, context)
+    case "interruption":
+      return handleInterruptionNode(node, currentState, context)
+    case "opaque":
+      return [currentState] // treat as no-op, path continues
+    case "unknown":
+      return [currentState]
     default:
-      return [currentState];
+      return [currentState]
   }
 }
 
 function handleEffectNode(
-  node: StaticFlowNode & { type: 'effect' },
-  currentState: PathState,
-): PathState[] {
+  node: StaticFlowNode & { type: "effect" },
+  currentState: PathState
+): Array<PathState> {
   const stepRef: PathStepRef = {
     nodeId: node.id,
     name: node.name ?? node.callee,
-    repeated: false,
-  };
+    repeated: false
+  }
   return [
     {
       ...currentState,
-      steps: [...currentState.steps, stepRef],
-    },
-  ];
+      steps: [...currentState.steps, stepRef]
+    }
+  ]
 }
 
 function handleGeneratorNode(
-  node: StaticFlowNode & { type: 'generator' },
+  node: StaticFlowNode & { type: "generator" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  const children = node.yields.map((y) => y.effect);
-  return generatePathsForNodes(children, currentState, context);
+  context: PathContext
+): Array<PathState> {
+  const children = node.yields.map((y) => y.effect)
+  return generatePathsForNodes(children, currentState, context)
 }
 
 function handlePipeNode(
-  node: StaticFlowNode & { type: 'pipe' },
+  node: StaticFlowNode & { type: "pipe" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  const children = [node.initial, ...node.transformations];
-  return generatePathsForNodes(children, currentState, context);
+  context: PathContext
+): Array<PathState> {
+  const children = [node.initial, ...node.transformations]
+  return generatePathsForNodes(children, currentState, context)
 }
 
 function handleParallelNode(
-  node: StaticFlowNode & { type: 'parallel' },
+  node: StaticFlowNode & { type: "parallel" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  let combinedStates: PathState[] = [currentState];
+  context: PathContext
+): Array<PathState> {
+  let combinedStates: Array<PathState> = [currentState]
 
   for (const child of node.children) {
-    const newCombinedStates: PathState[] = [];
+    const newCombinedStates: Array<PathState> = []
     for (const state of combinedStates) {
-      const childStates = generatePathsForNode(child, state, context);
+      const childStates = generatePathsForNode(child, state, context)
       for (const childState of childStates) {
         newCombinedStates.push({
           steps: childState.steps,
           conditions: childState.conditions,
           hasLoops: state.hasLoops || childState.hasLoops,
-          hasUnresolvedRefs:
-            state.hasUnresolvedRefs || childState.hasUnresolvedRefs,
-        });
+          hasUnresolvedRefs: state.hasUnresolvedRefs || childState.hasUnresolvedRefs
+        })
       }
     }
-    combinedStates = newCombinedStates;
+    combinedStates = newCombinedStates
   }
 
-  return combinedStates;
+  return combinedStates
 }
 
 function handleRaceNode(
-  node: StaticFlowNode & { type: 'race' },
+  node: StaticFlowNode & { type: "race" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   if (node.children.length === 0) {
-    return [currentState];
+    return [currentState]
   }
 
-  const atLimit =
-    context.hasHitLimit ||
-    context.pathCount + node.children.length >= context.opts.maxPaths;
+  const atLimit = context.hasHitLimit ||
+    context.pathCount + node.children.length >= context.opts.maxPaths
   if (atLimit) {
-    context.hasHitLimit = true;
-    const first = node.children[0];
+    context.hasHitLimit = true
+    const first = node.children[0]
     if (first) {
-      return generatePathsForNode(first, currentState, context);
+      return generatePathsForNode(first, currentState, context)
     }
-    return [currentState];
+    return [currentState]
   }
 
-  const allStates: PathState[] = [];
-  const maxAllowed = context.opts.maxPaths;
+  const allStates: Array<PathState> = []
+  const maxAllowed = context.opts.maxPaths
 
   for (const child of node.children) {
     if (allStates.length >= maxAllowed) {
-      context.hasHitLimit = true;
-      break;
+      context.hasHitLimit = true
+      break
     }
-    const childStates = generatePathsForNode(child, currentState, context);
-    const roomLeft = maxAllowed - allStates.length;
-    const toAdd = childStates.slice(0, roomLeft);
-    allStates.push(...toAdd);
+    const childStates = generatePathsForNode(child, currentState, context)
+    const roomLeft = maxAllowed - allStates.length
+    const toAdd = childStates.slice(0, roomLeft)
+    allStates.push(...toAdd)
     if (toAdd.length < childStates.length) {
-      context.hasHitLimit = true;
+      context.hasHitLimit = true
     }
   }
 
-  context.pathCount += Math.max(0, allStates.length - 1);
-  return allStates.length > 0 ? allStates : [currentState];
+  context.pathCount += Math.max(0, allStates.length - 1)
+  return allStates.length > 0 ? allStates : [currentState]
 }
 
 function handleErrorHandlerNode(
-  node: StaticFlowNode & { type: 'error-handler' },
+  node: StaticFlowNode & { type: "error-handler" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  const sourceStates = generatePathsForNode(node.source, currentState, context);
+  context: PathContext
+): Array<PathState> {
+  const sourceStates = generatePathsForNode(node.source, currentState, context)
   if (!node.handler) {
-    return sourceStates;
+    return sourceStates
   }
   const handlerStates = generatePathsForNode(
     node.handler,
     currentState,
-    context,
-  );
-  return [...sourceStates, ...handlerStates];
+    context
+  )
+  return [...sourceStates, ...handlerStates]
 }
 
 function handleSingleChildNode(
-  node: StaticFlowNode & { type: 'retry' | 'timeout' },
+  node: StaticFlowNode & { type: "retry" | "timeout" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  return generatePathsForNode(node.source, currentState, context);
+  context: PathContext
+): Array<PathState> {
+  return generatePathsForNode(node.source, currentState, context)
 }
 
 function handleResourceNode(
-  node: StaticFlowNode & { type: 'resource' },
+  node: StaticFlowNode & { type: "resource" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  const resourceNodes: StaticFlowNode[] = [node.acquire, node.release];
+  context: PathContext
+): Array<PathState> {
+  const resourceNodes: Array<StaticFlowNode> = [node.acquire, node.release]
   if (node.use) {
-    resourceNodes.push(node.use);
+    resourceNodes.push(node.use)
   }
-  return generatePathsForNodes(resourceNodes, currentState, context);
+  return generatePathsForNodes(resourceNodes, currentState, context)
 }
 
 function handleConditionalNode(
-  node: StaticFlowNode & { type: 'conditional' },
+  node: StaticFlowNode & { type: "conditional" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   const trueCondition: PathCondition = {
     expression: node.condition,
-    mustBe: node.conditionalType === 'unless' ? false : true,
-    location: node.location,
-  };
+    mustBe: node.conditionalType !== "unless",
+    location: node.location
+  }
 
   const trueState: PathState = {
     ...currentState,
-    conditions: [...currentState.conditions, trueCondition],
-  };
+    conditions: [...currentState.conditions, trueCondition]
+  }
 
-  const trueStates = generatePathsForNode(node.onTrue, trueState, context);
+  const trueStates = generatePathsForNode(node.onTrue, trueState, context)
 
   const falseCondition: PathCondition = {
     expression: node.condition,
-    mustBe: node.conditionalType === 'unless' ? true : false,
-    location: node.location,
-  };
+    mustBe: node.conditionalType === "unless",
+    location: node.location
+  }
 
   const falseState: PathState = {
     ...currentState,
-    conditions: [...currentState.conditions, falseCondition],
-  };
-
-  if (node.onFalse) {
-    const falseStates = generatePathsForNode(node.onFalse, falseState, context);
-    return [...trueStates, ...falseStates];
+    conditions: [...currentState.conditions, falseCondition]
   }
 
-  return [...trueStates, falseState];
+  if (node.onFalse) {
+    const falseStates = generatePathsForNode(node.onFalse, falseState, context)
+    return [...trueStates, ...falseStates]
+  }
+
+  return [...trueStates, falseState]
 }
 
 function handleLoopNode(
-  node: StaticFlowNode & { type: 'loop' },
+  node: StaticFlowNode & { type: "loop" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  const bodyStates = generatePathsForNode(node.body, currentState, context);
+  context: PathContext
+): Array<PathState> {
+  const bodyStates = generatePathsForNode(node.body, currentState, context)
   return bodyStates.map((state) => ({
     ...state,
-    steps: state.steps.map((step, idx) =>
-      idx >= currentState.steps.length ? { ...step, repeated: true } : step,
-    ),
-    hasLoops: true,
-  }));
+    steps: state.steps.map((step, idx) => idx >= currentState.steps.length ? { ...step, repeated: true } : step),
+    hasLoops: true
+  }))
 }
 
 function handleLayerNode(
-  node: StaticFlowNode & { type: 'layer' },
+  node: StaticFlowNode & { type: "layer" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  return generatePathsForNodes(node.operations, currentState, context);
+  context: PathContext
+): Array<PathState> {
+  return generatePathsForNodes(node.operations, currentState, context)
 }
 
 function handleStreamNode(
-  node: StaticFlowNode & { type: 'stream' },
+  node: StaticFlowNode & { type: "stream" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   const stepRef: PathStepRef = {
     nodeId: node.id,
-    name: node.pipeline.length > 0 ? `Stream.${node.pipeline.map((p) => p.operation).join(' → ')}` : 'Stream',
-    repeated: false,
-  };
+    name: node.pipeline.length > 0 ? `Stream.${node.pipeline.map((p) => p.operation).join(" → ")}` : "Stream",
+    repeated: false
+  }
   const stateWithStep = {
     ...currentState,
-    steps: [...currentState.steps, stepRef],
-  };
-  return generatePathsForNode(node.source, stateWithStep, context);
+    steps: [...currentState.steps, stepRef]
+  }
+  return generatePathsForNode(node.source, stateWithStep, context)
 }
 
 function handleConcurrencyOrFiberNode(
-  node: StaticFlowNode & { type: 'concurrency-primitive' | 'fiber' },
+  node: StaticFlowNode & { type: "concurrency-primitive" | "fiber" },
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   const stepRef: PathStepRef = {
     nodeId: node.id,
-    name:
-      node.type === 'concurrency-primitive'
-        ? `${node.primitive}.${node.operation}`
-        : node.operation,
-    repeated: false,
-  };
+    name: node.type === "concurrency-primitive"
+      ? `${node.primitive}.${node.operation}`
+      : node.operation,
+    repeated: false
+  }
   const stateWithStep = {
     ...currentState,
-    steps: [...currentState.steps, stepRef],
-  };
-  const child =
-    node.type === 'concurrency-primitive' ? node.source : node.fiberSource;
-  if (child) {
-    return generatePathsForNode(child, stateWithStep, context);
+    steps: [...currentState.steps, stepRef]
   }
-  return [stateWithStep];
+  const child = node.type === "concurrency-primitive" ? node.source : node.fiberSource
+  if (child) {
+    return generatePathsForNode(child, stateWithStep, context)
+  }
+  return [stateWithStep]
 }
 
 function handleDecisionNode(
   node: StaticDecisionNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   const trueCondition: PathCondition = {
     expression: node.condition,
     mustBe: true,
-    location: node.location,
-  };
+    location: node.location
+  }
   const trueState: PathState = {
     ...currentState,
-    conditions: [...currentState.conditions, trueCondition],
-  };
-  const trueStates = generatePathsForNodes(node.onTrue, trueState, context);
+    conditions: [...currentState.conditions, trueCondition]
+  }
+  const trueStates = generatePathsForNodes(node.onTrue, trueState, context)
 
   if (node.onFalse && node.onFalse.length > 0) {
     const falseCondition: PathCondition = {
       expression: node.condition,
       mustBe: false,
-      location: node.location,
-    };
+      location: node.location
+    }
     const falseState: PathState = {
       ...currentState,
-      conditions: [...currentState.conditions, falseCondition],
-    };
-    const falseStates = generatePathsForNodes(node.onFalse, falseState, context);
-    return [...trueStates, ...falseStates];
+      conditions: [...currentState.conditions, falseCondition]
+    }
+    const falseStates = generatePathsForNodes(node.onFalse, falseState, context)
+    return [...trueStates, ...falseStates]
   }
 
   const falseCondition: PathCondition = {
     expression: node.condition,
     mustBe: false,
-    location: node.location,
-  };
+    location: node.location
+  }
   const falseState: PathState = {
     ...currentState,
-    conditions: [...currentState.conditions, falseCondition],
-  };
-  return [...trueStates, falseState];
+    conditions: [...currentState.conditions, falseCondition]
+  }
+  return [...trueStates, falseState]
 }
 
 function handleSwitchNode(
   node: StaticSwitchNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  const allStates: PathState[] = [];
+  context: PathContext
+): Array<PathState> {
+  const allStates: Array<PathState> = []
 
   for (const caseItem of node.cases) {
-    const caseLabel = caseItem.labels.join(' / ');
+    const caseLabel = caseItem.labels.join(" / ")
     const caseCondition: PathCondition = {
       expression: `${node.expression} === ${caseLabel}`,
       mustBe: true,
-      location: node.location,
-    };
+      location: node.location
+    }
     const caseState: PathState = {
       ...currentState,
-      conditions: [...currentState.conditions, caseCondition],
-    };
-    const caseStates = generatePathsForNodes(caseItem.body, caseState, context);
-    allStates.push(...caseStates);
+      conditions: [...currentState.conditions, caseCondition]
+    }
+    const caseStates = generatePathsForNodes(caseItem.body, caseState, context)
+    allStates.push(...caseStates)
   }
 
-  return allStates.length > 0 ? allStates : [currentState];
+  return allStates.length > 0 ? allStates : [currentState]
 }
 
 function handleTryCatchNode(
   node: StaticTryCatchNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   // Try path (success)
-  const tryStates = generatePathsForNodes(node.tryBody, currentState, context);
+  const tryStates = generatePathsForNodes(node.tryBody, currentState, context)
 
   // Catch path
-  const catchStates: PathState[] = [];
+  const catchStates: Array<PathState> = []
   if (node.catchBody && node.catchBody.length > 0) {
     const catchCondition: PathCondition = {
-      expression: 'throws',
+      expression: "throws",
       mustBe: true,
-      location: node.location,
-    };
+      location: node.location
+    }
     const catchState: PathState = {
       ...currentState,
-      conditions: [...currentState.conditions, catchCondition],
-    };
-    catchStates.push(...generatePathsForNodes(node.catchBody, catchState, context));
+      conditions: [...currentState.conditions, catchCondition]
+    }
+    catchStates.push(...generatePathsForNodes(node.catchBody, catchState, context))
   }
 
-  const combined = [...tryStates, ...catchStates];
+  const combined = [...tryStates, ...catchStates]
 
   // Finally path: if present, append to all paths
   if (node.finallyBody && node.finallyBody.length > 0) {
-    const finalStates: PathState[] = [];
+    const finalStates: Array<PathState> = []
     for (const state of combined) {
-      finalStates.push(...generatePathsForNodes(node.finallyBody, state, context));
+      finalStates.push(...generatePathsForNodes(node.finallyBody, state, context))
     }
-    return finalStates;
+    return finalStates
   }
 
-  return combined;
+  return combined
 }
 
 function handleTerminalNode(
   node: StaticTerminalNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   // If the terminal has value nodes (e.g., return yield* effect), process them first
-  let state = currentState;
+  let state = currentState
   if (node.value && node.value.length > 0) {
-    const valueStates = generatePathsForNodes(node.value, currentState, context);
+    const valueStates = generatePathsForNodes(node.value, currentState, context)
     // Take the first resulting state (value expressions produce sequential steps)
-    state = valueStates[0] ?? currentState;
+    state = valueStates[0] ?? currentState
   }
 
   switch (node.terminalKind) {
-    case 'return':
-    case 'throw':
+    case "return":
+    case "throw":
       // Path terminates — add a step marking the termination
       return [{
         ...state,
         steps: [...state.steps, {
           nodeId: node.id,
           name: node.terminalKind,
-          repeated: false,
-        }],
-      }];
+          repeated: false
+        }]
+      }]
 
-    case 'break':
-    case 'continue':
+    case "break":
+    case "continue":
       // These are structurally captured — just continue the path
-      return [state];
+      return [state]
   }
 }
 
@@ -613,144 +607,145 @@ function handleTerminalNode(
 
 function handleLeafStepNode(
   node: StaticFlowNode,
-  currentState: PathState,
-): PathState[] {
+  currentState: PathState
+): Array<PathState> {
   const stepRef: PathStepRef = {
     nodeId: node.id,
     name: node.name ?? node.type,
-    repeated: false,
-  };
+    repeated: false
+  }
   return [{
     ...currentState,
-    steps: [...currentState.steps, stepRef],
-  }];
+    steps: [...currentState.steps, stepRef]
+  }]
 }
 
 function handleCauseNode(
   node: StaticCauseNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   const stepRef: PathStepRef = {
     nodeId: node.id,
     name: node.name ?? `Cause.${node.causeOp}`,
-    repeated: false,
-  };
+    repeated: false
+  }
   const stateWithStep: PathState = {
     ...currentState,
-    steps: [...currentState.steps, stepRef],
-  };
+    steps: [...currentState.steps, stepRef]
+  }
 
   if (node.children && node.children.length > 0) {
-    return generatePathsForNodes([...node.children], stateWithStep, context);
+    return generatePathsForNodes([...node.children], stateWithStep, context)
   }
-  return [stateWithStep];
+  return [stateWithStep]
 }
 
 function handleMatchNode(
   node: StaticMatchNode,
   currentState: PathState,
-  _context: PathContext,
-): PathState[] {
+  _context: PathContext
+): Array<PathState> {
   const stepRef: PathStepRef = {
     nodeId: node.id,
     name: node.name ?? `Match.${node.matchOp}`,
-    repeated: false,
-  };
+    repeated: false
+  }
   return [{
     ...currentState,
-    steps: [...currentState.steps, stepRef],
-  }];
+    steps: [...currentState.steps, stepRef]
+  }]
 }
 
 function handleTransformNode(
   node: StaticTransformNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  let state = currentState;
+  context: PathContext
+): Array<PathState> {
+  let state = currentState
   if (node.source) {
-    const sourceStates = generatePathsForNode(node.source, currentState, context);
-    state = sourceStates[0] ?? currentState;
+    const sourceStates = generatePathsForNode(node.source, currentState, context)
+    state = sourceStates[0] ?? currentState
   }
   const stepRef: PathStepRef = {
     nodeId: node.id,
     name: node.name ?? node.transformType,
-    repeated: false,
-  };
+    repeated: false
+  }
   return [{
     ...state,
-    steps: [...state.steps, stepRef],
-  }];
+    steps: [...state.steps, stepRef]
+  }]
 }
 
 function handleChannelNode(
   node: StaticChannelNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  let state = currentState;
+  context: PathContext
+): Array<PathState> {
+  let state = currentState
   if (node.source) {
-    const sourceStates = generatePathsForNode(node.source, currentState, context);
-    state = sourceStates[0] ?? currentState;
+    const sourceStates = generatePathsForNode(node.source, currentState, context)
+    state = sourceStates[0] ?? currentState
   }
   const stepRef: PathStepRef = {
     nodeId: node.id,
-    name: node.name ?? `Channel${node.pipeline.length > 0 ? `.${node.pipeline.map(p => p.operation).join('.')}` : ''}`,
-    repeated: false,
-  };
+    name: node.name ??
+      `Channel${node.pipeline.length > 0 ? `.${node.pipeline.map((p) => p.operation).join(".")}` : ""}`,
+    repeated: false
+  }
   return [{
     ...state,
-    steps: [...state.steps, stepRef],
-  }];
+    steps: [...state.steps, stepRef]
+  }]
 }
 
 function handleSinkNode(
   node: StaticSinkNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
-  let state = currentState;
+  context: PathContext
+): Array<PathState> {
+  let state = currentState
   if (node.source) {
-    const sourceStates = generatePathsForNode(node.source, currentState, context);
-    state = sourceStates[0] ?? currentState;
+    const sourceStates = generatePathsForNode(node.source, currentState, context)
+    state = sourceStates[0] ?? currentState
   }
   const stepRef: PathStepRef = {
     nodeId: node.id,
-    name: node.name ?? `Sink${node.pipeline.length > 0 ? `.${node.pipeline.map(p => p.operation).join('.')}` : ''}`,
-    repeated: false,
-  };
+    name: node.name ?? `Sink${node.pipeline.length > 0 ? `.${node.pipeline.map((p) => p.operation).join(".")}` : ""}`,
+    repeated: false
+  }
   return [{
     ...state,
-    steps: [...state.steps, stepRef],
-  }];
+    steps: [...state.steps, stepRef]
+  }]
 }
 
 function handleInterruptionNode(
   node: StaticInterruptionNode,
   currentState: PathState,
-  context: PathContext,
-): PathState[] {
+  context: PathContext
+): Array<PathState> {
   const stepRef: PathStepRef = {
     nodeId: node.id,
     name: node.name ?? node.interruptionType,
-    repeated: false,
-  };
+    repeated: false
+  }
   const stateWithStep: PathState = {
     ...currentState,
-    steps: [...currentState.steps, stepRef],
-  };
+    steps: [...currentState.steps, stepRef]
+  }
 
   if (node.source) {
-    const sourceStates = generatePathsForNode(node.source, stateWithStep, context);
+    const sourceStates = generatePathsForNode(node.source, stateWithStep, context)
     if (node.handler) {
       // Fork: source path + handler path (on interrupt)
-      const handlerStates = generatePathsForNode(node.handler, stateWithStep, context);
-      return [...sourceStates, ...handlerStates];
+      const handlerStates = generatePathsForNode(node.handler, stateWithStep, context)
+      return [...sourceStates, ...handlerStates]
     }
-    return sourceStates;
+    return sourceStates
   }
-  return [stateWithStep];
+  return [stateWithStep]
 }
 
 // =============================================================================
@@ -758,39 +753,38 @@ function handleInterruptionNode(
 // =============================================================================
 
 function generatePathDescription(state: PathState): string {
-  const parts: string[] = [];
+  const parts: Array<string> = []
 
   if (state.conditions.length > 0) {
     const conditionParts = state.conditions.map((c) => {
-      const verb = c.mustBe ? 'is true' : 'is false';
-      const expr =
-        c.expression.length > 30
-          ? c.expression.slice(0, 30) + '...'
-          : c.expression;
-      return `${expr} ${verb}`;
-    });
-    parts.push(`When ${conditionParts.join(' AND ')}`);
+      const verb = c.mustBe ? "is true" : "is false"
+      const expr = c.expression.length > 30
+        ? c.expression.slice(0, 30) + "..."
+        : c.expression
+      return `${expr} ${verb}`
+    })
+    parts.push(`When ${conditionParts.join(" AND ")}`)
   }
 
   const stepNames = state.steps
     .map((s) => {
-      const name = s.name ?? s.nodeId;
-      return s.repeated ? `${name} (repeated)` : name;
+      const name = s.name ?? s.nodeId
+      return s.repeated ? `${name} (repeated)` : name
     })
-    .join(' → ');
+    .join(" → ")
 
   if (stepNames) {
-    parts.push(`Steps: ${stepNames}`);
+    parts.push(`Steps: ${stepNames}`)
   }
 
   if (state.hasLoops) {
-    parts.push('[contains loops]');
+    parts.push("[contains loops]")
   }
   if (state.hasUnresolvedRefs) {
-    parts.push('[has unresolved refs]');
+    parts.push("[has unresolved refs]")
   }
 
-  return parts.join('. ') || 'Empty path';
+  return parts.join(". ") || "Empty path"
 }
 
 // =============================================================================
@@ -798,23 +792,23 @@ function generatePathDescription(state: PathState): string {
 // =============================================================================
 
 export interface PathStatistics {
-  totalPaths: number;
-  pathLimitHit: boolean;
-  pathsWithLoops: number;
-  pathsWithUnresolvedRefs: number;
-  uniqueConditions: string[];
-  maxPathLength: number;
-  minPathLength: number;
-  avgPathLength: number;
+  totalPaths: number
+  pathLimitHit: boolean
+  pathsWithLoops: number
+  pathsWithUnresolvedRefs: number
+  uniqueConditions: Array<string>
+  maxPathLength: number
+  minPathLength: number
+  avgPathLength: number
 }
 
 export interface PathStatisticsOptions {
-  limitHit?: boolean;
+  limitHit?: boolean
 }
 
 export function calculatePathStatistics(
-  paths: EffectPath[],
-  options?: PathStatisticsOptions,
+  paths: Array<EffectPath>,
+  options?: PathStatisticsOptions
 ): PathStatistics {
   if (paths.length === 0) {
     return {
@@ -825,26 +819,26 @@ export function calculatePathStatistics(
       uniqueConditions: [],
       maxPathLength: 0,
       minPathLength: 0,
-      avgPathLength: 0,
-    };
+      avgPathLength: 0
+    }
   }
 
-  const conditions = new Set<string>();
-  let pathsWithLoops = 0;
-  let pathsWithUnresolvedRefs = 0;
-  let totalLength = 0;
-  let maxLength = 0;
-  let minLength = Infinity;
+  const conditions = new Set<string>()
+  let pathsWithLoops = 0
+  let pathsWithUnresolvedRefs = 0
+  let totalLength = 0
+  let maxLength = 0
+  let minLength = Infinity
 
   for (const path of paths) {
-    if (path.hasLoops) pathsWithLoops++;
-    if (path.hasUnresolvedRefs) pathsWithUnresolvedRefs++;
-    const length = path.steps.length;
-    totalLength += length;
-    maxLength = Math.max(maxLength, length);
-    minLength = Math.min(minLength, length);
+    if (path.hasLoops) pathsWithLoops++
+    if (path.hasUnresolvedRefs) pathsWithUnresolvedRefs++
+    const length = path.steps.length
+    totalLength += length
+    maxLength = Math.max(maxLength, length)
+    minLength = Math.min(minLength, length)
     for (const c of path.conditions) {
-      conditions.add(c.expression);
+      conditions.add(c.expression)
     }
   }
 
@@ -856,8 +850,8 @@ export function calculatePathStatistics(
     uniqueConditions: Array.from(conditions),
     maxPathLength: maxLength,
     minPathLength: minLength === Infinity ? 0 : minLength,
-    avgPathLength: totalLength / paths.length,
-  };
+    avgPathLength: totalLength / paths.length
+  }
 }
 
 // =============================================================================
@@ -865,46 +859,47 @@ export function calculatePathStatistics(
 // =============================================================================
 
 export function filterPaths(
-  paths: EffectPath[],
+  paths: Array<EffectPath>,
   filter: {
-    mustIncludeStep?: string;
-    mustExcludeStep?: string;
-    conditionTrue?: string;
-    conditionFalse?: string;
-    noLoops?: boolean;
-    maxLength?: number;
-  },
-): EffectPath[] {
+    mustIncludeStep?: string
+    mustExcludeStep?: string
+    conditionTrue?: string
+    conditionFalse?: string
+    noLoops?: boolean
+    maxLength?: number
+  }
+): Array<EffectPath> {
   return paths.filter((path) => {
     if (filter.mustIncludeStep) {
       const has = path.steps.some(
-        (s) => s.name === filter.mustIncludeStep || s.nodeId === filter.mustIncludeStep,
-      );
-      if (!has) return false;
+        (s) => s.name === filter.mustIncludeStep || s.nodeId === filter.mustIncludeStep
+      )
+      if (!has) return false
     }
     if (filter.mustExcludeStep) {
       const has = path.steps.some(
         (s) =>
           s.name === filter.mustExcludeStep ||
-          s.nodeId === filter.mustExcludeStep,
-      );
-      if (has) return false;
+          s.nodeId === filter.mustExcludeStep
+      )
+      if (has) return false
     }
     if (filter.conditionTrue) {
       const has = path.conditions.some(
-        (c) => c.expression === filter.conditionTrue && c.mustBe,
-      );
-      if (!has) return false;
+        (c) => c.expression === filter.conditionTrue && c.mustBe
+      )
+      if (!has) return false
     }
     if (filter.conditionFalse) {
       const has = path.conditions.some(
-        (c) => c.expression === filter.conditionFalse && !c.mustBe,
-      );
-      if (!has) return false;
+        (c) => c.expression === filter.conditionFalse && !c.mustBe
+      )
+      if (!has) return false
     }
-    if (filter.noLoops && path.hasLoops) return false;
-    if (filter.maxLength !== undefined && path.steps.length > filter.maxLength)
-      return false;
-    return true;
-  });
+    if (filter.noLoops && path.hasLoops) return false
+    if (filter.maxLength !== undefined && path.steps.length > filter.maxLength) {
+      return false
+    }
+    return true
+  })
 }

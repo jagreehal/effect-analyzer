@@ -1,32 +1,32 @@
-import { describe, it, expect } from 'vitest';
-import { diffPrograms } from './diff-engine';
-import { renderDiffMarkdown } from './render-markdown';
-import { renderDiffJSON } from './render-json';
-import type { StaticEffectIR } from '../types';
+import { describe, expect, it } from "vitest"
+import type { StaticEffectIR } from "../types"
+import { diffPrograms } from "./diff-engine"
+import { renderDiffJSON } from "./render-json"
+import { renderDiffMarkdown } from "./render-markdown"
 
 function makeIR(
   programName: string,
-  nodes: { id: string; callee: string; displayName?: string }[],
+  nodes: Array<{ id: string; callee: string; displayName?: string }>
 ): StaticEffectIR {
   return {
     root: {
-      id: 'prog-1',
-      type: 'program',
+      id: "prog-1",
+      type: "program",
       programName,
-      source: 'generator',
+      source: "generator",
       children: nodes.map((n) => ({
         id: n.id,
-        type: 'effect' as const,
+        type: "effect" as const,
         callee: n.callee,
         name: n.callee,
-        displayName: n.displayName,
+        displayName: n.displayName
       })),
       dependencies: [],
-      errorTypes: [],
+      errorTypes: []
     },
     metadata: {
       analyzedAt: Date.now(),
-      filePath: 'test.ts',
+      filePath: "test.ts",
       warnings: [],
       stats: {
         totalEffects: 0,
@@ -45,94 +45,94 @@ function makeIR(
         switchCount: 0,
         tryCatchCount: 0,
         terminalCount: 0,
-        opaqueCount: 0,
-      },
+        opaqueCount: 0
+      }
     },
-    references: new Map(),
-  };
+    references: new Map()
+  }
 }
 
-describe('diffPrograms', () => {
-  it('detects identical programs as all unchanged', () => {
-    const ir = makeIR('testProg', [
-      { id: 's1', callee: 'Effect.succeed' },
-      { id: 's2', callee: 'Effect.fail' },
-    ]);
-    const diff = diffPrograms(ir, ir);
+describe("diffPrograms", () => {
+  it("detects identical programs as all unchanged", () => {
+    const ir = makeIR("testProg", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "Effect.fail" }
+    ])
+    const diff = diffPrograms(ir, ir)
 
-    expect(diff.summary.stepsUnchanged).toBe(2);
-    expect(diff.summary.stepsAdded).toBe(0);
-    expect(diff.summary.stepsRemoved).toBe(0);
-    expect(diff.steps.every((s) => s.kind === 'unchanged')).toBe(true);
-  });
+    expect(diff.summary.stepsUnchanged).toBe(2)
+    expect(diff.summary.stepsAdded).toBe(0)
+    expect(diff.summary.stepsRemoved).toBe(0)
+    expect(diff.steps.every((s) => s.kind === "unchanged")).toBe(true)
+  })
 
-  it('detects added steps', () => {
-    const before = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const after = makeIR('prog', [
-      { id: 's1', callee: 'Effect.succeed' },
-      { id: 's2', callee: 'Effect.fail' },
-    ]);
-    const diff = diffPrograms(before, after);
+  it("detects added steps", () => {
+    const before = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const after = makeIR("prog", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "Effect.fail" }
+    ])
+    const diff = diffPrograms(before, after)
 
-    expect(diff.summary.stepsAdded).toBe(1);
-    expect(diff.summary.stepsUnchanged).toBe(1);
-    expect(diff.steps.find((s) => s.kind === 'added')?.stepId).toBe('s2');
-  });
+    expect(diff.summary.stepsAdded).toBe(1)
+    expect(diff.summary.stepsUnchanged).toBe(1)
+    expect(diff.steps.find((s) => s.kind === "added")?.stepId).toBe("s2")
+  })
 
-  it('detects removed steps', () => {
-    const before = makeIR('prog', [
-      { id: 's1', callee: 'Effect.succeed' },
-      { id: 's2', callee: 'Effect.fail' },
-    ]);
-    const after = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const diff = diffPrograms(before, after);
+  it("detects removed steps", () => {
+    const before = makeIR("prog", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "Effect.fail" }
+    ])
+    const after = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const diff = diffPrograms(before, after)
 
-    expect(diff.summary.stepsRemoved).toBe(1);
-    expect(diff.steps.find((s) => s.kind === 'removed')?.stepId).toBe('s2');
-  });
+    expect(diff.summary.stepsRemoved).toBe(1)
+    expect(diff.steps.find((s) => s.kind === "removed")?.stepId).toBe("s2")
+  })
 
-  it('detects removed steps as regressions in regression mode', () => {
-    const before = makeIR('prog', [
-      { id: 's1', callee: 'Effect.succeed' },
-      { id: 's2', callee: 'Effect.fail' },
-    ]);
-    const after = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const diff = diffPrograms(before, after, { regressionMode: true });
+  it("detects removed steps as regressions in regression mode", () => {
+    const before = makeIR("prog", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "Effect.fail" }
+    ])
+    const after = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const diff = diffPrograms(before, after, { regressionMode: true })
 
-    expect(diff.summary.hasRegressions).toBe(true);
-  });
+    expect(diff.summary.hasRegressions).toBe(true)
+  })
 
-  it('treats same callee with different id as unchanged (content-based matching)', () => {
-    const before = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const after = makeIR('prog', [{ id: 's1-new', callee: 'Effect.succeed' }]);
-    const diff = diffPrograms(before, after);
+  it("treats same callee with different id as unchanged (content-based matching)", () => {
+    const before = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const after = makeIR("prog", [{ id: "s1-new", callee: "Effect.succeed" }])
+    const diff = diffPrograms(before, after)
 
     // With content-based fingerprints, same callee = same content = unchanged
-    expect(diff.summary.stepsUnchanged).toBe(1);
-    expect(diff.summary.stepsRenamed).toBe(0);
-  });
+    expect(diff.summary.stepsUnchanged).toBe(1)
+    expect(diff.summary.stepsRenamed).toBe(0)
+  })
 
-  it('detects moved steps (same id, different container)', () => {
+  it("detects moved steps (same id, different container)", () => {
     // Before: effect inside root
     const before: StaticEffectIR = {
       root: {
-        id: 'prog-1',
-        type: 'program',
-        programName: 'prog',
-        source: 'generator',
+        id: "prog-1",
+        type: "program",
+        programName: "prog",
+        source: "generator",
         children: [
           {
-            id: 's1',
-            type: 'effect',
-            callee: 'Effect.succeed',
-          },
+            id: "s1",
+            type: "effect",
+            callee: "Effect.succeed"
+          }
         ],
         dependencies: [],
-        errorTypes: [],
+        errorTypes: []
       },
       metadata: {
         analyzedAt: Date.now(),
-        filePath: 'test.ts',
+        filePath: "test.ts",
         warnings: [],
         stats: {
           totalEffects: 0,
@@ -151,40 +151,40 @@ describe('diffPrograms', () => {
           switchCount: 0,
           tryCatchCount: 0,
           terminalCount: 0,
-          opaqueCount: 0,
-        },
+          opaqueCount: 0
+        }
       },
-      references: new Map(),
-    };
+      references: new Map()
+    }
 
     // After: same effect inside a parallel block
     const after: StaticEffectIR = {
       root: {
-        id: 'prog-1',
-        type: 'program',
-        programName: 'prog',
-        source: 'generator',
+        id: "prog-1",
+        type: "program",
+        programName: "prog",
+        source: "generator",
         children: [
           {
-            id: 'p1',
-            type: 'parallel',
-            callee: 'Effect.all',
-            mode: 'parallel',
+            id: "p1",
+            type: "parallel",
+            callee: "Effect.all",
+            mode: "parallel",
             children: [
               {
-                id: 's1',
-                type: 'effect',
-                callee: 'Effect.succeed',
-              },
-            ],
-          },
+                id: "s1",
+                type: "effect",
+                callee: "Effect.succeed"
+              }
+            ]
+          }
         ],
         dependencies: [],
-        errorTypes: [],
+        errorTypes: []
       },
       metadata: {
         analyzedAt: Date.now(),
-        filePath: 'test.ts',
+        filePath: "test.ts",
         warnings: [],
         stats: {
           totalEffects: 0,
@@ -203,52 +203,52 @@ describe('diffPrograms', () => {
           switchCount: 0,
           tryCatchCount: 0,
           terminalCount: 0,
-          opaqueCount: 0,
-        },
+          opaqueCount: 0
+        }
       },
-      references: new Map(),
-    };
+      references: new Map()
+    }
 
-    const diff = diffPrograms(before, after);
-    expect(diff.summary.stepsMoved).toBe(1);
-    const moved = diff.steps.find((s) => s.kind === 'moved');
-    expect(moved?.containerBefore).toBe('root');
-    expect(moved?.containerAfter).toBe('parallel');
-  });
+    const diff = diffPrograms(before, after)
+    expect(diff.summary.stepsMoved).toBe(1)
+    const moved = diff.steps.find((s) => s.kind === "moved")
+    expect(moved?.containerBefore).toBe("root")
+    expect(moved?.containerAfter).toBe("parallel")
+  })
 
-  it('does not misclassify duplicate callees across containers as moved when one is removed', () => {
+  it("does not misclassify duplicate callees across containers as moved when one is removed", () => {
     const before: StaticEffectIR = {
       root: {
-        id: 'prog-1',
-        type: 'program',
-        programName: 'prog',
-        source: 'generator',
+        id: "prog-1",
+        type: "program",
+        programName: "prog",
+        source: "generator",
         children: [
           {
-            id: 'root-step',
-            type: 'effect',
-            callee: 'Effect.succeed',
+            id: "root-step",
+            type: "effect",
+            callee: "Effect.succeed"
           },
           {
-            id: 'parallel-1',
-            type: 'parallel',
-            callee: 'Effect.all',
-            mode: 'parallel',
+            id: "parallel-1",
+            type: "parallel",
+            callee: "Effect.all",
+            mode: "parallel",
             children: [
               {
-                id: 'parallel-step',
-                type: 'effect',
-                callee: 'Effect.succeed',
-              },
-            ],
-          },
+                id: "parallel-step",
+                type: "effect",
+                callee: "Effect.succeed"
+              }
+            ]
+          }
         ],
         dependencies: [],
-        errorTypes: [],
+        errorTypes: []
       },
       metadata: {
         analyzedAt: Date.now(),
-        filePath: 'test.ts',
+        filePath: "test.ts",
         warnings: [],
         stats: {
           totalEffects: 0,
@@ -267,39 +267,39 @@ describe('diffPrograms', () => {
           switchCount: 0,
           tryCatchCount: 0,
           terminalCount: 0,
-          opaqueCount: 0,
-        },
+          opaqueCount: 0
+        }
       },
-      references: new Map(),
-    };
+      references: new Map()
+    }
 
     const after: StaticEffectIR = {
       root: {
-        id: 'prog-1',
-        type: 'program',
-        programName: 'prog',
-        source: 'generator',
+        id: "prog-1",
+        type: "program",
+        programName: "prog",
+        source: "generator",
         children: [
           {
-            id: 'parallel-1',
-            type: 'parallel',
-            callee: 'Effect.all',
-            mode: 'parallel',
+            id: "parallel-1",
+            type: "parallel",
+            callee: "Effect.all",
+            mode: "parallel",
             children: [
               {
-                id: 'parallel-step-new',
-                type: 'effect',
-                callee: 'Effect.succeed',
-              },
-            ],
-          },
+                id: "parallel-step-new",
+                type: "effect",
+                callee: "Effect.succeed"
+              }
+            ]
+          }
         ],
         dependencies: [],
-        errorTypes: [],
+        errorTypes: []
       },
       metadata: {
         analyzedAt: Date.now(),
-        filePath: 'test.ts',
+        filePath: "test.ts",
         warnings: [],
         stats: {
           totalEffects: 0,
@@ -318,51 +318,51 @@ describe('diffPrograms', () => {
           switchCount: 0,
           tryCatchCount: 0,
           terminalCount: 0,
-          opaqueCount: 0,
-        },
+          opaqueCount: 0
+        }
       },
-      references: new Map(),
-    };
+      references: new Map()
+    }
 
-    const diff = diffPrograms(before, after);
+    const diff = diffPrograms(before, after)
 
-    expect(diff.summary.stepsMoved).toBe(0);
-    expect(diff.summary.stepsRemoved).toBe(1);
-    expect(diff.summary.stepsUnchanged).toBe(1);
-    expect(diff.steps.some((s) => s.kind === 'moved')).toBe(false);
+    expect(diff.summary.stepsMoved).toBe(0)
+    expect(diff.summary.stepsRemoved).toBe(1)
+    expect(diff.summary.stepsUnchanged).toBe(1)
+    expect(diff.steps.some((s) => s.kind === "moved")).toBe(false)
     expect(
-      diff.steps.some((s) => s.kind === 'removed' && s.stepId === 'root-step'),
-    ).toBe(true);
-  });
+      diff.steps.some((s) => s.kind === "removed" && s.stepId === "root-step")
+    ).toBe(true)
+  })
 
-  it('detects structural changes (parallel block added)', () => {
-    const before = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
+  it("detects structural changes (parallel block added)", () => {
+    const before = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
     const after: StaticEffectIR = {
       root: {
-        id: 'prog-1',
-        type: 'program',
-        programName: 'prog',
-        source: 'generator',
+        id: "prog-1",
+        type: "program",
+        programName: "prog",
+        source: "generator",
         children: [
           {
-            id: 's1',
-            type: 'effect',
-            callee: 'Effect.succeed',
+            id: "s1",
+            type: "effect",
+            callee: "Effect.succeed"
           },
           {
-            id: 'p1',
-            type: 'parallel',
-            callee: 'Effect.all',
-            mode: 'parallel',
-            children: [],
-          },
+            id: "p1",
+            type: "parallel",
+            callee: "Effect.all",
+            mode: "parallel",
+            children: []
+          }
         ],
         dependencies: [],
-        errorTypes: [],
+        errorTypes: []
       },
       metadata: {
         analyzedAt: Date.now(),
-        filePath: 'test.ts',
+        filePath: "test.ts",
         warnings: [],
         stats: {
           totalEffects: 0,
@@ -381,57 +381,57 @@ describe('diffPrograms', () => {
           switchCount: 0,
           tryCatchCount: 0,
           terminalCount: 0,
-          opaqueCount: 0,
-        },
+          opaqueCount: 0
+        }
       },
-      references: new Map(),
-    };
+      references: new Map()
+    }
 
-    const diff = diffPrograms(before, after);
-    expect(diff.summary.structuralChanges).toBeGreaterThan(0);
-    expect(diff.structuralChanges.some((sc) => sc.nodeType === 'parallel' && sc.kind === 'added')).toBe(true);
-  });
+    const diff = diffPrograms(before, after)
+    expect(diff.summary.structuralChanges).toBeGreaterThan(0)
+    expect(diff.structuralChanges.some((sc) => sc.nodeType === "parallel" && sc.kind === "added")).toBe(true)
+  })
 
-  it('renders markdown with expected sections', () => {
-    const before = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const after = makeIR('prog', [
-      { id: 's1', callee: 'Effect.succeed' },
-      { id: 's2', callee: 'Effect.fail' },
-    ]);
-    const diff = diffPrograms(before, after);
-    const md = renderDiffMarkdown(diff);
+  it("renders markdown with expected sections", () => {
+    const before = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const after = makeIR("prog", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "Effect.fail" }
+    ])
+    const diff = diffPrograms(before, after)
+    const md = renderDiffMarkdown(diff)
 
-    expect(md).toContain('# Effect Program Diff');
-    expect(md).toContain('## Summary');
-    expect(md).toContain('## Step Changes');
-    expect(md).toContain('Effect.fail');
-    expect(md).toContain('| Added | 1 |');
-  });
+    expect(md).toContain("# Effect Program Diff")
+    expect(md).toContain("## Summary")
+    expect(md).toContain("## Step Changes")
+    expect(md).toContain("Effect.fail")
+    expect(md).toContain("| Added | 1 |")
+  })
 
-  it('renders valid JSON with expected keys', () => {
-    const before = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const after = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const diff = diffPrograms(before, after);
-    const json = renderDiffJSON(diff);
-    const parsed = JSON.parse(json);
+  it("renders valid JSON with expected keys", () => {
+    const before = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const after = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const diff = diffPrograms(before, after)
+    const json = renderDiffJSON(diff)
+    const parsed = JSON.parse(json)
 
-    expect(parsed).toHaveProperty('beforeName');
-    expect(parsed).toHaveProperty('afterName');
-    expect(parsed).toHaveProperty('diffedAt');
-    expect(parsed).toHaveProperty('steps');
-    expect(parsed).toHaveProperty('structuralChanges');
-    expect(parsed).toHaveProperty('summary');
-  });
+    expect(parsed).toHaveProperty("beforeName")
+    expect(parsed).toHaveProperty("afterName")
+    expect(parsed).toHaveProperty("diffedAt")
+    expect(parsed).toHaveProperty("steps")
+    expect(parsed).toHaveProperty("structuralChanges")
+    expect(parsed).toHaveProperty("summary")
+  })
 
-  it('treats same callee as unchanged even when rename detection is disabled', () => {
-    const before = makeIR('prog', [{ id: 's1', callee: 'Effect.succeed' }]);
-    const after = makeIR('prog', [{ id: 's1-new', callee: 'Effect.succeed' }]);
-    const diff = diffPrograms(before, after, { detectRenames: false });
+  it("treats same callee as unchanged even when rename detection is disabled", () => {
+    const before = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
+    const after = makeIR("prog", [{ id: "s1-new", callee: "Effect.succeed" }])
+    const diff = diffPrograms(before, after, { detectRenames: false })
 
     // Content-based fingerprint matches in Pass 1 regardless of rename flag
-    expect(diff.summary.stepsUnchanged).toBe(1);
-    expect(diff.summary.stepsRenamed).toBe(0);
-    expect(diff.summary.stepsRemoved).toBe(0);
-    expect(diff.summary.stepsAdded).toBe(0);
-  });
-});
+    expect(diff.summary.stepsUnchanged).toBe(1)
+    expect(diff.summary.stepsRenamed).toBe(0)
+    expect(diff.summary.stepsRemoved).toBe(0)
+    expect(diff.summary.stepsAdded).toBe(0)
+  })
+})

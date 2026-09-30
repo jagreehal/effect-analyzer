@@ -37,13 +37,13 @@ The migration assistant detects the following patterns and suggests their Effect
 | `setTimeout` | `Effect.sleep(Duration.millis(n))` |
 | `setInterval` | `Schedule.spaced(Duration.millis(n))` |
 | `setImmediate` | `Effect.sync` + `queueMicrotask` or `Effect.callback` |
-| `fetch()` | `effect/unstable/http` HttpClient |
-| `http.request` / `https.request` | `effect/unstable/http` HttpClient |
-| `new XMLHttpRequest()` | `effect/unstable/http` HttpClient |
+| `fetch()` | `effect/http` HttpClient |
+| `http.request` / `https.request` | `effect/http` HttpClient |
+| `new XMLHttpRequest()` | `effect/http` HttpClient |
 | `dns.lookup` / `dns.resolve` | `Effect.promise` or `dns.promises` |
 | `fs.exists` (callback) | `Effect.promise` or `fs.promises.access` |
 | `new EventEmitter()` | `PubSub.bounded<T>()` or `PubSub.unbounded<T>()` |
-| `new Worker()` | `effect/unstable/workers` Worker |
+| `new Worker()` | `effect/workers` Worker |
 | Class-based DI (`*Service`, `*Repository`, `*Client`) | `Context.Service<Self, Shape>()('Key')` + `Layer.effect` or `Layer.succeed` |
 
 <Aside type="note">
@@ -72,7 +72,7 @@ Found 7 opportunities across 3 files.
 |------|---------|------------|
 | 12 | try/catch | Effect.try or Effect.tryPromise with catch handler |
 | 28 | Promise.all | Effect.all([...], { concurrency: "unbounded" }) |
-| 45 | fetch() | effect/unstable/http HttpClient |
+| 45 | fetch() | effect/http HttpClient |
 
 ### src/utils/timer.ts
 

@@ -25,15 +25,11 @@
  * ```
  */
 
-import './register-node-ts-morph';
-import { Effect, Option } from 'effect';
-import { AnalysisError } from './types';
-import type { StaticEffectIR, AnalyzerOptions } from './types';
-import {
-  analyzeEffectFile,
-  analyzeEffectSource,
-  resetIdCounter,
-} from './static-analyzer';
+import "./register-node-ts-morph"
+import { Effect, Option } from "effect"
+import { analyzeEffectFile, analyzeEffectSource, resetIdCounter } from "./static-analyzer"
+import { AnalysisError } from "./types"
+import type { AnalyzerOptions, StaticEffectIR } from "./types"
 
 /**
  * Result object from analyze() with fluent methods to retrieve programs.
@@ -42,108 +38,108 @@ export interface AnalyzeResult {
   /**
    * Get single program. Fails if file has 0 or >1 programs.
    */
-  readonly single: Effect.Effect<StaticEffectIR, AnalysisError>;
+  readonly single: Effect.Effect<StaticEffectIR, AnalysisError>
 
   /**
    * Get single program or None if not exactly one.
    */
   readonly singleOption: Effect.Effect<
     Option.Option<StaticEffectIR>
-  >;
+  >
 
   /**
    * Get all programs as array.
    */
   readonly all: Effect.Effect<
-    readonly StaticEffectIR[],
+    ReadonlyArray<StaticEffectIR>,
     AnalysisError
-  >;
+  >
 
   /**
    * Get program by name. Fails if not found.
    */
   readonly named: (
-    name: string,
-  ) => Effect.Effect<StaticEffectIR, AnalysisError>;
+    name: string
+  ) => Effect.Effect<StaticEffectIR, AnalysisError>
 
   /**
    * Get first program. Fails if empty.
    */
-  readonly first: Effect.Effect<StaticEffectIR, AnalysisError>;
+  readonly first: Effect.Effect<StaticEffectIR, AnalysisError>
 
   /**
    * Get first program or None if empty.
    */
   readonly firstOption: Effect.Effect<
     Option.Option<StaticEffectIR>
-  >;
+  >
 }
 
 const createResult = (
-  programs: readonly StaticEffectIR[],
+  programs: ReadonlyArray<StaticEffectIR>
 ): AnalyzeResult => ({
-  single: Effect.gen(function* () {
-      if (programs.length === 1) {
-        const program = programs[0];
-        if (program) {
-          return program;
-        }
+  single: Effect.gen(function*() {
+    if (programs.length === 1) {
+      const program = programs[0]
+      if (program) {
+        return program
       }
-      return yield* Effect.fail(
-        new AnalysisError(
-          'NOT_SINGLE_PROGRAM',
-          `Expected exactly 1 program, found ${String(programs.length)}: ` +
-            `${programs.map((p) => p.root.programName).join(', ')}. ` +
-            'Use .named(name) to pick one, or .all for every program.',
-        ),
-      );
-    }),
+    }
+    return yield* Effect.fail(
+      new AnalysisError(
+        "NOT_SINGLE_PROGRAM",
+        `Expected exactly 1 program, found ${String(programs.length)}: ` +
+          `${programs.map((p) => p.root.programName).join(", ")}. ` +
+          "Use .named(name) to pick one, or .all for every program."
+      )
+    )
+  }),
 
-  singleOption: Effect.gen(function* () {
-      if (programs.length === 1) {
-        const program = programs[0];
-        if (program) {
-          return Option.some(program);
-        }
+  singleOption: Effect.gen(function*() {
+    if (programs.length === 1) {
+      const program = programs[0]
+      if (program) {
+        return Option.some(program)
       }
-      return Option.none<StaticEffectIR>();
-    }),
+    }
+    return Option.none<StaticEffectIR>()
+  }),
 
   all: Effect.succeed(programs),
 
   named: (name: string) =>
-    Effect.gen(function* () {
-      const found = programs.find((p) => p.root.programName === name);
+    Effect.gen(function*() {
+      const found = programs.find((p) => p.root.programName === name)
       if (!found) {
-        const available = programs.map((p) => p.root.programName).join(', ');
+        const available = programs.map((p) => p.root.programName).join(", ")
         return yield* Effect.fail(
           new AnalysisError(
-            'PROGRAM_NOT_FOUND',
-            `Program "${name}" not found. Available: ${available || '(none)'}`,
-          ),
-        );
+            "PROGRAM_NOT_FOUND",
+            `Program "${name}" not found. Available: ${available || "(none)"}`
+          )
+        )
       }
-      return found;
+      return found
     }),
 
-  first: Effect.gen(function* () {
-      const program = programs[0];
-      if (program) {
-        return program;
-      }
-      return yield* Effect.fail(
-        new AnalysisError('NO_PROGRAMS', 'No programs found'),
-      );
-    }),
+  first: Effect.gen(function*() {
+    const program = programs[0]
+    if (program) {
+      return program
+    }
+    return yield* Effect.fail(
+      new AnalysisError("NO_PROGRAMS", "No programs found")
+    )
+  }),
 
-  firstOption: Effect.gen(function* () {
-      const program = programs[0];
-      if (program) {
-        return Option.some(program);
-      }
-      return Option.none<StaticEffectIR>();
-    }),
-});
+  firstOption: Effect.gen(function*() {
+    const program = programs[0]
+    if (program) {
+      return Option.some(program)
+    }
+    return Option.none<StaticEffectIR>()
+  })
+})
 
 /**
  * Analyze an Effect file and return a fluent result object.
@@ -166,44 +162,44 @@ const createResult = (
  */
 export const analyze = (
   filePath: string,
-  options?: AnalyzerOptions,
+  options?: AnalyzerOptions
 ): AnalyzeResult => {
   // Reset ID counter for deterministic results
-  resetIdCounter();
+  resetIdCounter()
 
   // Lazily evaluate the analysis
-  const programsEffect = analyzeEffectFile(filePath, options);
+  const programsEffect = analyzeEffectFile(filePath, options)
 
   return {
-    single: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).single;
-      }),
+    single: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).single
+    }),
 
-    singleOption: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).singleOption;
-      }).pipe(Effect.orDie),
+    singleOption: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).singleOption
+    }).pipe(Effect.orDie),
 
     all: programsEffect,
 
     named: (name: string) =>
-      Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).named(name);
+      Effect.gen(function*() {
+        const programs = yield* programsEffect
+        return yield* createResult(programs).named(name)
       }),
 
-    first: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).first;
-      }),
+    first: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).first
+    }),
 
-    firstOption: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).firstOption;
-      }).pipe(Effect.orDie),
-  };
-};
+    firstOption: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).firstOption
+    }).pipe(Effect.orDie)
+  }
+}
 
 /**
  * Analyze Effect source code directly (for testing or dynamic analysis).
@@ -225,37 +221,37 @@ export const analyze = (
  * ```
  */
 analyze.source = (code: string, options?: AnalyzerOptions): AnalyzeResult => {
-  resetIdCounter();
+  resetIdCounter()
 
-  const programsEffect = analyzeEffectSource(code, 'temp.ts', options);
+  const programsEffect = analyzeEffectSource(code, "temp.ts", options)
 
   return {
-    single: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).single;
-      }),
+    single: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).single
+    }),
 
-    singleOption: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).singleOption;
-      }).pipe(Effect.orDie),
+    singleOption: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).singleOption
+    }).pipe(Effect.orDie),
 
     all: programsEffect,
 
     named: (name: string) =>
-      Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).named(name);
+      Effect.gen(function*() {
+        const programs = yield* programsEffect
+        return yield* createResult(programs).named(name)
       }),
 
-    first: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).first;
-      }),
+    first: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).first
+    }),
 
-    firstOption: Effect.gen(function* () {
-        const programs = yield* programsEffect;
-        return yield* createResult(programs).firstOption;
-      }).pipe(Effect.orDie),
-  };
-};
+    firstOption: Effect.gen(function*() {
+      const programs = yield* programsEffect
+      return yield* createResult(programs).firstOption
+    }).pipe(Effect.orDie)
+  }
+}

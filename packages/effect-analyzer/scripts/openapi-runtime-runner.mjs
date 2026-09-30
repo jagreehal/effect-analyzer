@@ -30,11 +30,11 @@ async function main() {
   let OpenApi;
   try {
     const require = createRequire(join(process.cwd(), 'package.json'));
-    const httpApi = require('effect/unstable/httpapi');
+    const httpApi = require('effect/http-api');
     OpenApi = httpApi.OpenApi;
   } catch (e) {
     console.error('Error: Effect v4 is required for runtime OpenAPI generation.');
-    console.error('Install it: pnpm add effect@^4.0.0-beta.99');
+    console.error('Install it: pnpm add effect@^4.0.0-rc.118');
     if (e?.message) console.error('Details:', e.message);
     process.exit(1);
   }

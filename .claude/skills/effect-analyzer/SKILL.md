@@ -40,15 +40,17 @@ StaticEffectIR { root: StaticEffectProgram, metadata, serviceDefinitions, warnin
 - `effect` — individual Effect calls (with `callee`, `semanticRole`, `serviceCall`)
 - `generator` / `pipe` — Effect.gen blocks and pipe chains
 - `parallel` / `race` — concurrency patterns
-- `error-handler` — catch/catchTag/orDie/ignore (40 handler variants incl. Effect 4 `catchReason`, `catchFilter`, `catchNoSuchElement`); unary combinators passed uncalled in a pipe (`Effect.orDie`) are detected too
+- `error-handler` — catch/catchTag/orDie/ignore (40 handler variants incl. Effect 4 `catchReason`, `catchFilter`, `catchNoSuchElement`); unary combinators passed uncalled in a pipe (`Effect.orDie`) are detected too. `catchTags` keeps each tag's handler in `tagHandlers`. A data-last combinator inside `.pipe` gets a placeholder `source` with `description: 'pipe-input'`; explain prints it as "(the piped effect)"
 - `retry` / `timeout` / `resource` — resilience patterns
 - `conditional` / `decision` / `switch` — control flow
-- `layer` / `stream` / `fiber` — Effect ecosystem constructs
+- `layer` / `stream` / `fiber` — Effect ecosystem constructs. A merge-like stream operator keeps the other streams in `branches` (`Stream.merge(a, b)` → `b`), and `getStaticChildren` walks them
 - `transform` — map/flatMap/tap operations
 - `opaque` / `unknown` — unsupported or unanalyzable
-- Plus: `terminal`, `try-catch`, `loop`, `cause`, `exit`, `schedule`, `match`, `scope-resource`, and more
+- Plus: `terminal`, `try-catch`, `loop`, `cause`, `exit`, `schedule`, `match`, `scope-resource`, and more. `loop` records `concurrency` from a trailing `{ concurrency }` option; `parseEffectAllOptions` resolves a named const through the checker
 
 All types use `readonly` everywhere. See `StaticFlowNode` union in `src/types.ts` for the full set.
+
+**Program error types:** `root.errorTypes` comes from the checker's `E` for the whole program (`programErrorTypes` in `analysis-utils.ts`), so caught and remapped errors drop out. For `Effect.gen(...).pipe(...)` the type comes from the outer pipe. The per-node union (`collectErrorTypes`) is the fallback when the type does not resolve.
 
 ## CLI Usage
 
@@ -56,7 +58,7 @@ All types use `readonly` everywhere. See `StaticFlowNode` union in `src/types.ts
 effect-analyze [PATH] [options]
 ```
 
-PATH defaults to `.` (current directory). A file or a directory writes colocated `.effect-analysis.md` next to each file containing Effect programs (`--no-colocate` prints only); a single file also prints its diagram. Linear programs are colocated as railway; `Effect.runPromise` entrypoints count as trivial (`trivial-programs.ts`).
+PATH defaults to `.` (current directory). A file or a directory writes colocated `.effect-analysis.md` next to each file containing Effect programs (`--no-colocate` prints only); a single file also prints its diagram. With `-o`, a single file skips the colocated file unless `--colocate` is also given. Linear programs are colocated as railway. `trivial-programs.ts` hides classes, `Effect.runPromise` entrypoints and single-call direct programs; a direct program whose one child is a whole chain (`pipe`, `stream`, `loop`, `parallel`, `race`, `error-handler`, `retry`, `timeout`) stays visible.
 
 `-h, --help` and `-v, --version` print and exit 0 (`cli-help.ts`; the version is
 read through the package's own `./package.json` export, so it resolves the same
@@ -287,7 +289,7 @@ it. Adding a field to that key renumbers every existing finding.
 | `--tsgo[=<tsconfig>]` | Merge official `@effect/tsgo` diagnostics (TypeScript 7+) |
 | `--fail-on <severity>` | Exit 1 on a finding at or above `error`/`warning`/`info` (for `--lint-source`; omit for an advisory run) |
 | `--no-metadata` | Exclude metadata |
-| `--colocate` | Write colocated .md (the default) |
+| `--colocate` | Write colocated .md (the default; with `-o`, writes both) |
 | `--no-colocate` | Print only; skip writing files |
 | `--no-colocate-enhanced` | Standard Mermaid in colocated docs |
 | `--colocate-suffix <s>` | Custom suffix (default: `effect-analysis`) |
@@ -404,7 +406,7 @@ because it substitutes characters rather than entity-encoding them.
 
 1. Add type to `StaticFlowNode` union in `src/types.ts`
 2. Handle in `core-analysis.ts` or `effect-analysis.ts`
-3. Update `getStaticChildren()` in `analysis-utils.ts`
+3. Update `getStaticChildren()` in `types.ts`
 4. Handle in relevant output renderers (`output/mermaid.ts`, etc.)
 
 ## Testing
@@ -413,8 +415,8 @@ because it substitutes characters rather than entity-encoding them.
 
 **Pattern:** Fixture-based analysis validation:
 ```typescript
-import { analyze } from './analyze';
-import { Effect } from 'effect';
+import { analyze } from "./analyze"
+import { Effect } from "effect"
 
 it('detects parallel patterns', { timeout: 20_000 }, async () => {
   const irs = await Effect.runPromise(analyze(fixturePath).all);
@@ -423,11 +425,11 @@ it('detects parallel patterns', { timeout: 20_000 }, async () => {
 });
 ```
 
-**Fixtures:** `src/__fixtures__/*.ts` — add new patterns here, then reference in tests.
+**Fixtures:** `src/__fixtures__/*.ts` — add new patterns here, then reference in tests. Anything that depends on types (error channels, yieldable errors, concurrency consts) needs a fixture file: `analyzeEffectSource` runs in memory and cannot resolve `effect`. dprint skips `src/__fixtures__/`, so fixture line numbers stay put.
 
 **For source-level tests (no fixture file):**
 ```typescript
-import { analyzeEffectSource } from './static-analyzer';
+import { analyzeEffectSource } from "./static-analyzer"
 const [ir] = await Effect.runPromise(analyzeEffectSource(`
   import { Effect } from "effect";
   export const myProgram = Effect.gen(function* () { ... });
@@ -441,11 +443,16 @@ const [ir] = await Effect.runPromise(analyzeEffectSource(`
 ```bash
 pnpm build       # tsup package entry points, CLI, and LSP; tsc declarations
 pnpm type-check  # tsc --noEmit
-pnpm lint        # oxlint src + package-boundary import checks
-pnpm quality     # type-check && test && lint
+pnpm lint        # oxlint src (--deny-warnings) + package-boundary import checks; root also runs dprint check
+pnpm format      # dprint fmt (repo root)
+pnpm quality     # build, lint, dprint check, type-check, test, example type-check
 ```
 
 **Entries:** root plus `analysis`, `diagram`, `rules`, `migration`, `browser`, and `effect-workflow` package exports; `src/cli.ts` (CLI); `src/lsp/server.ts` (LSP)
+
+## Code Style
+
+dprint formats the repo (`dprint.json`): double quotes, no semicolons, 120 columns, no trailing commas. oxlint (`packages/effect-analyzer/.oxlintrc.json`) treats every rule as an error or off; generic array types (`ReadonlyArray<T>`) and inline `type` imports are required. CLI error text goes to `process.stderr.write`, since `no-console` applies outside tests.
 
 ## Key Patterns
 
@@ -463,3 +470,4 @@ pnpm quality     # type-check && test && lint
 - **Not handling new node types** in `getStaticChildren` — causes silent omission in traversals
 - **Long timeouts in tests** — ts-morph project creation is slow; use `{ timeout: 20_000 }`
 - **Mutating IR** — create new objects, never mutate existing nodes
+- **Quote-specific source scans** — tests that read our own source (for example `cli-help.test.ts`) must match either quote style

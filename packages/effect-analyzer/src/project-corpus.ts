@@ -1,127 +1,131 @@
 /** Discover and analyze a project once so every project view uses the same facts. */
 
-import { Effect, Clock } from 'effect';
-import { readdir } from 'fs/promises';
-import { extname, join } from 'path';
-import { analyze } from './analyze';
-import type { StaticEffectIR } from './types';
+import { Clock, Effect } from "effect"
+import { readdir } from "fs/promises"
+import { extname, join } from "path"
+import { analyze } from "./analyze"
+import type { StaticEffectIR } from "./types"
 
-export type ProjectCorpusFileStatus = 'ok' | 'zero' | 'fail';
+export type ProjectCorpusFileStatus = "ok" | "zero" | "fail"
 
 export interface ProjectCorpusFile {
-  readonly file: string;
-  readonly status: ProjectCorpusFileStatus;
-  readonly programs: readonly StaticEffectIR[];
-  readonly error?: string | undefined;
-  readonly durationMs?: number | undefined;
+  readonly file: string
+  readonly status: ProjectCorpusFileStatus
+  readonly programs: ReadonlyArray<StaticEffectIR>
+  readonly error?: string | undefined
+  readonly durationMs?: number | undefined
 }
 
 export interface ProjectCorpus {
-  readonly root: string;
-  readonly files: readonly ProjectCorpusFile[];
-  readonly durationMs: number;
+  readonly root: string
+  readonly files: ReadonlyArray<ProjectCorpusFile>
+  readonly durationMs: number
 }
 
 export interface ScanProjectCorpusOptions {
-  readonly tsconfig?: string | undefined;
-  readonly extensions?: readonly string[] | undefined;
-  readonly maxDepth?: number | undefined;
-  readonly includePerFileTiming?: boolean | undefined;
-  readonly knownEffectInternalsRoot?: string | undefined;
+  readonly tsconfig?: string | undefined
+  readonly extensions?: ReadonlyArray<string> | undefined
+  readonly maxDepth?: number | undefined
+  readonly includePerFileTiming?: boolean | undefined
+  readonly knownEffectInternalsRoot?: string | undefined
 }
 
-const DEFAULT_EXTENSIONS = ['.ts', '.tsx'] as const;
-const DEFAULT_MAX_DEPTH = 10;
+const DEFAULT_EXTENSIONS = [".ts", ".tsx"] as const
+const DEFAULT_MAX_DEPTH = 10
 
 export const discoverProjectFiles = async (
   dir: string,
-  extensions: readonly string[] = DEFAULT_EXTENSIONS,
+  extensions: ReadonlyArray<string> = DEFAULT_EXTENSIONS,
   maxDepth = DEFAULT_MAX_DEPTH,
-  currentDepth = 0,
-): Promise<readonly string[]> => {
-  if (currentDepth >= maxDepth) return [];
-  const files: string[] = [];
+  currentDepth = 0
+): Promise<ReadonlyArray<string>> => {
+  if (currentDepth >= maxDepth) return []
+  const files: Array<string> = []
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
+    const entries = await readdir(dir, { withFileTypes: true })
     for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
+      const fullPath = join(dir, entry.name)
       if (entry.isDirectory()) {
-        if (entry.name !== 'node_modules' && entry.name !== '.git') {
-          files.push(...await discoverProjectFiles(
-            fullPath,
-            extensions,
-            maxDepth,
-            currentDepth + 1,
-          ));
+        if (entry.name !== "node_modules" && entry.name !== ".git") {
+          files.push(
+            ...await discoverProjectFiles(
+              fullPath,
+              extensions,
+              maxDepth,
+              currentDepth + 1
+            )
+          )
         }
       } else if (entry.isFile() && extensions.includes(extname(entry.name))) {
-        files.push(fullPath);
+        files.push(fullPath)
       }
     }
   } catch {
     // An unreadable directory contributes no files. Individual analysis failures
     // remain visible in the corpus once a file has been discovered.
   }
-  return files.sort((left, right) => left.localeCompare(right));
-};
+  return files.sort((left, right) => left.localeCompare(right))
+}
 
 export const scanProjectCorpus = (
   root: string,
-  options: ScanProjectCorpusOptions = {},
+  options: ScanProjectCorpusOptions = {}
 ): Effect.Effect<ProjectCorpus> =>
-  Effect.gen(function* () {
-    const startedAt = yield* Clock.currentTimeMillis;
-    const files = yield* Effect.promise(() => discoverProjectFiles(
-      root,
-      options.extensions ?? DEFAULT_EXTENSIONS,
-      options.maxDepth ?? DEFAULT_MAX_DEPTH,
-    ));
-    const corpusFiles: ProjectCorpusFile[] = [];
+  Effect.gen(function*() {
+    const startedAt = yield* Clock.currentTimeMillis
+    const files = yield* Effect.promise(() =>
+      discoverProjectFiles(
+        root,
+        options.extensions ?? DEFAULT_EXTENSIONS,
+        options.maxDepth ?? DEFAULT_MAX_DEPTH
+      )
+    )
+    const corpusFiles: Array<ProjectCorpusFile> = []
 
     // Analysis remains sequential until node IDs and ts-morph projects are owned
     // by the Analysis session instead of shared module globals.
     for (const file of files) {
-      const fileStartedAt =
-        options.includePerFileTiming === true ? yield* Clock.currentTimeMillis : 0;
+      const fileStartedAt = options.includePerFileTiming === true ? yield* Clock.currentTimeMillis : 0
       const result = yield* analyze(file, {
         tsConfigPath: options.tsconfig,
-        knownEffectInternalsRoot: options.knownEffectInternalsRoot,
+        knownEffectInternalsRoot: options.knownEffectInternalsRoot
       }).all.pipe(
-        Effect.map((programs) => ({ _tag: 'ok' as const, programs })),
-        Effect.catch((error) => Effect.succeed({
-          _tag: 'fail' as const,
-          error: error instanceof Error ? error.message : String(error),
-        })),
-      );
-      const durationMs =
-        options.includePerFileTiming === true
-          ? (yield* Clock.currentTimeMillis) - fileStartedAt
-          : undefined;
+        Effect.map((programs) => ({ _tag: "ok" as const, programs })),
+        Effect.catch((error) =>
+          Effect.succeed({
+            _tag: "fail" as const,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        )
+      )
+      const durationMs = options.includePerFileTiming === true
+        ? (yield* Clock.currentTimeMillis) - fileStartedAt
+        : undefined
 
-      if (result._tag === 'ok') {
+      if (result._tag === "ok") {
         corpusFiles.push({
           file,
-          status: result.programs.length > 0 ? 'ok' : 'zero',
+          status: result.programs.length > 0 ? "ok" : "zero",
           programs: result.programs,
-          ...(durationMs === undefined ? {} : { durationMs }),
-        });
-        continue;
+          ...(durationMs === undefined ? {} : { durationMs })
+        })
+        continue
       }
 
-      const isZero = result.error.includes('No Effect programs found') ||
-        result.error.includes('NO_EFFECTS_FOUND');
+      const isZero = result.error.includes("No Effect programs found") ||
+        result.error.includes("NO_EFFECTS_FOUND")
       corpusFiles.push({
         file,
-        status: isZero ? 'zero' : 'fail',
+        status: isZero ? "zero" : "fail",
         programs: [],
         ...(isZero ? {} : { error: result.error }),
-        ...(durationMs === undefined ? {} : { durationMs }),
-      });
+        ...(durationMs === undefined ? {} : { durationMs })
+      })
     }
 
     return {
       root,
       files: corpusFiles,
-      durationMs: (yield* Clock.currentTimeMillis) - startedAt,
-    };
-  });
+      durationMs: (yield* Clock.currentTimeMillis) - startedAt
+    }
+  })

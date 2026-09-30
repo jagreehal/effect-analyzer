@@ -63,7 +63,7 @@ effect-analyze ./src/transfer.ts --format mermaid --no-colocate > transfer.mmd
 | `--tsconfig <path>` | Path to a custom `tsconfig.json` | auto-detected |
 | `--extensions <list>` | Extensions discovered when walking a directory | `ts,tsx` |
 | `--max-depth <n>` | How deep a directory walk descends | `10` |
-| `--include-trivial` | Include trivial programs (schemas, thin wrappers, `Effect.runPromise` entrypoints) that are excluded by default | off |
+| `--include-trivial` | Include trivial programs (schemas, single-call programs, `Effect.runPromise` entrypoints) that are excluded by default | off |
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
 | `-h, --help` | Print help and exit | — |
 | `-v, --version` | Print the analyzer version and exit | — |
@@ -265,7 +265,7 @@ Inspect the surface and dependency shape of an Effect app. See [App-Shape Analyz
 | Flag | Description |
 |---|---|
 | `--entry-points` | Detect `NodeRuntime` / `BunRuntime` / `Layer.launch` / `runFork` entry points (single file) |
-| `--config-leaks` | Flag `Config.redacted` / `Config.secret` values that flow into logs or console sinks (single file) |
+| `--config-leaks` | Flag `Config.Redacted` / `Config.secret` values that flow into logs or console sinks (single file) |
 | `--cli-commands` | Extract `@effect/cli` Command/Args/Options/Prompt structure (single file) |
 | `--service-cycles` | Detect cycles in the project-wide service dependency graph (directory) |
 
@@ -305,11 +305,11 @@ Inspect and search the deterministic rule registry (source lints, effect-lints, 
 
 ## Colocated Output
 
-A file or a directory writes `.effect-analysis.md` next to each source that contains an Effect program. Linear programs get a railway diagram in that file. `--no-colocate` prints only.
+A file or a directory writes `.effect-analysis.md` next to each source that contains an Effect program. Linear programs get a railway diagram in that file. `--no-colocate` prints only. For a single file, `-o` sends the output to that file and skips the adjacent one; add `--colocate` to write both.
 
 | Flag | Description | Default |
 |---|---|---|
-| `--colocate` | Write `.effect-analysis.md` next to source (same as the default) | on |
+| `--colocate` | Write `.effect-analysis.md` next to source (the default; also applies with `-o`) | on |
 | `--no-colocate` | Print only; do not write adjacent files | — |
 | `--colocate-suffix <suffix>` | Custom suffix for colocated files | `effect-analysis` |
 | `--no-colocate-enhanced` | Use standard Mermaid instead of railway/enhanced in colocated files | — |

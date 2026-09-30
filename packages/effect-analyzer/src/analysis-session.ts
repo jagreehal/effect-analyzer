@@ -6,57 +6,53 @@
  * deliberately not required to initialize the runtime.
  */
 
-import './register-node-ts-morph';
+import "./register-node-ts-morph"
 
-import type { Effect } from 'effect';
-import type { AnalysisError, AnalyzerOptions, StaticEffectIR } from './types';
-import { analyze as analyzeFile } from './analyze';
+import type { Effect } from "effect"
+import { analyze as analyzeFile } from "./analyze"
 import {
   analyzeProject,
   analyzeProjectCorpus,
-  runCoverageAudit,
-  runCoverageAuditFromCorpus,
   type AnalyzeProjectOptions,
   type CoverageAuditResult,
   type ProjectAnalysisResult,
-} from './project-analyzer';
-import { clearProjectCache } from './ts-morph-loader';
-import {
-  scanProjectCorpus,
-  type ProjectCorpus,
-  type ScanProjectCorpusOptions,
-} from './project-corpus';
+  runCoverageAudit,
+  runCoverageAuditFromCorpus
+} from "./project-analyzer"
+import { type ProjectCorpus, scanProjectCorpus, type ScanProjectCorpusOptions } from "./project-corpus"
+import { clearProjectCache } from "./ts-morph-loader"
+import type { AnalysisError, AnalyzerOptions, StaticEffectIR } from "./types"
 
 export interface AnalysisSession {
   readonly file: (
     filePath: string,
-    options?: AnalyzerOptions,
-  ) => ReturnType<typeof analyzeFile>;
+    options?: AnalyzerOptions
+  ) => ReturnType<typeof analyzeFile>
   readonly source: (
     code: string,
-    options?: AnalyzerOptions,
-  ) => ReturnType<typeof analyzeFile.source>;
+    options?: AnalyzerOptions
+  ) => ReturnType<typeof analyzeFile.source>
   readonly corpus: (
     dirPath: string,
-    options?: ScanProjectCorpusOptions,
-  ) => Effect.Effect<ProjectCorpus>;
+    options?: ScanProjectCorpusOptions
+  ) => Effect.Effect<ProjectCorpus>
   readonly project: (
     dirPath: string,
-    options?: AnalyzeProjectOptions,
-  ) => Effect.Effect<ProjectAnalysisResult>;
+    options?: AnalyzeProjectOptions
+  ) => Effect.Effect<ProjectAnalysisResult>
   readonly projectFromCorpus: (
     corpus: ProjectCorpus,
-    options?: AnalyzeProjectOptions,
-  ) => Effect.Effect<ProjectAnalysisResult>;
+    options?: AnalyzeProjectOptions
+  ) => Effect.Effect<ProjectAnalysisResult>
   readonly audit: (
     dirPath: string,
-    options?: AnalyzeProjectOptions,
-  ) => Effect.Effect<CoverageAuditResult>;
+    options?: AnalyzeProjectOptions
+  ) => Effect.Effect<CoverageAuditResult>
   readonly auditFromCorpus: (
     corpus: ProjectCorpus,
-    options?: AnalyzeProjectOptions,
-  ) => Effect.Effect<CoverageAuditResult>;
-  readonly clearCaches: () => void;
+    options?: AnalyzeProjectOptions
+  ) => Effect.Effect<CoverageAuditResult>
+  readonly clearCaches: () => void
 }
 
 export const createAnalysisSession = (): AnalysisSession => ({
@@ -67,13 +63,13 @@ export const createAnalysisSession = (): AnalysisSession => ({
   projectFromCorpus: analyzeProjectCorpus,
   audit: runCoverageAudit,
   auditFromCorpus: runCoverageAuditFromCorpus,
-  clearCaches: clearProjectCache,
-});
+  clearCaches: clearProjectCache
+})
 
 /** Default session for ordinary Node callers. */
-export const analysis = createAnalysisSession();
+export const analysis = createAnalysisSession()
 
 export type AnalysisEffect = Effect.Effect<
-  readonly StaticEffectIR[],
+  ReadonlyArray<StaticEffectIR>,
   AnalysisError
->;
+>

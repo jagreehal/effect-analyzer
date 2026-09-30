@@ -36,12 +36,12 @@ Single-file scope only.
 effect-analyze ./src/main.ts --config-leaks
 ```
 
-Tracks `Config.redacted` and `Config.secret` values through the program and flags any path that ends in a logging or console sink — `Effect.log*`, `Logger.log*`, `console.*`. The classic "I `console.log`d a secret in a debug commit and it got committed" problem, caught statically.
+Tracks `Config.Redacted` and `Config.secret` values through the program and flags any path that ends in a logging or console sink — `Effect.log*`, `Logger.log*`, `console.*`. The classic "I `console.log`d a secret in a debug commit and it got committed" problem, caught statically.
 
 Reports each leak with:
 
 - The redacted/secret config key
-- The full path from `Config.redacted("FOO")` → `console.log(value)`
+- The full path from `Config.Redacted("FOO")` → `console.log(value)`
 - The sink type
 - File / line / column
 

@@ -18,80 +18,80 @@
  * so coverage counts them as reachability edges without treating them as events.
  */
 
-import type { StateInvoke, StateMachine, StateTransition } from './state-machine';
+import type { StateInvoke, StateMachine, StateTransition } from "./state-machine"
 
 // =============================================================================
 // MachineJSON shape (structural — the XState v6 machine-as-data format)
 // =============================================================================
 
 export interface MachineJSONUnserializable {
-  readonly $unserializable: 'function' | 'actor' | 'schema' | 'value';
-  readonly id?: string;
+  readonly $unserializable: "function" | "actor" | "schema" | "value"
+  readonly id?: string
 }
 
 export type MachineJSONExpression =
-  | { readonly '@expr': string; readonly '@lang'?: string }
-  | { readonly '@code': string; readonly '@lang'?: string };
+  | { readonly "@expr": string; readonly "@lang"?: string }
+  | { readonly "@code": string; readonly "@lang"?: string }
 
 export type MachineJSONGuard =
   | { readonly type: string; readonly params?: Readonly<Record<string, unknown>> }
   | MachineJSONUnserializable
-  | MachineJSONExpression;
+  | MachineJSONExpression
 
 export type MachineJSONAction =
   | { readonly type: string; readonly [key: string]: unknown }
   | MachineJSONUnserializable
-  | MachineJSONExpression;
+  | MachineJSONExpression
 
 export interface MachineJSONTransition {
-  readonly target?: string | readonly string[];
-  readonly guard?: MachineJSONGuard;
-  readonly actions?: readonly MachineJSONAction[];
+  readonly target?: string | ReadonlyArray<string>
+  readonly guard?: MachineJSONGuard
+  readonly actions?: ReadonlyArray<MachineJSONAction>
 }
 
-type MachineJSONSingleValue = string | MachineJSONTransition | MachineJSONUnserializable;
+type MachineJSONSingleValue = string | MachineJSONTransition | MachineJSONUnserializable
 
 export type MachineJSONValue =
   | MachineJSONSingleValue
-  | readonly MachineJSONSingleValue[];
+  | ReadonlyArray<MachineJSONSingleValue>
 
 export type MachineJSONInitial =
   | string
-  | { readonly target: string; readonly input?: unknown };
+  | { readonly target: string; readonly input?: unknown }
 
 export interface MachineJSONInvoke {
-  readonly id?: string;
-  readonly src: string | MachineJSONUnserializable;
-  readonly onDone?: MachineJSONValue;
-  readonly onError?: MachineJSONValue;
+  readonly id?: string
+  readonly src: string | MachineJSONUnserializable
+  readonly onDone?: MachineJSONValue
+  readonly onError?: MachineJSONValue
 }
 
 export interface MachineJSONStateNode {
-  readonly id?: string;
-  readonly type?: 'atomic' | 'compound' | 'parallel' | 'final' | 'history' | 'choice';
-  readonly initial?: MachineJSONInitial;
-  readonly states?: Record<string, MachineJSONStateNode>;
-  readonly entry?: readonly MachineJSONAction[];
-  readonly exit?: readonly MachineJSONAction[];
-  readonly invoke?: MachineJSONInvoke | readonly MachineJSONInvoke[];
-  readonly on?: Record<string, MachineJSONValue>;
-  readonly always?: MachineJSONValue;
-  readonly after?: Record<string, MachineJSONValue>;
+  readonly id?: string
+  readonly type?: "atomic" | "compound" | "parallel" | "final" | "history" | "choice"
+  readonly initial?: MachineJSONInitial
+  readonly states?: Record<string, MachineJSONStateNode>
+  readonly entry?: ReadonlyArray<MachineJSONAction>
+  readonly exit?: ReadonlyArray<MachineJSONAction>
+  readonly invoke?: MachineJSONInvoke | ReadonlyArray<MachineJSONInvoke>
+  readonly on?: Record<string, MachineJSONValue>
+  readonly always?: MachineJSONValue
+  readonly after?: Record<string, MachineJSONValue>
 }
 
 export interface MachineJSON {
-  readonly id?: string;
-  readonly version?: string;
-  readonly initial: MachineJSONInitial;
-  readonly states: Record<string, MachineJSONStateNode>;
+  readonly id?: string
+  readonly version?: string
+  readonly initial: MachineJSONInitial
+  readonly states: Record<string, MachineJSONStateNode>
   readonly schemas?: {
-    readonly events?: Record<string, unknown> | MachineJSONUnserializable;
-  };
+    readonly events?: Record<string, unknown> | MachineJSONUnserializable
+  }
 }
 
 export interface FromMachineJSONOptions {
   /** Overrides the machine name (defaults to `json.id`, then `'machine'`). */
-  readonly name?: string;
+  readonly name?: string
 }
 
 // =============================================================================
@@ -100,135 +100,135 @@ export interface FromMachineJSONOptions {
 
 /** Non-null, non-array object — used only to check genuinely `unknown` input. */
 function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
+  return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
 /** Throw a uniform, located error unless `value` is a plain object. */
 function requireObject(value: unknown, what: string): void {
   if (!isPlainObject(value)) {
-    throw new Error(`fromMachineJSON: ${what} must be an object`);
+    throw new Error(`fromMachineJSON: ${what} must be an object`)
   }
 }
 
 function markerLabel(value: MachineJSONUnserializable): string {
-  return value.id ?? `$unserializable:${value.$unserializable}`;
+  return value.id ?? `$unserializable:${value.$unserializable}`
 }
 
 function invokeSource(
   value: unknown,
-  where: string,
+  where: string
 ): StateInvoke {
-  if (typeof value === 'string') return { src: value };
+  if (typeof value === "string") return { src: value }
   if (!isPlainObject(value)) {
     throw new Error(
-      `fromMachineJSON: ${where}.src must be a string or $unserializable object`,
-    );
+      `fromMachineJSON: ${where}.src must be a string or $unserializable object`
+    )
   }
-  const marker = value;
-  const kind = marker.$unserializable;
+  const marker = value
+  const kind = marker.$unserializable
   if (
-    kind !== 'function' &&
-    kind !== 'actor' &&
-    kind !== 'schema' &&
-    kind !== 'value'
+    kind !== "function" &&
+    kind !== "actor" &&
+    kind !== "schema" &&
+    kind !== "value"
   ) {
     throw new Error(
-      `fromMachineJSON: ${where}.src must contain a valid $unserializable marker`,
-    );
+      `fromMachineJSON: ${where}.src must contain a valid $unserializable marker`
+    )
   }
-  if (marker.id !== undefined && typeof marker.id !== 'string') {
-    throw new Error(`fromMachineJSON: ${where}.src.id must be a string`);
+  if (marker.id !== undefined && typeof marker.id !== "string") {
+    throw new Error(`fromMachineJSON: ${where}.src.id must be a string`)
   }
   return {
-    src: marker.id ?? `$unserializable:${kind}`,
-  };
+    src: marker.id ?? `$unserializable:${kind}`
+  }
 }
 
 function guardLabel(value: MachineJSONGuard, where: string): string {
   if (!isPlainObject(value)) {
-    throw new Error(`fromMachineJSON: ${where}.guard must be an object`);
+    throw new Error(`fromMachineJSON: ${where}.guard must be an object`)
   }
-  const record = value as unknown as Record<string, unknown>;
-  if (typeof record.type === 'string') return record.type;
-  if (typeof record['@expr'] === 'string') return record['@expr'];
-  if (typeof record['@code'] === 'string') return record['@code'];
-  if (typeof record.$unserializable === 'string') {
-    return markerLabel(record as unknown as MachineJSONUnserializable);
+  const record = value as unknown as Record<string, unknown>
+  if (typeof record.type === "string") return record.type
+  if (typeof record["@expr"] === "string") return record["@expr"]
+  if (typeof record["@code"] === "string") return record["@code"]
+  if (typeof record.$unserializable === "string") {
+    return markerLabel(record as unknown as MachineJSONUnserializable)
   }
   throw new Error(
-    `fromMachineJSON: ${where}.guard must contain type, @expr, @code, or $unserializable`,
-  );
+    `fromMachineJSON: ${where}.guard must contain type, @expr, @code, or $unserializable`
+  )
 }
 
 /** Best-effort label for an action: its type, expression text, or marker. */
 function actionLabel(value: MachineJSONAction): string | undefined {
-  if (!isPlainObject(value)) return undefined;
-  const record = value as unknown as Record<string, unknown>;
-  if (typeof record.type === 'string') return record.type;
-  if (typeof record['@expr'] === 'string') return record['@expr'];
-  if (typeof record['@code'] === 'string') return record['@code'];
-  if (typeof record.$unserializable === 'string') {
-    return markerLabel(record as unknown as MachineJSONUnserializable);
+  if (!isPlainObject(value)) return undefined
+  const record = value as unknown as Record<string, unknown>
+  if (typeof record.type === "string") return record.type
+  if (typeof record["@expr"] === "string") return record["@expr"]
+  if (typeof record["@code"] === "string") return record["@code"]
+  if (typeof record.$unserializable === "string") {
+    return markerLabel(record as unknown as MachineJSONUnserializable)
   }
-  return undefined;
+  return undefined
 }
 
 function actionLabels(
-  value: readonly MachineJSONAction[] | undefined,
-): string[] | undefined {
-  if (value === undefined) return undefined;
-  const labels = value.map(actionLabel).filter((x): x is string => x !== undefined);
-  return labels.length > 0 ? labels : undefined;
+  value: ReadonlyArray<MachineJSONAction> | undefined
+): Array<string> | undefined {
+  if (value === undefined) return undefined
+  const labels = value.map(actionLabel).filter((x): x is string => x !== undefined)
+  return labels.length > 0 ? labels : undefined
 }
 
 /** Normalize a transition value to one record per target/branch. */
 function normalizeValue(
   value: MachineJSONValue,
-  where: string,
-): readonly { target?: string; guard?: string; actions?: readonly string[] }[] {
+  where: string
+): ReadonlyArray<{ target?: string; guard?: string; actions?: ReadonlyArray<string> }> {
   const one = (
-    v: MachineJSONSingleValue,
-  ): readonly { target?: string; guard?: string; actions?: readonly string[] }[] => {
-    if (typeof v === 'string') return [{ target: v }];
+    v: MachineJSONSingleValue
+  ): ReadonlyArray<{ target?: string; guard?: string; actions?: ReadonlyArray<string> }> => {
+    if (typeof v === "string") return [{ target: v }]
     if (!isPlainObject(v)) {
-      throw new Error(`fromMachineJSON: ${where} must be a string or object, got ${typeof v}`);
+      throw new Error(`fromMachineJSON: ${where} must be a string or object, got ${typeof v}`)
     }
-    if (typeof v.$unserializable === 'string') {
-      return [{ guard: markerLabel(v as unknown as MachineJSONUnserializable) }];
+    if (typeof v.$unserializable === "string") {
+      return [{ guard: markerLabel(v as unknown as MachineJSONUnserializable) }]
     }
 
-    const transition = v as unknown as MachineJSONTransition;
-    const target: unknown = transition.target;
-    let targets: readonly (string | undefined)[];
+    const transition = v as unknown as MachineJSONTransition
+    const target: unknown = transition.target
+    let targets: ReadonlyArray<string | undefined>
     if (target === undefined) {
-      targets = [undefined];
-    } else if (typeof target === 'string') {
-      targets = [target];
-    } else if (Array.isArray(target) && target.every((candidate) => typeof candidate === 'string')) {
-      targets = target;
+      targets = [undefined]
+    } else if (typeof target === "string") {
+      targets = [target]
+    } else if (Array.isArray(target) && target.every((candidate) => typeof candidate === "string")) {
+      targets = target
     } else {
-      throw new Error(`fromMachineJSON: ${where}.target must be a string or string array`);
+      throw new Error(`fromMachineJSON: ${where}.target must be a string or string array`)
     }
-    const guard = transition.guard === undefined ? undefined : guardLabel(transition.guard, where);
-    const actions = actionLabels(transition.actions);
+    const guard = transition.guard === undefined ? undefined : guardLabel(transition.guard, where)
+    const actions = actionLabels(transition.actions)
     return targets.map((candidate) => ({
       ...(candidate !== undefined ? { target: candidate } : {}),
       ...(guard !== undefined ? { guard } : {}),
-      ...(actions !== undefined ? { actions } : {}),
-    }));
-  };
+      ...(actions !== undefined ? { actions } : {})
+    }))
+  }
 
-  if (Array.isArray(value)) return value.flatMap(one);
-  return one(value as MachineJSONSingleValue);
+  if (Array.isArray(value)) return value.flatMap(one)
+  return one(value as MachineJSONSingleValue)
 }
 
 function initialTarget(value: MachineJSONInitial, where: string): string {
-  if (typeof value === 'string') return value;
-  requireObject(value, where);
-  if (typeof value.target !== 'string') {
-    throw new Error(`fromMachineJSON: ${where}.target must be a string`);
+  if (typeof value === "string") return value
+  requireObject(value, where)
+  if (typeof value.target !== "string") {
+    throw new Error(`fromMachineJSON: ${where}.target must be a string`)
   }
-  return value.target;
+  return value.target
 }
 
 // =============================================================================
@@ -237,7 +237,7 @@ function initialTarget(value: MachineJSONInitial, where: string): string {
 
 /** Label an `after` delay key readably: `after 500ms` / `after PT1M`. */
 function afterLabel(delayKey: string): string {
-  return /^\d+$/.test(delayKey) ? `after ${delayKey}ms` : `after ${delayKey}`;
+  return /^\d+$/.test(delayKey) ? `after ${delayKey}ms` : `after ${delayKey}`
 }
 
 /**
@@ -248,63 +248,63 @@ function afterLabel(delayKey: string): string {
  */
 export function fromMachineJSON(
   json: MachineJSON,
-  options?: FromMachineJSONOptions,
+  options?: FromMachineJSONOptions
 ): StateMachine {
-  requireObject(json, 'input');
-  const rootInitial = initialTarget(json.initial, '`initial`');
-  const states = json.states;
-  requireObject(states, '`states`');
+  requireObject(json, "input")
+  const rootInitial = initialTarget(json.initial, "`initial`")
+  const states = json.states
+  requireObject(states, "`states`")
 
-  const entries: {
-    readonly path: string;
-    readonly parentPath: string | undefined;
-    readonly node: MachineJSONStateNode;
-  }[] = [];
-  const idToPath = new Map<string, string>();
+  const entries: Array<{
+    readonly path: string
+    readonly parentPath: string | undefined
+    readonly node: MachineJSONStateNode
+  }> = []
+  const idToPath = new Map<string, string>()
 
   const collectStates = (
     children: Record<string, MachineJSONStateNode>,
-    parentPath?: string,
+    parentPath?: string
   ): void => {
     for (const [key, node] of Object.entries(children)) {
-      requireObject(node, `state '${parentPath === undefined ? key : `${parentPath}.${key}`}'`);
-      const path = parentPath === undefined ? key : `${parentPath}.${key}`;
-      entries.push({ path, parentPath, node });
-      idToPath.set(path, path);
+      requireObject(node, `state '${parentPath === undefined ? key : `${parentPath}.${key}`}'`)
+      const path = parentPath === undefined ? key : `${parentPath}.${key}`
+      entries.push({ path, parentPath, node })
+      idToPath.set(path, path)
       if (node.id !== undefined) {
-        if (typeof node.id !== 'string') {
-          throw new Error(`fromMachineJSON: state '${path}'.id must be a string`);
+        if (typeof node.id !== "string") {
+          throw new Error(`fromMachineJSON: state '${path}'.id must be a string`)
         }
-        idToPath.set(node.id, path);
+        idToPath.set(node.id, path)
       }
       if (node.states !== undefined) {
-        requireObject(node.states, `state '${path}'.states`);
-        collectStates(node.states, path);
+        requireObject(node.states, `state '${path}'.states`)
+        collectStates(node.states, path)
       }
     }
-  };
-  collectStates(states);
+  }
+  collectStates(states)
 
-  const declaredStates = entries.map(({ path }) => path);
-  const transitions: StateTransition[] = [];
-  const observedEvents: string[] = [];
-  const seenEvents = new Set<string>();
+  const declaredStates = entries.map(({ path }) => path)
+  const transitions: Array<StateTransition> = []
+  const observedEvents: Array<string> = []
+  const seenEvents = new Set<string>()
 
   const resolveTarget = (
     target: string,
     from: string,
-    parentPath: string | undefined,
+    parentPath: string | undefined
   ): string => {
-    if (target.startsWith('#')) return idToPath.get(target.slice(1)) ?? target.slice(1);
-    if (target.startsWith('.')) return `${from}${target}`;
-    return parentPath === undefined ? target : `${parentPath}.${target}`;
-  };
+    if (target.startsWith("#")) return idToPath.get(target.slice(1)) ?? target.slice(1)
+    if (target.startsWith(".")) return `${from}${target}`
+    return parentPath === undefined ? target : `${parentPath}.${target}`
+  }
 
   const resolveInitialTarget = (target: string, from?: string): string => {
-    if (target.startsWith('#')) return idToPath.get(target.slice(1)) ?? target.slice(1);
-    if (from === undefined) return target.startsWith('.') ? target.slice(1) : target;
-    return `${from}.${target.startsWith('.') ? target.slice(1) : target}`;
-  };
+    if (target.startsWith("#")) return idToPath.get(target.slice(1)) ?? target.slice(1)
+    if (from === undefined) return target.startsWith(".") ? target.slice(1) : target
+    return `${from}.${target.startsWith(".") ? target.slice(1) : target}`
+  }
 
   // Emit one transition per normalized branch of a value, self-edging on a
   // targetless (internal / automatic-without-target) transition.
@@ -314,8 +314,8 @@ export function fromMachineJSON(
     value: MachineJSONValue,
     where: string,
     parentPath: string | undefined,
-    trigger?: 'always' | 'after' | 'done' | 'error',
-    invokeIndex?: number,
+    trigger?: "always" | "after" | "done" | "error",
+    invokeIndex?: number
   ): void => {
     for (const norm of normalizeValue(value, where)) {
       transitions.push({
@@ -325,101 +325,100 @@ export function fromMachineJSON(
         ...(norm.guard !== undefined ? { guard: norm.guard } : {}),
         ...(norm.actions !== undefined ? { actions: norm.actions } : {}),
         ...(trigger !== undefined ? { trigger } : {}),
-        ...(invokeIndex !== undefined ? { invokeIndex } : {}),
-      });
+        ...(invokeIndex !== undefined ? { invokeIndex } : {})
+      })
     }
-  };
+  }
 
-  const entryActions: Record<string, readonly string[]> = {};
-  const exitActions: Record<string, readonly string[]> = {};
-  const invokes: Record<string, readonly StateInvoke[]> = {};
+  const entryActions: Record<string, ReadonlyArray<string>> = {}
+  const exitActions: Record<string, ReadonlyArray<string>> = {}
+  const invokes: Record<string, ReadonlyArray<StateInvoke>> = {}
 
   for (const { path: from, parentPath, node } of entries) {
-    const entry = actionLabels(node.entry);
-    if (entry !== undefined) entryActions[from] = entry;
-    const exit = actionLabels(node.exit);
-    if (exit !== undefined) exitActions[from] = exit;
+    const entry = actionLabels(node.entry)
+    if (entry !== undefined) entryActions[from] = entry
+    const exit = actionLabels(node.exit)
+    if (exit !== undefined) exitActions[from] = exit
 
     // Invoked effects: preserve every invoke and associate its completion
     // transitions by index so the XState exporter can rebuild the array.
-    const invokeValues: readonly MachineJSONInvoke[] =
-      node.invoke === undefined
-        ? []
-        : Array.isArray(node.invoke)
-          ? node.invoke
-          : [node.invoke];
+    const invokeValues: ReadonlyArray<MachineJSONInvoke> = node.invoke === undefined
+      ? []
+      : Array.isArray(node.invoke)
+      ? node.invoke
+      : [node.invoke]
     if (invokeValues.length > 0) {
-      const metadata: StateInvoke[] = [];
+      const metadata: Array<StateInvoke> = []
       for (const [invokeIndex, invoke] of invokeValues.entries()) {
-        const where = `state '${from}'.invoke[${invokeIndex}]`;
-        requireObject(invoke, where);
-        if (invoke.id !== undefined && typeof invoke.id !== 'string') {
-          throw new Error(`fromMachineJSON: ${where}.id must be a string`);
+        const where = `state '${from}'.invoke[${invokeIndex}]`
+        requireObject(invoke, where)
+        if (invoke.id !== undefined && typeof invoke.id !== "string") {
+          throw new Error(`fromMachineJSON: ${where}.id must be a string`)
         }
         metadata.push({
           ...invokeSource(invoke.src, where),
-          ...(invoke.id !== undefined ? { id: invoke.id } : {}),
-        });
+          ...(invoke.id !== undefined ? { id: invoke.id } : {})
+        })
         if (invoke.onDone !== undefined) {
           emit(
             from,
-            'onDone',
+            "onDone",
             invoke.onDone,
             `${where}.onDone`,
             parentPath,
-            'done',
-            invokeIndex,
-          );
+            "done",
+            invokeIndex
+          )
         }
         if (invoke.onError !== undefined) {
           emit(
             from,
-            'onError',
+            "onError",
             invoke.onError,
             `${where}.onError`,
             parentPath,
-            'error',
-            invokeIndex,
-          );
+            "error",
+            invokeIndex
+          )
         }
       }
-      invokes[from] = metadata;
+      invokes[from] = metadata
     }
     if (node.initial !== undefined) {
       transitions.push({
         from,
-        event: 'initial',
+        event: "initial",
         to: resolveInitialTarget(initialTarget(node.initial, `state '${from}'.initial`), from),
-        trigger: 'initial',
-      });
-    } else if (node.type === 'parallel' && node.states !== undefined) {
+        trigger: "initial"
+      })
+    } else if (node.type === "parallel" && node.states !== undefined) {
       for (const child of Object.keys(node.states)) {
-        transitions.push({ from, event: 'initial', to: `${from}.${child}`, trigger: 'initial' });
+        transitions.push({ from, event: "initial", to: `${from}.${child}`, trigger: "initial" })
       }
     }
 
-    const on = node.on;
+    const on = node.on
     if (on !== undefined) {
-      requireObject(on, `state '${from}'.on`);
+      requireObject(on, `state '${from}'.on`)
       for (const [event, value] of Object.entries(on)) {
         if (!seenEvents.has(event)) {
-          seenEvents.add(event);
-          observedEvents.push(event);
+          seenEvents.add(event)
+          observedEvents.push(event)
         }
-        emit(from, event, value, `state '${from}' event '${event}'`, parentPath);
+        emit(from, event, value, `state '${from}' event '${event}'`, parentPath)
       }
     }
 
     // Eventless: fires automatically when the state is entered and its guard
     // passes. A reachability edge, not an event.
     if (node.always !== undefined) {
-      emit(from, 'always', node.always, `state '${from}'.always`, parentPath, 'always');
+      emit(from, "always", node.always, `state '${from}'.always`, parentPath, "always")
     }
 
     // Delayed: fires automatically after the given delay. Also reachability.
-    const after = node.after;
+    const after = node.after
     if (after !== undefined) {
-      requireObject(after, `state '${from}'.after`);
+      requireObject(after, `state '${from}'.after`)
       for (const [delayKey, value] of Object.entries(after)) {
         emit(
           from,
@@ -427,24 +426,23 @@ export function fromMachineJSON(
           value,
           `state '${from}'.after['${delayKey}']`,
           parentPath,
-          'after',
-        );
+          "after"
+        )
       }
     }
   }
 
-  const schemaEvents = json.schemas?.events;
+  const schemaEvents = json.schemas?.events
   if (schemaEvents !== undefined) {
-    requireObject(schemaEvents, '`schemas.events`');
+    requireObject(schemaEvents, "`schemas.events`")
   }
-  const declaredEvents =
-    schemaEvents !== undefined && !('$unserializable' in schemaEvents)
-      ? Object.keys(schemaEvents)
-      : observedEvents;
+  const declaredEvents = schemaEvents !== undefined && !("$unserializable" in schemaEvents)
+    ? Object.keys(schemaEvents)
+    : observedEvents
 
   return {
-    name: options?.name ?? json.id ?? 'machine',
-    source: 'machine-json',
+    name: options?.name ?? json.id ?? "machine",
+    source: "machine-json",
     initial: resolveInitialTarget(rootInitial),
     // The full config state set (not just states appearing in transitions) so
     // final/orphan states still render and are judged for reachability.
@@ -453,20 +451,20 @@ export function fromMachineJSON(
     location: undefined,
     declaredStates,
     declaredEvents,
-    alphabetSource: 'config',
+    alphabetSource: "config",
     // Explicit finals only: a transitionless `{}` node is active, not final.
     finalStates: entries
-      .filter(({ node }) => node.type === 'final')
+      .filter(({ node }) => node.type === "final")
       .map(({ path }) => path),
-    ...(entries.some(({ node }) => node.type === 'parallel')
+    ...(entries.some(({ node }) => node.type === "parallel")
       ? {
-          parallelStates: entries
-            .filter(({ node }) => node.type === 'parallel')
-            .map(({ path }) => path),
-        }
+        parallelStates: entries
+          .filter(({ node }) => node.type === "parallel")
+          .map(({ path }) => path)
+      }
       : {}),
     ...(Object.keys(entryActions).length > 0 ? { entryActions } : {}),
     ...(Object.keys(exitActions).length > 0 ? { exitActions } : {}),
-    ...(Object.keys(invokes).length > 0 ? { invokes } : {}),
-  };
+    ...(Object.keys(invokes).length > 0 ? { invokes } : {})
+  }
 }

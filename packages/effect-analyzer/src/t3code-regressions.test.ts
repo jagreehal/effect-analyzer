@@ -1,23 +1,23 @@
-import { describe, expect, it } from 'vitest';
-import { Effect, Option } from 'effect';
-import { analyzeEffectSource } from './static-analyzer';
-import { renderExplanation } from './output/explain';
-import type { StaticEffectNode, StaticFlowNode } from './types';
-import { getStaticChildren, isStaticEffectNode } from './types';
+import { Effect, Option } from "effect"
+import { describe, expect, it } from "vitest"
+import { renderExplanation } from "./output/explain"
+import { analyzeEffectSource } from "./static-analyzer"
+import type { StaticEffectNode, StaticFlowNode } from "./types"
+import { getStaticChildren, isStaticEffectNode } from "./types"
 
-const collectEffectNodes = (nodes: readonly StaticFlowNode[]): StaticEffectNode[] => {
-  const collected: StaticEffectNode[] = [];
+const collectEffectNodes = (nodes: ReadonlyArray<StaticFlowNode>): Array<StaticEffectNode> => {
+  const collected: Array<StaticEffectNode> = []
   const visit = (node: StaticFlowNode): void => {
-    if (isStaticEffectNode(node)) collected.push(node);
-    const children = Option.getOrElse(getStaticChildren(node), () => []);
-    for (const child of children) visit(child);
-  };
-  for (const node of nodes) visit(node);
-  return collected;
-};
+    if (isStaticEffectNode(node)) collected.push(node)
+    const children = Option.getOrElse(getStaticChildren(node), () => [])
+    for (const child of children) visit(child)
+  }
+  for (const node of nodes) visit(node)
+  return collected
+}
 
-describe('t3code-inspired regressions', () => {
-  it('hides top-level Effect.fn wrapper nodes in explain output', async () => {
+describe("t3code-inspired regressions", () => {
+  it("hides top-level Effect.fn wrapper nodes in explain output", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -34,17 +34,17 @@ describe('t3code-inspired regressions', () => {
           }).pipe(Effect.timeoutOption(1000), Effect.map(Option.flatten));
         });
         `,
-        'bootstrap.ts',
-      ),
-    );
+        "bootstrap.ts"
+      )
+    )
 
-    const explanation = renderExplanation(ir);
-    expect(explanation).toContain('Yields fdReady <- succeed');
-    expect(explanation).toContain('Registers callback bridge');
-    expect(explanation).not.toContain('Calls fn');
-  });
+    const explanation = renderExplanation(ir)
+    expect(explanation).toContain("Yields fdReady <- succeed")
+    expect(explanation).toContain("Registers callback bridge")
+    expect(explanation).not.toContain("Calls fn")
+  })
 
-  it('does not duplicate callback-return internals as sibling generator steps', async () => {
+  it("does not duplicate callback-return internals as sibling generator steps", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -61,23 +61,23 @@ describe('t3code-inspired regressions', () => {
           }).pipe(Effect.timeoutOption(1000));
         });
         `,
-        'bootstrap.ts',
-      ),
-    );
+        "bootstrap.ts"
+      )
+    )
 
-    const generator = ir.root.children.find((child) => child.type === 'generator');
-    expect(generator?.type).toBe('generator');
-    if (generator?.type !== 'generator') return;
+    const generator = ir.root.children.find((child) => child.type === "generator")
+    expect(generator?.type).toBe("generator")
+    if (generator?.type !== "generator") return
 
-    expect(generator.yields).toHaveLength(2);
+    expect(generator.yields).toHaveLength(2)
     const callbackNodes = collectEffectNodes(ir.root.children).filter(
-      (node) => node.callee === 'Effect.callback',
-    );
-    expect(callbackNodes).toHaveLength(1);
-    expect(renderExplanation(ir).match(/Registers callback bridge/g)?.length ?? 0).toBe(1);
-  });
+      (node) => node.callee === "Effect.callback"
+    )
+    expect(callbackNodes).toHaveLength(1)
+    expect(renderExplanation(ir).match(/Registers callback bridge/g)?.length ?? 0).toBe(1)
+  })
 
-  it('models yielded service properties as service calls instead of unknown nodes', async () => {
+  it("models yielded service properties as service calls instead of unknown nodes", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -95,18 +95,18 @@ describe('t3code-inspired regressions', () => {
           return yield* Effect.succeed("ok");
         });
         `,
-        'main.ts',
-      ),
-    );
+        "main.ts"
+      )
+    )
 
-    const effectNodes = collectEffectNodes(ir.root.children);
-    const fixPathNode = effectNodes.find((node) => node.callee === 'cliConfig.fixPath');
-    expect(fixPathNode?.serviceCall?.serviceType).toBe('CliConfig');
-    expect(ir.root.dependencies.map((dep) => dep.name)).toContain('CliConfig');
-    expect(renderExplanation(ir)).toContain('Calls CliConfig.fixPath');
-  });
+    const effectNodes = collectEffectNodes(ir.root.children)
+    const fixPathNode = effectNodes.find((node) => node.callee === "cliConfig.fixPath")
+    expect(fixPathNode?.serviceCall?.serviceType).toBe("CliConfig")
+    expect(ir.root.dependencies.map((dep) => dep.name)).toContain("CliConfig")
+    expect(renderExplanation(ir)).toContain("Calls CliConfig.fixPath")
+  })
 
-  it('does not treat STM primitives as service dependencies', async () => {
+  it("does not treat STM primitives as service dependencies", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -122,14 +122,14 @@ describe('t3code-inspired regressions', () => {
             yield* Effect.succeed({ ref, queue, process });
           });
         `,
-        'DrainableWorker.ts',
-      ),
-    );
+        "DrainableWorker.ts"
+      )
+    )
 
-    expect(ir.root.dependencies.map((dep) => dep.name)).toEqual([]);
-  });
+    expect(ir.root.dependencies.map((dep) => dep.name)).toEqual([])
+  })
 
-  it('renders built-in platform services with consistent dotted names', async () => {
+  it("renders built-in platform services with consistent dotted names", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -141,16 +141,16 @@ describe('t3code-inspired regressions', () => {
           yield* fileSystem.exists("/tmp/demo");
         });
         `,
-        'fs.ts',
-      ),
-    );
+        "fs.ts"
+      )
+    )
 
-    const explanation = renderExplanation(ir);
-    expect(explanation).toContain('Services required: FileSystem.FileSystem');
-    expect(explanation).not.toContain('Services required: FileSystem\n');
-  });
+    const explanation = renderExplanation(ir)
+    expect(explanation).toContain("Services required: FileSystem.FileSystem")
+    expect(explanation).not.toContain("Services required: FileSystem\n")
+  })
 
-  it('models service stream properties as reactor streams instead of unknown sources', async () => {
+  it("models service stream properties as reactor streams instead of unknown sources", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -169,16 +169,16 @@ describe('t3code-inspired regressions', () => {
           );
         });
         `,
-        'ProviderRegistry.ts',
-      ),
-    );
+        "ProviderRegistry.ts"
+      )
+    )
 
-    const explanation = renderExplanation(ir);
-    expect(explanation).toContain('Background stream reactor (Provider.streamChanges)');
-    expect(explanation).not.toContain('Could not determine effect type');
-  });
+    const explanation = renderExplanation(ir)
+    expect(explanation).toContain("Background stream reactor (Provider.streamChanges)")
+    expect(explanation).not.toContain("Could not determine effect type")
+  })
 
-  it('summarizes callback handlers instead of only shallow callback internals', async () => {
+  it("summarizes callback handlers instead of only shallow callback internals", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -206,18 +206,18 @@ describe('t3code-inspired regressions', () => {
           });
         });
         `,
-        'bootstrap.ts',
-      ),
-    );
+        "bootstrap.ts"
+      )
+    )
 
-    const explanation = renderExplanation(ir);
-    expect(explanation).toContain('Calls handleError — callback-handler');
-    expect(explanation).toContain('Calls handleLine — callback-handler');
-    expect(explanation).toContain('Calls resume -> Effect.fail(error) — callback-resume');
-    expect(explanation).toContain('Calls resume -> Effect.succeed(Option.some(parsed.value)) — callback-resume');
-  });
+    const explanation = renderExplanation(ir)
+    expect(explanation).toContain("Calls handleError — callback-handler")
+    expect(explanation).toContain("Calls handleLine — callback-handler")
+    expect(explanation).toContain("Calls resume -> Effect.fail(error) — callback-resume")
+    expect(explanation).toContain("Calls resume -> Effect.succeed(Option.some(parsed.value)) — callback-resume")
+  })
 
-  it('keeps service property effects inside Effect.all branches', async () => {
+  it("keeps service property effects inside Effect.all branches", async () => {
     const [ir] = await Effect.runPromise(
       analyzeEffectSource(
         `
@@ -238,13 +238,13 @@ describe('t3code-inspired regressions', () => {
           });
         });
         `,
-        'ProviderRegistry.ts',
-      ),
-    );
+        "ProviderRegistry.ts"
+      )
+    )
 
-    const explanation = renderExplanation(ir);
-    expect(explanation).toContain('Calls CodexProvider.refresh');
-    expect(explanation).toContain('Calls ClaudeProvider.refresh');
-    expect(explanation).not.toContain('Could not determine effect type');
-  });
-});
+    const explanation = renderExplanation(ir)
+    expect(explanation).toContain("Calls CodexProvider.refresh")
+    expect(explanation).toContain("Calls ClaudeProvider.refresh")
+    expect(explanation).not.toContain("Could not determine effect type")
+  })
+})

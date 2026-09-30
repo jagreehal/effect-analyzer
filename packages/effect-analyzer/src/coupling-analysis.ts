@@ -14,132 +14,132 @@
  * is still reported as low-impact info so growth can be monitored.
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { extname, relative, resolve, sep, dirname } from 'path';
-import type { Project } from 'ts-morph';
-import { loadTsMorph } from './ts-morph-loader';
+import { existsSync, readFileSync } from "fs"
+import { dirname, extname, relative, resolve, sep } from "path"
+import type { Project } from "ts-morph"
+import { loadTsMorph } from "./ts-morph-loader"
 
 // =============================================================================
 // Types
 // =============================================================================
 
 export interface FileCouplingMetrics {
-  readonly filePath: string;
-  readonly projectFilePath: string;
-  readonly fanIn: number;
-  readonly fanOut: number;
-  readonly knownHub: boolean;
-  readonly knownHubReason: string;
-  readonly importSources: readonly string[];
-  readonly importedBy: readonly string[];
+  readonly filePath: string
+  readonly projectFilePath: string
+  readonly fanIn: number
+  readonly fanOut: number
+  readonly knownHub: boolean
+  readonly knownHubReason: string
+  readonly importSources: ReadonlyArray<string>
+  readonly importedBy: ReadonlyArray<string>
 }
 
 export interface CouplingIssue {
   readonly type:
-    | 'high-fanin'
-    | 'critical-fanin'
-    | 'high-fanout'
-    | 'accidental-hub'
-    | 'hub-without-annotation';
-  readonly filePath: string;
-  readonly projectFilePath: string;
-  readonly metric: string;
-  readonly value: number;
-  readonly threshold: number;
-  readonly description: string;
-  readonly suggestion: string;
-  readonly estimatedImpact: 'low' | 'medium' | 'high';
-  readonly knownHub: boolean;
-  readonly knownHubReason: string;
+    | "high-fanin"
+    | "critical-fanin"
+    | "high-fanout"
+    | "accidental-hub"
+    | "hub-without-annotation"
+  readonly filePath: string
+  readonly projectFilePath: string
+  readonly metric: string
+  readonly value: number
+  readonly threshold: number
+  readonly description: string
+  readonly suggestion: string
+  readonly estimatedImpact: "low" | "medium" | "high"
+  readonly knownHub: boolean
+  readonly knownHubReason: string
 }
 
 export interface CouplingAnalysis {
-  readonly metrics: readonly FileCouplingMetrics[];
-  readonly issues: readonly CouplingIssue[];
-  readonly summary: CouplingSummary;
-  readonly knownHubs: readonly FileCouplingMetrics[];
+  readonly metrics: ReadonlyArray<FileCouplingMetrics>
+  readonly issues: ReadonlyArray<CouplingIssue>
+  readonly summary: CouplingSummary
+  readonly knownHubs: ReadonlyArray<FileCouplingMetrics>
 }
 
 export interface CouplingSummary {
-  readonly totalFiles: number;
-  readonly analyzedFiles: number;
-  readonly highFanInFiles: number;
-  readonly criticalFanInFiles: number;
-  readonly highFanOutFiles: number;
+  readonly totalFiles: number
+  readonly analyzedFiles: number
+  readonly highFanInFiles: number
+  readonly criticalFanInFiles: number
+  readonly highFanOutFiles: number
   /** High on fan-in and fan-out at once; see the detection site for why. */
-  readonly accidentalHubs: number;
-  readonly knownHubs: number;
-  readonly unannotatedHubs: number;
-  readonly parseFailures: number;
+  readonly accidentalHubs: number
+  readonly knownHubs: number
+  readonly unannotatedHubs: number
+  readonly parseFailures: number
 }
 
 // =============================================================================
 // Default thresholds
 // =============================================================================
 
-const DEFAULT_HIGH_FANIN = 15;
-const DEFAULT_CRITICAL_FANIN = 30;
-const DEFAULT_HIGH_FANOUT = 20;
+const DEFAULT_HIGH_FANIN = 15
+const DEFAULT_CRITICAL_FANIN = 30
+const DEFAULT_HIGH_FANOUT = 20
 
-const TS_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
-const RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
+const TS_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"])
+const RESOLVE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]
 
 /**
  * Node ESM convention: imports of TypeScript source use the compiled .js
  * extension. Map each runtime extension to the TS source extensions that
  * could compile to it, so `import '../foo.js'` resolves to `../foo.ts`.
  */
-const JS_TO_TS_FALLBACKS: Record<string, readonly string[]> = {
-  '.js': ['.ts', '.tsx'],
-  '.jsx': ['.tsx'],
-  '.mjs': ['.mts'],
-  '.cjs': ['.cts'],
-};
+const JS_TO_TS_FALLBACKS: Record<string, ReadonlyArray<string>> = {
+  ".js": [".ts", ".tsx"],
+  ".jsx": [".tsx"],
+  ".mjs": [".mts"],
+  ".cjs": [".cts"]
+}
 
 // =============================================================================
 // Path alias support (tsconfig.json compilerOptions.paths)
 // =============================================================================
 
 interface PathAliasEntry {
-  readonly prefix: string;
-  readonly target: string;
-  readonly hasStar: boolean;
+  readonly prefix: string
+  readonly target: string
+  readonly hasStar: boolean
 }
 
 interface ResolvedAliases {
-  readonly baseUrl: string;
-  readonly aliases: readonly PathAliasEntry[];
+  readonly baseUrl: string
+  readonly aliases: ReadonlyArray<PathAliasEntry>
 }
 
 function parseTsconfigPaths(tsconfigPath: string): ResolvedAliases | null {
   try {
-    const content = readFileSync(tsconfigPath, 'utf-8');
-    const parsed = JSON.parse(content);
-    const compilerOptions = parsed.compilerOptions;
-    if (!compilerOptions?.paths) return null;
+    const content = readFileSync(tsconfigPath, "utf-8")
+    const parsed = JSON.parse(content)
+    const compilerOptions = parsed.compilerOptions
+    if (!compilerOptions?.paths) return null
 
-    const tsconfigDir = dirname(resolve(tsconfigPath));
+    const tsconfigDir = dirname(resolve(tsconfigPath))
     const baseUrl = compilerOptions.baseUrl
       ? resolve(tsconfigDir, compilerOptions.baseUrl)
-      : tsconfigDir;
+      : tsconfigDir
 
-    const aliases: PathAliasEntry[] = [];
+    const aliases: Array<PathAliasEntry> = []
     for (const [pattern, targets] of Object.entries(compilerOptions.paths)) {
-      const targetArr = Array.isArray(targets) ? targets : [targets];
-      const target = targetArr[0];
-      if (typeof target !== 'string') continue;
+      const targetArr = Array.isArray(targets) ? targets : [targets]
+      const target = targetArr[0]
+      if (typeof target !== "string") continue
 
-      const hasStar = pattern.includes('*');
-      const prefix = hasStar ? pattern.slice(0, pattern.indexOf('*')) : pattern;
+      const hasStar = pattern.includes("*")
+      const prefix = hasStar ? pattern.slice(0, pattern.indexOf("*")) : pattern
 
-      aliases.push({ prefix, target, hasStar });
+      aliases.push({ prefix, target, hasStar })
     }
 
-    aliases.sort((a, b) => b.prefix.length - a.prefix.length);
+    aliases.sort((a, b) => b.prefix.length - a.prefix.length)
 
-    return { baseUrl, aliases };
+    return { baseUrl, aliases }
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -152,31 +152,31 @@ function tryResolveAlias(
   specifier: string,
   project: Project,
   projectRoot: string,
-  resolvedAliases: ResolvedAliases,
+  resolvedAliases: ResolvedAliases
 ): string | null {
   for (const alias of resolvedAliases.aliases) {
-    if (!specifier.startsWith(alias.prefix)) continue;
+    if (!specifier.startsWith(alias.prefix)) continue
 
-    let rest: string;
+    let rest: string
     if (alias.hasStar) {
-      rest = specifier.slice(alias.prefix.length);
+      rest = specifier.slice(alias.prefix.length)
       if (!rest && alias.prefix === specifier) {
-        rest = '';
+        rest = ""
       }
-      const targetPath = alias.target.replace('*', rest);
-      const resolved = resolve(resolvedAliases.baseUrl, targetPath);
-      const found = resolveAliasToFile(resolved, project);
-      if (found && found.startsWith(projectRoot)) return found;
+      const targetPath = alias.target.replace("*", rest)
+      const resolved = resolve(resolvedAliases.baseUrl, targetPath)
+      const found = resolveAliasToFile(resolved, project)
+      if (found && found.startsWith(projectRoot)) return found
     } else {
-      if (specifier !== alias.prefix && !specifier.startsWith(alias.prefix + '/')) {
-        continue;
+      if (specifier !== alias.prefix && !specifier.startsWith(alias.prefix + "/")) {
+        continue
       }
-      const resolved = resolve(resolvedAliases.baseUrl, alias.target);
-      const found = resolveAliasToFile(resolved, project);
-      if (found && found.startsWith(projectRoot)) return found;
+      const resolved = resolve(resolvedAliases.baseUrl, alias.target)
+      const found = resolveAliasToFile(resolved, project)
+      if (found && found.startsWith(projectRoot)) return found
     }
   }
-  return null;
+  return null
 }
 
 /**
@@ -185,31 +185,31 @@ function tryResolveAlias(
  * directory with an index file.
  */
 function resolveAliasToFile(resolved: string, project: Project): string | null {
-  const ext = extname(resolved);
+  const ext = extname(resolved)
   if (ext && RESOLVE_EXTENSIONS.includes(ext)) {
-    if (candidateExists(resolved, project)) return resolved;
-    return null;
+    if (candidateExists(resolved, project)) return resolved
+    return null
   }
 
   for (const e of RESOLVE_EXTENSIONS) {
-    const candidate = resolved + e;
-    if (candidateExists(candidate, project)) return candidate;
+    const candidate = resolved + e
+    if (candidateExists(candidate, project)) return candidate
   }
 
   for (const e of RESOLVE_EXTENSIONS) {
-    const candidate = resolve(resolved, `index${e}`);
-    if (candidateExists(candidate, project)) return candidate;
+    const candidate = resolve(resolved, `index${e}`)
+    if (candidateExists(candidate, project)) return candidate
   }
 
-  return null;
+  return null
 }
 
 // =============================================================================
 // Known-hub annotation detection
 // =============================================================================
 
-const LINE_HUB_RE = /\/\/\s*effect-analyzer-known-hub\b\s*(.*)$/m;
-const JSDOC_HUB_RE = /@known-hub\b\s*([^\n*]*)/;
+const LINE_HUB_RE = /\/\/\s*effect-analyzer-known-hub\b\s*(.*)$/m
+const JSDOC_HUB_RE = /@known-hub\b\s*([^\n*]*)/
 
 /**
  * Extract the leading comment block (line + block comments and blanks) from a
@@ -218,56 +218,56 @@ const JSDOC_HUB_RE = /@known-hub\b\s*([^\n*]*)/;
  * 10 lines.
  */
 function extractLeadingCommentBlock(content: string): string {
-  const lines = content.split('\n');
-  const captured: string[] = [];
-  let inBlock = false;
+  const lines = content.split("\n")
+  const captured: Array<string> = []
+  let inBlock = false
   for (const raw of lines) {
-    const line = raw.trim();
+    const line = raw.trim()
     if (inBlock) {
-      captured.push(raw);
-      if (line.includes('*/')) inBlock = false;
-      continue;
+      captured.push(raw)
+      if (line.includes("*/")) inBlock = false
+      continue
     }
-    if (line === '') {
-      captured.push(raw);
-      continue;
+    if (line === "") {
+      captured.push(raw)
+      continue
     }
-    if (line.startsWith('//')) {
-      captured.push(raw);
-      continue;
+    if (line.startsWith("//")) {
+      captured.push(raw)
+      continue
     }
-    if (line.startsWith('/*')) {
-      captured.push(raw);
-      if (!line.includes('*/')) inBlock = true;
-      continue;
+    if (line.startsWith("/*")) {
+      captured.push(raw)
+      if (!line.includes("*/")) inBlock = true
+      continue
     }
-    break;
+    break
   }
-  return captured.join('\n');
+  return captured.join("\n")
 }
 
 function detectKnownHub(filePath: string, project: Project): { hub: boolean; reason: string } {
-  let content: string | undefined;
-  const sf = project.getSourceFile(filePath);
+  let content: string | undefined
+  const sf = project.getSourceFile(filePath)
   if (sf) {
-    content = sf.getFullText();
+    content = sf.getFullText()
   } else {
     try {
-      content = readFileSync(filePath, 'utf-8');
+      content = readFileSync(filePath, "utf-8")
     } catch {
-      return { hub: false, reason: '' };
+      return { hub: false, reason: "" }
     }
   }
-  const header = extractLeadingCommentBlock(content);
-  const lineMatch = LINE_HUB_RE.exec(header);
+  const header = extractLeadingCommentBlock(content)
+  const lineMatch = LINE_HUB_RE.exec(header)
   if (lineMatch) {
-    return { hub: true, reason: (lineMatch[1] ?? '').trim() || 'intentional hub' };
+    return { hub: true, reason: (lineMatch[1] ?? "").trim() || "intentional hub" }
   }
-  const jsdocMatch = JSDOC_HUB_RE.exec(header);
+  const jsdocMatch = JSDOC_HUB_RE.exec(header)
   if (jsdocMatch) {
-    return { hub: true, reason: (jsdocMatch[1] ?? '').trim() || 'intentional hub' };
+    return { hub: true, reason: (jsdocMatch[1] ?? "").trim() || "intentional hub" }
   }
-  return { hub: false, reason: '' };
+  return { hub: false, reason: "" }
 }
 
 // =============================================================================
@@ -275,125 +275,130 @@ function detectKnownHub(filePath: string, project: Project): { hub: boolean; rea
 // =============================================================================
 
 export interface AnalyzeCouplingOptions {
-  readonly highFanInThreshold?: number;
-  readonly criticalFanInThreshold?: number;
-  readonly highFanOutThreshold?: number;
-  readonly knownHubPaths?: readonly string[];
-  readonly excludePatterns?: readonly string[];
+  readonly highFanInThreshold?: number
+  readonly criticalFanInThreshold?: number
+  readonly highFanOutThreshold?: number
+  readonly knownHubPaths?: ReadonlyArray<string>
+  readonly excludePatterns?: ReadonlyArray<string>
   /**
    * Optional prebuilt ts-morph Project. When supplied, files are read from the
    * Project (which may use an in-memory file system) instead of disk. Useful
    * for tests and for sharing a Project across analyzers.
    */
-  readonly project?: Project | undefined;
+  readonly project?: Project | undefined
   /**
    * Path to tsconfig.json. When provided, `compilerOptions.paths` and
    * `compilerOptions.baseUrl` are used to resolve path aliases (e.g. `@/*`,
    * `~/*`, `@org/foo/*`). The longest-prefix-wins matching strategy is used,
    * with `*` wildcard support.
    */
-  readonly tsconfig?: string | undefined;
+  readonly tsconfig?: string | undefined
   /**
    * Map of workspace package names to their source root directories. When a
    * specifier matches a package name, it is resolved against the mapped path.
    * Useful for pnpm/yarn workspaces where sibling packages import each other
    * by name without explicit tsconfig paths.
    */
-  readonly workspacePackages?: Record<string, string> | undefined;
+  readonly workspacePackages?: Record<string, string> | undefined
   /**
    * When true, fan-in is computed transitively through `export ... from`
    * re-exports. A consumer of a barrel file is also counted as a consumer of
    * the modules the barrel re-exports. Default: false (direct fan-in only).
    */
-  readonly transitive?: boolean | undefined;
+  readonly transitive?: boolean | undefined
 }
 
 export function analyzeCoupling(
-  files: readonly string[],
+  files: ReadonlyArray<string>,
   projectRoot: string,
-  options: AnalyzeCouplingOptions = {},
+  options: AnalyzeCouplingOptions = {}
 ): CouplingAnalysis {
-  const highFanIn = options.highFanInThreshold ?? DEFAULT_HIGH_FANIN;
-  const criticalFanIn = options.criticalFanInThreshold ?? DEFAULT_CRITICAL_FANIN;
-  const highFanOut = options.highFanOutThreshold ?? DEFAULT_HIGH_FANOUT;
-  const knownHubPaths = new Set(options.knownHubPaths ?? []);
-  const excludePatterns = options.excludePatterns ?? [];
+  const highFanIn = options.highFanInThreshold ?? DEFAULT_HIGH_FANIN
+  const criticalFanIn = options.criticalFanInThreshold ?? DEFAULT_CRITICAL_FANIN
+  const highFanOut = options.highFanOutThreshold ?? DEFAULT_HIGH_FANOUT
+  const knownHubPaths = new Set(options.knownHubPaths ?? [])
+  const excludePatterns = options.excludePatterns ?? []
 
   const tsFiles = files.filter((f) => {
-    if (!TS_EXTENSIONS.has(extname(f))) return false;
+    if (!TS_EXTENSIONS.has(extname(f))) return false
     for (const pat of excludePatterns) {
-      if (f.includes(pat)) return false;
+      if (f.includes(pat)) return false
     }
-    return true;
-  });
+    return true
+  })
 
-  const normalizedRoot = resolve(projectRoot) + sep;
+  const normalizedRoot = resolve(projectRoot) + sep
 
   // Path alias resolution from tsconfig
-  const resolvedAliases: ResolvedAliases | null =
-    options.tsconfig ? parseTsconfigPaths(options.tsconfig) : null;
+  const resolvedAliases: ResolvedAliases | null = options.tsconfig ? parseTsconfigPaths(options.tsconfig) : null
 
   // Workspace package name → path mapping
   const workspacePackageMap = options.workspacePackages
     ? new Map(Object.entries(options.workspacePackages))
-    : undefined;
+    : undefined
 
   // Use a caller-supplied Project if provided (e.g. an in-memory one from
   // tests), otherwise build one and load files from disk. Skip tsconfig so we
   // don't pull in incidental files from typeRoots/lib settings.
-  let project: Project;
-  let parseFailures = 0;
+  let project: Project
+  let parseFailures = 0
   if (options.project) {
-    project = options.project;
+    project = options.project
   } else {
-    const { Project } = loadTsMorph();
-    project = new Project({ skipAddingFilesFromTsConfig: true });
+    const { Project } = loadTsMorph()
+    project = new Project({ skipAddingFilesFromTsConfig: true })
     for (const filePath of tsFiles) {
       try {
-        project.addSourceFileAtPath(filePath);
+        project.addSourceFileAtPath(filePath)
       } catch {
-        parseFailures++;
+        parseFailures++
       }
     }
   }
 
   // File -> resolved import paths (internal only)
-  const importMap = new Map<string, string[]>();
+  const importMap = new Map<string, Array<string>>()
   // File -> set of files that import it (fan-in tracking)
-  const reverseMap = new Map<string, Set<string>>();
+  const reverseMap = new Map<string, Set<string>>()
   // File -> resolved re-export targets (only for export ... from declarations)
-  const reexportMap = new Map<string, string[]>();
+  const reexportMap = new Map<string, Array<string>>()
 
   for (const filePath of tsFiles) {
-    const { imports, reexports } = parseImportsAst(project, filePath, normalizedRoot, resolvedAliases, workspacePackageMap);
-    importMap.set(filePath, imports);
+    const { imports, reexports } = parseImportsAst(
+      project,
+      filePath,
+      normalizedRoot,
+      resolvedAliases,
+      workspacePackageMap
+    )
+    importMap.set(filePath, imports)
     if (reexports.length > 0) {
-      reexportMap.set(filePath, reexports);
+      reexportMap.set(filePath, reexports)
     }
   }
 
   for (const [importer, imported] of importMap) {
     for (const target of imported) {
-      let set = reverseMap.get(target);
+      let set = reverseMap.get(target)
       if (!set) {
-        set = new Set();
-        reverseMap.set(target, set);
+        set = new Set()
+        reverseMap.set(target, set)
       }
-      set.add(importer);
+      set.add(importer)
     }
   }
 
-  const metrics: FileCouplingMetrics[] = [];
+  const metrics: Array<FileCouplingMetrics> = []
   for (const filePath of tsFiles) {
-    const outbound = importMap.get(filePath) ?? [];
-    const inbound = reverseMap.get(filePath);
-    const fanOut = outbound.length;
-    const fanIn = inbound?.size ?? 0;
-    const projectFilePath = relative(normalizedRoot, filePath);
-    const knownHubConfig = knownHubPaths.has(filePath);
-    const { hub: knownHubComment, reason } = detectKnownHub(filePath, project);
-    const knownHub = knownHubConfig || knownHubComment;
-    const knownHubReason = knownHubComment ? reason : knownHubConfig ? 'configured hub' : '';
+    const outbound = importMap.get(filePath) ?? []
+    const inbound = reverseMap.get(filePath)
+    const fanOut = outbound.length
+    const fanIn = inbound?.size ?? 0
+    const projectFilePath = relative(normalizedRoot, filePath)
+    const knownHubConfig = knownHubPaths.has(filePath)
+    const { hub: knownHubComment, reason } = detectKnownHub(filePath, project)
+    const knownHub = knownHubConfig || knownHubComment
+    const knownHubReason = knownHubComment ? reason : knownHubConfig ? "configured hub" : ""
 
     metrics.push({
       filePath,
@@ -403,21 +408,21 @@ export function analyzeCoupling(
       knownHub,
       knownHubReason,
       importSources: outbound,
-      importedBy: inbound ? [...inbound] : [],
-    });
+      importedBy: inbound ? [...inbound] : []
+    })
   }
 
   // Transitive fan-in: propagate importers through re-export chains
   if (options.transitive && reexportMap.size > 0) {
-    const reverseReexportMap = new Map<string, Set<string>>();
+    const reverseReexportMap = new Map<string, Set<string>>()
     for (const [reexporter, targets] of reexportMap) {
       for (const target of targets) {
-        let set = reverseReexportMap.get(target);
+        let set = reverseReexportMap.get(target)
         if (!set) {
-          set = new Set();
-          reverseReexportMap.set(target, set);
+          set = new Set()
+          reverseReexportMap.set(target, set)
         }
-        set.add(reexporter);
+        set.add(reexporter)
       }
     }
 
@@ -425,20 +430,20 @@ export function analyzeCoupling(
       const transitiveFans = computeTransitiveImporters(
         metric.filePath,
         reverseMap,
-        reverseReexportMap,
-      );
+        reverseReexportMap
+      )
       if (transitiveFans.size > metric.fanIn) {
-        (metric as { fanIn: number }).fanIn = transitiveFans.size;
+        ;(metric as { fanIn: number }).fanIn = transitiveFans.size
       }
     }
   }
 
-  const issues: CouplingIssue[] = [];
-  let highFanInFiles = 0;
-  let criticalFanInFiles = 0;
-  let highFanOutFiles = 0;
-  let accidentalHubFiles = 0;
-  let unannotatedHubs = 0;
+  const issues: Array<CouplingIssue> = []
+  let highFanInFiles = 0
+  let criticalFanInFiles = 0
+  let highFanOutFiles = 0
+  let accidentalHubFiles = 0
+  let unannotatedHubs = 0
 
   for (const m of metrics) {
     /**
@@ -457,113 +462,119 @@ export function analyzeCoupling(
       m.fanOut >= highFanOut
     ) {
       issues.push({
-        type: 'accidental-hub',
+        type: "accidental-hub",
         filePath: m.filePath,
         projectFilePath: m.projectFilePath,
-        metric: 'fan-in',
+        metric: "fan-in",
         value: m.fanIn,
         threshold: highFanIn,
-        description: `File "${m.projectFilePath}" has fan-in ${m.fanIn} and fan-out ${m.fanOut} — ${m.fanIn} files depend on it while it reaches into ${m.fanOut} others`,
+        description:
+          `File "${m.projectFilePath}" has fan-in ${m.fanIn} and fan-out ${m.fanOut} — ${m.fanIn} files depend on it while it reaches into ${m.fanOut} others`,
         suggestion:
-          'Split the parts dependents actually use from the parts that pull in the rest of the codebase. Add a `// effect-analyzer-known-hub <reason>` comment or `@known-hub <reason>` JSDoc tag if this junction is intentional.',
-        estimatedImpact: 'high',
+          "Split the parts dependents actually use from the parts that pull in the rest of the codebase. Add a `// effect-analyzer-known-hub <reason>` comment or `@known-hub <reason>` JSDoc tag if this junction is intentional.",
+        estimatedImpact: "high",
         knownHub: false,
-        knownHubReason: '',
-      });
-      accidentalHubFiles++;
-      unannotatedHubs++;
-      continue;
+        knownHubReason: ""
+      })
+      accidentalHubFiles++
+      unannotatedHubs++
+      continue
     }
 
     if (m.fanIn >= criticalFanIn) {
       if (m.knownHub) {
         issues.push({
-          type: 'critical-fanin',
+          type: "critical-fanin",
           filePath: m.filePath,
           projectFilePath: m.projectFilePath,
-          metric: 'fan-in',
+          metric: "fan-in",
           value: m.fanIn,
           threshold: criticalFanIn,
-          description: `File "${m.projectFilePath}" has fan-in ${m.fanIn} (critical) — marked as known hub (${m.knownHubReason}), but worth monitoring`,
-          suggestion: 'Review if this hub is growing as expected. Consider splitting if fan-in continues to rise.',
-          estimatedImpact: 'low',
+          description:
+            `File "${m.projectFilePath}" has fan-in ${m.fanIn} (critical) — marked as known hub (${m.knownHubReason}), but worth monitoring`,
+          suggestion: "Review if this hub is growing as expected. Consider splitting if fan-in continues to rise.",
+          estimatedImpact: "low",
           knownHub: m.knownHub,
-          knownHubReason: m.knownHubReason,
-        });
+          knownHubReason: m.knownHubReason
+        })
       } else {
         issues.push({
-          type: 'critical-fanin',
+          type: "critical-fanin",
           filePath: m.filePath,
           projectFilePath: m.projectFilePath,
-          metric: 'fan-in',
+          metric: "fan-in",
           value: m.fanIn,
           threshold: criticalFanIn,
-          description: `File "${m.projectFilePath}" has fan-in ${m.fanIn} (critical) — changes affect ${m.fanIn} dependents`,
-          suggestion: 'Consider splitting this file into smaller modules. Extract stable interfaces. Add a `// effect-analyzer-known-hub <reason>` comment or `@known-hub <reason>` JSDoc tag if this is intentional.',
-          estimatedImpact: 'high',
+          description:
+            `File "${m.projectFilePath}" has fan-in ${m.fanIn} (critical) — changes affect ${m.fanIn} dependents`,
+          suggestion:
+            "Consider splitting this file into smaller modules. Extract stable interfaces. Add a `// effect-analyzer-known-hub <reason>` comment or `@known-hub <reason>` JSDoc tag if this is intentional.",
+          estimatedImpact: "high",
           knownHub: false,
-          knownHubReason: '',
-        });
-        criticalFanInFiles++;
-        unannotatedHubs++;
+          knownHubReason: ""
+        })
+        criticalFanInFiles++
+        unannotatedHubs++
       }
     }
 
     if (m.fanIn >= highFanIn && m.fanIn < criticalFanIn) {
-      if (m.knownHub) continue;
+      if (m.knownHub) continue
       issues.push({
-        type: 'high-fanin',
+        type: "high-fanin",
         filePath: m.filePath,
         projectFilePath: m.projectFilePath,
-        metric: 'fan-in',
+        metric: "fan-in",
         value: m.fanIn,
         threshold: highFanIn,
         description: `File "${m.projectFilePath}" has fan-in ${m.fanIn} (high) — changes affect ${m.fanIn} dependents`,
-        suggestion: 'Consider reducing the import surface. Add a `// effect-analyzer-known-hub <reason>` comment or `@known-hub <reason>` JSDoc tag if this is intentional.',
-        estimatedImpact: 'medium',
+        suggestion:
+          "Consider reducing the import surface. Add a `// effect-analyzer-known-hub <reason>` comment or `@known-hub <reason>` JSDoc tag if this is intentional.",
+        estimatedImpact: "medium",
         knownHub: false,
-        knownHubReason: '',
-      });
-      highFanInFiles++;
-      unannotatedHubs++;
+        knownHubReason: ""
+      })
+      highFanInFiles++
+      unannotatedHubs++
     }
 
     if (m.fanOut >= highFanOut) {
       issues.push({
-        type: 'high-fanout',
+        type: "high-fanout",
         filePath: m.filePath,
         projectFilePath: m.projectFilePath,
-        metric: 'fan-out',
+        metric: "fan-out",
         value: m.fanOut,
         threshold: highFanOut,
         description: `File "${m.projectFilePath}" imports ${m.fanOut} internal modules (high) — broad dependency scope`,
-        suggestion: 'Reduce the number of internal imports. Consider consolidating dependencies or splitting the file by concern.',
-        estimatedImpact: 'medium',
+        suggestion:
+          "Reduce the number of internal imports. Consider consolidating dependencies or splitting the file by concern.",
+        estimatedImpact: "medium",
         knownHub: false,
-        knownHubReason: '',
-      });
-      highFanOutFiles++;
+        knownHubReason: ""
+      })
+      highFanOutFiles++
     }
   }
 
-  const typeOrder: Record<CouplingIssue['type'], number> = {
-    'critical-fanin': 0,
-    'accidental-hub': 1,
-    'high-fanin': 2,
-    'hub-without-annotation': 3,
-    'high-fanout': 4,
-  };
+  const typeOrder: Record<CouplingIssue["type"], number> = {
+    "critical-fanin": 0,
+    "accidental-hub": 1,
+    "high-fanin": 2,
+    "hub-without-annotation": 3,
+    "high-fanout": 4
+  }
   const sortedIssues = [...issues].sort((a, b) => {
-    const cmp = typeOrder[a.type] - typeOrder[b.type];
-    if (cmp !== 0) return cmp;
-    return b.value - a.value;
-  });
+    const cmp = typeOrder[a.type] - typeOrder[b.type]
+    if (cmp !== 0) return cmp
+    return b.value - a.value
+  })
 
   // Only count known hubs that actually meet the high-fan-in threshold
   // (files annotated below threshold aren't really hubs at scale)
   const thresholdKnownHubs = metrics.filter(
-    (m) => m.knownHub && m.fanIn >= highFanIn,
-  );
+    (m) => m.knownHub && m.fanIn >= highFanIn
+  )
 
   return {
     metrics,
@@ -577,10 +588,10 @@ export function analyzeCoupling(
       accidentalHubs: accidentalHubFiles,
       knownHubs: thresholdKnownHubs.length,
       unannotatedHubs,
-      parseFailures,
+      parseFailures
     },
-    knownHubs: metrics.filter((m) => m.knownHub),
-  };
+    knownHubs: metrics.filter((m) => m.knownHub)
+  }
 }
 
 /**
@@ -591,35 +602,35 @@ export function analyzeCoupling(
 function computeTransitiveImporters(
   filePath: string,
   reverseMap: Map<string, Set<string>>,
-  reverseReexportMap: Map<string, Set<string>>,
+  reverseReexportMap: Map<string, Set<string>>
 ): Set<string> {
-  const result = new Set(reverseMap.get(filePath) ?? []);
-  const visited = new Set<string>();
-  const queue = [...(reverseReexportMap.get(filePath) ?? [])];
+  const result = new Set(reverseMap.get(filePath) ?? [])
+  const visited = new Set<string>()
+  const queue = [...(reverseReexportMap.get(filePath) ?? [])]
 
   while (queue.length > 0) {
-    const reexporter = queue.shift()!;
-    if (visited.has(reexporter)) continue;
-    visited.add(reexporter);
+    const reexporter = queue.shift()!
+    if (visited.has(reexporter)) continue
+    visited.add(reexporter)
 
-    const importersOfReexporter = reverseMap.get(reexporter);
+    const importersOfReexporter = reverseMap.get(reexporter)
     if (importersOfReexporter) {
       for (const imp of importersOfReexporter) {
-        result.add(imp);
+        result.add(imp)
       }
     }
 
-    const higherReexporters = reverseReexportMap.get(reexporter);
+    const higherReexporters = reverseReexportMap.get(reexporter)
     if (higherReexporters) {
       for (const hr of higherReexporters) {
         if (!visited.has(hr)) {
-          queue.push(hr);
+          queue.push(hr)
         }
       }
     }
   }
 
-  return result;
+  return result
 }
 
 // =============================================================================
@@ -636,50 +647,50 @@ function parseImportsAst(
   filePath: string,
   projectRoot: string,
   resolvedAliases: ResolvedAliases | null = null,
-  workspacePackageMap?: Map<string, string>,
-): { imports: string[]; reexports: string[] } {
-  const sourceFile = project.getSourceFile(filePath);
-  if (!sourceFile) return { imports: [], reexports: [] };
+  workspacePackageMap?: Map<string, string>
+): { imports: Array<string>; reexports: Array<string> } {
+  const sourceFile = project.getSourceFile(filePath)
+  if (!sourceFile) return { imports: [], reexports: [] }
 
-  const { SyntaxKind } = loadTsMorph();
-  const importSpecifiers = new Set<string>();
-  const reexportSpecifiers = new Set<string>();
+  const { SyntaxKind } = loadTsMorph()
+  const importSpecifiers = new Set<string>()
+  const reexportSpecifiers = new Set<string>()
 
   for (const decl of sourceFile.getImportDeclarations()) {
-    importSpecifiers.add(decl.getModuleSpecifierValue());
+    importSpecifiers.add(decl.getModuleSpecifierValue())
   }
   for (const decl of sourceFile.getExportDeclarations()) {
-    const spec = decl.getModuleSpecifierValue();
+    const spec = decl.getModuleSpecifierValue()
     if (spec) {
       // Re-exports (export ... from ...)
-      reexportSpecifiers.add(spec);
-      importSpecifiers.add(spec);
+      reexportSpecifiers.add(spec)
+      importSpecifiers.add(spec)
     }
   }
   // Dynamic imports: import('...')
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (call.getExpression().getKind() !== SyntaxKind.ImportKeyword) continue;
-    const [arg] = call.getArguments();
+    if (call.getExpression().getKind() !== SyntaxKind.ImportKeyword) continue
+    const [arg] = call.getArguments()
     if (arg?.getKind() === SyntaxKind.StringLiteral) {
-      importSpecifiers.add(arg.getText().slice(1, -1));
+      importSpecifiers.add(arg.getText().slice(1, -1))
     }
   }
 
-  const resolvedImports: string[] = [];
-  const resolvedReexports: string[] = [];
+  const resolvedImports: Array<string> = []
+  const resolvedReexports: Array<string> = []
   for (const spec of importSpecifiers) {
-    const r = tryResolveInternal(spec, filePath, projectRoot, project, resolvedAliases, workspacePackageMap);
-    if (r) resolvedImports.push(r);
+    const r = tryResolveInternal(spec, filePath, projectRoot, project, resolvedAliases, workspacePackageMap)
+    if (r) resolvedImports.push(r)
   }
   for (const spec of reexportSpecifiers) {
-    const r = tryResolveInternal(spec, filePath, projectRoot, project, resolvedAliases, workspacePackageMap);
-    if (r) resolvedReexports.push(r);
+    const r = tryResolveInternal(spec, filePath, projectRoot, project, resolvedAliases, workspacePackageMap)
+    if (r) resolvedReexports.push(r)
   }
 
   return {
     imports: [...new Set(resolvedImports)],
-    reexports: [...new Set(resolvedReexports)],
-  };
+    reexports: [...new Set(resolvedReexports)]
+  }
 }
 
 /**
@@ -687,8 +698,8 @@ function parseImportsAst(
  * (so in-memory file systems work), then falls back to a disk existence check.
  */
 function candidateExists(candidate: string, project: Project): boolean {
-  if (project.getSourceFile(candidate)) return true;
-  return existsSync(candidate);
+  if (project.getSourceFile(candidate)) return true
+  return existsSync(candidate)
 }
 
 /**
@@ -701,67 +712,67 @@ function tryResolveInternal(
   projectRoot: string,
   project: Project,
   resolvedAliases: ResolvedAliases | null = null,
-  workspacePackageMap?: Map<string, string>,
+  workspacePackageMap?: Map<string, string>
 ): string | null {
-  if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
+  if (!specifier.startsWith(".") && !specifier.startsWith("/")) {
     // Try tsconfig path aliases first (longest-prefix-wins)
     if (resolvedAliases) {
-      const aliasResult = tryResolveAlias(specifier, project, projectRoot, resolvedAliases);
-      if (aliasResult) return aliasResult;
+      const aliasResult = tryResolveAlias(specifier, project, projectRoot, resolvedAliases)
+      if (aliasResult) return aliasResult
     }
     // Try workspace package names (e.g. @org/foo resolves to packages/foo/src)
     if (workspacePackageMap) {
       for (const [pkgName, pkgPath] of workspacePackageMap) {
-        if (specifier === pkgName || specifier.startsWith(pkgName + '/')) {
-          const rest = specifier.slice(pkgName.length);
-          const candidate = resolve(pkgPath, rest.length > 0 ? rest.slice(1) : '.');
-          const found = resolveAliasToFile(candidate, project);
-          if (found && found.startsWith(projectRoot)) return found;
+        if (specifier === pkgName || specifier.startsWith(pkgName + "/")) {
+          const rest = specifier.slice(pkgName.length)
+          const candidate = resolve(pkgPath, rest.length > 0 ? rest.slice(1) : ".")
+          const found = resolveAliasToFile(candidate, project)
+          if (found && found.startsWith(projectRoot)) return found
         }
       }
     }
-    return null;
+    return null
   }
 
-  const sourceDir = resolve(sourceFile, '..');
-  const ext = extname(specifier);
+  const sourceDir = resolve(sourceFile, "..")
+  const ext = extname(specifier)
 
   if (ext && RESOLVE_EXTENSIONS.includes(ext)) {
-    const direct = resolve(sourceDir, specifier);
-    if (!direct.startsWith(projectRoot)) return null;
-    if (candidateExists(direct, project)) return direct;
+    const direct = resolve(sourceDir, specifier)
+    if (!direct.startsWith(projectRoot)) return null
+    if (candidateExists(direct, project)) return direct
 
     // Node ESM: import path uses .js but on-disk source is .ts. Try the
     // matching TS source extension before giving up.
-    const tsFallbacks = JS_TO_TS_FALLBACKS[ext];
+    const tsFallbacks = JS_TO_TS_FALLBACKS[ext]
     if (tsFallbacks) {
-      const base = direct.slice(0, -ext.length);
+      const base = direct.slice(0, -ext.length)
       for (const tsExt of tsFallbacks) {
-        const candidate = base + tsExt;
-        if (candidateExists(candidate, project)) return candidate;
+        const candidate = base + tsExt
+        if (candidateExists(candidate, project)) return candidate
       }
     }
-    return direct;
+    return direct
   }
 
   // Try with each extension.
   for (const e of RESOLVE_EXTENSIONS) {
-    const candidate = resolve(sourceDir, specifier + e);
-    if (!candidate.startsWith(projectRoot)) continue;
-    if (candidateExists(candidate, project)) return candidate;
+    const candidate = resolve(sourceDir, specifier + e)
+    if (!candidate.startsWith(projectRoot)) continue
+    if (candidateExists(candidate, project)) return candidate
   }
 
   // Try as directory with index file.
   for (const e of RESOLVE_EXTENSIONS) {
-    const candidate = resolve(sourceDir, specifier, `index${e}`);
-    if (!candidate.startsWith(projectRoot)) continue;
-    if (candidateExists(candidate, project)) return candidate;
+    const candidate = resolve(sourceDir, specifier, `index${e}`)
+    if (!candidate.startsWith(projectRoot)) continue
+    if (candidateExists(candidate, project)) return candidate
   }
 
   // Best-guess fallback (used when the target file isn't on disk yet, e.g.
   // mid-refactor); still constrained to the project root.
-  const guessed = resolve(sourceDir, specifier + '.ts');
-  return guessed.startsWith(projectRoot) ? guessed : null;
+  const guessed = resolve(sourceDir, specifier + ".ts")
+  return guessed.startsWith(projectRoot) ? guessed : null
 }
 
 // =============================================================================
@@ -769,62 +780,62 @@ function tryResolveInternal(
 // =============================================================================
 
 export const renderCouplingReport = (analysis: CouplingAnalysis): string => {
-  const lines: string[] = [];
-  const s = analysis.summary;
+  const lines: Array<string> = []
+  const s = analysis.summary
 
-  lines.push('# Module Coupling Analysis\n');
-  lines.push('## Summary\n');
-  lines.push(`- Total files: ${s.totalFiles}`);
-  lines.push(`- Analyzed files: ${s.analyzedFiles}`);
-  lines.push(`- High fan-in files: ${s.highFanInFiles}`);
-  lines.push(`- Critical fan-in files: ${s.criticalFanInFiles}`);
-  lines.push(`- High fan-out files: ${s.highFanOutFiles}`);
-  lines.push(`- Accidental hubs (high fan-in and fan-out): ${s.accidentalHubs}`);
-  lines.push(`- Known hubs (annotated at scale): ${s.knownHubs}`);
-  lines.push(`- Unannotated hubs: ${s.unannotatedHubs}`);
+  lines.push("# Module Coupling Analysis\n")
+  lines.push("## Summary\n")
+  lines.push(`- Total files: ${s.totalFiles}`)
+  lines.push(`- Analyzed files: ${s.analyzedFiles}`)
+  lines.push(`- High fan-in files: ${s.highFanInFiles}`)
+  lines.push(`- Critical fan-in files: ${s.criticalFanInFiles}`)
+  lines.push(`- High fan-out files: ${s.highFanOutFiles}`)
+  lines.push(`- Accidental hubs (high fan-in and fan-out): ${s.accidentalHubs}`)
+  lines.push(`- Known hubs (annotated at scale): ${s.knownHubs}`)
+  lines.push(`- Unannotated hubs: ${s.unannotatedHubs}`)
   if (s.parseFailures > 0) {
-    lines.push(`- ⚠️ Parse failures: ${s.parseFailures} (fan-in numbers may undercount)`);
+    lines.push(`- ⚠️ Parse failures: ${s.parseFailures} (fan-in numbers may undercount)`)
   }
-  lines.push('');
+  lines.push("")
 
   if (analysis.issues.length > 0) {
-    lines.push('## Issues\n');
+    lines.push("## Issues\n")
     for (const issue of analysis.issues) {
-      const icon = issue.type === 'critical-fanin' ? '🔴' : issue.type === 'high-fanin' ? '🟡' : '🟢';
-      lines.push(`${icon} **[${issue.type}]** \`${issue.projectFilePath || issue.filePath}\``);
-      lines.push(`   ${issue.description}`);
-      lines.push(`   💡 ${issue.suggestion}`);
-      lines.push('');
+      const icon = issue.type === "critical-fanin" ? "🔴" : issue.type === "high-fanin" ? "🟡" : "🟢"
+      lines.push(`${icon} **[${issue.type}]** \`${issue.projectFilePath || issue.filePath}\``)
+      lines.push(`   ${issue.description}`)
+      lines.push(`   💡 ${issue.suggestion}`)
+      lines.push("")
     }
   }
 
   if (analysis.knownHubs.length > 0) {
-    lines.push('## Known Hubs (Annotated)\n');
+    lines.push("## Known Hubs (Annotated)\n")
     for (const hub of analysis.knownHubs) {
-      lines.push(`- \`${hub.projectFilePath}\` — fan-in: ${hub.fanIn}, fan-out: ${hub.fanOut} — ${hub.knownHubReason}`);
+      lines.push(`- \`${hub.projectFilePath}\` — fan-in: ${hub.fanIn}, fan-out: ${hub.fanOut} — ${hub.knownHubReason}`)
     }
-    lines.push('');
+    lines.push("")
   }
 
   if (analysis.metrics.length > 0) {
-    lines.push('## All Files (sorted by fan-in)\n');
-    const sorted = [...analysis.metrics].sort((a, b) => b.fanIn - a.fanIn);
-    lines.push('| File | Fan-in | Fan-out | Known hub |');
-    lines.push('|------|--------|---------|-----------|');
+    lines.push("## All Files (sorted by fan-in)\n")
+    const sorted = [...analysis.metrics].sort((a, b) => b.fanIn - a.fanIn)
+    lines.push("| File | Fan-in | Fan-out | Known hub |")
+    lines.push("|------|--------|---------|-----------|")
     for (const m of sorted.slice(0, 30)) {
-      const known = m.knownHub ? ` (${m.knownHubReason})` : '';
-      lines.push(`| \`${m.projectFilePath}\` | ${m.fanIn} | ${m.fanOut} | ${m.knownHub ? '✅' + known : ''} |`);
+      const known = m.knownHub ? ` (${m.knownHubReason})` : ""
+      lines.push(`| \`${m.projectFilePath}\` | ${m.fanIn} | ${m.fanOut} | ${m.knownHub ? "✅" + known : ""} |`)
     }
     if (sorted.length > 30) {
-      lines.push(`| ... and ${sorted.length - 30} more (use \`--format json\` for full list) |`);
+      lines.push(`| ... and ${sorted.length - 30} more (use \`--format json\` for full list) |`)
     }
-    lines.push('');
+    lines.push("")
   }
 
-  return lines.join('\n');
-};
+  return lines.join("\n")
+}
 
 export const renderCouplingJson = (
   analysis: CouplingAnalysis,
-  pretty = true,
-): string => JSON.stringify(analysis, null, pretty ? 2 : 0);
+  pretty = true
+): string => JSON.stringify(analysis, null, pretty ? 2 : 0)

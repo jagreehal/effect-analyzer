@@ -29,7 +29,7 @@ Certain IR patterns always trigger a specific diagram type:
 
 | Pattern Detected | Diagram Selected |
 |---|---|
-| `Effect.all` with concurrency, `Effect.race` | Concurrency view |
+| `Effect.all` or `Effect.forEach` with concurrency, `Effect.race` | Concurrency view |
 | Conditional branches, `Effect.if` | Decision tree |
 | `Effect.loop`, `Effect.iterate` | Standard flowchart |
 | Multiple services or layers | Service map |
@@ -77,7 +77,7 @@ effect-analyzer includes 15 Mermaid diagram renderers, each optimized for a diff
 | `mermaid-errors` | What each handler does to each error; what reaches the caller |
 | `mermaid-decisions` | Conditional branching tree |
 | `mermaid-causes` | Cause and Exit error wrapping hierarchy |
-| `mermaid-concurrency` | Parallel and race patterns with fork/join structure |
+| `mermaid-concurrency` | Parallel and race patterns with fork/join structure, plus loops that run with `{ concurrency }` |
 | `mermaid-timeline` | Step sequence displayed as a timeline |
 | `mermaid-layers` | Layer composition and dependency graph |
 | `mermaid-retry` | Retry and timeout strategy visualization |

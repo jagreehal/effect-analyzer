@@ -15,60 +15,56 @@
  * "What runs when this file is imported?"
  */
 
-import type { CallExpression, Node, SourceFile } from 'ts-morph';
-import { Effect } from 'effect';
-import {
-  loadTsMorph,
-  createProject,
-  createProjectFromSource,
-} from './ts-morph-loader';
-import type { SourceLocation } from './types';
-import { AnalysisError } from './types';
-import { isJsOrJsxPath } from './analysis-utils';
+import { Effect } from "effect"
+import type { CallExpression, Node, SourceFile } from "ts-morph"
+import { isJsOrJsxPath } from "./analysis-utils"
+import { createProject, createProjectFromSource, loadTsMorph } from "./ts-morph-loader"
+import type { SourceLocation } from "./types"
+import { AnalysisError } from "./types"
 
 export type EntryPointKind =
-  | 'NodeRuntime.runMain'
-  | 'BunRuntime.runMain'
-  | 'Layer.launch'
-  | 'Effect.runFork'
-  | 'Effect.runPromise'
-  | 'Effect.runPromiseExit'
-  | 'Effect.runSync'
-  | 'Effect.runSyncExit';
+  | "NodeRuntime.runMain"
+  | "BunRuntime.runMain"
+  | "Layer.launch"
+  | "Effect.runFork"
+  | "Effect.runPromise"
+  | "Effect.runPromiseExit"
+  | "Effect.runSync"
+  | "Effect.runSyncExit"
 
 export interface EntryPoint {
-  readonly kind: EntryPointKind;
+  readonly kind: EntryPointKind
   /** The full callee text e.g. "NodeRuntime.runMain" or "BunRuntime.runMain". */
-  readonly callee: string;
+  readonly callee: string
   /** Text of the effect / layer argument (truncated to 120 chars). */
-  readonly argText?: string;
+  readonly argText?: string
   /** Whether the call appears at module scope (true) or nested inside another expression. */
-  readonly isTopLevel: boolean;
+  readonly isTopLevel: boolean
   /** Source location of the call. */
-  readonly location: SourceLocation;
+  readonly location: SourceLocation
 }
 
 export interface EntryPointReport {
-  readonly filePath: string;
-  readonly entryPoints: readonly EntryPoint[];
+  readonly filePath: string
+  readonly entryPoints: ReadonlyArray<EntryPoint>
 }
 
 const ENTRY_POINT_CALLEES = new Map<string, EntryPointKind>([
-  ['NodeRuntime.runMain', 'NodeRuntime.runMain'],
-  ['BunRuntime.runMain', 'BunRuntime.runMain'],
-  ['Layer.launch', 'Layer.launch'],
-  ['Effect.runFork', 'Effect.runFork'],
-  ['Effect.runPromise', 'Effect.runPromise'],
-  ['Effect.runPromiseExit', 'Effect.runPromiseExit'],
-  ['Effect.runSync', 'Effect.runSync'],
-  ['Effect.runSyncExit', 'Effect.runSyncExit'],
-]);
+  ["NodeRuntime.runMain", "NodeRuntime.runMain"],
+  ["BunRuntime.runMain", "BunRuntime.runMain"],
+  ["Layer.launch", "Layer.launch"],
+  ["Effect.runFork", "Effect.runFork"],
+  ["Effect.runPromise", "Effect.runPromise"],
+  ["Effect.runPromiseExit", "Effect.runPromiseExit"],
+  ["Effect.runSync", "Effect.runSync"],
+  ["Effect.runSyncExit", "Effect.runSyncExit"]
+])
 
 const isModuleScope = (node: Node): boolean => {
-  const { SyntaxKind } = loadTsMorph();
-  let cur: Node | undefined = node.getParent();
+  const { SyntaxKind } = loadTsMorph()
+  let cur: Node | undefined = node.getParent()
   while (cur) {
-    const kind = cur.getKind();
+    const kind = cur.getKind()
     if (
       kind === SyntaxKind.FunctionDeclaration ||
       kind === SyntaxKind.FunctionExpression ||
@@ -76,86 +72,85 @@ const isModuleScope = (node: Node): boolean => {
       kind === SyntaxKind.MethodDeclaration ||
       kind === SyntaxKind.ClassDeclaration
     ) {
-      return false;
+      return false
     }
-    cur = cur.getParent();
+    cur = cur.getParent()
   }
-  return true;
-};
+  return true
+}
 
 const makeLocation = (call: CallExpression, filePath: string): SourceLocation => {
-  const start = call.getStart();
-  const { line, column } = call.getSourceFile().getLineAndColumnAtPos(start);
-  return { filePath, line, column };
-};
+  const start = call.getStart()
+  const { line, column } = call.getSourceFile().getLineAndColumnAtPos(start)
+  return { filePath, line, column }
+}
 
 /** Scan a SourceFile for entry-point call expressions. */
 export const findEntryPoints = (
   sf: SourceFile,
-  filePath?: string,
+  filePath?: string
 ): EntryPointReport => {
-  const { SyntaxKind } = loadTsMorph();
-  const fp = filePath ?? sf.getFilePath();
-  const entryPoints: EntryPoint[] = [];
+  const { SyntaxKind } = loadTsMorph()
+  const fp = filePath ?? sf.getFilePath()
+  const entryPoints: Array<EntryPoint> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const callee = call.getExpression().getText();
-    const kind = ENTRY_POINT_CALLEES.get(callee);
-    if (!kind) continue;
-    const args = call.getArguments();
-    const rawArg = args[0]?.getText();
-    const argText =
-      rawArg && rawArg.length > 120 ? `${rawArg.slice(0, 120)}…` : rawArg;
+    const callee = call.getExpression().getText()
+    const kind = ENTRY_POINT_CALLEES.get(callee)
+    if (!kind) continue
+    const args = call.getArguments()
+    const rawArg = args[0]?.getText()
+    const argText = rawArg && rawArg.length > 120 ? `${rawArg.slice(0, 120)}…` : rawArg
     entryPoints.push({
       kind,
       callee,
       ...(argText ? { argText } : {}),
       isTopLevel: isModuleScope(call),
-      location: makeLocation(call, fp),
-    });
+      location: makeLocation(call, fp)
+    })
   }
-  return { filePath: fp, entryPoints };
-};
+  return { filePath: fp, entryPoints }
+}
 
 /** Convenience: scan a file path. */
 export const analyzeEntryPointsFile = (
-  filePath: string,
+  filePath: string
 ): Effect.Effect<EntryPointReport, AnalysisError> =>
-  Effect.gen(function* () {
-    const { Project } = loadTsMorph();
+  Effect.gen(function*() {
+    const { Project } = loadTsMorph()
     const project = yield* Effect.try({
       try: () =>
         isJsOrJsxPath(filePath)
           ? new Project({
-              skipAddingFilesFromTsConfig: true,
-              compilerOptions: { allowJs: true },
-            })
+            skipAddingFilesFromTsConfig: true,
+            compilerOptions: { allowJs: true }
+          })
           : createProject(),
       catch: (error) =>
         new AnalysisError(
-          'PROJECT_CREATION_FAILED',
-          `Failed to create project: ${String(error)}`,
-        ),
-    });
+          "PROJECT_CREATION_FAILED",
+          `Failed to create project: ${String(error)}`
+        )
+    })
     const sf = yield* Effect.try({
       try: () => {
-        const existing = project.getSourceFile(filePath);
-        if (existing) return existing;
-        return project.addSourceFileAtPath(filePath);
+        const existing = project.getSourceFile(filePath)
+        if (existing) return existing
+        return project.addSourceFileAtPath(filePath)
       },
       catch: (error) =>
         new AnalysisError(
-          'FILE_NOT_FOUND',
-          `Failed to load file ${filePath}: ${String(error)}`,
-        ),
-    });
-    return findEntryPoints(sf, filePath);
-  });
+          "FILE_NOT_FOUND",
+          `Failed to load file ${filePath}: ${String(error)}`
+        )
+    })
+    return findEntryPoints(sf, filePath)
+  })
 
 /** Convenience: scan a source string. */
 export const analyzeEntryPointsSource = (
   code: string,
-  filePath = 'temp.ts',
+  filePath = "temp.ts"
 ): EntryPointReport => {
-  const sf = createProjectFromSource(code, filePath);
-  return findEntryPoints(sf, filePath);
-};
+  const sf = createProjectFromSource(code, filePath)
+  return findEntryPoints(sf, filePath)
+}

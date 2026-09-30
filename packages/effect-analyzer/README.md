@@ -154,7 +154,7 @@ For whole-codebase gates rather than per-PR review:
 Given an Effect program like this:
 
 ```ts
-export const transfer = Effect.gen(function* () {
+export const transfer = Effect.gen(function*() {
   const repo = yield* AccountRepo
   const audit = yield* AuditLog
 
@@ -213,20 +213,20 @@ flowchart TB
 
 Auto-mode picks the most relevant views for your program, or choose explicitly:
 
-| Format | Shows |
-|--------|-------|
-| `mermaid-railway` | Linear happy path with error branches |
-| `mermaid` | Full flowchart with all control flow |
-| `mermaid-services` | Service dependency map |
-| `mermaid-errors` | What each handler does to each error; what reaches the caller in `E` |
-| `mermaid-concurrency` | Parallel and race patterns |
-| `mermaid-layers` | Layer composition graph |
-| `mermaid-retry` | Retry and timeout strategies |
-| `mermaid-timeline` | Step sequence over time |
-| `mermaid-statechart` | State machine as a `stateDiagram-v2` |
-| `svg-statechart` | Self-contained, XState-styled statechart SVG |
-| `statechart-html` | Local visualizer page with SVG, coverage, and XState export |
-| `xstate-config` | `createMachine()` config for the [Stately visualizer](https://stately.ai/viz) |
+| Format                | Shows                                                                         |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `mermaid-railway`     | Linear happy path with error branches                                         |
+| `mermaid`             | Full flowchart with all control flow                                          |
+| `mermaid-services`    | Service dependency map                                                        |
+| `mermaid-errors`      | What each handler does to each error; what reaches the caller in `E`          |
+| `mermaid-concurrency` | Parallel and race patterns                                                    |
+| `mermaid-layers`      | Layer composition graph                                                       |
+| `mermaid-retry`       | Retry and timeout strategies                                                  |
+| `mermaid-timeline`    | Step sequence over time                                                       |
+| `mermaid-statechart`  | State machine as a `stateDiagram-v2`                                          |
+| `svg-statechart`      | Self-contained, XState-styled statechart SVG                                  |
+| `statechart-html`     | Local visualizer page with SVG, coverage, and XState export                   |
+| `xstate-config`       | `createMachine()` config for the [Stately visualizer](https://stately.ai/viz) |
 
 [See all formats →](https://jagreehal.github.io/effect-analyzer/diagrams/all-formats/)
 
@@ -265,35 +265,34 @@ The recognized shape is `Machine.make({...}).handle({...})`:
 const CheckoutStates = Machine.states({
   Idle: {},
   Paying: CheckoutState.cases.Paying,
-  Paid: { type: 'final' },
-  Failed: {},
-});
+  Paid: { type: "final" },
+  Failed: {}
+})
 
 const CheckoutEvents = Machine.events(
-  Schema.TaggedUnion({ Pay: { amount: Schema.Number }, Cancel: {} }),
-);
+  Schema.TaggedUnion({ Pay: { amount: Schema.Number }, Cancel: {} })
+)
 
 export const CheckoutMachine = Machine.make({
   states: CheckoutStates.states,
   events: CheckoutEvents,
-  initial: (to) => to.Idle(),
+  initial: (to) => to.Idle()
 }).handle({
   Idle: {
     on: {
-      Pay: (to) =>
-        to.full.Paying().resolve(({ event, target }) => target.from({ amount: event.amount })),
-    },
+      Pay: (to) => to.full.Paying().resolve(({ event, target }) => target.from({ amount: event.amount }))
+    }
   },
   Paying: {
     entry: logCharge,
     invoke: (from) =>
       from
-        .effect('charge-card', ({ state }) => chargeCard(state.amount))
+        .effect("charge-card", ({ state }) => chargeCard(state.amount))
         .onDone((to) => to.full.Paid())
         .onFailure((to) => to.full.Failed()),
-    on: { Cancel: (to) => to.full.Failed() },
-  },
-});
+    on: { Cancel: (to) => to.full.Failed() }
+  }
+})
 ```
 
 Both API generations are read: the `Machine.states` / `Machine.events`
@@ -451,14 +450,14 @@ const html = renderInteractiveHTML(ir, { theme: "midnight" })
 Use the programmatic API to integrate analysis into your own tools:
 
 ```ts
-import { analyze } from "effect-analyzer/analysis"
 import { Effect } from "effect"
+import { analyze } from "effect-analyzer/analysis"
 
 const ir = await Effect.runPromise(analyze("./src/transfer.ts").single)
 
-console.log(ir.root.programName)    // "transfer"
-console.log(ir.root.dependencies)    // [{ name: "AccountRepo", ... }, ...]
-console.log(ir.root.errorTypes)      // ["InsufficientFundsError", "AccountNotFoundError"]
+console.log(ir.root.programName) // "transfer"
+console.log(ir.root.dependencies) // [{ name: "AccountRepo", ... }, ...]
+console.log(ir.root.errorTypes) // ["InsufficientFundsError", "AccountNotFoundError"]
 ```
 
 The root package intentionally exposes only the canonical workflow:
@@ -470,13 +469,13 @@ runtime-overlay renderer. Expert functionality is grouped under
 ### Diagram fidelity and runtime traces
 
 ```ts
+import { Effect } from "effect"
 import {
   analysis,
   computeDiagramFidelity,
   renderMermaidWithRuntimeTrace,
-  traceFromOpenTelemetry,
+  traceFromOpenTelemetry
 } from "effect-analyzer"
-import { Effect } from "effect"
 
 const ir = await Effect.runPromise(analysis.file("./src/transfer.ts").single)
 const fidelity = computeDiagramFidelity(ir)
@@ -498,18 +497,18 @@ programs are all trivial.
 
 ## What It Detects
 
-| Area | Patterns |
-|------|----------|
-| **Programs** | `Effect.gen`, pipe chains, `Effect.sync`, `Effect.callback`, `Effect.promise` |
-| **Services** | `Context.Service` via `yield*`, service method calls |
-| **Layers** | `Layer.mergeAll`, `Layer.effect`, `Layer.provide`, `Layer.succeed` |
-| **Errors** | `catchTag`, `catch`, `tapError`, `retry`, `timeout` |
-| **Concurrency** | `Effect.all`, `Effect.race`, `Effect.fork`, `Fiber.join` |
-| **Resources** | `acquireRelease`, `ensuring`, `Effect.scoped` |
-| **Streams** | `Stream.fromIterable`, `Stream.mapEffect`, `Stream.runCollect` |
-| **Control flow** | `if/else`, `for..of`, `while`, `try/catch`, `switch` inside generators |
-| **Schedules** | `Schedule.recurs`, `Schedule.exponential` |
-| **Aliases** | `const E = Effect`, destructured imports, renamed imports |
+| Area             | Patterns                                                                      |
+| ---------------- | ----------------------------------------------------------------------------- |
+| **Programs**     | `Effect.gen`, pipe chains, `Effect.sync`, `Effect.callback`, `Effect.promise` |
+| **Services**     | `Context.Service` via `yield*`, service method calls                          |
+| **Layers**       | `Layer.mergeAll`, `Layer.effect`, `Layer.provide`, `Layer.succeed`            |
+| **Errors**       | `catchTag`, `catch`, `tapError`, `retry`, `timeout`                           |
+| **Concurrency**  | `Effect.all`, `Effect.race`, `Effect.fork`, `Fiber.join`                      |
+| **Resources**    | `acquireRelease`, `ensuring`, `Effect.scoped`                                 |
+| **Streams**      | `Stream.fromIterable`, `Stream.mapEffect`, `Stream.runCollect`                |
+| **Control flow** | `if/else`, `for..of`, `while`, `try/catch`, `switch` inside generators        |
+| **Schedules**    | `Schedule.recurs`, `Schedule.exponential`                                     |
+| **Aliases**      | `const E = Effect`, destructured imports, renamed imports                     |
 
 ## Mutation Testing
 

@@ -2,162 +2,154 @@
  * Effect expression analysis: pipe chains, effect calls, and domain-specific analyzers.
  */
 
-import { Effect, Option } from 'effect';
+import { Effect, Option } from "effect"
 import type {
-  SourceFile,
-  Node,
-  CallExpression,
-  ArrowFunction,
-  FunctionExpression,
-  Block,
-  ReturnStatement,
-  ObjectLiteralExpression,
-  PropertyAssignment,
-  PropertyAccessExpression,
-  ExpressionStatement,
-  Identifier,
   ArrayLiteralExpression,
-  TaggedTemplateExpression,
+  ArrowFunction,
+  Block,
+  CallExpression,
+  ExpressionStatement,
+  FunctionExpression,
+  Identifier,
   NewExpression,
-} from 'ts-morph';
-import { loadTsMorph } from './ts-morph-loader';
-import type { AnalysisError, AnalyzerOptions, AnalysisWarning, AnalysisStats } from './types';
-import type {
-  StaticFlowNode,
-  StaticEffectNode,
-  StaticPipeNode,
-  StaticErrorHandlerNode,
-  StaticLayerNode,
-  StaticStreamNode,
-  StaticFiberNode,
-  StaticUnknownNode,
-  LayerLifecycle,
-  EffectTypeSignature,
-} from './types';
-import { getStaticChildren } from './types';
-import {
-  extractEffectTypeSignature,
-  extractServiceRequirements,
-  extractLayerTypeSignature,
-} from './type-extractor';
-import {
-  generateId,
-  extractLocation,
-  extractJSDocDescription,
-  extractJSDocTags,
-  computeDisplayName,
-  computeSemanticRole,
-  unwrapExpression,
-} from './analysis-utils';
-import {
-  ERROR_HANDLER_PATTERNS,
-  CONDITIONAL_PATTERNS,
-  COLLECTION_PATTERNS,
-  FIBER_PATTERNS,
-  INTERRUPTION_PATTERNS,
-  isTransformCall,
-  isMatchCall,
-  isCauseCall,
-  isExitCall,
-  isScheduleCall,
-  getSemanticDescriptionWithAliases,
-  parseServiceIdsFromContextType,
-  BUILT_IN_TYPE_NAMES,
-  KNOWN_EFFECT_NAMESPACES,
-} from './analysis-patterns';
+  Node,
+  ObjectLiteralExpression,
+  PropertyAccessExpression,
+  PropertyAssignment,
+  ReturnStatement,
+  SourceFile,
+  TaggedTemplateExpression
+} from "ts-morph"
 import {
   getAliasesForFile,
   isEffectCallee,
   isEffectLikeCallExpression,
-  normalizeEffectCallee,
-} from './alias-resolution';
+  normalizeEffectCallee
+} from "./alias-resolution"
+import { bindAnalysisContext, createAnalysisContext } from "./analysis-context"
 import {
-  buildCallbackSummaryNodes,
-  summarizeNamedCallbackHandlers,
-} from './callback-summary';
-import { resolveIdentifierToLayerInitializer } from './layer-initializer-resolution';
+  BUILT_IN_TYPE_NAMES,
+  COLLECTION_PATTERNS,
+  CONDITIONAL_PATTERNS,
+  ERROR_HANDLER_PATTERNS,
+  FIBER_PATTERNS,
+  getSemanticDescriptionWithAliases,
+  INTERRUPTION_PATTERNS,
+  isCauseCall,
+  isExitCall,
+  isMatchCall,
+  isScheduleCall,
+  isTransformCall,
+  KNOWN_EFFECT_NAMESPACES,
+  parseServiceIdsFromContextType
+} from "./analysis-patterns"
 import {
-  isEffectRuntimePrimitive,
-  isLikelyServiceStreamProperty,
-  tryResolveServicePropertyAccess,
-  classifyUseCallbackKind,
-} from './service-type-heuristics';
-import {
-  bindAnalysisContext,
-  createAnalysisContext,
-} from './analysis-context';
-import {
-  analyzeStreamCall as _analyzeStreamCall,
-  analyzeChannelCall as _analyzeChannelCall,
-  analyzeSinkCall as _analyzeSinkCall,
-} from './stream-channel-sink-analyzers';
-import {
-  analyzeRetryCall as _analyzeRetryCall,
-  analyzeTimeoutCall as _analyzeTimeoutCall,
-  analyzeScheduleCall,
-} from './retry-timeout-analyzers';
+  computeDisplayName,
+  computeSemanticRole,
+  extractJSDocDescription,
+  extractJSDocTags,
+  extractLocation,
+  generateId,
+  unwrapExpression
+} from "./analysis-utils"
+import { buildCallbackSummaryNodes, summarizeNamedCallbackHandlers } from "./callback-summary"
 import {
   analyzeConcurrencyPrimitiveCall,
   analyzeFiberCall as _analyzeFiberCall,
-  analyzeInterruptionCall as _analyzeInterruptionCall,
-} from './concurrency-fiber-analyzers';
+  analyzeInterruptionCall as _analyzeInterruptionCall
+} from "./concurrency-fiber-analyzers"
 import {
-  analyzeParallelCall as _analyzeParallelCall,
-  analyzeRaceCall as _analyzeRaceCall,
-} from './parallel-race-analyzers';
-import { analyzeErrorHandlerCall as _analyzeErrorHandlerCall, classifyErrorHandlerName } from './error-handler-analyzer';
-import { analyzeResourceCall as _analyzeResourceCall } from './resource-analyzer';
-import {
+  analyzeCauseCall as _analyzeCauseCall,
   analyzeConditionalCall as _analyzeConditionalCall,
+  analyzeExitCall,
   analyzeLoopCall as _analyzeLoopCall,
   analyzeMatchCall,
-  analyzeCauseCall as _analyzeCauseCall,
-  analyzeExitCall,
-  analyzeTransformCall as _analyzeTransformCall,
-} from './control-flow-analyzers';
+  analyzeTransformCall as _analyzeTransformCall
+} from "./control-flow-analyzers"
+import { analyzeErrorHandlerCall as _analyzeErrorHandlerCall, classifyErrorHandlerName } from "./error-handler-analyzer"
+import { resolveIdentifierToLayerInitializer } from "./layer-initializer-resolution"
+import {
+  analyzeParallelCall as _analyzeParallelCall,
+  analyzeRaceCall as _analyzeRaceCall
+} from "./parallel-race-analyzers"
+import { analyzeResourceCall as _analyzeResourceCall } from "./resource-analyzer"
+import {
+  analyzeRetryCall as _analyzeRetryCall,
+  analyzeScheduleCall,
+  analyzeTimeoutCall as _analyzeTimeoutCall
+} from "./retry-timeout-analyzers"
+import {
+  classifyUseCallbackKind,
+  isEffectRuntimePrimitive,
+  isLikelyServiceStreamProperty,
+  tryResolveServicePropertyAccess
+} from "./service-type-heuristics"
+import {
+  analyzeChannelCall as _analyzeChannelCall,
+  analyzeSinkCall as _analyzeSinkCall,
+  analyzeStreamCall as _analyzeStreamCall
+} from "./stream-channel-sink-analyzers"
+import { loadTsMorph } from "./ts-morph-loader"
+import { extractEffectTypeSignature, extractLayerTypeSignature, extractServiceRequirements } from "./type-extractor"
+import type {
+  AnalysisError,
+  AnalysisStats,
+  AnalysisWarning,
+  AnalyzerOptions,
+  EffectTypeSignature,
+  LayerLifecycle,
+  StaticEffectNode,
+  StaticErrorHandlerNode,
+  StaticFiberNode,
+  StaticFlowNode,
+  StaticLayerNode,
+  StaticPipeNode,
+  StaticStreamNode,
+  StaticUnknownNode
+} from "./types"
+import { getStaticChildren } from "./types"
 
 /**
  * Deferred reference to `analyzeEffectExpression` used by extracted analyzers
  * (stream/channel/sink) that need to recurse. The getter resolves at call time,
  * which is after the module's top-level evaluation, so the export is in scope.
  */
-const analysisContext = createAnalysisContext(() => analyzeEffectExpression);
+const analysisContext = createAnalysisContext(() => analyzeEffectExpression)
 
-const analyzeStreamCall = bindAnalysisContext(analysisContext, _analyzeStreamCall);
-const analyzeChannelCall = bindAnalysisContext(analysisContext, _analyzeChannelCall);
-const analyzeSinkCall = bindAnalysisContext(analysisContext, _analyzeSinkCall);
-const analyzeRetryCall = bindAnalysisContext(analysisContext, _analyzeRetryCall);
-const analyzeTimeoutCall = bindAnalysisContext(analysisContext, _analyzeTimeoutCall);
-const analyzeFiberCall = bindAnalysisContext(analysisContext, _analyzeFiberCall);
-const analyzeInterruptionCall = bindAnalysisContext(analysisContext, _analyzeInterruptionCall);
-const analyzeParallelCall = bindAnalysisContext(analysisContext, _analyzeParallelCall);
-const analyzeRaceCall = bindAnalysisContext(analysisContext, _analyzeRaceCall);
-const analyzeErrorHandlerCall = bindAnalysisContext(analysisContext, _analyzeErrorHandlerCall);
-const analyzeResourceCall = bindAnalysisContext(analysisContext, _analyzeResourceCall);
-const analyzeConditionalCall = bindAnalysisContext(analysisContext, _analyzeConditionalCall);
-const analyzeLoopCall = bindAnalysisContext(analysisContext, _analyzeLoopCall);
-const analyzeCauseCall = bindAnalysisContext(analysisContext, _analyzeCauseCall);
-const analyzeTransformCall = bindAnalysisContext(analysisContext, _analyzeTransformCall);
+const analyzeStreamCall = bindAnalysisContext(analysisContext, _analyzeStreamCall)
+const analyzeChannelCall = bindAnalysisContext(analysisContext, _analyzeChannelCall)
+const analyzeSinkCall = bindAnalysisContext(analysisContext, _analyzeSinkCall)
+const analyzeRetryCall = bindAnalysisContext(analysisContext, _analyzeRetryCall)
+const analyzeTimeoutCall = bindAnalysisContext(analysisContext, _analyzeTimeoutCall)
+const analyzeFiberCall = bindAnalysisContext(analysisContext, _analyzeFiberCall)
+const analyzeInterruptionCall = bindAnalysisContext(analysisContext, _analyzeInterruptionCall)
+const analyzeParallelCall = bindAnalysisContext(analysisContext, _analyzeParallelCall)
+const analyzeRaceCall = bindAnalysisContext(analysisContext, _analyzeRaceCall)
+const analyzeErrorHandlerCall = bindAnalysisContext(analysisContext, _analyzeErrorHandlerCall)
+const analyzeResourceCall = bindAnalysisContext(analysisContext, _analyzeResourceCall)
+const analyzeConditionalCall = bindAnalysisContext(analysisContext, _analyzeConditionalCall)
+const analyzeLoopCall = bindAnalysisContext(analysisContext, _analyzeLoopCall)
+const analyzeCauseCall = bindAnalysisContext(analysisContext, _analyzeCauseCall)
+const analyzeTransformCall = bindAnalysisContext(analysisContext, _analyzeTransformCall)
 
 // Schema decode/encode operations are NOT collection operations.
 const SCHEMA_OPS = [
-  'Schema.decode',
-  'Schema.decodeUnknown',
-  'Schema.encode',
-  'Schema.validate',
-  'Schema.decodeOption',
-  'Schema.decodeEither',
-  'Schema.encodeUnknown',
-  'Schema.decodeSync',
-  'Schema.encodeSync',
-  'Schema.decodeUnknownSync',
-  'Schema.decodeUnknownOption',
-  'Schema.decodeUnknownEither',
-  'Schema.decodePromise',
-  'Schema.encodePromise',
-  'Schema.decodeUnknownPromise',
-];
-
+  "Schema.decode",
+  "Schema.decodeUnknown",
+  "Schema.encode",
+  "Schema.validate",
+  "Schema.decodeOption",
+  "Schema.decodeEither",
+  "Schema.encodeUnknown",
+  "Schema.decodeSync",
+  "Schema.encodeSync",
+  "Schema.decodeUnknownSync",
+  "Schema.decodeUnknownOption",
+  "Schema.decodeUnknownEither",
+  "Schema.decodePromise",
+  "Schema.encodePromise",
+  "Schema.decodeUnknownPromise"
+]
 
 /**
  * Heuristic: does this `.pipe(...)` call apply Effect-level operations?
@@ -168,14 +160,14 @@ const SCHEMA_OPS = [
  * combinators — cheap, no type-checker needed.
  */
 const EFFECT_PIPE_OP_REGEX =
-  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catch\w*|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|ignore|ignoreLogged|sandbox|unsandbox|flip|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*(?:\(|$)/;
+  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catch\w*|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|ignore|ignoreLogged|sandbox|unsandbox|flip|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*(?:\(|$)/
 
 const pipeArgsIncludeEffectOp = (call: CallExpression): boolean => {
   for (const arg of call.getArguments()) {
-    if (EFFECT_PIPE_OP_REGEX.test(arg.getText())) return true;
+    if (EFFECT_PIPE_OP_REGEX.test(arg.getText())) return true
   }
-  return false;
-};
+  return false
+}
 
 /**
  * `Effect.orDie` and `Effect.ignore` are unary, so a pipe passes them uncalled
@@ -184,66 +176,65 @@ const pipeArgsIncludeEffectOp = (call: CallExpression): boolean => {
 const asErrorHandler = (
   analyzed: StaticFlowNode,
   arg: Node,
-  stats: AnalysisStats,
+  stats: AnalysisStats
 ): StaticFlowNode => {
-  if (analyzed.type !== 'effect') return analyzed;
-  if (arg.getKind() === loadTsMorph().SyntaxKind.CallExpression) return analyzed;
-  const text = arg.getText();
+  if (analyzed.type !== "effect") return analyzed
+  if (arg.getKind() === loadTsMorph().SyntaxKind.CallExpression) return analyzed
+  const text = arg.getText()
   if (!ERROR_HANDLER_PATTERNS.some((pattern) => text.includes(pattern))) {
-    return analyzed;
+    return analyzed
   }
-  const handlerType = classifyErrorHandlerName(text);
-  stats.errorHandlerCount++;
+  const handlerType = classifyErrorHandlerName(text)
+  stats.errorHandlerCount++
   const node: StaticErrorHandlerNode = {
     id: generateId(),
-    type: 'error-handler',
+    type: "error-handler",
     handlerType,
     // Uncalled combinator: the effect it applies to is the pipe's own base,
     // which `walkPropagation` already has in hand when it reaches this node.
-    source: { id: generateId(), type: 'effect', callee: text },
-    ...(analyzed.location ? { location: analyzed.location } : {}),
-  };
+    source: { id: generateId(), type: "effect", callee: text, description: "pipe-input" },
+    ...(analyzed.location ? { location: analyzed.location } : {})
+  }
   return {
     ...node,
     displayName: computeDisplayName(node),
-    semanticRole: computeSemanticRole(node),
-  };
-};
+    semanticRole: computeSemanticRole(node)
+  }
+}
 
 export const analyzePipeChain = (
   node: CallExpression,
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
+  warnings: Array<AnalysisWarning>,
   stats: AnalysisStats,
-  serviceScope?: Map<string, string>,
-): Effect.Effect<readonly StaticFlowNode[], AnalysisError> =>
-  Effect.gen(function* () {
-    const { SyntaxKind } = loadTsMorph();
-    const args = node.getArguments();
-    const expr = node.getExpression();
-    const isMethodPipe =
-      expr.getKind() === SyntaxKind.PropertyAccessExpression &&
-      (expr as PropertyAccessExpression).getName() === 'pipe';
+  serviceScope?: Map<string, string>
+): Effect.Effect<ReadonlyArray<StaticFlowNode>, AnalysisError> =>
+  Effect.gen(function*() {
+    const { SyntaxKind } = loadTsMorph()
+    const args = node.getArguments()
+    const expr = node.getExpression()
+    const isMethodPipe = expr.getKind() === SyntaxKind.PropertyAccessExpression &&
+      (expr as PropertyAccessExpression).getName() === "pipe"
     const baseExpr = isMethodPipe
       ? (expr as PropertyAccessExpression).getExpression()
-      : args[0];
-    const transformArgs = isMethodPipe ? args : args.slice(1);
-    if (!baseExpr) return [];
+      : args[0]
+    const transformArgs = isMethodPipe ? args : args.slice(1)
+    if (!baseExpr) return []
 
     // GAP: pipe-chain when base is a variable — resolve to Layer initializer (same- or cross-file)
-    const baseNode = resolveIdentifierToLayerInitializer(baseExpr);
-    let baseSourceFile = baseNode.getSourceFile();
-    const basePath = baseSourceFile.getFilePath();
-    const project = sourceFile.getProject();
+    const baseNode = resolveIdentifierToLayerInitializer(baseExpr)
+    let baseSourceFile = baseNode.getSourceFile()
+    const basePath = baseSourceFile.getFilePath()
+    const project = sourceFile.getProject()
     // Ensure the resolved file is in the project so alias resolution (e.g. L→Layer) works
     if (!project.getSourceFile(basePath)) {
-      const added = project.addSourceFileAtPath(basePath);
-      if (added) baseSourceFile = added;
+      const added = project.addSourceFileAtPath(basePath)
+      if (added) baseSourceFile = added
     } else {
-      const inProject = project.getSourceFile(basePath);
-      if (inProject) baseSourceFile = inProject;
+      const inProject = project.getSourceFile(basePath)
+      if (inProject) baseSourceFile = inProject
     }
     const initial = yield* analyzeEffectExpression(
       baseNode,
@@ -252,10 +243,10 @@ export const analyzePipeChain = (
       opts,
       warnings,
       stats,
-      serviceScope,
-    );
+      serviceScope
+    )
 
-    const transformations: StaticFlowNode[] = [];
+    const transformations: Array<StaticFlowNode> = []
     for (const arg of transformArgs) {
       if (arg) {
         const analyzed = yield* analyzeEffectExpression(
@@ -265,57 +256,57 @@ export const analyzePipeChain = (
           opts,
           warnings,
           stats,
-          serviceScope,
-        );
-        transformations.push(asErrorHandler(analyzed, arg, stats));
+          serviceScope
+        )
+        transformations.push(asErrorHandler(analyzed, arg, stats))
       }
     }
 
     // Detect Effect.withSpan in transformations and merge as annotation
-    const sourceOrderedSpanNames: string[] = [];
-    let spanNameDynamic = false;
+    const sourceOrderedSpanNames: Array<string> = []
+    let spanNameDynamic = false
     const filteredTransformations = transformations.filter((t) => {
-      if (t.type === 'effect' && t.callee.includes('withSpan')) {
-        return false; // Remove withSpan from transformations list
+      if (t.type === "effect" && t.callee.includes("withSpan")) {
+        return false // Remove withSpan from transformations list
       }
-      return true;
-    });
+      return true
+    })
 
     // Extract span name from the AST transform arguments
     for (const arg of transformArgs) {
       if (arg) {
-        const argText = arg.getText();
-        if (argText.includes('withSpan')) {
-          const match = /withSpan\s*\(\s*["']([^"']+)["']/.exec(argText);
+        const argText = arg.getText()
+        if (argText.includes("withSpan")) {
+          const match = /withSpan\s*\(\s*["']([^"']+)["']/.exec(argText)
           if (match?.[1]) {
-            sourceOrderedSpanNames.push(match[1]);
+            sourceOrderedSpanNames.push(match[1])
           } else {
-            spanNameDynamic = true;
+            spanNameDynamic = true
           }
         }
       }
     }
-    const spanNames = [...sourceOrderedSpanNames].reverse();
-    const spanName = spanNames.at(-1);
+    const spanNames = [...sourceOrderedSpanNames].reverse()
+    const spanName = spanNames.at(-1)
 
     // Extract type flow through pipe chain
-    let typeFlow: EffectTypeSignature[] | undefined;
+    let typeFlow: Array<EffectTypeSignature> | undefined
     yield* Effect.try(() => {
-      const typeChecker = sourceFile.getProject().getTypeChecker();
-      const flow: EffectTypeSignature[] = [];
+      const typeChecker = sourceFile.getProject().getTypeChecker()
+      const flow: Array<EffectTypeSignature> = []
       // Extract initial type
-      const initialSig = extractEffectTypeSignature(baseExpr, typeChecker);
-      if (initialSig) flow.push(initialSig);
+      const initialSig = extractEffectTypeSignature(baseExpr, typeChecker)
+      if (initialSig) flow.push(initialSig)
       // Extract type at each transform step
       for (const argNode of transformArgs) {
         if (argNode) {
-          const sig = extractEffectTypeSignature(argNode, typeChecker);
-          if (sig) flow.push(sig);
+          const sig = extractEffectTypeSignature(argNode, typeChecker)
+          if (sig) flow.push(sig)
         }
       }
-      if (flow.length > 0) typeFlow = flow;
+      if (flow.length > 0) typeFlow = flow
       // Type extraction can fail; leaving typeFlow unset is the fallback.
-    }).pipe(Effect.ignore);
+    }).pipe(Effect.ignore)
 
     // A pipe whose only transforms were annotations (Effect.withSpan) adds no
     // step of its own. Emitting a "Pipe (0 steps)" node between every real call
@@ -326,38 +317,37 @@ export const analyzePipeChain = (
       // already on it are the inner ones. Concatenating keeps `spanNames`
       // outermost-first, which is the order `indexIR` builds span paths in;
       // overwriting would drop the inner span and lose the trace match.
-      const innerSpanNames =
-        initial.spanNames ?? (initial.spanName ? [initial.spanName] : []);
-      const mergedSpanNames = [...spanNames, ...innerSpanNames];
-      const innermost = mergedSpanNames.at(-1);
+      const innerSpanNames = initial.spanNames ?? (initial.spanName ? [initial.spanName] : [])
+      const mergedSpanNames = [...spanNames, ...innerSpanNames]
+      const innermost = mergedSpanNames.at(-1)
       return [{
         ...initial,
         ...(innermost ? { spanName: innermost } : {}),
         ...(mergedSpanNames.length > 0 ? { spanNames: mergedSpanNames } : {}),
         ...(spanNameDynamic || initial.spanNameDynamic
           ? { spanNameDynamic: true }
-          : {}),
-      }];
+          : {})
+      }]
     }
 
     const pipeNode: StaticPipeNode = {
       id: generateId(),
-      type: 'pipe',
+      type: "pipe",
       initial,
       transformations: filteredTransformations,
       ...(typeFlow ? { typeFlow } : {}),
       ...(spanName ? { spanName } : {}),
       ...(spanNames.length > 0 ? { spanNames } : {}),
-      ...(spanNameDynamic ? { spanNameDynamic: true } : {}),
-    };
+      ...(spanNameDynamic ? { spanNameDynamic: true } : {})
+    }
     const enrichedPipeNode: StaticPipeNode = {
       ...pipeNode,
       displayName: computeDisplayName(pipeNode),
-      semanticRole: computeSemanticRole(pipeNode),
-    };
+      semanticRole: computeSemanticRole(pipeNode)
+    }
 
-    return [enrichedPipeNode];
-  });
+    return [enrichedPipeNode]
+  })
 
 // =============================================================================
 // Effect Expression Analysis
@@ -368,12 +358,12 @@ export const analyzeEffectExpression = (
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
+  warnings: Array<AnalysisWarning>,
   stats: AnalysisStats,
-  serviceScope?: Map<string, string>,
+  serviceScope?: Map<string, string>
 ): Effect.Effect<StaticFlowNode, AnalysisError> =>
-  Effect.gen(function* () {
-    const { SyntaxKind } = loadTsMorph();
+  Effect.gen(function*() {
+    const { SyntaxKind } = loadTsMorph()
 
     /**
      * A type assertion is not a program. Look through `as`, `satisfies`, `!`,
@@ -384,41 +374,41 @@ export const analyzeEffectExpression = (
      * largest resolution gap: 108 of the 141 nodes in the `Could not determine
      * effect type` bucket were `AsExpression`.
      */
-    node = unwrapExpression(node);
+    node = unwrapExpression(node)
 
     // Handle function wrappers that return an Effect (common in workflow APIs)
     if (
       node.getKind() === SyntaxKind.ArrowFunction ||
       node.getKind() === SyntaxKind.FunctionExpression
     ) {
-      const fnNode = node as ArrowFunction | FunctionExpression;
-      const body = fnNode.getBody();
+      const fnNode = node as ArrowFunction | FunctionExpression
+      const body = fnNode.getBody()
 
       if (!body) {
         const unknownNode: StaticUnknownNode = {
           id: generateId(),
-          type: 'unknown',
-          reason: 'Function has no body',
+          type: "unknown",
+          reason: "Function has no body",
           sourceCode: node.getText().slice(0, 100),
           location: extractLocation(
             node,
             filePath,
-            opts.includeLocations ?? false,
-          ),
-        };
-        stats.unknownCount++;
-        return unknownNode;
+            opts.includeLocations ?? false
+          )
+        }
+        stats.unknownCount++
+        return unknownNode
       }
 
       if (body.getKind() === SyntaxKind.Block) {
         const statements = (
           body as Block
-        ).getStatements();
+        ).getStatements()
         const returnStmt = statements.find(
-          (stmt) => stmt.getKind() === SyntaxKind.ReturnStatement,
-        ) as ReturnStatement | undefined;
+          (stmt) => stmt.getKind() === SyntaxKind.ReturnStatement
+        ) as ReturnStatement | undefined
 
-        const returnedExpr = returnStmt?.getExpression();
+        const returnedExpr = returnStmt?.getExpression()
         if (returnedExpr) {
           return yield* analyzeEffectExpression(
             returnedExpr,
@@ -427,8 +417,8 @@ export const analyzeEffectExpression = (
             opts,
             warnings,
             stats,
-            serviceScope,
-          );
+            serviceScope
+          )
         }
       } else {
         return yield* analyzeEffectExpression(
@@ -438,18 +428,18 @@ export const analyzeEffectExpression = (
           opts,
           warnings,
           stats,
-          serviceScope,
-        );
+          serviceScope
+        )
       }
 
       const opaqueNode = {
         id: generateId(),
-        type: 'opaque' as const,
-        reason: 'Function body is a non-Effect callback',
+        type: "opaque" as const,
+        reason: "Function body is a non-Effect callback",
         sourceText: node.getText().slice(0, 100),
-        location: extractLocation(node, filePath, opts.includeLocations ?? false),
-      };
-      return opaqueNode;
+        location: extractLocation(node, filePath, opts.includeLocations ?? false)
+      }
+      return opaqueNode
     }
 
     // Handle call expressions
@@ -461,39 +451,38 @@ export const analyzeEffectExpression = (
         opts,
         warnings,
         stats,
-        serviceScope,
-      );
+        serviceScope
+      )
     }
 
     // Handle property access chains (Effect.succeed(...))
     if (node.getKind() === SyntaxKind.PropertyAccessExpression) {
-      const text = node.getText();
+      const text = node.getText()
       // Fiber.roots / Fiber.getCurrentFiber — property access that yields an Effect (GAP 5)
-      if (text === 'Fiber.roots' || text === 'Fiber.getCurrentFiber') {
-        const operation: StaticFiberNode['operation'] =
-          text === 'Fiber.roots' ? 'roots' : 'getCurrentFiber';
+      if (text === "Fiber.roots" || text === "Fiber.getCurrentFiber") {
+        const operation: StaticFiberNode["operation"] = text === "Fiber.roots" ? "roots" : "getCurrentFiber"
         return {
           id: generateId(),
-          type: 'fiber',
+          type: "fiber",
           operation,
           isScoped: false,
           isDaemon: false,
           location: extractLocation(
             node,
             filePath,
-            opts.includeLocations ?? false,
-          ),
-        };
+            opts.includeLocations ?? false
+          )
+        }
       }
-      const objectText = (node as PropertyAccessExpression).getExpression().getText();
-      const propertyName = (node as PropertyAccessExpression).getName();
-      const serviceId = serviceScope?.get(objectText);
+      const objectText = (node as PropertyAccessExpression).getExpression().getText()
+      const propertyName = (node as PropertyAccessExpression).getName()
+      const serviceId = serviceScope?.get(objectText)
       if (serviceId) {
         const serviceEffectNode: StaticEffectNode = {
           id: generateId(),
-          type: 'effect',
+          type: "effect",
           callee: text,
-          description: 'service-call',
+          description: "service-call",
           requiredServices: [
             {
               serviceId,
@@ -501,65 +490,65 @@ export const analyzeEffectExpression = (
               requiredAt: extractLocation(
                 node,
                 filePath,
-                opts.includeLocations ?? false,
+                opts.includeLocations ?? false
               ) ?? {
                 filePath,
                 line: 1,
-                column: 0,
-              },
-            },
+                column: 0
+              }
+            }
           ],
           serviceCall: {
             serviceType: serviceId,
             methodName: propertyName,
-            objectName: objectText,
+            objectName: objectText
           },
           location: extractLocation(
             node,
             filePath,
-            opts.includeLocations ?? false,
-          ),
-        };
-        stats.totalEffects++;
+            opts.includeLocations ?? false
+          )
+        }
+        stats.totalEffects++
         if (isLikelyServiceStreamProperty(propertyName)) {
           const streamNode: StaticStreamNode = {
             id: generateId(),
-            type: 'stream',
+            type: "stream",
             source: {
               ...serviceEffectNode,
               displayName: computeDisplayName(serviceEffectNode),
-              semanticRole: computeSemanticRole(serviceEffectNode),
+              semanticRole: computeSemanticRole(serviceEffectNode)
             },
             pipeline: [],
-            constructorType: 'other',
+            constructorType: "other",
             location: extractLocation(
               node,
               filePath,
-              opts.includeLocations ?? false,
-            ),
-          };
+              opts.includeLocations ?? false
+            )
+          }
           return {
             ...streamNode,
             displayName: computeDisplayName(streamNode),
-            semanticRole: computeSemanticRole(streamNode),
-          };
+            semanticRole: computeSemanticRole(streamNode)
+          }
         }
         return {
           ...serviceEffectNode,
           displayName: computeDisplayName(serviceEffectNode),
-          semanticRole: computeSemanticRole(serviceEffectNode),
-        };
+          semanticRole: computeSemanticRole(serviceEffectNode)
+        }
       }
 
       const inferredServiceCall = tryResolveServicePropertyAccess(
-        node as PropertyAccessExpression,
-      );
+        node as PropertyAccessExpression
+      )
       if (inferredServiceCall) {
         const serviceEffectNode: StaticEffectNode = {
           id: generateId(),
-          type: 'effect',
+          type: "effect",
           callee: text,
-          description: 'service-call',
+          description: "service-call",
           requiredServices: [
             {
               serviceId: inferredServiceCall.serviceType,
@@ -567,69 +556,69 @@ export const analyzeEffectExpression = (
               requiredAt: extractLocation(
                 node,
                 filePath,
-                opts.includeLocations ?? false,
+                opts.includeLocations ?? false
               ) ?? {
                 filePath,
                 line: 1,
-                column: 0,
-              },
-            },
+                column: 0
+              }
+            }
           ],
           serviceCall: inferredServiceCall,
           serviceMethod: {
             serviceId: inferredServiceCall.serviceType,
-            methodName: inferredServiceCall.methodName,
+            methodName: inferredServiceCall.methodName
           },
           location: extractLocation(
             node,
             filePath,
-            opts.includeLocations ?? false,
-          ),
-        };
-        stats.totalEffects++;
+            opts.includeLocations ?? false
+          )
+        }
+        stats.totalEffects++
         if (isLikelyServiceStreamProperty(propertyName)) {
           const streamNode: StaticStreamNode = {
             id: generateId(),
-            type: 'stream',
+            type: "stream",
             source: {
               ...serviceEffectNode,
               displayName: computeDisplayName(serviceEffectNode),
-              semanticRole: computeSemanticRole(serviceEffectNode),
+              semanticRole: computeSemanticRole(serviceEffectNode)
             },
             pipeline: [],
-            constructorType: 'other',
+            constructorType: "other",
             location: extractLocation(
               node,
               filePath,
-              opts.includeLocations ?? false,
-            ),
-          };
+              opts.includeLocations ?? false
+            )
+          }
           return {
             ...streamNode,
             displayName: computeDisplayName(streamNode),
-            semanticRole: computeSemanticRole(streamNode),
-          };
+            semanticRole: computeSemanticRole(streamNode)
+          }
         }
         return {
           ...serviceEffectNode,
           displayName: computeDisplayName(serviceEffectNode),
-          semanticRole: computeSemanticRole(serviceEffectNode),
-        };
+          semanticRole: computeSemanticRole(serviceEffectNode)
+        }
       }
 
       if (isEffectCallee(text, getAliasesForFile(sourceFile), sourceFile)) {
         const effectNode: StaticEffectNode = {
           id: generateId(),
-          type: 'effect',
+          type: "effect",
           callee: normalizeEffectCallee(text, sourceFile),
           location: extractLocation(
             node,
             filePath,
-            opts.includeLocations ?? false,
-          ),
-        };
-        stats.totalEffects++;
-        return effectNode;
+            opts.includeLocations ?? false
+          )
+        }
+        stats.totalEffects++
+        return effectNode
       }
     }
 
@@ -637,33 +626,33 @@ export const analyzeEffectExpression = (
     if (node.getKind() === SyntaxKind.Identifier) {
       const effectNode: StaticEffectNode = {
         id: generateId(),
-        type: 'effect',
+        type: "effect",
         callee: node.getText(),
         location: extractLocation(
           node,
           filePath,
-          opts.includeLocations ?? false,
-        ),
-      };
-      stats.totalEffects++;
-      return effectNode;
+          opts.includeLocations ?? false
+        )
+      }
+      stats.totalEffects++
+      return effectNode
     }
 
     // Handle object literal with known Effect handler properties (match-style APIs)
     if (node.getKind() === SyntaxKind.ObjectLiteralExpression) {
-      const objLit = node as ObjectLiteralExpression;
-      const HANDLER_PROPS = new Set(['onNone', 'onSome', 'onFailure', 'onSuccess', 'onLeft', 'onRight']);
-      const props = objLit.getProperties();
-      const handlerEntries: StaticFlowNode[] = [];
-      let hasKnownHandler = false;
+      const objLit = node as ObjectLiteralExpression
+      const HANDLER_PROPS = new Set(["onNone", "onSome", "onFailure", "onSuccess", "onLeft", "onRight"])
+      const props = objLit.getProperties()
+      const handlerEntries: Array<StaticFlowNode> = []
+      let hasKnownHandler = false
 
       for (const prop of props) {
-        if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue;
-        const assignment = prop as PropertyAssignment;
-        const propName = assignment.getName();
-        if (!HANDLER_PROPS.has(propName)) continue;
-        hasKnownHandler = true;
-        const initializer = assignment.getInitializer();
+        if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue
+        const assignment = prop as PropertyAssignment
+        const propName = assignment.getName()
+        if (!HANDLER_PROPS.has(propName)) continue
+        hasKnownHandler = true
+        const initializer = assignment.getInitializer()
         if (initializer) {
           const analyzed = yield* analyzeEffectExpression(
             initializer,
@@ -672,70 +661,76 @@ export const analyzeEffectExpression = (
             opts,
             warnings,
             stats,
-            serviceScope,
-          );
-          handlerEntries.push(analyzed);
+            serviceScope
+          )
+          handlerEntries.push(analyzed)
         }
       }
 
       if (hasKnownHandler && handlerEntries.length > 0) {
         return handlerEntries.length === 1 ? handlerEntries[0]! : {
           id: generateId(),
-          type: 'parallel',
-          callee: 'match-handlers',
-          mode: 'sequential' as const,
+          type: "parallel",
+          callee: "match-handlers",
+          mode: "sequential" as const,
           children: handlerEntries,
-          location: extractLocation(node, filePath, opts.includeLocations ?? false),
-        };
+          location: extractLocation(node, filePath, opts.includeLocations ?? false)
+        }
       }
     }
 
     // Handle tagged template expressions (e.g. sql`CREATE TABLE...`)
     // These are commonly used in Effect SQL clients and return Effects
     if (node.getKind() === SyntaxKind.TaggedTemplateExpression) {
-      const taggedTemplate = node as TaggedTemplateExpression;
-      const tagText = taggedTemplate.getTag().getText();
+      const taggedTemplate = node as TaggedTemplateExpression
+      const tagText = taggedTemplate.getTag().getText()
       const effectNode: StaticEffectNode = {
         id: generateId(),
-        type: 'effect',
+        type: "effect",
         callee: tagText,
-        description: 'side-effect',
-        location: extractLocation(node, filePath, opts.includeLocations ?? false),
-      };
-      stats.totalEffects++;
+        description: "side-effect",
+        location: extractLocation(node, filePath, opts.includeLocations ?? false)
+      }
+      stats.totalEffects++
       return {
         ...effectNode,
         displayName: computeDisplayName(effectNode),
-        semanticRole: 'side-effect' as const,
-      };
+        semanticRole: "side-effect" as const
+      }
     }
 
     // Handle yielded error instances: `yield* new SomeTaggedError(...)`
     // Common in Effect codebases where TaggedError is yieldable.
     if (node.getKind() === SyntaxKind.NewExpression) {
-      const newExpr = node as NewExpression;
-      const ctorText = newExpr.getExpression().getText();
-      const ctorName = ctorText.split('.').pop() ?? ctorText;
-      const typeText = newExpr.getType().getText();
-      const isErrorLike =
-        ctorName.endsWith("Error") ||
-        typeText.includes('YieldableError') ||
-        typeText.includes('TaggedError');
+      const newExpr = node as NewExpression
+      const ctorText = newExpr.getExpression().getText()
+      const ctorName = ctorText.split(".").pop() ?? ctorText
+      const type = newExpr.getType()
+      const typeText = type.getText()
+      // A subclass (`class PageSkipped extends Data.TaggedError(...)`) prints
+      // as its own name. An instance that is both an Effect and an Error is a
+      // yieldable error.
+      const isYieldableError = type.getProperty("~effect/Effect") !== undefined &&
+        type.getProperty("message") !== undefined
+      const isErrorLike = ctorName.endsWith("Error") ||
+        typeText.includes("YieldableError") ||
+        typeText.includes("TaggedError") ||
+        isYieldableError
       if (isErrorLike) {
         const effectNode: StaticEffectNode = {
           id: generateId(),
-          type: 'effect',
-          callee: 'Effect.fail',
+          type: "effect",
+          callee: "Effect.fail",
           errorType: ctorName,
-          description: 'error-handling',
-          location: extractLocation(node, filePath, opts.includeLocations ?? false),
-        };
-        stats.totalEffects++;
+          description: "error-handling",
+          location: extractLocation(node, filePath, opts.includeLocations ?? false)
+        }
+        stats.totalEffects++
         return {
           ...effectNode,
           displayName: computeDisplayName(effectNode),
-          semanticRole: computeSemanticRole(effectNode),
-        };
+          semanticRole: computeSemanticRole(effectNode)
+        }
       }
     }
 
@@ -746,70 +741,68 @@ export const analyzeEffectExpression = (
     const unknownReason = ((): string => {
       switch (node.getKind()) {
         case SyntaxKind.ObjectLiteralExpression:
-          return 'Non-Effect object literal (e.g. service impl or options argument)';
+          return "Non-Effect object literal (e.g. service impl or options argument)"
         case SyntaxKind.BinaryExpression:
         case SyntaxKind.PrefixUnaryExpression:
-          return 'Non-Effect predicate or boolean expression';
+          return "Non-Effect predicate or boolean expression"
         case SyntaxKind.NewExpression:
-          return 'Unrecognized constructor (not an error-like type)';
+          return "Unrecognized constructor (not an error-like type)"
         case SyntaxKind.PropertyAccessExpression:
         case SyntaxKind.ElementAccessExpression:
-          return 'Unresolved property access (not tied back to an Effect)';
+          return "Unresolved property access (not tied back to an Effect)"
         case SyntaxKind.Identifier:
-          return 'Unresolved identifier (not tied back to an Effect)';
+          return "Unresolved identifier (not tied back to an Effect)"
         case SyntaxKind.ConditionalExpression:
-          return 'Non-Effect conditional expression';
+          return "Non-Effect conditional expression"
         case SyntaxKind.ArrowFunction:
         case SyntaxKind.FunctionExpression:
-          return 'Non-Effect function expression';
+          return "Non-Effect function expression"
         default:
-          return 'Could not determine effect type';
+          return "Could not determine effect type"
       }
-    })();
+    })()
     const unknownNode: StaticUnknownNode = {
       id: generateId(),
-      type: 'unknown',
+      type: "unknown",
       reason: unknownReason,
       sourceCode: node.getText().slice(0, 100),
-      location: extractLocation(node, filePath, opts.includeLocations ?? false),
-    };
-    stats.unknownCount++;
-    return unknownNode;
-  });
+      location: extractLocation(node, filePath, opts.includeLocations ?? false)
+    }
+    stats.unknownCount++
+    return unknownNode
+  })
 
 export const analyzeEffectCall = (
   call: CallExpression,
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
+  warnings: Array<AnalysisWarning>,
   stats: AnalysisStats,
-  serviceScope?: Map<string, string>,
+  serviceScope?: Map<string, string>
 ): Effect.Effect<StaticFlowNode, AnalysisError> =>
-  Effect.gen(function* () {
-    const { SyntaxKind } = loadTsMorph();
+  Effect.gen(function*() {
+    const { SyntaxKind } = loadTsMorph()
     // Source text keeps the line breaks of a wrapped member chain
     // (`deps\n  .fetchRate`), which surfaces in every label as `deps .fetchRate`.
-    const callee = call.getExpression().getText().replace(/\s*\n\s*/g, '');
-    const normalizedCallee = normalizeEffectCallee(callee, sourceFile);
-    const calleeOperation =
-      (/([A-Za-z_$][\w$]*)$/.exec(normalizedCallee))?.[1] ?? normalizedCallee;
+    const callee = call.getExpression().getText().replace(/\s*\n\s*/g, "")
+    const normalizedCallee = normalizeEffectCallee(callee, sourceFile)
+    const calleeOperation = (/([A-Za-z_$][\w$]*)$/.exec(normalizedCallee))?.[1] ?? normalizedCallee
     const location = extractLocation(
       call,
       filePath,
-      opts.includeLocations ?? false,
-    );
+      opts.includeLocations ?? false
+    )
 
     // pipe(base, ...fns) or <base>.pipe(...fns) inside generator → analyze as pipe chain so transformations (e.g. RcRef.update) are classified
     // For method-style .pipe(), route Effect-based pipes, plus any pipe whose
     // transformations include explicit Effect.* operations (e.g. retry, timeout, catch)
     // on a non-Effect-prefixed base like `serviceCall().pipe(Effect.retry(...))`.
-    const isEffectMethodPipe =
-      callee.endsWith('.pipe') &&
-      callee !== 'pipe' &&
-      (callee.startsWith('Effect.') || pipeArgsIncludeEffectOp(call));
+    const isEffectMethodPipe = callee.endsWith(".pipe") &&
+      callee !== "pipe" &&
+      (callee.startsWith("Effect.") || pipeArgsIncludeEffectOp(call))
     if (
-      (callee === 'pipe' || isEffectMethodPipe) &&
+      (callee === "pipe" || isEffectMethodPipe) &&
       call.getArguments().length >= 1
     ) {
       const nodes = yield* analyzePipeChain(
@@ -819,20 +812,18 @@ export const analyzeEffectCall = (
         opts,
         warnings,
         stats,
-        serviceScope,
-      );
-      if (nodes.length > 0 && nodes[0]) return nodes[0];
+        serviceScope
+      )
+      if (nodes.length > 0 && nodes[0]) return nodes[0]
     }
 
-    const isMethodPipe =
-      call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression &&
-      (call.getExpression() as PropertyAccessExpression).getName() === 'pipe';
+    const isMethodPipe = call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression &&
+      (call.getExpression() as PropertyAccessExpression).getName() === "pipe"
     if (isMethodPipe) {
-      const baseExpr = (call.getExpression() as PropertyAccessExpression).getExpression();
-      const baseCallText =
-        baseExpr.getKind() === SyntaxKind.CallExpression
-          ? (baseExpr as CallExpression).getExpression().getText()
-          : '';
+      const baseExpr = (call.getExpression() as PropertyAccessExpression).getExpression()
+      const baseCallText = baseExpr.getKind() === SyntaxKind.CallExpression
+        ? (baseExpr as CallExpression).getExpression().getText()
+        : ""
       if (/\blayerProtocol[A-Za-z0-9_]*$/.test(baseCallText)) {
         const nodes = yield* analyzePipeChain(
           call,
@@ -841,48 +832,48 @@ export const analyzeEffectCall = (
           opts,
           warnings,
           stats,
-          serviceScope,
-        );
-        if (nodes.length > 0 && nodes[0]) return nodes[0];
+          serviceScope
+        )
+        if (nodes.length > 0 && nodes[0]) return nodes[0]
       }
-      const baseText = baseExpr.getText();
-      const baseCallOrExprText = baseCallText || baseText;
-      if (baseText.startsWith('Stream.') || baseCallOrExprText.startsWith('Stream.')) {
+      const baseText = baseExpr.getText()
+      const baseCallOrExprText = baseCallText || baseText
+      if (baseText.startsWith("Stream.") || baseCallOrExprText.startsWith("Stream.")) {
         return yield* analyzeStreamCall(
           call,
-          'Stream.pipe',
+          "Stream.pipe",
           sourceFile,
           filePath,
           opts,
           warnings,
           stats,
-          serviceScope,
-        );
+          serviceScope
+        )
       }
     }
 
     // Context.pick / Context.omit are pure operations (not Effects) but are useful
     // to preserve context-shaping steps inside Effect.gen bodies.
     if (
-      normalizedCallee === 'Context.pick' ||
-      normalizedCallee === 'Context.omit'
+      normalizedCallee === "Context.pick" ||
+      normalizedCallee === "Context.omit"
     ) {
       const effectNode: StaticEffectNode = {
         id: generateId(),
-        type: 'effect',
+        type: "effect",
         callee: normalizedCallee,
-        description: 'context',
-        location,
-      };
-      stats.totalEffects++;
+        description: "context",
+        location
+      }
+      stats.totalEffects++
       return {
         ...effectNode,
         displayName: computeDisplayName(effectNode),
-        semanticRole: computeSemanticRole(effectNode),
-      };
+        semanticRole: computeSemanticRole(effectNode)
+      }
     }
 
-    if (normalizedCallee.startsWith('Layer.')) {
+    if (normalizedCallee.startsWith("Layer.")) {
       return yield* analyzeLayerCall(
         call,
         normalizedCallee,
@@ -890,8 +881,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     // Protocol client factories often return layers that are then composed via Layer.provide(...)
@@ -899,20 +890,20 @@ export const analyzeEffectCall = (
     if (/\blayerProtocol[A-Za-z0-9_]*$/.test(normalizedCallee)) {
       const layerNode: StaticLayerNode = {
         id: generateId(),
-        type: 'layer',
+        type: "layer",
         name: normalizedCallee,
         operations: [],
         isMerged: false,
-        location,
-      };
+        location
+      }
       return {
         ...layerNode,
         displayName: computeDisplayName(layerNode),
-        semanticRole: computeSemanticRole(layerNode),
-      };
+        semanticRole: computeSemanticRole(layerNode)
+      }
     }
 
-    if (normalizedCallee.startsWith('Stream.')) {
+    if (normalizedCallee.startsWith("Stream.")) {
       return yield* analyzeStreamCall(
         call,
         normalizedCallee,
@@ -921,11 +912,11 @@ export const analyzeEffectCall = (
         opts,
         warnings,
         stats,
-        serviceScope,
-      );
+        serviceScope
+      )
     }
 
-    if (normalizedCallee.startsWith('Channel.')) {
+    if (normalizedCallee.startsWith("Channel.")) {
       return yield* analyzeChannelCall(
         call,
         normalizedCallee,
@@ -933,11 +924,11 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
-    if (callee.startsWith('Sink.')) {
+    if (callee.startsWith("Sink.")) {
       return yield* analyzeSinkCall(
         call,
         callee,
@@ -945,32 +936,31 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
-    const isConcurrencyPrimitiveCallee =
-      callee.startsWith('Queue.') ||
-      callee.startsWith('PubSub.') ||
-      callee.startsWith('Deferred.') ||
-      callee.startsWith('Semaphore.') ||
-      callee.startsWith('Mailbox.') ||
-      callee.startsWith('SubscriptionRef.') ||
-      callee.startsWith('RateLimiter.') ||
-      callee.startsWith('PartitionedSemaphore.') ||
-      callee.startsWith('FiberHandle.') ||
-      callee.startsWith('FiberSet.') ||
-      callee.startsWith('FiberMap.') ||
-      callee.startsWith('Cache.') ||
-      callee.startsWith('ScopedCache.') ||
-      callee.startsWith('RcRef.') ||
-      callee.includes('.RcRef.') ||
-      callee.startsWith('RcMap.') ||
-      callee.includes('.RcMap.') ||
-      callee.startsWith('Reloadable.') ||
-      callee.includes('.Reloadable.') ||
-      callee.includes('makeLatch') ||
-      callee.includes('Latch.');
+    const isConcurrencyPrimitiveCallee = callee.startsWith("Queue.") ||
+      callee.startsWith("PubSub.") ||
+      callee.startsWith("Deferred.") ||
+      callee.startsWith("Semaphore.") ||
+      callee.startsWith("Mailbox.") ||
+      callee.startsWith("SubscriptionRef.") ||
+      callee.startsWith("RateLimiter.") ||
+      callee.startsWith("PartitionedSemaphore.") ||
+      callee.startsWith("FiberHandle.") ||
+      callee.startsWith("FiberSet.") ||
+      callee.startsWith("FiberMap.") ||
+      callee.startsWith("Cache.") ||
+      callee.startsWith("ScopedCache.") ||
+      callee.startsWith("RcRef.") ||
+      callee.includes(".RcRef.") ||
+      callee.startsWith("RcMap.") ||
+      callee.includes(".RcMap.") ||
+      callee.startsWith("Reloadable.") ||
+      callee.includes(".Reloadable.") ||
+      callee.includes("makeLatch") ||
+      callee.includes("Latch.")
     if (isConcurrencyPrimitiveCallee) {
       return yield* analyzeConcurrencyPrimitiveCall(
         call,
@@ -979,8 +969,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     if (FIBER_PATTERNS.some((p) => callee.includes(p) || callee.startsWith(p))) {
@@ -991,8 +981,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     if (INTERRUPTION_PATTERNS.some((p) => callee.includes(p))) {
@@ -1003,12 +993,12 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     // Handle different Effect patterns
-    if (callee.includes('.all') || callee === 'all') {
+    if (callee.includes(".all") || callee === "all") {
       return yield* analyzeParallelCall(
         call,
         callee,
@@ -1017,11 +1007,11 @@ export const analyzeEffectCall = (
         opts,
         warnings,
         stats,
-        serviceScope,
-      );
+        serviceScope
+      )
     }
 
-    if (callee.includes('.race') || callee === 'race') {
+    if (callee.includes(".race") || callee === "race") {
       return yield* analyzeRaceCall(
         call,
         callee,
@@ -1029,8 +1019,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     if (ERROR_HANDLER_PATTERNS.some((pattern) => callee.includes(pattern))) {
@@ -1041,55 +1031,54 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
-    if (callee.includes('.retry')) {
+    if (callee.includes(".retry")) {
       return yield* analyzeRetryCall(
         call,
         sourceFile,
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
-    if (callee.includes('.timeout')) {
+    if (callee.includes(".timeout")) {
       return yield* analyzeTimeoutCall(
         call,
         sourceFile,
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     const resourceOps = new Set([
-      'acquireRelease',
-      'acquireUseRelease',
-      'ensuring',
-      'addFinalizer',
-      'onExit',
-      'onError',
-      'parallelFinalizers',
-      'sequentialFinalizers',
-      'finalizersMask',
-      'using',
-      'withEarlyRelease',
-    ]);
-    const resourceOpPrefixes = ['acquireRelease', 'acquireUseRelease'] as const;
-    const isResourceOp = (op: string) =>
-      resourceOps.has(op) || resourceOpPrefixes.some((p) => op.startsWith(p));
-    if (calleeOperation === 'pipe' && call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression) {
-      const propAccess = call.getExpression() as PropertyAccessExpression;
-      const baseExpr = propAccess.getExpression();
+      "acquireRelease",
+      "acquireUseRelease",
+      "ensuring",
+      "addFinalizer",
+      "onExit",
+      "onError",
+      "parallelFinalizers",
+      "sequentialFinalizers",
+      "finalizersMask",
+      "using",
+      "withEarlyRelease"
+    ])
+    const resourceOpPrefixes = ["acquireRelease", "acquireUseRelease"] as const
+    const isResourceOp = (op: string) => resourceOps.has(op) || resourceOpPrefixes.some((p) => op.startsWith(p))
+    if (calleeOperation === "pipe" && call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression) {
+      const propAccess = call.getExpression() as PropertyAccessExpression
+      const baseExpr = propAccess.getExpression()
       if (baseExpr.getKind() === SyntaxKind.CallExpression) {
-        const baseCall = baseExpr as CallExpression;
-        const baseCallee = baseCall.getExpression().getText();
-        const baseOperation = (/([A-Za-z_$][\w$]*)$/.exec(baseCallee))?.[1] ?? baseCallee;
+        const baseCall = baseExpr as CallExpression
+        const baseCallee = baseCall.getExpression().getText()
+        const baseOperation = (/([A-Za-z_$][\w$]*)$/.exec(baseCallee))?.[1] ?? baseCallee
         if (isResourceOp(baseOperation)) {
           return yield* analyzeResourceCall(
             baseCall,
@@ -1098,8 +1087,8 @@ export const analyzeEffectCall = (
             filePath,
             opts,
             warnings,
-            stats,
-          );
+            stats
+          )
         }
       }
     }
@@ -1111,12 +1100,12 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     // Match CONDITIONAL_PATTERNS against the final method name, not the full callee text
-    const conditionalOp = `.${calleeOperation}`;
+    const conditionalOp = `.${calleeOperation}`
     if (CONDITIONAL_PATTERNS.some((pattern) => conditionalOp === pattern || callee.endsWith(pattern))) {
       return yield* analyzeConditionalCall(
         call,
@@ -1125,15 +1114,15 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
-    const isSchemaOp = SCHEMA_OPS.some((op) => callee.startsWith(op) || normalizedCallee.startsWith(op));
+    const isSchemaOp = SCHEMA_OPS.some((op) => callee.startsWith(op) || normalizedCallee.startsWith(op))
 
     // Match COLLECTION_PATTERNS against the final method name (calleeOperation), not
     // the full callee text which can contain arbitrary source code from curried functions.
-    const collectionOp = `.${calleeOperation}`;
+    const collectionOp = `.${calleeOperation}`
     if (!isSchemaOp && COLLECTION_PATTERNS.some((pattern) => collectionOp === pattern || callee.endsWith(pattern))) {
       return yield* analyzeLoopCall(
         call,
@@ -1142,8 +1131,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     if (isTransformCall(callee)) {
@@ -1154,12 +1143,12 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     if (isMatchCall(callee)) {
-      return analyzeMatchCall(call, callee, filePath, opts);
+      return analyzeMatchCall(call, callee, filePath, opts)
     }
 
     if (isCauseCall(callee)) {
@@ -1170,56 +1159,54 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats,
-      );
+        stats
+      )
     }
 
     if (isExitCall(callee)) {
-      return analyzeExitCall(call, callee, filePath, opts);
+      return analyzeExitCall(call, callee, filePath, opts)
     }
 
     if (isScheduleCall(callee)) {
-      return yield* analyzeScheduleCall(call, callee, filePath, opts);
+      return yield* analyzeScheduleCall(call, callee, filePath, opts)
     }
 
     // Default effect node
-    stats.totalEffects++;
+    stats.totalEffects++
 
     // Effect.sync/promise/async callback body (one level only)
-    let callbackBody: readonly StaticFlowNode[] | undefined;
-    let usePattern: StaticEffectNode['usePattern'];
+    let callbackBody: ReadonlyArray<StaticFlowNode> | undefined
+    let usePattern: StaticEffectNode["usePattern"]
     const CONSTRUCTOR_CALLBACK_CALLEES = [
-      'Effect.sync',
-      'Effect.promise',
-      'Effect.callback',
-      'Effect.asyncEffect',
-      'Effect.callback',
-      'Effect.tryPromise',
-      'Effect.suspend',
-    ];
-    const isConstructorWithCallback =
-      CONSTRUCTOR_CALLBACK_CALLEES.some((c) => callee.includes(c)) &&
+      "Effect.sync",
+      "Effect.promise",
+      "Effect.callback",
+      "Effect.asyncEffect",
+      "Effect.callback",
+      "Effect.tryPromise",
+      "Effect.suspend"
+    ]
+    const isConstructorWithCallback = CONSTRUCTOR_CALLBACK_CALLEES.some((c) => callee.includes(c)) &&
       call.getArguments().length > 0 &&
-      call.getArguments()[0];
-    let asyncCallback: StaticEffectNode['asyncCallback'];
+      call.getArguments()[0]
+    let asyncCallback: StaticEffectNode["asyncCallback"]
     if (isConstructorWithCallback) {
-      const firstArg = call.getArguments()[0]!;
-      const { SyntaxKind } = loadTsMorph();
-      const isFn =
-        firstArg.getKind() === SyntaxKind.ArrowFunction ||
-        firstArg.getKind() === SyntaxKind.FunctionExpression;
+      const firstArg = call.getArguments()[0]!
+      const { SyntaxKind } = loadTsMorph()
+      const isFn = firstArg.getKind() === SyntaxKind.ArrowFunction ||
+        firstArg.getKind() === SyntaxKind.FunctionExpression
       if (isFn) {
         const fn = firstArg as
           | ArrowFunction
-          | FunctionExpression;
-        const body = fn.getBody();
-        const innerNodes: StaticFlowNode[] = [];
+          | FunctionExpression
+        const body = fn.getBody()
+        const innerNodes: Array<StaticFlowNode> = []
         if (body) {
           if (body.getKind() === SyntaxKind.Block) {
-            const block = body as Block;
+            const block = body as Block
             for (const stmt of block.getStatements()) {
               if (stmt.getKind() === SyntaxKind.ReturnStatement) {
-                const retExpr = (stmt as ReturnStatement).getExpression();
+                const retExpr = (stmt as ReturnStatement).getExpression()
                 if (retExpr && isEffectCallee(retExpr.getText(), getAliasesForFile(sourceFile), sourceFile)) {
                   const analyzed = yield* analyzeEffectExpression(
                     retExpr,
@@ -1228,15 +1215,20 @@ export const analyzeEffectCall = (
                     opts,
                     warnings,
                     stats,
-                    undefined,
-                  );
-                  innerNodes.push(analyzed);
+                    undefined
+                  )
+                  innerNodes.push(analyzed)
                 }
               } else if (stmt.getKind() === SyntaxKind.ExpressionStatement) {
-                const expr = (stmt as ExpressionStatement).getExpression();
+                const expr = (stmt as ExpressionStatement).getExpression()
                 if (
                   expr.getKind() === SyntaxKind.CallExpression &&
-                  isEffectLikeCallExpression(expr as CallExpression, sourceFile, getAliasesForFile(sourceFile), opts.knownEffectInternalsRoot)
+                  isEffectLikeCallExpression(
+                    expr as CallExpression,
+                    sourceFile,
+                    getAliasesForFile(sourceFile),
+                    opts.knownEffectInternalsRoot
+                  )
                 ) {
                   const analyzed = yield* analyzeEffectExpression(
                     expr,
@@ -1245,9 +1237,9 @@ export const analyzeEffectCall = (
                     opts,
                     warnings,
                     stats,
-                    undefined,
-                  );
-                  innerNodes.push(analyzed);
+                    undefined
+                  )
+                  innerNodes.push(analyzed)
                 }
               }
             }
@@ -1260,51 +1252,50 @@ export const analyzeEffectCall = (
                 opts,
                 warnings,
                 stats,
-                undefined,
-              );
-              innerNodes.push(analyzed);
+                undefined
+              )
+              innerNodes.push(analyzed)
             }
           }
         }
-        if (innerNodes.length > 0) callbackBody = innerNodes;
+        if (innerNodes.length > 0) callbackBody = innerNodes
 
         // Effect.callback/asyncEffect: resume/canceller patterns (GAP async callback interop)
         if (
-          callee.includes('Effect.callback') ||
-          callee.includes('Effect.asyncEffect') ||
-          callee.includes('Effect.callback')
+          callee.includes("Effect.callback") ||
+          callee.includes("Effect.asyncEffect") ||
+          callee.includes("Effect.callback")
         ) {
-          const resumeParamName =
-            fn.getParameters()[0]?.getName?.() ?? 'resume';
-          let resumeCallCount = 0;
+          const resumeParamName = fn.getParameters()[0]?.getName?.() ?? "resume"
+          let resumeCallCount = 0
           const visit = (node: Node) => {
             if (node.getKind() === SyntaxKind.CallExpression) {
-              const callNode = node as CallExpression;
-              const expr = callNode.getExpression();
+              const callNode = node as CallExpression
+              const expr = callNode.getExpression()
               if (
                 expr.getKind() === SyntaxKind.Identifier &&
                 (expr as Identifier).getText() === resumeParamName
               ) {
-                resumeCallCount++;
+                resumeCallCount++
               }
             }
-            node.getChildren().forEach(visit);
-          };
-          if (body) visit(body);
-          let returnsCanceller = false;
+            node.getChildren().forEach(visit)
+          }
+          if (body) visit(body)
+          let returnsCanceller = false
           if (body?.getKind() === SyntaxKind.Block) {
-            const block = body as Block;
+            const block = body as Block
             for (const stmt of block.getStatements()) {
               if (stmt.getKind() === SyntaxKind.ReturnStatement) {
-                const retExpr = (stmt as ReturnStatement).getExpression();
+                const retExpr = (stmt as ReturnStatement).getExpression()
                 if (retExpr) {
-                  const k = retExpr.getKind();
+                  const k = retExpr.getKind()
                   if (
                     k === SyntaxKind.ArrowFunction ||
                     k === SyntaxKind.FunctionExpression
                   ) {
-                    returnsCanceller = true;
-                    break;
+                    returnsCanceller = true
+                    break
                   }
                 }
               }
@@ -1314,15 +1305,15 @@ export const analyzeEffectCall = (
             (body.getKind() === SyntaxKind.ArrowFunction ||
               body.getKind() === SyntaxKind.FunctionExpression)
           ) {
-            returnsCanceller = true;
+            returnsCanceller = true
           }
           asyncCallback = {
             resumeParamName,
             resumeCallCount,
-            returnsCanceller,
-          };
+            returnsCanceller
+          }
 
-          if (callee.includes('Effect.callback')) {
+          if (callee.includes("Effect.callback")) {
             const handlerSummaries = yield* summarizeNamedCallbackHandlers(
               fn,
               sourceFile,
@@ -1330,10 +1321,10 @@ export const analyzeEffectCall = (
               opts,
               warnings,
               stats,
-              resumeParamName,
-            );
+              resumeParamName
+            )
             if (handlerSummaries && handlerSummaries.length > 0) {
-              callbackBody = handlerSummaries;
+              callbackBody = handlerSummaries
             }
           }
         }
@@ -1341,107 +1332,127 @@ export const analyzeEffectCall = (
     }
 
     if (call.getExpression().getKind() === SyntaxKind.PropertyAccessExpression) {
-      const propAccess = call.getExpression() as PropertyAccessExpression;
-      if (propAccess.getName() === 'use') {
+      const propAccess = call.getExpression() as PropertyAccessExpression
+      if (propAccess.getName() === "use") {
         const callbackArg = call.getArguments().find(
           (arg) =>
             arg.getKind() === SyntaxKind.ArrowFunction ||
-            arg.getKind() === SyntaxKind.FunctionExpression,
-        );
+            arg.getKind() === SyntaxKind.FunctionExpression
+        )
         if (callbackArg) {
-          const callbackFn = callbackArg as ArrowFunction | FunctionExpression;
+          const callbackFn = callbackArg as ArrowFunction | FunctionExpression
           const callbackNodes = buildCallbackSummaryNodes(
             callbackFn,
             filePath,
-            opts.includeLocations ?? false,
-          );
+            opts.includeLocations ?? false
+          )
           if (callbackNodes) {
-            callbackBody = [...(callbackBody ?? []), ...callbackNodes];
+            callbackBody = [...(callbackBody ?? []), ...callbackNodes]
           }
-          const wrapperExpr = propAccess.getExpression().getText();
+          const wrapperExpr = propAccess.getExpression().getText()
           usePattern = {
             wrapperName: serviceScope?.get(wrapperExpr) ?? wrapperExpr,
-            callbackKind: classifyUseCallbackKind(callbackFn),
-          };
+            callbackKind: classifyUseCallbackKind(callbackFn)
+          }
         }
       }
     }
 
     // Extract JSDoc from the call statement
-    const effectJSDoc = extractJSDocDescription(call);
+    const effectJSDoc = extractJSDocDescription(call)
 
     // Extract type signature and service requirements
-    const typeChecker = sourceFile.getProject().getTypeChecker();
-    const typeSignature = extractEffectTypeSignature(call, typeChecker);
-    const requiredServices = extractServiceRequirements(call, typeChecker);
+    const typeChecker = sourceFile.getProject().getTypeChecker()
+    const typeSignature = extractEffectTypeSignature(call, typeChecker)
+    const requiredServices = extractServiceRequirements(call, typeChecker)
 
     // Try to identify service method calls
-    const serviceCall = tryResolveServiceCall(call, sourceFile);
+    const serviceCall = tryResolveServiceCall(call, sourceFile)
 
     // Resolve serviceMethod from generator scope or requiredServices fallback
-    let serviceMethod: StaticEffectNode['serviceMethod'];
-    const expr = call.getExpression();
+    let serviceMethod: StaticEffectNode["serviceMethod"]
+    const expr = call.getExpression()
     if (expr.getKind() === loadTsMorph().SyntaxKind.PropertyAccessExpression) {
-      const propAccess = expr as PropertyAccessExpression;
-      const objectText = propAccess.getExpression().getText();
-      const methodName = propAccess.getName();
+      const propAccess = expr as PropertyAccessExpression
+      const objectText = propAccess.getExpression().getText()
+      const methodName = propAccess.getName()
       if (serviceScope) {
-        const serviceId = serviceScope.get(objectText);
-        if (serviceId) serviceMethod = { serviceId, methodName };
+        const serviceId = serviceScope.get(objectText)
+        if (serviceId) serviceMethod = { serviceId, methodName }
       }
       if (!serviceMethod && requiredServices?.length === 1 && requiredServices[0]) {
-        serviceMethod = { serviceId: requiredServices[0].serviceId, methodName };
+        serviceMethod = { serviceId: requiredServices[0].serviceId, methodName }
       }
     }
 
     // Effect.provide: infer provideKind from context arg (GAP 6: Runtime vs Layer/Context)
     // Two forms: Effect.provide(effect, layer) → 2 args, layer is args[1]; pipe(effect, Effect.provide(layer)) → 1 arg, layer is args[0]
-    let provideKind: StaticEffectNode['provideKind'];
+    let provideKind: StaticEffectNode["provideKind"]
     if (
-      callee === 'Effect.provide' ||
-      (callee.startsWith('Effect.') && callee.includes('.provide') && !callee.includes('provideService'))
+      callee === "Effect.provide" ||
+      (callee.startsWith("Effect.") && callee.includes(".provide") && !callee.includes("provideService"))
     ) {
-      const args = call.getArguments();
-      const contextArgText = (args.length >= 2 ? args[1] : args[0])?.getText() ?? '';
+      const args = call.getArguments()
+      const contextArgText = (args.length >= 2 ? args[1] : args[0])?.getText() ?? ""
       if (
         /Runtime\.|defaultRuntime|\.runSync|\.runPromise|\.runFork|\.runCallback/.test(contextArgText) ||
         /^\s*runtime\s*$|^\s*rt\s*$/i.test(contextArgText.trim())
       ) {
-        provideKind = 'runtime';
-      } else if (contextArgText.includes('Layer.')) {
-        provideKind = 'layer';
+        provideKind = "runtime"
+      } else if (contextArgText.includes("Layer.")) {
+        provideKind = "layer"
       } else {
-        provideKind = 'context';
+        provideKind = "context"
       }
     }
 
     // Determine constructorKind
-    let constructorKind: StaticEffectNode['constructorKind'];
-    if (callee.endsWith('.sync') || callee.endsWith('.succeed') || callee.endsWith('.fail') || callee.endsWith('.try') || callee.endsWith('.suspend')) constructorKind = 'sync';
-    else if (callee.endsWith('.promise')) constructorKind = 'promise';
-    else if (callee.endsWith('.async') || callee.endsWith('.asyncEffect')) constructorKind = 'async';
-    else if (callee.endsWith('.callback')) constructorKind = 'callback';
-    else if (callee.endsWith('.never')) constructorKind = 'never';
-    else if (callee.endsWith('.void')) constructorKind = 'void';
-    else if (callee.endsWith('.fromNullable')) constructorKind = 'fromNullable';
-    else if (callee.endsWith('.fn')) constructorKind = 'fn';
-    else if (callee.endsWith('.fnUntraced')) constructorKind = 'fnUntraced';
+    let constructorKind: StaticEffectNode["constructorKind"]
+    if (
+      callee.endsWith(".sync") || callee.endsWith(".succeed") || callee.endsWith(".fail") || callee.endsWith(".try") ||
+      callee.endsWith(".suspend")
+    ) constructorKind = "sync"
+    else if (callee.endsWith(".promise")) constructorKind = "promise"
+    else if (callee.endsWith(".async") || callee.endsWith(".asyncEffect")) constructorKind = "async"
+    else if (callee.endsWith(".callback")) constructorKind = "callback"
+    else if (callee.endsWith(".never")) constructorKind = "never"
+    else if (callee.endsWith(".void")) constructorKind = "void"
+    else if (callee.endsWith(".fromNullable")) constructorKind = "fromNullable"
+    else if (callee.endsWith(".fn")) constructorKind = "fn"
+    else if (callee.endsWith(".fnUntraced")) constructorKind = "fnUntraced"
 
     // Extract FiberRef built-in name
-    let fiberRefName: string | undefined;
-    const KNOWN_FIBER_REFS = ['currentConcurrency', 'currentLogLevel', 'currentScheduler', 'currentTracerEnabled', 'currentLogSpan', 'currentLogAnnotations', 'currentContext', 'currentRequestBatching', 'currentMaxOpsBeforeYield', 'currentSupervisor', 'currentMetricLabels', 'interruptedCause', 'unhandledLogLevel'] as const;
+    let fiberRefName: string | undefined
+    const KNOWN_FIBER_REFS = [
+      "currentConcurrency",
+      "currentLogLevel",
+      "currentScheduler",
+      "currentTracerEnabled",
+      "currentLogSpan",
+      "currentLogAnnotations",
+      "currentContext",
+      "currentRequestBatching",
+      "currentMaxOpsBeforeYield",
+      "currentSupervisor",
+      "currentMetricLabels",
+      "interruptedCause",
+      "unhandledLogLevel"
+    ] as const
     for (const refName of KNOWN_FIBER_REFS) {
-      if (callee.includes(refName)) { fiberRefName = refName; break; }
+      if (callee.includes(refName)) {
+        fiberRefName = refName
+        break
+      }
     }
 
     // Extract Effect.fn traced name
-    let tracedName: string | undefined;
-    if (constructorKind === 'fn' || constructorKind === 'fnUntraced') {
-      const args = call.getArguments();
+    let tracedName: string | undefined
+    if (constructorKind === "fn" || constructorKind === "fnUntraced") {
+      const args = call.getArguments()
       if (args.length > 0) {
-        const firstArg = args[0]!.getText();
-        const strMatch = /^["'`](.+?)["'`]$/.exec(firstArg);
-        if (strMatch) tracedName = strMatch[1];
+        const firstArg = args[0]!.getText()
+        const strMatch = /^["'`](.+?)["'`]$/.exec(firstArg)
+        if (strMatch) tracedName = strMatch[1]
       }
     }
 
@@ -1449,32 +1460,32 @@ export const analyzeEffectCall = (
       constructorKind === undefined &&
       call.getExpression().getKind() === loadTsMorph().SyntaxKind.CallExpression
     ) {
-      const innerCall = call.getExpression() as CallExpression;
-      const innerCallee = innerCall.getExpression().getText();
-      if (innerCallee.endsWith('.fn') || innerCallee.endsWith('.fnUntraced')) {
-        constructorKind = innerCallee.endsWith('.fnUntraced') ? 'fnUntraced' : 'fn';
-        const fnArgs = innerCall.getArguments();
+      const innerCall = call.getExpression() as CallExpression
+      const innerCallee = innerCall.getExpression().getText()
+      if (innerCallee.endsWith(".fn") || innerCallee.endsWith(".fnUntraced")) {
+        constructorKind = innerCallee.endsWith(".fnUntraced") ? "fnUntraced" : "fn"
+        const fnArgs = innerCall.getArguments()
         if (fnArgs.length > 0) {
-          const firstArg = fnArgs[0]!.getText();
-          const strMatch = /^["'`](.+?)["'`]$/.exec(firstArg);
-          if (strMatch) tracedName = strMatch[1];
+          const firstArg = fnArgs[0]!.getText()
+          const strMatch = /^["'`](.+?)["'`]$/.exec(firstArg)
+          if (strMatch) tracedName = strMatch[1]
         }
       }
     }
 
     const filteredRequiredServices = requiredServices?.filter(
-      (service) => !isEffectRuntimePrimitive(service.serviceId),
-    );
+      (service) => !isEffectRuntimePrimitive(service.serviceId)
+    )
 
     const effectNode: StaticEffectNode = {
       id: generateId(),
-      type: 'effect',
+      type: "effect",
       callee: normalizedCallee,
       description: usePattern
         ? `use-pattern (${usePattern.callbackKind})`
         : serviceCall || serviceMethod
-          ? 'service-call'
-          : getSemanticDescriptionWithAliases(normalizedCallee, getAliasesForFile(sourceFile)),
+        ? "service-call"
+        : getSemanticDescriptionWithAliases(normalizedCallee, getAliasesForFile(sourceFile)),
       location,
       jsdocDescription: effectJSDoc,
       jsdocTags: extractJSDocTags(call),
@@ -1488,15 +1499,15 @@ export const analyzeEffectCall = (
       ...(provideKind ? { provideKind } : {}),
       ...(constructorKind ? { constructorKind } : {}),
       ...(fiberRefName ? { fiberRefName } : {}),
-      ...(tracedName ? { tracedName } : {}),
-    };
+      ...(tracedName ? { tracedName } : {})
+    }
     const enrichedEffectNode: StaticEffectNode = {
       ...effectNode,
       displayName: computeDisplayName(effectNode),
-      semanticRole: computeSemanticRole(effectNode),
-    };
-    return enrichedEffectNode;
-  });
+      semanticRole: computeSemanticRole(effectNode)
+    }
+    return enrichedEffectNode
+  })
 
 /**
  * Try to resolve a service method call from a CallExpression.
@@ -1505,54 +1516,53 @@ export const analyzeEffectCall = (
  */
 const tryResolveServiceCall = (
   call: CallExpression,
-  sourceFile: SourceFile,
-): StaticEffectNode['serviceCall'] => {
-  const { SyntaxKind } = loadTsMorph();
-  const expr = call.getExpression();
+  sourceFile: SourceFile
+): StaticEffectNode["serviceCall"] => {
+  const { SyntaxKind } = loadTsMorph()
+  const expr = call.getExpression()
 
   // Must be a property access (obj.method form)
-  if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return undefined;
+  if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return undefined
 
-  const propAccess = expr as PropertyAccessExpression;
-  const objExpr = propAccess.getExpression();
-  const methodName = propAccess.getName();
-  const objectName = objExpr.getText();
+  const propAccess = expr as PropertyAccessExpression
+  const objExpr = propAccess.getExpression()
+  const methodName = propAccess.getName()
+  const objectName = objExpr.getText()
 
   // Skip if first segment is a known Effect/JS namespace (resolve aliases first)
-  const firstSegment = objectName.split('.')[0] ?? objectName;
-  if (KNOWN_EFFECT_NAMESPACES.has(firstSegment)) return undefined;
+  const firstSegment = objectName.split(".")[0] ?? objectName
+  if (KNOWN_EFFECT_NAMESPACES.has(firstSegment)) return undefined
   // Resolve aliases: e.g. "M" -> "Match", "S" -> "Schema"
-  const normalized = normalizeEffectCallee(objectName, sourceFile);
-  const normalizedFirstSegment = normalized.split('.')[0] ?? normalized;
-  if (KNOWN_EFFECT_NAMESPACES.has(normalizedFirstSegment)) return undefined;
+  const normalized = normalizeEffectCallee(objectName, sourceFile)
+  const normalizedFirstSegment = normalized.split(".")[0] ?? normalized
+  if (KNOWN_EFFECT_NAMESPACES.has(normalizedFirstSegment)) return undefined
 
   try {
-    const type = objExpr.getType();
-    const symbol = type.getSymbol() ?? type.getAliasSymbol();
-    if (!symbol) return undefined;
+    const type = objExpr.getType()
+    const symbol = type.getSymbol() ?? type.getAliasSymbol()
+    if (!symbol) return undefined
 
-    const typeName = symbol.getName();
+    const typeName = symbol.getName()
     // Skip anonymous structural types, built-ins, and error sentinels
     if (
       !typeName ||
-      typeName === '__type' ||
-      typeName === 'unknown' ||
-      typeName === 'any' ||
+      typeName === "__type" ||
+      typeName === "unknown" ||
+      typeName === "any" ||
       BUILT_IN_TYPE_NAMES.has(typeName)
     ) {
-      return undefined;
+      return undefined
     }
 
-    return { serviceType: typeName, methodName, objectName };
+    return { serviceType: typeName, methodName, objectName }
   } catch {
-    return undefined;
+    return undefined
   }
-};
+}
 
 // =============================================================================
 // Specific Pattern Analysis
 // =============================================================================
-
 
 const analyzeLayerCall = (
   call: CallExpression,
@@ -1560,24 +1570,23 @@ const analyzeLayerCall = (
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
-  stats: AnalysisStats,
+  warnings: Array<AnalysisWarning>,
+  stats: AnalysisStats
 ): Effect.Effect<StaticLayerNode, AnalysisError> =>
-  Effect.gen(function* () {
-    const args = call.getArguments();
-    const operations: StaticFlowNode[] = [];
-    const { SyntaxKind } = loadTsMorph();
+  Effect.gen(function*() {
+    const args = call.getArguments()
+    const operations: Array<StaticFlowNode> = []
+    const { SyntaxKind } = loadTsMorph()
 
     if (args.length > 0 && args[0]) {
-      const firstArg = args[0];
-      const isMergeAll =
-        callee.includes('mergeAll') &&
-        firstArg.getKind() === SyntaxKind.ArrayLiteralExpression;
+      const firstArg = args[0]
+      const isMergeAll = callee.includes("mergeAll") &&
+        firstArg.getKind() === SyntaxKind.ArrayLiteralExpression
 
       if (isMergeAll) {
         const elements = (
           firstArg as ArrayLiteralExpression
-        ).getElements();
+        ).getElements()
         for (const elem of elements) {
           const analyzed = yield* analyzeEffectExpression(
             elem,
@@ -1585,36 +1594,35 @@ const analyzeLayerCall = (
             filePath,
             opts,
             warnings,
-            stats,
-          );
-          operations.push(analyzed);
+            stats
+          )
+          operations.push(analyzed)
         }
       } else {
         for (const arg of args) {
-          if (!arg) continue;
-          const toAnalyze = resolveIdentifierToLayerInitializer(arg);
-          const argSourceFile = toAnalyze.getSourceFile();
+          if (!arg) continue
+          const toAnalyze = resolveIdentifierToLayerInitializer(arg)
+          const argSourceFile = toAnalyze.getSourceFile()
           const analyzed = yield* analyzeEffectExpression(
             toAnalyze,
             argSourceFile,
             argSourceFile.getFilePath(),
             opts,
             warnings,
-            stats,
-          );
-          operations.push(analyzed);
+            stats
+          )
+          operations.push(analyzed)
         }
       }
     }
 
-    const isMerged =
-      callee.includes('merge') || callee.includes('mergeAll');
+    const isMerged = callee.includes("merge") || callee.includes("mergeAll")
 
-    let lifecycle: LayerLifecycle | undefined;
-    if (callee.includes('fresh')) lifecycle = 'fresh';
-    else if (callee.includes('memoize')) lifecycle = 'memoized';
-    else if (callee.includes('scoped')) lifecycle = 'scoped';
-    else lifecycle = 'default';
+    let lifecycle: LayerLifecycle | undefined
+    if (callee.includes("fresh")) lifecycle = "fresh"
+    else if (callee.includes("memoize")) lifecycle = "memoized"
+    else if (callee.includes("scoped")) lifecycle = "scoped"
+    else lifecycle = "default"
 
     // Layer error-handling / utility ops — track as semantic description on the node
     // These don't change the primitive provides/requires but are important to detect:
@@ -1622,131 +1630,153 @@ const analyzeLayerCall = (
     // passthrough, project, flatMap, flatten, annotateLogs, annotateSpans,
     // setConfigProvider, setClock, setTracer, locally, withSpan
 
-    const provides: string[] = [];
+    const provides: Array<string> = []
     // Helper: extract one or more tag names from an arg.
-    const extractTagNames = (node: Node): string[] => {
+    const extractTagNames = (node: Node): Array<string> => {
       if (node.getKind() === SyntaxKind.ArrayLiteralExpression) {
-        const items = (node as ArrayLiteralExpression).getElements();
-        return items.flatMap((item) => extractTagNames(item));
+        const items = (node as ArrayLiteralExpression).getElements()
+        return items.flatMap((item) => extractTagNames(item))
       }
       if (node.getKind() === SyntaxKind.CallExpression) {
-        const callNode = node as CallExpression;
-        const callExpr = callNode.getExpression().getText();
-        if (callExpr.startsWith('Layer.') && callNode.getArguments().length > 0) {
-          const first = callNode.getArguments()[0];
-          if (first) return extractTagNames(first);
+        const callNode = node as CallExpression
+        const callExpr = callNode.getExpression().getText()
+        if (callExpr.startsWith("Layer.") && callNode.getArguments().length > 0) {
+          const first = callNode.getArguments()[0]
+          if (first) return extractTagNames(first)
         }
       }
       if (node.getKind() === SyntaxKind.Identifier) {
-        return [(node as Identifier).getText()];
+        return [(node as Identifier).getText()]
       }
       if (node.getKind() === SyntaxKind.PropertyAccessExpression) {
         // e.g. SomeService.Default → 'SomeService'
-        const pae = node as PropertyAccessExpression;
-        const obj = pae.getExpression();
+        const pae = node as PropertyAccessExpression
+        const obj = pae.getExpression()
         if (obj.getKind() === SyntaxKind.Identifier) {
-          return [(obj as Identifier).getText()];
+          return [(obj as Identifier).getText()]
         }
-        return [pae.getText().split('.')[0] ?? pae.getText()];
+        return [pae.getText().split(".")[0] ?? pae.getText()]
       }
-      return [];
-    };
+      return []
+    }
 
     // Layer.succeed(Tag, value) / Layer.sync(Tag, fn) / Layer.effect(Tag, eff) / Layer.scoped(Tag, eff)
     if (
-      (callee.includes('succeed') || callee.includes('sync') ||
-       callee.includes('effect') || callee.includes('scoped') ||
-       callee.includes('scopedDiscard') || callee.includes('effectDiscard')) &&
+      (callee.includes("succeed") || callee.includes("sync") ||
+        callee.includes("effect") || callee.includes("scoped") ||
+        callee.includes("scopedDiscard") || callee.includes("effectDiscard")) &&
       args.length > 0 && args[0]
     ) {
-      provides.push(...extractTagNames(args[0]));
+      provides.push(...extractTagNames(args[0]))
     }
     // Layer.provide / Layer.provideMerge — method call: outerLayer.pipe(Layer.provide(innerLayer))
     // In this case, callee is Layer.provide or Layer.provideMerge
     // The first arg is the layer being provided (i.e., the dependency)
-    const isProvideCall = callee.includes('provide') && !callee.includes('provideService');
+    const isProvideCall = callee.includes("provide") && !callee.includes("provideService")
 
-    const requiresSet = new Set<string>();
+    const requiresSet = new Set<string>()
     // If this is Layer.provide(dep) [1-arg curried], dep's tag is what we're injecting
     if (isProvideCall && args.length >= 1 && args[0]) {
       for (const depName of extractTagNames(args[0])) {
-        requiresSet.add(depName);
+        requiresSet.add(depName)
       }
     }
     // If this is Layer.provide(base, dep) [2-arg], dep is injected into base
     if (isProvideCall && args.length >= 2 && args[1]) {
       for (const depName of extractTagNames(args[1])) {
-        requiresSet.add(depName);
+        requiresSet.add(depName)
       }
       // The provides of the composed layer come from base (args[0])
-      const baseArg = args[0];
-      if (baseArg) provides.push(...extractTagNames(baseArg));
+      const baseArg = args[0]
+      if (baseArg) provides.push(...extractTagNames(baseArg))
     }
     // Layer.provideService(tag, value) — provides a service inline
-    if (callee.includes('provideService') && args.length > 0 && args[0]) {
-      provides.push(...extractTagNames(args[0]));
+    if (callee.includes("provideService") && args.length > 0 && args[0]) {
+      provides.push(...extractTagNames(args[0]))
     }
     const collectRequires = (node: StaticFlowNode): void => {
-      if (node.type === 'effect') {
-        const eff = node;
+      if (node.type === "effect") {
+        const eff = node
         for (const req of eff.requiredServices ?? []) {
-          requiresSet.add(req.serviceId);
+          requiresSet.add(req.serviceId)
         }
-        const calleeText = eff.callee ?? '';
+        const calleeText = eff.callee ?? ""
         if (
           /^[A-Z][A-Za-z0-9_]*(Service|Tag)$/.test(calleeText) ||
-          calleeText.endsWith('.Tag')
+          calleeText.endsWith(".Tag")
         ) {
-          requiresSet.add(calleeText);
+          requiresSet.add(calleeText)
         }
-      } else if (node.type === 'layer') {
-        const layer = node;
+      } else if (node.type === "layer") {
+        const layer = node
         for (const r of layer.requires ?? []) {
-          requiresSet.add(r);
+          requiresSet.add(r)
         }
       }
-      const children = Option.getOrElse(getStaticChildren(node), () => []);
-      children.forEach(collectRequires);
-    };
-    operations.forEach(collectRequires);
+      const children = Option.getOrElse(getStaticChildren(node), () => [])
+      children.forEach(collectRequires)
+    }
+    operations.forEach(collectRequires)
 
     // Fallback: Layer type RIn extraction when requires is empty (GAP Layer requires)
     if (requiresSet.size === 0) {
       // Type extraction can fail; an empty requires set is the fallback.
       yield* Effect.try(() => {
-        const layerSig = extractLayerTypeSignature(call);
-        if (layerSig?.requiredType && layerSig.requiredType !== 'never') {
-          const ids = parseServiceIdsFromContextType(layerSig.requiredType);
-          ids.forEach((id) => requiresSet.add(id));
+        const layerSig = extractLayerTypeSignature(call)
+        if (layerSig?.requiredType && layerSig.requiredType !== "never") {
+          const ids = parseServiceIdsFromContextType(layerSig.requiredType)
+          ids.forEach((id) => requiresSet.add(id))
         }
-      }).pipe(Effect.ignore);
+      }).pipe(Effect.ignore)
     }
 
     // Extract a semantic name for utility Layer ops
-    const layerOpName = callee.replace(/^Layer\./, '').replace(/^[a-zA-Z]+\./, '');
+    const layerOpName = callee.replace(/^Layer\./, "").replace(/^[a-zA-Z]+\./, "")
     const UTILITY_LAYER_OPS = new Set([
-      'catch', 'catchCause', 'orDie', 'orElse', 'retry', 'tap',
-      'mapError', 'mapErrorCause', 'build', 'launch', 'toRuntime',
-      'passthrough', 'project', 'flatMap', 'flatten', 'annotateLogs',
-      'annotateSpans', 'setConfigProvider', 'setClock', 'setTracer',
-      'locally', 'withSpan', 'withLogger', 'withTracer', 'withClock',
-      'mock', 'suspend', 'unwrapEffect', 'unwrapScoped',
-    ]);
-    let layerName = UTILITY_LAYER_OPS.has(layerOpName) ? `Layer.${layerOpName}` : undefined;
-    if (layerOpName === 'unwrapEffect' && operations.some((op) => op.type === 'generator')) {
-      layerName = 'Layer.unwrapEffect(gen)';
+      "catch",
+      "catchCause",
+      "orDie",
+      "orElse",
+      "retry",
+      "tap",
+      "mapError",
+      "mapErrorCause",
+      "build",
+      "launch",
+      "toRuntime",
+      "passthrough",
+      "project",
+      "flatMap",
+      "flatten",
+      "annotateLogs",
+      "annotateSpans",
+      "setConfigProvider",
+      "setClock",
+      "setTracer",
+      "locally",
+      "withSpan",
+      "withLogger",
+      "withTracer",
+      "withClock",
+      "mock",
+      "suspend",
+      "unwrapEffect",
+      "unwrapScoped"
+    ])
+    let layerName = UTILITY_LAYER_OPS.has(layerOpName) ? `Layer.${layerOpName}` : undefined
+    if (layerOpName === "unwrapEffect" && operations.some((op) => op.type === "generator")) {
+      layerName = "Layer.unwrapEffect(gen)"
     }
 
     // GAP Layer.MemoMap: dedicated memo-map analysis
-    const isMemoMap =
-      callee.includes('MemoMap') ||
+    const isMemoMap = callee.includes("MemoMap") ||
       operations.some(
-        (op) => op.type === 'layer' && (op).isMemoMap === true,
-      );
+        (op) => op.type === "layer" && op.isMemoMap === true
+      )
 
     const layerNode: StaticLayerNode = {
       id: generateId(),
-      type: 'layer',
+      type: "layer",
       name: layerName,
       operations,
       isMerged,
@@ -1757,12 +1787,12 @@ const analyzeLayerCall = (
       location: extractLocation(
         call,
         filePath,
-        opts.includeLocations ?? false,
-      ),
-    };
+        opts.includeLocations ?? false
+      )
+    }
     return {
       ...layerNode,
       displayName: computeDisplayName(layerNode),
-      semanticRole: computeSemanticRole(layerNode),
-    };
-  });
+      semanticRole: computeSemanticRole(layerNode)
+    }
+  })

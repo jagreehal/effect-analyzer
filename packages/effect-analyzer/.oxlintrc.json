@@ -1,155 +1,106 @@
 {
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
-  // Scope matches the ESLint config this replaced: eslint recommended +
-  // typescript type-checked rules, plus the Effect rules that are the point of
-  // the swap. The unicorn/oxc plugins are deliberately not enabled — they were
-  // never part of this repo's lint surface.
-  "plugins": ["typescript", "effecttsgo"],
+  // Effect's oxlint conventions plus the type-aware rules from @effect/tsgo.
+  // Every rule is either an error or off; lint runs with --deny-warnings.
+  "plugins": ["typescript", "import", "oxc", "eslint", "unicorn", "node", "effecttsgo"],
   "options": {
     "typeAware": true
   },
   "ignorePatterns": ["dist/**", "node_modules/**", "src/__fixtures__/**"],
   "categories": {
-    "correctness": "error"
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
   },
   "rules": {
-    // This repo vendors several Effect versions under ___temp/repos as analysis
-    // corpora, so duplicate packages are expected here, not a defect.
+    // --- Effect conventions ---
+    // Import rules
+    "typescript/consistent-type-imports": ["error", { "fixStyle": "inline-type-imports" }],
+    "typescript/no-import-type-side-effects": "error",
+    "import/no-duplicates": "error",
+    "import/no-self-import": "error",
+    "import/no-empty-named-blocks": "error",
+    // TypeScript cleanup
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-useless-empty-export": "error",
+    // Code quality
+    "eslint/no-console": "error",
+    "eslint/no-var": "error",
+    "eslint/no-useless-constructor": "error",
+    "unicorn/no-abusive-eslint-disable": "error",
+    "eslint/no-unneeded-ternary": "error",
+    "eslint/no-useless-concat": "error",
+    "oxc/misrefactored-assign-op": "error",
+    // Unicorn
+    "unicorn/prefer-array-flat-map": "error",
+    "unicorn/no-accessor-recursion": "error",
+    "oxc/no-map-spread": "off",
+    "eslint/object-shorthand": "off",
+    "eslint/no-shadow": "off",
+    "eslint/no-unused-vars": "off",
+    "eslint/require-yield": "off",
+    "eslint/no-fallthrough": "off",
+    "eslint/no-await-in-loop": "off",
+    "unicorn/no-new-array": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-reverse": "off",
+    "unicorn/require-post-message-target-origin": "off",
+    "unicorn/prefer-add-event-listener": "off",
+    "unicorn/prefer-set-has": "off",
+    "no-underscore-dangle": "off",
+    "typescript/no-explicit-any": "off",
+    "typescript/no-empty-interface": "off",
+    "typescript/ban-ts-comment": "off",
+    "typescript/no-namespace": "off",
+    "typescript/no-non-null-assertion": "off",
+    "typescript/no-dynamic-delete": "off",
+    "typescript/no-invalid-void-type": "off",
+    "typescript/no-unsafe-function-type": "off",
+    "typescript/unified-signatures": "off",
+    "typescript/no-empty-object-type": "off",
+    "typescript/no-confusing-non-null-assertion": "off",
+    "typescript/array-type": ["error", { "default": "generic", "readonly": "generic" }],
+    "typescript/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+
+    // Type-aware category rules outside these conventions. consistent-return
+    // also flags exhaustive switches.
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/consistent-return": "off",
+    "typescript/no-unsafe-enum-comparison": "off",
+    // Side-effect import that installs the Node ts-morph loader before use.
+    "import/no-unassigned-import": ["error", { "allow": ["**/register-node-ts-morph"] }],
+
+    // --- @effect/tsgo type-aware rules ---
+    // Analysis corpora install several Effect versions side by side.
     "effecttsgo/duplicate-package": "off",
-    // Replacements for the five source-linter rules deleted in favour of tsgo.
-    // These default to "off" upstream, so they must be enabled explicitly or
-    // deleting our versions would have dropped the coverage entirely.
-    "effecttsgo/global-error-in-effect-failure": "warn", // was effect-fail-untagged
-    "effecttsgo/global-console-in-effect": "warn", // was console-log-in-effect
-    "effecttsgo/run-effect-inside-effect": "warn", // was run-effect-in-gen
-    "effecttsgo/unnecessary-pipe": "warn", // was useless-pipe
-    "effecttsgo/unnecessary-pipe-chain": "warn",
-    // ...and the seven that together covered raw-side-effect-in-gen:
-    "effecttsgo/global-fetch-in-effect": "warn",
-    "effecttsgo/global-date-in-effect": "warn",
-    "effecttsgo/global-random-in-effect": "warn",
-    "effecttsgo/crypto-random-uuid-in-effect": "warn",
-    "effecttsgo/global-timers-in-effect": "warn",
-    "effecttsgo/process-env-in-effect": "warn",
-    "effecttsgo/new-promise": "warn",
-
-    // Real findings in our own code; surfaced as warnings so the gate stays
-    // green while they are worked through, matching the old ESLint baseline.
-    "effecttsgo/any-unknown-in-error-context": "warn",
-    "effecttsgo/global-error-in-effect-catch": "warn",
-    "effecttsgo/try-catch-in-effect-gen": "warn",
-    "effecttsgo/lazy-effect": "warn",
+    // These default to off in @effect/tsgo.
+    "effecttsgo/global-error-in-effect-failure": "error",
+    "effecttsgo/global-console-in-effect": "error",
+    "effecttsgo/run-effect-inside-effect": "error",
+    "effecttsgo/unnecessary-pipe": "error",
+    "effecttsgo/unnecessary-pipe-chain": "error",
+    "effecttsgo/global-fetch-in-effect": "error",
+    "effecttsgo/global-date-in-effect": "error",
+    "effecttsgo/global-random-in-effect": "error",
+    "effecttsgo/crypto-random-uuid-in-effect": "error",
+    "effecttsgo/global-timers-in-effect": "error",
+    "effecttsgo/process-env-in-effect": "error",
+    "effecttsgo/new-promise": "error",
+    "effecttsgo/any-unknown-in-error-context": "error",
+    "effecttsgo/global-error-in-effect-catch": "error",
+    "effecttsgo/try-catch-in-effect-gen": "error",
+    "effecttsgo/lazy-effect": "error",
     "effecttsgo/floating-effect": "error",
-    "effecttsgo/missing-return-yield-star": "error",
-
-    "eqeqeq": "error",
-    "no-console": ["warn", { "allow": ["warn", "error"] }],
-    "require-yield": "off",
-    "no-constant-binary-expression": "warn",
-    "no-useless-escape": "warn",
-
-    "typescript/no-explicit-any": "error",
-    "typescript/no-unused-vars": [
-      "error",
-      {
-        "argsIgnorePattern": "^_",
-        "varsIgnorePattern": "^_",
-        "caughtErrorsIgnorePattern": "^_"
-      }
-    ],
-    "typescript/explicit-function-return-type": "off",
-    "typescript/no-non-null-assertion": "warn",
-
-    "typescript/no-unnecessary-type-assertion": "warn",
-    "typescript/no-unnecessary-condition": "warn",
-    "typescript/no-confusing-void-expression": "warn",
-    "typescript/no-empty-function": "warn",
-    "typescript/prefer-optional-chain": "warn",
-    "typescript/prefer-nullish-coalescing": "warn",
-    "typescript/prefer-regexp-exec": "warn",
-    "typescript/array-type": "warn",
-    "typescript/no-unsafe-argument": "warn",
-    "typescript/no-unsafe-member-access": "warn",
-    "typescript/no-unsafe-assignment": "warn",
-    "typescript/require-await": "warn",
-    "typescript/unbound-method": "warn",
-    "typescript/no-unsafe-enum-comparison": "warn",
-    "typescript/restrict-template-expressions": ["error", { "allowNumber": true }]
+    "effecttsgo/missing-return-yield-star": "error"
   },
   "overrides": [
     {
+      // Tests may log.
       "files": ["src/**/*.test.ts"],
       "rules": {
-        "typescript/no-explicit-any": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unused-vars": "off",
-        "typescript/no-unnecessary-type-assertion": "off",
-        "typescript/no-non-null-assertion": "off",
-        "no-console": "off"
-      }
-    },
-    {
-      "files": ["src/ts-morph-loader.ts"],
-      "rules": {
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-require-imports": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/consistent-type-definitions": "off"
-      }
-    },
-    {
-      "files": ["src/lsp/server.ts"],
-      "rules": {
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/require-await": "off",
-        "typescript/no-unnecessary-condition": "off"
-      }
-    },
-    {
-      "files": ["src/type-extractor.ts"],
-      "rules": {
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unnecessary-condition": "off"
-      }
-    },
-    {
-      "files": [
-        "src/effect-analysis.ts",
-        "src/project-analyzer.ts",
-        "src/program-discovery.ts",
-        "src/output/mermaid.ts"
-      ],
-      "rules": {
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unnecessary-condition": "off",
-        "typescript/prefer-nullish-coalescing": "off"
-      }
-    },
-    {
-      "files": [
-        "src/analysis-utils.ts",
-        "src/observability.ts",
-        "src/output/json.ts",
-        "src/schema-analyzer.ts",
-        "src/service-flow.ts",
-        "src/migration-assistant.ts",
-        "src/strict-diagnostics.ts"
-      ],
-      "rules": {
-        "typescript/no-unnecessary-condition": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/prefer-nullish-coalescing": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/unbound-method": "off"
-      }
-    },
-    {
-      "files": ["src/project-analyzer.ts"],
-      "rules": {
-        "typescript/require-await": "off"
+        "eslint/no-console": "off"
       }
     }
   ]

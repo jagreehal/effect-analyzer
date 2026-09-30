@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { Effect } from 'effect';
-import { analyze } from './analyze';
-import { renderExplanation } from './output/explain';
+import { Effect } from "effect"
+import { describe, expect, it } from "vitest"
+import { analyze } from "./analyze"
+import { renderExplanation } from "./output/explain"
 
-describe('use pattern semantics', () => {
-  it('renders service wrapper .use calls as use-pattern callbacks', async () => {
+describe("use pattern semantics", () => {
+  it("renders service wrapper .use calls as use-pattern callbacks", async () => {
     const source = `
       import { Context, Effect } from "effect";
 
@@ -26,14 +26,14 @@ describe('use pattern semantics', () => {
         const contents = yield* fileClient.use((fs, signal) => fs.readFile("a.txt", signal));
         return contents.length;
       });
-    `;
+    `
 
-    const ir = await Effect.runPromise(analyze.source(source).named('copyFile'));
-    const explanation = renderExplanation(ir);
+    const ir = await Effect.runPromise(analyze.source(source).named("copyFile"))
+    const explanation = renderExplanation(ir)
 
-    expect(explanation).toContain('Uses FileClient via .use callback');
-    expect(explanation).toContain('Calls fs.readFile');
-    expect(explanation).toContain('Services required: FileClient');
-    expect(explanation).not.toContain('Services required: Effect');
-  });
-});
+    expect(explanation).toContain("Uses FileClient via .use callback")
+    expect(explanation).toContain("Calls fs.readFile")
+    expect(explanation).toContain("Services required: FileClient")
+    expect(explanation).not.toContain("Services required: Effect")
+  })
+})

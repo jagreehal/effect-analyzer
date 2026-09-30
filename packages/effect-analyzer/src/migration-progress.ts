@@ -1,13 +1,9 @@
 /**
  * Migration progress: snapshot two migration scans and diff them to see what
  * got fixed, what's new, and what remains.
- *
  */
 
-import {
-  findMigrationOpportunities,
-  type MigrationOpportunity,
-} from './migration-assistant';
+import { findMigrationOpportunities, type MigrationOpportunity } from "./migration-assistant"
 
 // =============================================================================
 // Types
@@ -15,22 +11,22 @@ import {
 
 export interface MigrationSnapshot {
   /** ISO timestamp, supplied by the caller so this module stays pure/testable. */
-  readonly takenAt: string;
-  readonly opportunities: readonly MigrationOpportunity[];
+  readonly takenAt: string
+  readonly opportunities: ReadonlyArray<MigrationOpportunity>
 }
 
 export interface MigrationDelta {
   /** Present in `prev`, gone in `curr` — i.e. migrated away. */
-  readonly fixed: readonly MigrationOpportunity[];
+  readonly fixed: ReadonlyArray<MigrationOpportunity>
   /** New in `curr`, absent from `prev` — regressions or newly-touched code. */
-  readonly added: readonly MigrationOpportunity[];
+  readonly added: ReadonlyArray<MigrationOpportunity>
   /** Present in both snapshots — still to do. */
-  readonly remaining: readonly MigrationOpportunity[];
-  readonly fixedCount: number;
-  readonly addedCount: number;
-  readonly remainingCount: number;
+  readonly remaining: ReadonlyArray<MigrationOpportunity>
+  readonly fixedCount: number
+  readonly addedCount: number
+  readonly remainingCount: number
   /** `fixed / (fixed + remaining)` for the patterns seen in `prev`, 0..1. */
-  readonly progress: number;
+  readonly progress: number
 }
 
 // =============================================================================
@@ -38,7 +34,7 @@ export interface MigrationDelta {
 // =============================================================================
 
 function normalizeSnippet(snippet: string | undefined): string {
-  return (snippet ?? '').replace(/\s+/g, ' ').trim();
+  return (snippet ?? "").replace(/\s+/g, " ").trim()
 }
 
 /**
@@ -51,24 +47,24 @@ function normalizeSnippet(snippet: string | undefined): string {
  */
 export function deriveOpportunityKey(
   opp: MigrationOpportunity,
-  occurrence: number,
+  occurrence: number
 ): string {
-  return `${opp.filePath}::${opp.pattern}::${normalizeSnippet(opp.codeSnippet)}::${occurrence}`;
+  return `${opp.filePath}::${opp.pattern}::${normalizeSnippet(opp.codeSnippet)}::${occurrence}`
 }
 
 /** Build a key→opportunity map, assigning occurrence indices per identical tuple. */
 function keyOpportunities(
-  opportunities: readonly MigrationOpportunity[],
+  opportunities: ReadonlyArray<MigrationOpportunity>
 ): Map<string, MigrationOpportunity> {
-  const seen = new Map<string, number>();
-  const out = new Map<string, MigrationOpportunity>();
+  const seen = new Map<string, number>()
+  const out = new Map<string, MigrationOpportunity>()
   for (const opp of opportunities) {
-    const base = `${opp.filePath}::${opp.pattern}::${normalizeSnippet(opp.codeSnippet)}`;
-    const occurrence = seen.get(base) ?? 0;
-    seen.set(base, occurrence + 1);
-    out.set(deriveOpportunityKey(opp, occurrence), opp);
+    const base = `${opp.filePath}::${opp.pattern}::${normalizeSnippet(opp.codeSnippet)}`
+    const occurrence = seen.get(base) ?? 0
+    seen.set(base, occurrence + 1)
+    out.set(deriveOpportunityKey(opp, occurrence), opp)
   }
-  return out;
+  return out
 }
 
 // =============================================================================
@@ -79,12 +75,12 @@ function keyOpportunities(
 export function snapshotFile(
   filePath: string,
   takenAt: string,
-  source?: string,
+  source?: string
 ): MigrationSnapshot {
   return {
     takenAt,
-    opportunities: findMigrationOpportunities(filePath, source),
-  };
+    opportunities: findMigrationOpportunities(filePath, source)
+  }
 }
 
 /**
@@ -97,35 +93,34 @@ export function snapshotFile(
  */
 export function diffMigrationSnapshots(
   prev: MigrationSnapshot,
-  curr: MigrationSnapshot,
+  curr: MigrationSnapshot
 ): MigrationDelta {
-  const prevKeys = keyOpportunities(prev.opportunities);
-  const currKeys = keyOpportunities(curr.opportunities);
+  const prevKeys = keyOpportunities(prev.opportunities)
+  const currKeys = keyOpportunities(curr.opportunities)
 
-  const fixed: MigrationOpportunity[] = [];
-  const remaining: MigrationOpportunity[] = [];
+  const fixed: Array<MigrationOpportunity> = []
+  const remaining: Array<MigrationOpportunity> = []
   for (const [key, opp] of prevKeys) {
     if (currKeys.has(key)) {
-      remaining.push(opp);
+      remaining.push(opp)
     } else {
-      fixed.push(opp);
+      fixed.push(opp)
     }
   }
 
-  const added: MigrationOpportunity[] = [];
+  const added: Array<MigrationOpportunity> = []
   for (const [key, opp] of currKeys) {
     if (!prevKeys.has(key)) {
-      added.push(opp);
+      added.push(opp)
     }
   }
 
-  const baseline = fixed.length + remaining.length;
-  const progress =
-    baseline === 0
-      ? added.length === 0
-        ? 1
-        : 0
-      : fixed.length / baseline;
+  const baseline = fixed.length + remaining.length
+  const progress = baseline === 0
+    ? added.length === 0
+      ? 1
+      : 0
+    : fixed.length / baseline
 
   return {
     fixed,
@@ -134,17 +129,17 @@ export function diffMigrationSnapshots(
     fixedCount: fixed.length,
     addedCount: added.length,
     remainingCount: remaining.length,
-    progress,
-  };
+    progress
+  }
 }
 
 /** Render a short, human/agent-readable progress line. */
 export function formatMigrationDelta(delta: MigrationDelta): string {
-  const pct = Math.round(delta.progress * 100);
+  const pct = Math.round(delta.progress * 100)
   const parts = [
     `${delta.fixedCount} fixed`,
-    `${delta.remainingCount} remaining`,
-  ];
-  if (delta.addedCount > 0) parts.push(`${delta.addedCount} new`);
-  return `Migration progress: ${pct}% (${parts.join(', ')})`;
+    `${delta.remainingCount} remaining`
+  ]
+  if (delta.addedCount > 0) parts.push(`${delta.addedCount} new`)
+  return `Migration progress: ${pct}% (${parts.join(", ")})`
 }

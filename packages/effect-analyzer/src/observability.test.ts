@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { Effect } from 'effect';
-import { analyze } from './analyze';
-import { analyzeObservability } from './observability';
+import { Effect } from "effect"
+import { describe, expect, it } from "vitest"
+import { analyze } from "./analyze"
+import { analyzeObservability } from "./observability"
 
-describe('observability analysis', () => {
-  it('tracks named spans from merged withSpan annotations and nested effects', async () => {
+describe("observability analysis", () => {
+  it("tracks named spans from merged withSpan annotations and nested effects", async () => {
     const source = `
       import { Effect } from "effect";
 
@@ -16,16 +16,16 @@ describe('observability analysis', () => {
         );
         return yield* Effect.succeed(2).pipe(Effect.withSpan("child-span"));
       });
-    `;
+    `
 
-    const ir = await Effect.runPromise(analyze.source(source).single);
-    const result = analyzeObservability(ir);
+    const ir = await Effect.runPromise(analyze.source(source).single)
+    const result = analyzeObservability(ir)
 
     expect(result.spans.map((span) => span.name)).toEqual(
-      expect.arrayContaining(['parent-span', 'child-span']),
-    );
-    expect(result.coverage.effectsWithSpans).toBeGreaterThan(0);
-    expect(result.logPoints.length).toBeGreaterThan(0);
-    expect(result.spans.every((span) => typeof span.childEffectCount === 'number')).toBe(true);
-  });
-});
+      expect.arrayContaining(["parent-span", "child-span"])
+    )
+    expect(result.coverage.effectsWithSpans).toBeGreaterThan(0)
+    expect(result.logPoints.length).toBeGreaterThan(0)
+    expect(result.spans.every((span) => typeof span.childEffectCount === "number")).toBe(true)
+  })
+})

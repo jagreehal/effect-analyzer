@@ -5,7 +5,7 @@
 import { Schema } from 'effect';
 
 export const User = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(2)),
+  name: Schema.String.check(Schema.isMaxLength(20)),
   age: Schema.Number,
   tags: Schema.Array(Schema.String),
 });

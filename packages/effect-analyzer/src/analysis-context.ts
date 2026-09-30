@@ -1,27 +1,21 @@
 /** Shared recursive context for domain-specific expression analyzers. */
 
-import type { Effect } from 'effect';
-import type { Node, SourceFile } from 'ts-morph';
-import type {
-  AnalysisError,
-  AnalysisStats,
-  AnalysisWarning,
-  AnalyzerOptions,
-  StaticFlowNode,
-} from './types';
+import type { Effect } from "effect"
+import type { Node, SourceFile } from "ts-morph"
+import type { AnalysisError, AnalysisStats, AnalysisWarning, AnalyzerOptions, StaticFlowNode } from "./types"
 
 export type AnalyzeEffectExpression = (
   node: Node,
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
-  warnings: AnalysisWarning[],
+  warnings: Array<AnalysisWarning>,
   stats: AnalysisStats,
-  serviceScope?: Map<string, string>,
-) => Effect.Effect<StaticFlowNode, AnalysisError>;
+  serviceScope?: Map<string, string>
+) => Effect.Effect<StaticFlowNode, AnalysisError>
 
 export interface AnalysisContext {
-  readonly analyzeEffectExpression: AnalyzeEffectExpression;
+  readonly analyzeEffectExpression: AnalyzeEffectExpression
 }
 
 /**
@@ -29,24 +23,22 @@ export interface AnalysisContext {
  * lazy so module initialization order is not part of any analyzer interface.
  */
 export const createAnalysisContext = (
-  getAnalyze: () => AnalyzeEffectExpression,
+  getAnalyze: () => AnalyzeEffectExpression
 ): AnalysisContext => ({
   get analyzeEffectExpression() {
-    return getAnalyze();
-  },
-});
+    return getAnalyze()
+  }
+})
 
 export type BindAnalysisContext<F> = F extends (
   context: AnalysisContext,
   ...args: infer Args
-) => infer Output
-  ? (...args: Args) => Output
-  : never;
+) => infer Output ? (...args: Args) => Output
+  : never
 
 export const bindAnalysisContext = <
-  F extends (context: AnalysisContext, ...args: never[]) => unknown,
+  F extends (context: AnalysisContext, ...args: Array<never>) => unknown
 >(
   context: AnalysisContext,
-  analyzer: F,
-): BindAnalysisContext<F> =>
-  ((...args: never[]) => analyzer(context, ...args)) as BindAnalysisContext<F>;
+  analyzer: F
+): BindAnalysisContext<F> => ((...args: Array<never>) => analyzer(context, ...args)) as BindAnalysisContext<F>

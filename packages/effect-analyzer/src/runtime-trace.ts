@@ -1,126 +1,128 @@
 /** Normalize Effect v4 and OpenTelemetry spans for static diagram overlays. */
 
-import { Exit, Option } from 'effect';
-import type * as Tracer from 'effect/Tracer';
+import { Exit, Option } from "effect"
+import type * as Tracer from "effect/Tracer"
 
-export type RuntimeSpanStatus = 'running' | 'success' | 'error';
+export type RuntimeSpanStatus = "running" | "success" | "error"
 
 export interface RuntimeTraceSpan {
-  readonly spanId: string;
-  readonly parentSpanId?: string | undefined;
-  readonly name: string;
-  readonly path: readonly string[];
-  readonly status: RuntimeSpanStatus;
-  readonly durationMs?: number | undefined;
+  readonly spanId: string
+  readonly parentSpanId?: string | undefined
+  readonly name: string
+  readonly path: ReadonlyArray<string>
+  readonly status: RuntimeSpanStatus
+  readonly durationMs?: number | undefined
 }
 
 export interface RuntimeTrace {
-  readonly spans: readonly RuntimeTraceSpan[];
+  readonly spans: ReadonlyArray<RuntimeTraceSpan>
 }
 
 interface FlatSpan {
-  readonly spanId: string;
-  readonly parentSpanId?: string | undefined;
-  readonly name: string;
-  readonly status: RuntimeSpanStatus;
-  readonly durationMs?: number | undefined;
+  readonly spanId: string
+  readonly parentSpanId?: string | undefined
+  readonly name: string
+  readonly status: RuntimeSpanStatus
+  readonly durationMs?: number | undefined
 }
 
-const addPaths = (spans: readonly FlatSpan[]): RuntimeTrace => {
-  const byId = new Map(spans.map((span) => [span.spanId, span] as const));
-  const pathFor = (span: FlatSpan, seen = new Set<string>()): readonly string[] => {
-    if (!span.parentSpanId || seen.has(span.spanId)) return [span.name];
-    const parent = byId.get(span.parentSpanId);
-    if (!parent) return [span.name];
-    seen.add(span.spanId);
-    return [...pathFor(parent, seen), span.name];
-  };
+const addPaths = (spans: ReadonlyArray<FlatSpan>): RuntimeTrace => {
+  const byId = new Map(spans.map((span) => [span.spanId, span] as const))
+  const pathFor = (span: FlatSpan, seen = new Set<string>()): ReadonlyArray<string> => {
+    if (!span.parentSpanId || seen.has(span.spanId)) return [span.name]
+    const parent = byId.get(span.parentSpanId)
+    if (!parent) return [span.name]
+    seen.add(span.spanId)
+    return [...pathFor(parent, seen), span.name]
+  }
   return {
-    spans: spans.map((span) => ({ ...span, path: pathFor(span) })),
-  };
-};
+    spans: spans.map((span) => ({ ...span, path: pathFor(span) }))
+  }
+}
 
 /** Adapter for Effect v4 native/devtools span values. */
 export const traceFromEffectSpans = (
-  spans: readonly Tracer.Span[],
-): RuntimeTrace => addPaths(spans.map((span) => {
-  const parent = Option.getOrUndefined(span.parent);
-  const ended = span.status._tag === 'Ended';
-  return {
-    spanId: span.spanId,
-    ...(parent ? { parentSpanId: parent.spanId } : {}),
-    name: span.name,
-    status: ended
-      ? Exit.isSuccess(span.status.exit) ? 'success' as const : 'error' as const
-      : 'running' as const,
-    ...(ended
-      ? { durationMs: Number(span.status.endTime - span.status.startTime) / 1_000_000 }
-      : {}),
-  };
-}));
+  spans: ReadonlyArray<Tracer.Span>
+): RuntimeTrace =>
+  addPaths(spans.map((span) => {
+    const parent = Option.getOrUndefined(span.parent)
+    const ended = span.status._tag === "Ended"
+    return {
+      spanId: span.spanId,
+      ...(parent ? { parentSpanId: parent.spanId } : {}),
+      name: span.name,
+      status: ended
+        ? Exit.isSuccess(span.status.exit) ? "success" as const : "error" as const
+        : "running" as const,
+      ...(ended
+        ? { durationMs: Number(span.status.endTime - span.status.startTime) / 1_000_000 }
+        : {})
+    }
+  }))
 
 export interface OpenTelemetryReadableSpan {
-  readonly name: string;
-  readonly spanContext: () => { readonly spanId: string };
-  readonly parentSpanContext?: { readonly spanId: string } | undefined;
-  readonly status?: { readonly code: number } | undefined;
-  readonly startTime?: readonly [number, number] | undefined;
-  readonly endTime?: readonly [number, number] | undefined;
+  readonly name: string
+  readonly spanContext: () => { readonly spanId: string }
+  readonly parentSpanContext?: { readonly spanId: string } | undefined
+  readonly status?: { readonly code: number } | undefined
+  readonly startTime?: readonly [number, number] | undefined
+  readonly endTime?: readonly [number, number] | undefined
 }
 
 const hrDurationMs = (
   start: readonly [number, number] | undefined,
-  end: readonly [number, number] | undefined,
+  end: readonly [number, number] | undefined
 ): number | undefined => {
-  if (!start || !end) return undefined;
-  return (end[0] - start[0]) * 1_000 + (end[1] - start[1]) / 1_000_000;
-};
+  if (!start || !end) return undefined
+  return (end[0] - start[0]) * 1_000 + (end[1] - start[1]) / 1_000_000
+}
 
 /** Adapter for OpenTelemetry ReadableSpan-shaped exports. */
 export const traceFromOpenTelemetry = (
-  spans: readonly OpenTelemetryReadableSpan[],
-): RuntimeTrace => addPaths(spans.map((span) => ({
-  spanId: span.spanContext().spanId,
-  ...(span.parentSpanContext ? { parentSpanId: span.parentSpanContext.spanId } : {}),
-  name: span.name,
-  status: span.status?.code === 2 ? 'error' : 'success',
-  ...(() => {
-    const durationMs = hrDurationMs(span.startTime, span.endTime);
-    return durationMs === undefined ? {} : { durationMs };
-  })(),
-})));
+  spans: ReadonlyArray<OpenTelemetryReadableSpan>
+): RuntimeTrace =>
+  addPaths(spans.map((span) => ({
+    spanId: span.spanContext().spanId,
+    ...(span.parentSpanContext ? { parentSpanId: span.parentSpanContext.spanId } : {}),
+    name: span.name,
+    status: span.status?.code === 2 ? "error" : "success",
+    ...(() => {
+      const durationMs = hrDurationMs(span.startTime, span.endTime)
+      return durationMs === undefined ? {} : { durationMs }
+    })()
+  })))
 
 /** One node of a nested span-tree JSON export. */
 export interface SpanTreeNode {
-  readonly spanId: string;
-  readonly name: string;
-  readonly status: 'ok' | 'error' | 'unset';
-  readonly durationMs?: number | null | undefined;
-  readonly running?: boolean | undefined;
-  readonly children?: readonly SpanTreeNode[] | undefined;
+  readonly spanId: string
+  readonly name: string
+  readonly status: "ok" | "error" | "unset"
+  readonly durationMs?: number | null | undefined
+  readonly running?: boolean | undefined
+  readonly children?: ReadonlyArray<SpanTreeNode> | undefined
 }
 
 export interface SpanTree {
-  readonly spans: readonly SpanTreeNode[];
+  readonly spans: ReadonlyArray<SpanTreeNode>
 }
 
 /** Adapter for tracing tools that export a trace as a nested span tree. */
 export const traceFromSpanTree = (trace: SpanTree): RuntimeTrace => {
-  const flat: FlatSpan[] = [];
+  const flat: Array<FlatSpan> = []
   const walk = (node: SpanTreeNode, parentSpanId?: string): void => {
     flat.push({
       spanId: node.spanId,
       ...(parentSpanId ? { parentSpanId } : {}),
       name: node.name,
       status: node.running === true
-        ? 'running'
-        : node.status === 'error'
-          ? 'error'
-          : 'success',
-      ...(typeof node.durationMs === 'number' ? { durationMs: node.durationMs } : {}),
-    });
-    for (const child of node.children ?? []) walk(child, node.spanId);
-  };
-  for (const root of trace.spans) walk(root);
-  return addPaths(flat);
-};
+        ? "running"
+        : node.status === "error"
+        ? "error"
+        : "success",
+      ...(typeof node.durationMs === "number" ? { durationMs: node.durationMs } : {})
+    })
+    for (const child of node.children ?? []) walk(child, node.spanId)
+  }
+  for (const root of trace.spans) walk(root)
+  return addPaths(flat)
+}

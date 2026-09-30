@@ -9,7 +9,7 @@
  * drift apart in the first place.
  */
 
-import { createRequire } from 'node:module';
+import { createRequire } from "node:module"
 
 export const HELP_TEXT = `
 effect-analyzer - Static analysis for Effect-TS
@@ -70,7 +70,8 @@ Options:
   --extensions <list>      Extensions to discover when walking a directory (default: ts,tsx)
   --max-depth <n>          How deep a directory walk descends (default: 10)
   --no-metadata            Exclude metadata from output
-  --colocate               Write analysis next to source (default: on for a single file)
+  --colocate               Write analysis next to source (default: on for a single
+                           file, off when -o is given)
   --no-colocate            Print only; do not write the adjacent analysis file
   --no-colocate-enhanced   Use standard Mermaid in colocated docs (default: enhanced)
   --colocate-suffix <s>    Suffix for colocated files (default: "effect-analysis")
@@ -189,16 +190,16 @@ Examples:
   effect-analyze --diff HEAD:./src/checkout.ts main:./src/checkout.ts  # Structural diff between two git refs
   effect-analyze review --base origin/main src/   # PR review of every program the branch changed
   effect-analyze review --base main --head HEAD --fail-on-regression   # CI gate
-`;
+`
 
 export const printHelp = (): void => {
-  process.stdout.write(HELP_TEXT + '\n');
-};
+  process.stdout.write(HELP_TEXT + "\n")
+}
 
 /** Resolved through the package's own exports, so it works from dist and src. */
 export const packageVersion = (): string =>
-  (createRequire(import.meta.url)('effect-analyzer/package.json') as { version: string }).version;
+  (createRequire(import.meta.url)("effect-analyzer/package.json") as { version: string }).version
 
 export const printVersion = (): void => {
-  process.stdout.write(packageVersion() + '\n');
-};
+  process.stdout.write(packageVersion() + "\n")
+}

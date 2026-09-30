@@ -182,7 +182,7 @@ export const rawSideEffectInGen = Effect.gen(function* () {
   const r = yield* Effect.succeed(fetch('/api'));
   // LINT: Math.random() — should be wrapped in Effect.sync or a Random service
   const x = Math.random();
-  // LINT: process.env access — should be Config.string
+  // LINT: process.env access — should be Config.String
   const k = process.env['SECRET_KEY'];
   return { r, x, k };
 });

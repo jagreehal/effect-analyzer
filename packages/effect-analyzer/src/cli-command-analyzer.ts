@@ -14,196 +14,188 @@
  * diagram generation.
  */
 
+import { Effect } from "effect"
 import type {
+  ArrayLiteralExpression,
   CallExpression,
   Identifier,
   Node,
-  SourceFile,
-  ArrayLiteralExpression,
   ObjectLiteralExpression,
   PropertyAssignment,
-  StringLiteral,
-} from 'ts-morph';
-import { Effect } from 'effect';
-import {
-  loadTsMorph,
-  createProject,
-  createProjectFromSource,
-} from './ts-morph-loader';
-import type { SourceLocation } from './types';
-import { AnalysisError } from './types';
-import { isJsOrJsxPath } from './analysis-utils';
+  SourceFile,
+  StringLiteral
+} from "ts-morph"
+import { isJsOrJsxPath } from "./analysis-utils"
+import { createProject, createProjectFromSource, loadTsMorph } from "./ts-morph-loader"
+import type { SourceLocation } from "./types"
+import { AnalysisError } from "./types"
 
 export interface CliArgInfo {
   /** Kind of input (text, integer, choice, boolean, etc.). */
-  readonly kind: string;
+  readonly kind: string
   /** First argument text (often the flag/name). */
-  readonly nameOrLabel?: string | undefined;
+  readonly nameOrLabel?: string | undefined
 }
 
 export interface CliPromptInfo {
   /** Kind of prompt (text, select, toggle, list, ...). */
-  readonly kind: string;
+  readonly kind: string
   /** First argument text (label/message). */
-  readonly nameOrLabel?: string | undefined;
+  readonly nameOrLabel?: string | undefined
 }
 
 export interface CliCommandInfo {
   /** Command name as passed to Command.make("name", ...). */
-  readonly name: string;
+  readonly name: string
   /** Source location of the Command.make call. */
-  readonly location: SourceLocation;
+  readonly location: SourceLocation
   /** Options (--foo) parsed from the second argument shape. */
-  readonly options: readonly CliArgInfo[];
+  readonly options: ReadonlyArray<CliArgInfo>
   /** Positional args. */
-  readonly args: readonly CliArgInfo[];
+  readonly args: ReadonlyArray<CliArgInfo>
   /** Prompts referenced from this command's containing module. */
-  readonly prompts: readonly CliPromptInfo[];
+  readonly prompts: ReadonlyArray<CliPromptInfo>
   /** Whether a .pipe(Command.withHandler(...)) is present in the same statement chain. */
-  readonly hasHandler: boolean;
+  readonly hasHandler: boolean
   /** Subcommands names referenced via Command.withSubcommands ([...]). */
-  readonly subcommandNames: readonly string[];
+  readonly subcommandNames: ReadonlyArray<string>
 }
 
 export interface CliRunInfo {
-  readonly rootCommand?: string | undefined;
-  readonly name?: string | undefined;
-  readonly version?: string | undefined;
-  readonly location: SourceLocation;
+  readonly rootCommand?: string | undefined
+  readonly name?: string | undefined
+  readonly version?: string | undefined
+  readonly location: SourceLocation
 }
 
 export interface CliCommandReport {
-  readonly filePath: string;
-  readonly commands: readonly CliCommandInfo[];
-  readonly runs: readonly CliRunInfo[];
+  readonly filePath: string
+  readonly commands: ReadonlyArray<CliCommandInfo>
+  readonly runs: ReadonlyArray<CliRunInfo>
 }
 
 const makeLocation = (node: Node, filePath: string): SourceLocation => {
-  const start = node.getStart();
-  const { line, column } = node.getSourceFile().getLineAndColumnAtPos(start);
-  return { filePath, line, column };
-};
+  const start = node.getStart()
+  const { line, column } = node.getSourceFile().getLineAndColumnAtPos(start)
+  return { filePath, line, column }
+}
 
-const isArgsCallee = (callee: string): boolean =>
-  /^(?:Args|@effect\/cli\.Args)\.[A-Za-z]+$/.test(callee);
-const isOptionsCallee = (callee: string): boolean =>
-  /^(?:Options|@effect\/cli\.Options)\.[A-Za-z]+$/.test(callee);
-const isPromptCallee = (callee: string): boolean =>
-  /^Prompt\.[A-Za-z]+$/.test(callee);
+const isArgsCallee = (callee: string): boolean => /^(?:Args|@effect\/cli\.Args)\.[A-Za-z]+$/.test(callee)
+const isOptionsCallee = (callee: string): boolean => /^(?:Options|@effect\/cli\.Options)\.[A-Za-z]+$/.test(callee)
+const isPromptCallee = (callee: string): boolean => /^Prompt\.[A-Za-z]+$/.test(callee)
 
-const trimText = (s: string, n = 64): string =>
-  s.length <= n ? s : `${s.slice(0, n)}…`;
+const trimText = (s: string, n = 64): string => s.length <= n ? s : `${s.slice(0, n)}…`
 
-const calleeOf = (call: CallExpression): string => call.getExpression().getText();
+const calleeOf = (call: CallExpression): string => call.getExpression().getText()
 
 /**
  * Extract argument info (kind + first-arg text) from an Args.* / Options.* / Prompt.* call.
  */
 const argInfoFromCall = (call: CallExpression): CliArgInfo => {
-  const callee = calleeOf(call);
-  const kind = callee.split('.').pop() ?? callee;
-  const args = call.getArguments();
-  const first = args[0]?.getText();
+  const callee = calleeOf(call)
+  const kind = callee.split(".").pop() ?? callee
+  const args = call.getArguments()
+  const first = args[0]?.getText()
   return {
     kind,
-    nameOrLabel: first ? trimText(first) : undefined,
-  };
-};
+    nameOrLabel: first ? trimText(first) : undefined
+  }
+}
 
 /**
  * Inspect the second arg of Command.make (the option-shape object literal)
  * and gather Args / Options calls contained within.
  */
 const collectArgsAndOptions = (
-  call: CallExpression,
-): { args: CliArgInfo[]; options: CliArgInfo[] } => {
-  const { SyntaxKind } = loadTsMorph();
-  const args: CliArgInfo[] = [];
-  const options: CliArgInfo[] = [];
-  const second = call.getArguments()[1];
-  if (!second) return { args, options };
-  if (second.getKind() !== SyntaxKind.ObjectLiteralExpression) return { args, options };
+  call: CallExpression
+): { args: Array<CliArgInfo>; options: Array<CliArgInfo> } => {
+  const { SyntaxKind } = loadTsMorph()
+  const args: Array<CliArgInfo> = []
+  const options: Array<CliArgInfo> = []
+  const second = call.getArguments()[1]
+  if (!second) return { args, options }
+  if (second.getKind() !== SyntaxKind.ObjectLiteralExpression) return { args, options }
 
   for (const prop of (second as ObjectLiteralExpression).getProperties()) {
-    if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue;
-    const init = (prop as PropertyAssignment).getInitializer();
-    if (!init) continue;
+    if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue
+    const init = (prop as PropertyAssignment).getInitializer()
+    if (!init) continue
     // Walk through the initializer for any Args.* / Options.* calls.
     for (const c of init.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const callee = calleeOf(c);
-      if (isArgsCallee(callee)) args.push(argInfoFromCall(c));
-      else if (isOptionsCallee(callee)) options.push(argInfoFromCall(c));
+      const callee = calleeOf(c)
+      if (isArgsCallee(callee)) args.push(argInfoFromCall(c))
+      else if (isOptionsCallee(callee)) options.push(argInfoFromCall(c))
     }
     // If the initializer itself is a call:
     if (init.getKind() === SyntaxKind.CallExpression) {
-      const callee = calleeOf(init as CallExpression);
-      if (isArgsCallee(callee)) args.push(argInfoFromCall(init as CallExpression));
-      else if (isOptionsCallee(callee)) options.push(argInfoFromCall(init as CallExpression));
+      const callee = calleeOf(init as CallExpression)
+      if (isArgsCallee(callee)) args.push(argInfoFromCall(init as CallExpression))
+      else if (isOptionsCallee(callee)) options.push(argInfoFromCall(init as CallExpression))
     }
   }
-  return { args, options };
-};
+  return { args, options }
+}
 
 /** Look for `.pipe(Command.withHandler(...))` chained on the Command.make call. */
 const hasWithHandler = (call: CallExpression, sf: SourceFile): boolean => {
-  const text = sf.getText();
-  const callText = call.getText();
-  const idx = text.indexOf(callText);
-  if (idx < 0) return false;
-  const tail = text.slice(idx, idx + callText.length + 400);
-  return /Command\.withHandler\s*\(/.test(tail);
-};
+  const text = sf.getText()
+  const callText = call.getText()
+  const idx = text.indexOf(callText)
+  if (idx < 0) return false
+  const tail = text.slice(idx, idx + callText.length + 400)
+  return /Command\.withHandler\s*\(/.test(tail)
+}
 
-const subcommandNamesFromCall = (call: CallExpression): string[] => {
-  const { SyntaxKind } = loadTsMorph();
-  const text = call.getText();
-  if (!text.includes('Command.withSubcommands')) return [];
-  const names: string[] = [];
+const subcommandNamesFromCall = (call: CallExpression): Array<string> => {
+  const { SyntaxKind } = loadTsMorph()
+  const text = call.getText()
+  if (!text.includes("Command.withSubcommands")) return []
+  const names: Array<string> = []
   for (const subcall of call.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (calleeOf(subcall) !== 'Command.withSubcommands') continue;
-    const arr = subcall.getArguments()[0];
-    if (arr?.getKind() !== SyntaxKind.ArrayLiteralExpression) continue;
+    if (calleeOf(subcall) !== "Command.withSubcommands") continue
+    const arr = subcall.getArguments()[0]
+    if (arr?.getKind() !== SyntaxKind.ArrayLiteralExpression) continue
     for (const el of (arr as ArrayLiteralExpression).getElements()) {
       if (el.getKind() === SyntaxKind.Identifier) {
-        names.push((el as Identifier).getText());
+        names.push((el as Identifier).getText())
       }
     }
   }
-  return names;
-};
+  return names
+}
 
 export const findCliCommands = (
   sf: SourceFile,
-  filePath?: string,
+  filePath?: string
 ): CliCommandReport => {
-  const { SyntaxKind } = loadTsMorph();
-  const fp = filePath ?? sf.getFilePath();
+  const { SyntaxKind } = loadTsMorph()
+  const fp = filePath ?? sf.getFilePath()
 
   // Collect Prompt.* calls at file scope for attaching to commands.
-  const prompts: CliPromptInfo[] = [];
+  const prompts: Array<CliPromptInfo> = []
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const callee = calleeOf(call);
-    if (!isPromptCallee(callee)) continue;
-    const kind = callee.split('.').pop() ?? callee;
-    const first = call.getArguments()[0]?.getText();
-    prompts.push({ kind, nameOrLabel: first ? trimText(first) : undefined });
+    const callee = calleeOf(call)
+    if (!isPromptCallee(callee)) continue
+    const kind = callee.split(".").pop() ?? callee
+    const first = call.getArguments()[0]?.getText()
+    prompts.push({ kind, nameOrLabel: first ? trimText(first) : undefined })
   }
 
-  const commands: CliCommandInfo[] = [];
-  const runs: CliRunInfo[] = [];
+  const commands: Array<CliCommandInfo> = []
+  const runs: Array<CliRunInfo> = []
 
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const callee = calleeOf(call);
-    if (callee === 'Command.make') {
-      const args = call.getArguments();
-      const first = args[0];
-      let name = 'unknown';
+    const callee = calleeOf(call)
+    if (callee === "Command.make") {
+      const args = call.getArguments()
+      const first = args[0]
+      let name = "unknown"
       if (first?.getKind() === SyntaxKind.StringLiteral) {
-        name = (first as StringLiteral).getLiteralValue();
+        name = (first as StringLiteral).getLiteralValue()
       } else if (first) {
-        name = trimText(first.getText());
+        name = trimText(first.getText())
       }
-      const { args: positional, options } = collectArgsAndOptions(call);
+      const { args: positional, options } = collectArgsAndOptions(call)
       commands.push({
         name,
         location: makeLocation(call, fp),
@@ -211,28 +203,28 @@ export const findCliCommands = (
         args: positional,
         prompts,
         hasHandler: hasWithHandler(call, sf),
-        subcommandNames: subcommandNamesFromCall(call),
-      });
-    } else if (callee === 'Command.run') {
-      const args = call.getArguments();
-      const rootArg = args[0]?.getText();
-      let runName: string | undefined;
-      let version: string | undefined;
-      const second = args[1];
+        subcommandNames: subcommandNamesFromCall(call)
+      })
+    } else if (callee === "Command.run") {
+      const args = call.getArguments()
+      const rootArg = args[0]?.getText()
+      let runName: string | undefined
+      let version: string | undefined
+      const second = args[1]
       if (second?.getKind() === SyntaxKind.ObjectLiteralExpression) {
         for (const p of (second as ObjectLiteralExpression).getProperties()) {
-          if (p.getKind() !== SyntaxKind.PropertyAssignment) continue;
-          const pa = p as PropertyAssignment;
-          const nm = pa.getName();
-          const init = pa.getInitializer();
-          if (!init) continue;
-          if (nm === 'name' && init.getKind() === SyntaxKind.StringLiteral) {
-            runName = (init as StringLiteral).getLiteralValue();
+          if (p.getKind() !== SyntaxKind.PropertyAssignment) continue
+          const pa = p as PropertyAssignment
+          const nm = pa.getName()
+          const init = pa.getInitializer()
+          if (!init) continue
+          if (nm === "name" && init.getKind() === SyntaxKind.StringLiteral) {
+            runName = (init as StringLiteral).getLiteralValue()
           } else if (
-            nm === 'version' &&
+            nm === "version" &&
             init.getKind() === SyntaxKind.StringLiteral
           ) {
-            version = (init as StringLiteral).getLiteralValue();
+            version = (init as StringLiteral).getLiteralValue()
           }
         }
       }
@@ -240,52 +232,52 @@ export const findCliCommands = (
         rootCommand: rootArg,
         name: runName,
         version,
-        location: makeLocation(call, fp),
-      });
+        location: makeLocation(call, fp)
+      })
     }
   }
 
-  return { filePath: fp, commands, runs };
-};
+  return { filePath: fp, commands, runs }
+}
 
 export const analyzeCliCommandsFile = (
-  filePath: string,
+  filePath: string
 ): Effect.Effect<CliCommandReport, AnalysisError> =>
-  Effect.gen(function* () {
-    const { Project } = loadTsMorph();
+  Effect.gen(function*() {
+    const { Project } = loadTsMorph()
     const project = yield* Effect.try({
       try: () =>
         isJsOrJsxPath(filePath)
           ? new Project({
-              skipAddingFilesFromTsConfig: true,
-              compilerOptions: { allowJs: true },
-            })
+            skipAddingFilesFromTsConfig: true,
+            compilerOptions: { allowJs: true }
+          })
           : createProject(),
       catch: (error) =>
         new AnalysisError(
-          'PROJECT_CREATION_FAILED',
-          `Failed to create project: ${String(error)}`,
-        ),
-    });
+          "PROJECT_CREATION_FAILED",
+          `Failed to create project: ${String(error)}`
+        )
+    })
     const sf = yield* Effect.try({
       try: () => {
-        const existing = project.getSourceFile(filePath);
-        if (existing) return existing;
-        return project.addSourceFileAtPath(filePath);
+        const existing = project.getSourceFile(filePath)
+        if (existing) return existing
+        return project.addSourceFileAtPath(filePath)
       },
       catch: (error) =>
         new AnalysisError(
-          'FILE_NOT_FOUND',
-          `Failed to load file ${filePath}: ${String(error)}`,
-        ),
-    });
-    return findCliCommands(sf, filePath);
-  });
+          "FILE_NOT_FOUND",
+          `Failed to load file ${filePath}: ${String(error)}`
+        )
+    })
+    return findCliCommands(sf, filePath)
+  })
 
 export const analyzeCliCommandsSource = (
   code: string,
-  filePath = 'temp.ts',
+  filePath = "temp.ts"
 ): CliCommandReport => {
-  const sf = createProjectFromSource(code, filePath);
-  return findCliCommands(sf, filePath);
-};
+  const sf = createProjectFromSource(code, filePath)
+  return findCliCommands(sf, filePath)
+}

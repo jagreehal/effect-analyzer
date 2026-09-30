@@ -1,15 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { loadTsMorph } from './ts-morph-loader';
-import { buildProjectServiceMap } from './service-registry';
+import { describe, expect, it } from "vitest"
+import { buildProjectServiceMap } from "./service-registry"
+import { loadTsMorph } from "./ts-morph-loader"
 
-describe('service-registry', () => {
-  it('maps Effect v4 Context.Service declarations to their service key', () => {
-    const { Project } = loadTsMorph();
+describe("service-registry", () => {
+  it("maps Effect v4 Context.Service declarations to their service key", () => {
+    const { Project } = loadTsMorph()
     const project = new Project({
       useInMemoryFileSystem: true,
-      skipAddingFilesFromTsConfig: true,
-    });
-    const filePath = '/virtual/v4-services.ts';
+      skipAddingFilesFromTsConfig: true
+    })
+    const filePath = "/virtual/v4-services.ts"
     const sourceFile = project.createSourceFile(
       filePath,
       `
@@ -23,26 +23,28 @@ describe('service-registry', () => {
         log: (_message: string) => undefined
       });
       `,
-      { overwrite: true },
-    );
+      { overwrite: true }
+    )
 
     const serviceMap = buildProjectServiceMap(
-      new Map<string, readonly any[]>([[filePath, []]]),
-      new Map([[filePath, sourceFile]]),
-    );
+      new Map<string, ReadonlyArray<any>>([[filePath, []]]),
+      new Map([[filePath, sourceFile]])
+    )
 
-    expect(serviceMap.services.get('AppLogger')?.definition.methods).toContain('log');
-    expect(serviceMap.services.get('AppLogger')?.layerImplementations.map((layer) => layer.name)).toContain('LoggerLive');
-  });
+    expect(serviceMap.services.get("AppLogger")?.definition.methods).toContain("log")
+    expect(serviceMap.services.get("AppLogger")?.layerImplementations.map((layer) => layer.name)).toContain(
+      "LoggerLive"
+    )
+  })
 
-  it('maps Layer.* providers to tag IDs even when class name differs from Context.Tag string', () => {
-    const { Project } = loadTsMorph();
+  it("maps Layer.* providers to tag IDs even when class name differs from Context.Tag string", () => {
+    const { Project } = loadTsMorph()
     const project = new Project({
       useInMemoryFileSystem: true,
-      skipAddingFilesFromTsConfig: true,
-    });
+      skipAddingFilesFromTsConfig: true
+    })
 
-    const filePath = '/virtual/services.ts';
+    const filePath = "/virtual/services.ts"
     const sourceFile = project.createSourceFile(
       filePath,
       `
@@ -54,45 +56,45 @@ describe('service-registry', () => {
         log: (_msg: string) => undefined
       });
       `,
-      { overwrite: true },
-    );
+      { overwrite: true }
+    )
 
-    const byFile = new Map<string, readonly any[]>([[filePath, []]]);
-    const serviceMap = buildProjectServiceMap(byFile, new Map([[filePath, sourceFile]]));
-    const loggerArtifact = serviceMap.services.get('AppLogger');
+    const byFile = new Map<string, ReadonlyArray<any>>([[filePath, []]])
+    const serviceMap = buildProjectServiceMap(byFile, new Map([[filePath, sourceFile]]))
+    const loggerArtifact = serviceMap.services.get("AppLogger")
 
-    expect(loggerArtifact).toBeDefined();
-    expect(loggerArtifact?.layerImplementations.map((l) => l.name)).toContain('LoggerLive');
-  });
+    expect(loggerArtifact).toBeDefined()
+    expect(loggerArtifact?.layerImplementations.map((l) => l.name)).toContain("LoggerLive")
+  })
 
-  it('tracks unresolved services referenced by serviceCall nodes even when requiredServices is empty', () => {
-    const byFile = new Map<string, readonly any[]>([
+  it("tracks unresolved services referenced by serviceCall nodes even when requiredServices is empty", () => {
+    const byFile = new Map<string, ReadonlyArray<any>>([
       [
-        '/virtual/main.ts',
+        "/virtual/main.ts",
         [
           {
             root: {
-              id: 'program-main',
-              type: 'program',
-              programName: 'main',
-              source: 'generator',
+              id: "program-main",
+              type: "program",
+              programName: "main",
+              source: "generator",
               children: [
                 {
-                  id: 'node-1',
-                  type: 'effect',
-                  callee: 'MissingSvc',
-                  description: 'service',
-                  location: { filePath: '/virtual/main.ts', line: 3, column: 2 },
-                  serviceCall: { serviceType: 'MissingSvc', methodName: 'Tag' },
-                },
+                  id: "node-1",
+                  type: "effect",
+                  callee: "MissingSvc",
+                  description: "service",
+                  location: { filePath: "/virtual/main.ts", line: 3, column: 2 },
+                  serviceCall: { serviceType: "MissingSvc", methodName: "Tag" }
+                }
               ],
               dependencies: [],
               errorTypes: [],
-              requiredServices: [],
+              requiredServices: []
             },
             metadata: {
               analyzedAt: Date.now(),
-              filePath: '/virtual/main.ts',
+              filePath: "/virtual/main.ts",
               stats: {
                 totalEffects: 1,
                 parallelCount: 0,
@@ -104,46 +106,46 @@ describe('service-registry', () => {
                 loopCount: 0,
                 conditionalCount: 0,
                 layerCount: 0,
-                unknownCount: 0,
-              },
+                unknownCount: 0
+              }
             },
-            references: new Map(),
-          },
-        ],
-      ],
-    ]);
+            references: new Map()
+          }
+        ]
+      ]
+    ])
 
-    const serviceMap = buildProjectServiceMap(byFile);
-    expect(serviceMap.unresolvedServices).toContain('MissingSvc');
-  });
+    const serviceMap = buildProjectServiceMap(byFile)
+    expect(serviceMap.unresolvedServices).toContain("MissingSvc")
+  })
 
-  it('does not treat plain effect identifiers as unresolved services', () => {
-    const byFile = new Map<string, readonly any[]>([
+  it("does not treat plain effect identifiers as unresolved services", () => {
+    const byFile = new Map<string, ReadonlyArray<any>>([
       [
-        '/virtual/main.ts',
+        "/virtual/main.ts",
         [
           {
             root: {
-              id: 'program-main',
-              type: 'program',
-              programName: 'main',
-              source: 'generator',
+              id: "program-main",
+              type: "program",
+              programName: "main",
+              source: "generator",
               children: [
                 {
-                  id: 'node-1',
-                  type: 'effect',
-                  callee: 'helperProgram',
-                  description: 'effect call',
-                  location: { filePath: '/virtual/main.ts', line: 4, column: 2 },
-                },
+                  id: "node-1",
+                  type: "effect",
+                  callee: "helperProgram",
+                  description: "effect call",
+                  location: { filePath: "/virtual/main.ts", line: 4, column: 2 }
+                }
               ],
               dependencies: [],
               errorTypes: [],
-              requiredServices: [],
+              requiredServices: []
             },
             metadata: {
               analyzedAt: Date.now(),
-              filePath: '/virtual/main.ts',
+              filePath: "/virtual/main.ts",
               stats: {
                 totalEffects: 1,
                 parallelCount: 0,
@@ -155,16 +157,16 @@ describe('service-registry', () => {
                 loopCount: 0,
                 conditionalCount: 0,
                 layerCount: 0,
-                unknownCount: 0,
-              },
+                unknownCount: 0
+              }
             },
-            references: new Map(),
-          },
-        ],
-      ],
-    ]);
+            references: new Map()
+          }
+        ]
+      ]
+    ])
 
-    const serviceMap = buildProjectServiceMap(byFile);
-    expect(serviceMap.unresolvedServices).not.toContain('helperProgram');
-  });
-});
+    const serviceMap = buildProjectServiceMap(byFile)
+    expect(serviceMap.unresolvedServices).not.toContain("helperProgram")
+  })
+})

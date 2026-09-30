@@ -1,47 +1,39 @@
-import { describe, it, expect } from 'vitest';
-import { renderServicesMermaid, renderServicesMermaidFromMap } from './output/mermaid-services';
-import type {
-  StaticEffectIR,
-  StaticEffectNode,
-  StaticGeneratorNode,
-  ProjectServiceMap,
-  ServiceArtifact,
-  ServiceRequirement,
-  SourceLocation,
-} from './types';
+import { describe, expect, it } from "vitest"
+import { renderServicesMermaid, renderServicesMermaidFromMap } from "./output/mermaid-services"
+import type { ProjectServiceMap, ServiceArtifact, SourceLocation, StaticEffectIR, StaticEffectNode } from "./types"
 
-const loc: SourceLocation = { file: 'test.ts', line: 1, column: 0 };
+const loc: SourceLocation = { file: "test.ts", line: 1, column: 0 }
 
 const makeNode = (
-  overrides: Partial<StaticEffectNode> & { id: string; callee: string },
+  overrides: Partial<StaticEffectNode> & { id: string; callee: string }
 ): StaticEffectNode => ({
-  type: 'effect',
+  type: "effect",
   name: overrides.callee,
-  ...overrides,
-});
+  ...overrides
+})
 
 const makeIR = (
-  effects: StaticEffectNode[],
-  programName = 'TestProgram',
+  effects: Array<StaticEffectNode>,
+  programName = "TestProgram"
 ): StaticEffectIR => ({
   root: {
-    id: 'prog-1',
-    type: 'program',
+    id: "prog-1",
+    type: "program",
     programName,
-    source: 'generator',
+    source: "generator",
     children: [
       {
-        id: 'gen-1',
-        type: 'generator',
-        yields: effects.map((e) => ({ effect: e })),
-      } as StaticGeneratorNode,
+        id: "gen-1",
+        type: "generator",
+        yields: effects.map((e) => ({ effect: e }))
+      }
     ],
     dependencies: [],
-    errorTypes: [],
+    errorTypes: []
   },
   metadata: {
     analyzedAt: Date.now(),
-    filePath: 'test.ts',
+    filePath: "test.ts",
     stats: {
       totalEffects: 0,
       parallelCount: 0,
@@ -56,151 +48,163 @@ const makeIR = (
       unknownCount: 0,
       interruptionCount: 0,
       decisionCount: 0,
-      switchCount: 0,
-    },
+      switchCount: 0
+    }
   },
-  references: new Map(),
-});
+  references: new Map()
+})
 
-describe('renderServicesMermaid', () => {
-  it('renders required services as hexagon nodes with requires edges', () => {
+describe("renderServicesMermaid", () => {
+  it("renders required services as hexagon nodes with requires edges", () => {
     const ir = makeIR([
       makeNode({
-        id: 'n1',
-        callee: 'UserRepo.findById',
+        id: "n1",
+        callee: "UserRepo.findById",
         requiredServices: [
-          { serviceId: 'UserRepo', serviceType: 'UserRepo', requiredAt: loc },
-        ],
+          { serviceId: "UserRepo", serviceType: "UserRepo", requiredAt: loc }
+        ]
       }),
       makeNode({
-        id: 'n2',
-        callee: 'EmailService.send',
+        id: "n2",
+        callee: "EmailService.send",
         requiredServices: [
-          { serviceId: 'EmailService', serviceType: 'EmailService', requiredAt: loc },
-        ],
-      }),
-    ]);
+          { serviceId: "EmailService", serviceType: "EmailService", requiredAt: loc }
+        ]
+      })
+    ])
 
-    const result = renderServicesMermaid(ir);
+    const result = renderServicesMermaid(ir)
 
-    expect(result).toContain('flowchart LR');
-    expect(result).toContain('prog[');
-    expect(result).toContain('UserRepo');
-    expect(result).toContain('EmailService');
-    expect(result).toContain('-->|requires|');
+    expect(result).toContain("flowchart LR")
+    expect(result).toContain("prog[")
+    expect(result).toContain("UserRepo")
+    expect(result).toContain("EmailService")
+    expect(result).toContain("-->|requires|")
     // Hexagon shape
-    expect(result).toMatch(/svc_\w+\{\{"/);
-  });
+    expect(result).toMatch(/svc_\w+\{\{"/)
+  })
 
-  it('renders graceful output when no services exist', () => {
+  it("renders graceful output when no services exist", () => {
     const ir = makeIR([
-      makeNode({ id: 'n1', callee: 'Effect.succeed' }),
-    ]);
+      makeNode({ id: "n1", callee: "Effect.succeed" })
+    ])
 
-    const result = renderServicesMermaid(ir);
+    const result = renderServicesMermaid(ir)
 
-    expect(result).toContain('flowchart LR');
-    expect(result).toContain('No services');
-  });
+    expect(result).toContain("flowchart LR")
+    expect(result).toContain("No services")
+  })
 
-  it('respects direction option', () => {
+  it("respects direction option", () => {
     const ir = makeIR([
       makeNode({
-        id: 'n1',
-        callee: 'UserRepo.findById',
+        id: "n1",
+        callee: "UserRepo.findById",
         requiredServices: [
-          { serviceId: 'UserRepo', serviceType: 'UserRepo', requiredAt: loc },
-        ],
-      }),
-    ]);
+          { serviceId: "UserRepo", serviceType: "UserRepo", requiredAt: loc }
+        ]
+      })
+    ])
 
-    const resultTB = renderServicesMermaid(ir, { direction: 'TB' });
-    expect(resultTB).toContain('flowchart TB');
+    const resultTB = renderServicesMermaid(ir, { direction: "TB" })
+    expect(resultTB).toContain("flowchart TB")
 
-    const resultLR = renderServicesMermaid(ir, { direction: 'LR' });
-    expect(resultLR).toContain('flowchart LR');
-  });
-});
+    const resultLR = renderServicesMermaid(ir, { direction: "LR" })
+    expect(resultLR).toContain("flowchart LR")
+  })
+})
 
-describe('renderServicesMermaidFromMap', () => {
-  it('renders service dependencies as edges between hexagon nodes', () => {
+describe("renderServicesMermaidFromMap", () => {
+  it("renders service dependencies as edges between hexagon nodes", () => {
     const services = new Map<string, ServiceArtifact>([
       [
-        'UserRepo',
+        "UserRepo",
         {
-          serviceId: 'UserRepo',
-          className: 'UserRepo',
-          definitionFilePath: 'user-repo.ts',
+          serviceId: "UserRepo",
+          className: "UserRepo",
+          definitionFilePath: "user-repo.ts",
           definitionLocation: loc,
-          definition: { methods: [{ name: 'findById', parameters: [], returnType: 'Effect<User>' }], properties: [] },
+          definition: { methods: [{ name: "findById", parameters: [], returnType: "Effect<User>" }], properties: [] },
           layerImplementations: [
-            { name: 'UserRepoLive', provides: 'UserRepo', requires: ['Database'], filePath: 'user-repo.ts', location: loc },
+            {
+              name: "UserRepoLive",
+              provides: "UserRepo",
+              requires: ["Database"],
+              filePath: "user-repo.ts",
+              location: loc
+            }
           ],
           consumers: [],
-          dependencies: ['Database'],
-        } as ServiceArtifact,
+          dependencies: ["Database"]
+        } as ServiceArtifact
       ],
       [
-        'Database',
+        "Database",
         {
-          serviceId: 'Database',
-          className: 'Database',
-          definitionFilePath: 'database.ts',
+          serviceId: "Database",
+          className: "Database",
+          definitionFilePath: "database.ts",
           definitionLocation: loc,
-          definition: { methods: [{ name: 'query', parameters: [], returnType: 'Effect<Result>' }], properties: [] },
+          definition: { methods: [{ name: "query", parameters: [], returnType: "Effect<Result>" }], properties: [] },
           layerImplementations: [],
           consumers: [],
-          dependencies: [],
-        } as ServiceArtifact,
-      ],
-    ]);
+          dependencies: []
+        } as ServiceArtifact
+      ]
+    ])
 
     const serviceMap: ProjectServiceMap = {
       services,
       unresolvedServices: [],
-      topologicalOrder: ['Database', 'UserRepo'],
-    };
+      topologicalOrder: ["Database", "UserRepo"]
+    }
 
-    const result = renderServicesMermaidFromMap(serviceMap);
+    const result = renderServicesMermaidFromMap(serviceMap)
 
-    expect(result).toContain('flowchart TB');
-    expect(result).toContain('UserRepo');
-    expect(result).toContain('Database');
+    expect(result).toContain("flowchart TB")
+    expect(result).toContain("UserRepo")
+    expect(result).toContain("Database")
     // Edge from UserRepo to Database via layer
-    expect(result).toContain('-->');
+    expect(result).toContain("-->")
     // Hexagon shape
-    expect(result).toMatch(/\{\{"/);
-  });
+    expect(result).toMatch(/\{\{"/)
+  })
 
-  it('renders unresolved services with dashed styling', () => {
+  it("renders unresolved services with dashed styling", () => {
     const services = new Map<string, ServiceArtifact>([
       [
-        'UserRepo',
+        "UserRepo",
         {
-          serviceId: 'UserRepo',
-          className: 'UserRepo',
-          definitionFilePath: 'user-repo.ts',
+          serviceId: "UserRepo",
+          className: "UserRepo",
+          definitionFilePath: "user-repo.ts",
           definitionLocation: loc,
           definition: { methods: [], properties: [] },
           layerImplementations: [
-            { name: 'UserRepoLive', provides: 'UserRepo', requires: ['ExternalApi'], filePath: 'user-repo.ts', location: loc },
+            {
+              name: "UserRepoLive",
+              provides: "UserRepo",
+              requires: ["ExternalApi"],
+              filePath: "user-repo.ts",
+              location: loc
+            }
           ],
           consumers: [],
-          dependencies: ['ExternalApi'],
-        } as ServiceArtifact,
-      ],
-    ]);
+          dependencies: ["ExternalApi"]
+        } as ServiceArtifact
+      ]
+    ])
 
     const serviceMap: ProjectServiceMap = {
       services,
-      unresolvedServices: ['ExternalApi'],
-      topologicalOrder: ['UserRepo'],
-    };
+      unresolvedServices: ["ExternalApi"],
+      topologicalOrder: ["UserRepo"]
+    }
 
-    const result = renderServicesMermaidFromMap(serviceMap);
+    const result = renderServicesMermaidFromMap(serviceMap)
 
-    expect(result).toContain('ExternalApi');
-    expect(result).toContain('unresolved');
-    expect(result).toContain('stroke-dasharray');
-  });
-});
+    expect(result).toContain("ExternalApi")
+    expect(result).toContain("unresolved")
+    expect(result).toContain("stroke-dasharray")
+  })
+})

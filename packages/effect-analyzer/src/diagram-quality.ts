@@ -1,134 +1,136 @@
-import { Option } from 'effect';
+import { Option } from "effect"
+import { summarizePathSteps } from "./output/mermaid"
+import { generatePaths } from "./path-generator"
 import type {
-  StaticEffectIR,
-  StaticFlowNode,
-  StaticEffectNode,
   DiagramQuality,
   DiagramQualityMetrics,
   DiagramQualityWithFile,
-  DiagramTopOffendersReport,
   DiagramTopOffenderEntry,
-} from './types';
-import { getStaticChildren } from './types';
-import { generatePaths } from './path-generator';
-import { summarizePathSteps } from './output/mermaid';
+  DiagramTopOffendersReport,
+  StaticEffectIR,
+  StaticEffectNode,
+  StaticFlowNode
+} from "./types"
+import { getStaticChildren } from "./types"
 
 export interface DiagramQualityHintInput {
-  readonly reasons?: readonly string[] | undefined;
-  readonly tips?: readonly string[] | undefined;
+  readonly reasons?: ReadonlyArray<string> | undefined
+  readonly tips?: ReadonlyArray<string> | undefined
 }
 
 export interface DiagramQualityOptions {
-  readonly styleGuideSummary?: boolean | undefined;
-  readonly hints?: DiagramQualityHintInput | undefined;
+  readonly styleGuideSummary?: boolean | undefined
+  readonly hints?: DiagramQualityHintInput | undefined
 }
 
-const MAX_PROGRAM_TIPS = 3;
-const MAX_FILE_TIPS = 5;
+const MAX_PROGRAM_TIPS = 3
+const MAX_FILE_TIPS = 5
 
 function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
+  return Math.max(min, Math.min(max, n))
 }
 
-function uniqueCapped(items: readonly string[], max: number): string[] {
-  return [...new Set(items)].slice(0, max);
+function uniqueCapped(items: ReadonlyArray<string>, max: number): Array<string> {
+  return [...new Set(items)].slice(0, max)
 }
 
 function startsWithAllowedTipPrefix(tip: string): boolean {
   return (
-    tip.startsWith('Consider') ||
-    tip.startsWith('If you want clearer diagrams') ||
-    tip.startsWith('For larger programs')
-  );
+    tip.startsWith("Consider") ||
+    tip.startsWith("If you want clearer diagrams") ||
+    tip.startsWith("For larger programs")
+  )
 }
 
 function normalizeTip(tip: string): string {
-  if (startsWithAllowedTipPrefix(tip)) return tip;
-  return `Consider ${tip.charAt(0).toLowerCase()}${tip.slice(1)}`;
+  if (startsWithAllowedTipPrefix(tip)) return tip
+  return `Consider ${tip.charAt(0).toLowerCase()}${tip.slice(1)}`
 }
 
-function collectAllNodes(nodes: readonly StaticFlowNode[]): StaticFlowNode[] {
-  const out: StaticFlowNode[] = [];
-  const visit = (list: readonly StaticFlowNode[]) => {
+function collectAllNodes(nodes: ReadonlyArray<StaticFlowNode>): Array<StaticFlowNode> {
+  const out: Array<StaticFlowNode> = []
+  const visit = (list: ReadonlyArray<StaticFlowNode>) => {
     for (const node of list) {
-      out.push(node);
-      const children = Option.getOrElse(getStaticChildren(node), () => [] as readonly StaticFlowNode[]);
-      if (children.length > 0) visit(children);
+      out.push(node)
+      const children = Option.getOrElse(getStaticChildren(node), () => [] as ReadonlyArray<StaticFlowNode>)
+      if (children.length > 0) visit(children)
     }
-  };
-  visit(nodes);
-  return out;
+  }
+  visit(nodes)
+  return out
 }
 
 function isLogLike(name: string): boolean {
-  const n = name.toLowerCase();
-  return n.includes('log') || n.includes('logger') || n.includes('taperror');
+  const n = name.toLowerCase()
+  return n.includes("log") || n.includes("logger") || n.includes("taperror")
 }
 
 function looksAnonymousEffectNode(node: StaticEffectNode): boolean {
-  const callee = node.callee.trim();
-  if (callee === '' || callee === '_' || callee === 'Effect') return true;
-  if (/call expression/i.test(callee)) return true;
-  if (/^program-\d+$/i.test(node.name ?? '')) return true;
-  return false;
+  const callee = node.callee.trim()
+  if (callee === "" || callee === "_" || callee === "Effect") return true
+  if (/call expression/i.test(callee)) return true
+  if (/^program-\d+$/i.test(node.name ?? "")) return true
+  return false
 }
 
 function isServiceCallNode(node: StaticFlowNode): node is StaticEffectNode {
   return (
-    node.type === 'effect' &&
-    (node.semanticRole === 'service-call' ||
+    node.type === "effect" &&
+    (node.semanticRole === "service-call" ||
       node.serviceCall !== undefined ||
       node.serviceMethod !== undefined)
-  );
+  )
 }
 
 function hasNamedServiceCallee(node: StaticEffectNode): boolean {
-  const c = node.callee.trim();
-  if (c === '' || c === '_' || c === 'Effect') return false;
-  if (/unknown/i.test(c) || /call expression/i.test(c)) return false;
-  return true;
+  const c = node.callee.trim()
+  if (c === "" || c === "_" || c === "Effect") return false
+  if (/unknown/i.test(c) || /call expression/i.test(c)) return false
+  return true
 }
 
 function computeMetrics(
   ir: StaticEffectIR,
-  options: DiagramQualityOptions = {},
+  options: DiagramQualityOptions = {}
 ): DiagramQualityMetrics {
-  const nodes = collectAllNodes(ir.root.children);
-  const detailedSteps = nodes.length;
-  const effects = nodes.filter((n): n is StaticEffectNode => n.type === 'effect');
+  const nodes = collectAllNodes(ir.root.children)
+  const detailedSteps = nodes.length
+  const effects = nodes.filter((n): n is StaticEffectNode => n.type === "effect")
 
-  const sideEffects = effects.filter((n) => n.semanticRole === 'side-effect');
-  const logEffects = effects.filter((n) => isLogLike(n.displayName ?? n.name ?? n.callee));
-  const unknownNodes = nodes.filter((n) => n.type === 'unknown').length;
+  const sideEffects = effects.filter((n) => n.semanticRole === "side-effect")
+  const logEffects = effects.filter((n) => isLogLike(n.displayName ?? n.name ?? n.callee))
+  const unknownNodes = nodes.filter((n) => n.type === "unknown").length
 
   const anonymousNodeCount = nodes.filter((n) => {
-    if (n.type === 'unknown') return true;
-    if (n.type === 'pipe') return true;
-    if (n.type === 'effect') return looksAnonymousEffectNode(n);
-    return false;
-  }).length;
+    if (n.type === "unknown") return true
+    if (n.type === "pipe") return true
+    if (n.type === "effect") return looksAnonymousEffectNode(n)
+    return false
+  }).length
 
-  const serviceCalls = nodes.filter((n) => isServiceCallNode(n));
-  const namedServiceCalls = serviceCalls.filter((n) => hasNamedServiceCallee(n));
+  const serviceCalls = nodes.filter((n) => isServiceCallNode(n))
+  const namedServiceCalls = serviceCalls.filter((n) => hasNamedServiceCallee(n))
 
-  const pipeNodes = nodes.filter((n): n is StaticFlowNode & { type: 'pipe'; transformations: readonly StaticFlowNode[] } => n.type === 'pipe');
-  const pipeChainCount = pipeNodes.length;
+  const pipeNodes = nodes.filter((
+    n
+  ): n is StaticFlowNode & { type: "pipe"; transformations: ReadonlyArray<StaticFlowNode> } => n.type === "pipe")
+  const pipeChainCount = pipeNodes.length
   const maxPipeChainLength = pipeNodes.length > 0
     ? Math.max(...pipeNodes.map((p) => 1 + p.transformations.length))
-    : 0;
+    : 0
 
-  const paths = generatePaths(ir);
-  const representativePath = [...paths].sort((a, b) => b.steps.length - a.steps.length)[0];
+  const paths = generatePaths(ir)
+  const representativePath = [...paths].sort((a, b) => b.steps.length - a.steps.length)[0]
   const summary = representativePath
     ? summarizePathSteps(representativePath, {
-        collapseRepeatedLogs: true,
-        collapsePureTransforms: true,
-        styleGuide: options.styleGuideSummary ?? false,
-      })
-    : { steps: [] as const, collapsedGroups: 0 };
+      collapseRepeatedLogs: true,
+      collapsePureTransforms: true,
+      styleGuide: options.styleGuideSummary ?? false
+    })
+    : { steps: [] as const, collapsedGroups: 0 }
 
-  const ratioBase = detailedSteps > 0 ? detailedSteps : 1;
-  const serviceBase = serviceCalls.length > 0 ? serviceCalls.length : 1;
+  const ratioBase = detailedSteps > 0 ? detailedSteps : 1
+  const serviceBase = serviceCalls.length > 0 ? serviceCalls.length : 1
 
   return {
     stepCountDetailed: detailedSteps,
@@ -142,108 +144,108 @@ function computeMetrics(
     serviceCallCount: serviceCalls.length,
     namedServiceCallRatio: namedServiceCalls.length / serviceBase,
     pipeChainCount,
-    maxPipeChainLength,
-  };
+    maxPipeChainLength
+  }
 }
 
-function scoreFromMetrics(metrics: DiagramQualityMetrics): { score: number; band: DiagramQuality['band'] } {
-  const unknownPenalty = Math.min(35, metrics.unknownNodeCount * 8);
-  const anonymousPenalty = Math.min(25, Math.round(metrics.anonymousRatio * 40));
-  const stepPenalty =
-    metrics.stepCountDetailed > 24
-      ? Math.min(22, Math.round((metrics.stepCountDetailed - 24) * 0.6))
-      : 0;
-  const logPenalty = Math.min(12, Math.round(metrics.logRatio * 30));
-  const sideEffectPenalty =
-    metrics.sideEffectRatio > 0.75
-      ? Math.min(8, Math.round((metrics.sideEffectRatio - 0.75) * 40))
-      : 0;
+function scoreFromMetrics(metrics: DiagramQualityMetrics): { score: number; band: DiagramQuality["band"] } {
+  const unknownPenalty = Math.min(35, metrics.unknownNodeCount * 8)
+  const anonymousPenalty = Math.min(25, Math.round(metrics.anonymousRatio * 40))
+  const stepPenalty = metrics.stepCountDetailed > 24
+    ? Math.min(22, Math.round((metrics.stepCountDetailed - 24) * 0.6))
+    : 0
+  const logPenalty = Math.min(12, Math.round(metrics.logRatio * 30))
+  const sideEffectPenalty = metrics.sideEffectRatio > 0.75
+    ? Math.min(8, Math.round((metrics.sideEffectRatio - 0.75) * 40))
+    : 0
 
   const score = clamp(
     Math.round(100 - unknownPenalty - anonymousPenalty - stepPenalty - logPenalty - sideEffectPenalty),
     0,
-    100,
-  );
-  const band: DiagramQuality['band'] = score >= 75 ? 'good' : score >= 50 ? 'ok' : 'noisy';
-  return { score, band };
+    100
+  )
+  const band: DiagramQuality["band"] = score >= 75 ? "good" : score >= 50 ? "ok" : "noisy"
+  return { score, band }
 }
 
-function reasonsFromMetrics(metrics: DiagramQualityMetrics): string[] {
-  const reasons: string[] = [];
-  const logCount = Math.round(metrics.logRatio * Math.max(metrics.stepCountDetailed, 1));
+function reasonsFromMetrics(metrics: DiagramQualityMetrics): Array<string> {
+  const reasons: Array<string> = []
+  const logCount = Math.round(metrics.logRatio * Math.max(metrics.stepCountDetailed, 1))
 
   if (metrics.stepCountDetailed >= 60) {
-    reasons.push(`High step count (${String(metrics.stepCountDetailed)}). Consider summary mode.`);
+    reasons.push(`High step count (${String(metrics.stepCountDetailed)}). Consider summary mode.`)
   } else if (metrics.stepCountDetailed >= 35) {
-    reasons.push(`Moderate step count (${String(metrics.stepCountDetailed)}). Summary mode may improve readability.`);
+    reasons.push(`Moderate step count (${String(metrics.stepCountDetailed)}). Summary mode may improve readability.`)
   }
 
   if (logCount >= 12 || metrics.logRatio >= 0.35) {
-    reasons.push(`Many log steps (${String(logCount)}). Consider collapsing logs or summary mode.`);
+    reasons.push(`Many log steps (${String(logCount)}). Consider collapsing logs or summary mode.`)
   }
 
   if (metrics.anonymousNodeCount >= 5) {
-    reasons.push(`${String(metrics.anonymousNodeCount)} anonymous nodes from pipe chains or unnamed calls.`);
+    reasons.push(`${String(metrics.anonymousNodeCount)} anonymous nodes from pipe chains or unnamed calls.`)
   }
 
   if (metrics.unknownNodeCount > 0) {
-    reasons.push(`${String(metrics.unknownNodeCount)} unresolved nodes may reduce diagram clarity.`);
+    reasons.push(`${String(metrics.unknownNodeCount)} unresolved nodes may reduce diagram clarity.`)
   }
 
   if (metrics.serviceCallCount >= 3 && metrics.namedServiceCallRatio < 0.7) {
     reasons.push(
-      `Service call naming clarity is ${(metrics.namedServiceCallRatio * 100).toFixed(0)}% (${String(metrics.serviceCallCount)} calls).`,
-    );
+      `Service call naming clarity is ${(metrics.namedServiceCallRatio * 100).toFixed(0)}% (${
+        String(metrics.serviceCallCount)
+      } calls).`
+    )
   }
 
-  return reasons;
+  return reasons
 }
 
-function tipsFromMetrics(metrics: DiagramQualityMetrics): string[] {
-  const tips: string[] = [];
-  const logCount = Math.round(metrics.logRatio * Math.max(metrics.stepCountDetailed, 1));
+function tipsFromMetrics(metrics: DiagramQualityMetrics): Array<string> {
+  const tips: Array<string> = []
+  const logCount = Math.round(metrics.logRatio * Math.max(metrics.stepCountDetailed, 1))
 
   if (metrics.stepCountDetailed >= 35) {
-    tips.push('For larger programs, consider summary mode.');
+    tips.push("For larger programs, consider summary mode.")
   }
   if (logCount >= 12 || metrics.logRatio >= 0.35) {
-    tips.push('For larger programs, consider grouping logs or using summary mode.');
+    tips.push("For larger programs, consider grouping logs or using summary mode.")
   }
   if (metrics.anonymousNodeCount >= 5) {
-    tips.push('Consider naming intermediate values or extracting named helpers.');
+    tips.push("Consider naming intermediate values or extracting named helpers.")
   }
   if (metrics.pipeChainCount >= 4 || metrics.maxPipeChainLength >= 6) {
-    tips.push('If you want clearer diagrams, consider splitting long pipe chains into named steps.');
+    tips.push("If you want clearer diagrams, consider splitting long pipe chains into named steps.")
   }
   if (metrics.serviceCallCount >= 3 && metrics.namedServiceCallRatio < 0.7) {
-    tips.push('Consider naming service-call intermediates to make boundaries explicit.');
+    tips.push("Consider naming service-call intermediates to make boundaries explicit.")
   }
 
-  return uniqueCapped(tips.map(normalizeTip), MAX_PROGRAM_TIPS);
+  return uniqueCapped(tips.map(normalizeTip), MAX_PROGRAM_TIPS)
 }
 
 export function computeProgramDiagramQuality(
   ir: StaticEffectIR,
-  options: DiagramQualityOptions = {},
+  options: DiagramQualityOptions = {}
 ): DiagramQuality {
-  const metrics = computeMetrics(ir, options);
-  const { score, band } = scoreFromMetrics(metrics);
-  const reasons = reasonsFromMetrics(metrics);
-  const tips = tipsFromMetrics(metrics);
+  const metrics = computeMetrics(ir, options)
+  const { score, band } = scoreFromMetrics(metrics)
+  const reasons = reasonsFromMetrics(metrics)
+  const tips = tipsFromMetrics(metrics)
 
-  const hintReasons = options.hints?.reasons ?? [];
-  const hintTips = (options.hints?.tips ?? []).map(normalizeTip);
+  const hintReasons = options.hints?.reasons ?? []
+  const hintTips = (options.hints?.tips ?? []).map(normalizeTip)
 
   return {
     score,
     band,
     metrics,
     reasons: uniqueCapped([...reasons, ...hintReasons], 8),
-    tips: uniqueCapped([...tips, ...hintTips], MAX_PROGRAM_TIPS),
-  };
+    tips: uniqueCapped([...tips, ...hintTips], MAX_PROGRAM_TIPS)
+  }
 }
 
-function aggregateMetrics(qualities: readonly DiagramQuality[]): DiagramQualityMetrics {
+function aggregateMetrics(qualities: ReadonlyArray<DiagramQuality>): DiagramQualityMetrics {
   if (qualities.length === 0) {
     return {
       stepCountDetailed: 0,
@@ -257,16 +259,16 @@ function aggregateMetrics(qualities: readonly DiagramQuality[]): DiagramQualityM
       serviceCallCount: 0,
       namedServiceCallRatio: 0,
       pipeChainCount: 0,
-      maxPipeChainLength: 0,
-    };
+      maxPipeChainLength: 0
+    }
   }
 
-  const weights = qualities.map((q) => Math.max(1, q.metrics.stepCountDetailed));
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  const weights = qualities.map((q) => Math.max(1, q.metrics.stepCountDetailed))
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
   const weightedAvg = (picker: (q: DiagramQuality) => number): number =>
-    qualities.reduce((sum, q, i) => sum + picker(q) * (weights[i] ?? 1), 0) / totalWeight;
+    qualities.reduce((sum, q, i) => sum + picker(q) * (weights[i] ?? 1), 0) / totalWeight
   const weightedSum = (picker: (q: DiagramQuality) => number): number =>
-    qualities.reduce((sum, q) => sum + picker(q), 0);
+    qualities.reduce((sum, q) => sum + picker(q), 0)
 
   return {
     stepCountDetailed: Math.round(weightedAvg((q) => q.metrics.stepCountDetailed)),
@@ -280,44 +282,43 @@ function aggregateMetrics(qualities: readonly DiagramQuality[]): DiagramQualityM
     serviceCallCount: Math.round(weightedSum((q) => q.metrics.serviceCallCount)),
     namedServiceCallRatio: weightedAvg((q) => q.metrics.namedServiceCallRatio),
     pipeChainCount: Math.round(weightedSum((q) => q.metrics.pipeChainCount)),
-    maxPipeChainLength: Math.max(...qualities.map((q) => q.metrics.maxPipeChainLength)),
-  };
+    maxPipeChainLength: Math.max(...qualities.map((q) => q.metrics.maxPipeChainLength))
+  }
 }
 
 export function computeFileDiagramQuality(
   filePath: string,
-  programs: readonly StaticEffectIR[],
-  options: DiagramQualityOptions = {},
+  programs: ReadonlyArray<StaticEffectIR>,
+  options: DiagramQualityOptions = {}
 ): DiagramQualityWithFile {
-  const programQualities = programs.map((ir) => computeProgramDiagramQuality(ir, options));
-  const metrics = aggregateMetrics(programQualities);
+  const programQualities = programs.map((ir) => computeProgramDiagramQuality(ir, options))
+  const metrics = aggregateMetrics(programQualities)
   const weightedScore = programQualities.length > 0
     ? Math.round(
-        programQualities.reduce(
-          (sum, q) => sum + q.score * Math.max(1, q.metrics.stepCountDetailed),
-          0,
-        ) /
-          programQualities.reduce((sum, q) => sum + Math.max(1, q.metrics.stepCountDetailed), 0),
-      )
-    : 100;
+      programQualities.reduce(
+        (sum, q) => sum + q.score * Math.max(1, q.metrics.stepCountDetailed),
+        0
+      ) /
+        programQualities.reduce((sum, q) => sum + Math.max(1, q.metrics.stepCountDetailed), 0)
+    )
+    : 100
 
-  const band: DiagramQuality['band'] =
-    weightedScore >= 75 ? 'good' : weightedScore >= 50 ? 'ok' : 'noisy';
+  const band: DiagramQuality["band"] = weightedScore >= 75 ? "good" : weightedScore >= 50 ? "ok" : "noisy"
 
   const reasons = uniqueCapped(
     [
       ...reasonsFromMetrics(metrics),
-      ...(options.hints?.reasons ?? []),
+      ...(options.hints?.reasons ?? [])
     ],
-    10,
-  );
+    10
+  )
   const tips = uniqueCapped(
     [
       ...tipsFromMetrics(metrics),
-      ...((options.hints?.tips ?? []).map(normalizeTip)),
+      ...((options.hints?.tips ?? []).map(normalizeTip))
     ].filter(startsWithAllowedTipPrefix),
-    MAX_FILE_TIPS,
-  );
+    MAX_FILE_TIPS
+  )
 
   return {
     filePath,
@@ -326,65 +327,64 @@ export function computeFileDiagramQuality(
       band,
       metrics,
       reasons,
-      tips,
-    },
-  };
+      tips
+    }
+  }
 }
 
 function makeEntry(filePath: string, metricValue: number, tip: string): DiagramTopOffenderEntry {
   return {
     filePath,
     metricValue,
-    tip: normalizeTip(tip),
-  };
+    tip: normalizeTip(tip)
+  }
 }
 
 function rankTop(
-  entries: readonly DiagramQualityWithFile[],
+  entries: ReadonlyArray<DiagramQualityWithFile>,
   valueOf: (q: DiagramQualityWithFile) => number,
   tip: (q: DiagramQualityWithFile) => string,
-  topN: number,
-): DiagramTopOffenderEntry[] {
+  topN: number
+): Array<DiagramTopOffenderEntry> {
   return [...entries]
     .sort((a, b) => {
-      const dv = valueOf(b) - valueOf(a);
-      if (dv !== 0) return dv;
-      return a.filePath.localeCompare(b.filePath);
+      const dv = valueOf(b) - valueOf(a)
+      if (dv !== 0) return dv
+      return a.filePath.localeCompare(b.filePath)
     })
     .slice(0, topN)
-    .map((q) => makeEntry(q.filePath, valueOf(q), tip(q)));
+    .map((q) => makeEntry(q.filePath, valueOf(q), tip(q)))
 }
 
 export function buildTopOffendersReport(
-  fileQualities: readonly DiagramQualityWithFile[],
-  topN = 10,
+  fileQualities: ReadonlyArray<DiagramQualityWithFile>,
+  topN = 10
 ): DiagramTopOffendersReport {
-  const capped = clamp(topN, 1, 50);
+  const capped = clamp(topN, 1, 50)
   return {
     largestPrograms: rankTop(
       fileQualities,
       (q) => q.quality.metrics.stepCountDetailed,
-      () => 'For larger programs, consider summary mode.',
-      capped,
+      () => "For larger programs, consider summary mode.",
+      capped
     ),
     mostAnonymousNodes: rankTop(
       fileQualities,
       (q) => q.quality.metrics.anonymousNodeCount,
-      () => 'Consider naming intermediate values or extracting named helpers.',
-      capped,
+      () => "Consider naming intermediate values or extracting named helpers.",
+      capped
     ),
     mostUnknownNodes: rankTop(
       fileQualities,
       (q) => q.quality.metrics.unknownNodeCount,
-      () => 'If you want clearer diagrams, consider extracting helpers to reduce unresolved nodes.',
-      capped,
+      () => "If you want clearer diagrams, consider extracting helpers to reduce unresolved nodes.",
+      capped
     ),
     highestLogRatio: rankTop(
       fileQualities,
       (q) => q.quality.metrics.logRatio,
-      () => 'For larger programs, consider grouping logs or using summary mode.',
-      capped,
-    ),
-  };
+      () => "For larger programs, consider grouping logs or using summary mode.",
+      capped
+    )
+  }
 }
-

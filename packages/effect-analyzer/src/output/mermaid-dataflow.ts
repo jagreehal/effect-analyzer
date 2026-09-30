@@ -1,150 +1,145 @@
-import { Option } from 'effect';
-import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from '../types';
-import { escapeMermaidLabel as escapeLabel } from '../analysis-utils';
+import { Option } from "effect"
+import { escapeMermaidLabel as escapeLabel } from "../analysis-utils"
+import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from "../types"
 
 interface DataflowOptions {
-  readonly direction?: 'TB' | 'LR' | 'BT' | 'RL';
+  readonly direction?: "TB" | "LR" | "BT" | "RL"
 }
 
 interface DataflowStep {
-  readonly successType: string;
-  readonly errorType: string;
-  readonly transformLabel?: string | undefined;
-  readonly isEffectful: boolean;
+  readonly successType: string
+  readonly errorType: string
+  readonly transformLabel?: string | undefined
+  readonly isEffectful: boolean
 }
 
 /** Generate a short node ID: S0, S1, S2, ... */
 function stepId(index: number): string {
-  return `S${index}`;
+  return `S${index}`
 }
 
 /**
  * Extract pipe chains from IR, collecting transformation steps with type info.
  */
-function collectPipeSteps(node: StaticFlowNode): DataflowStep[][] {
-  const chains: DataflowStep[][] = [];
+function collectPipeSteps(node: StaticFlowNode): Array<Array<DataflowStep>> {
+  const chains: Array<Array<DataflowStep>> = []
 
-  if (node.type === 'pipe') {
+  if (node.type === "pipe") {
     const pipeNode = node as {
-      initial: StaticFlowNode;
-      transformations: readonly StaticFlowNode[];
-      typeFlow?: readonly { successType: string; errorType: string }[];
-    };
+      initial: StaticFlowNode
+      transformations: ReadonlyArray<StaticFlowNode>
+      typeFlow?: ReadonlyArray<{ successType: string; errorType: string }>
+    }
 
-    const steps: DataflowStep[] = [];
+    const steps: Array<DataflowStep> = []
 
     // Initial step type from initial node's typeSignature or typeFlow[0]
-    const initialSig =
-      pipeNode.typeFlow?.[0] ??
-      ('typeSignature' in pipeNode.initial
+    const initialSig = pipeNode.typeFlow?.[0] ??
+      ("typeSignature" in pipeNode.initial
         ? (pipeNode.initial as { typeSignature?: { successType: string; errorType: string } }).typeSignature
-        : undefined);
+        : undefined)
 
     if (initialSig) {
       steps.push({
         successType: initialSig.successType,
         errorType: initialSig.errorType,
-        isEffectful: false,
-      });
+        isEffectful: false
+      })
     }
 
     for (let i = 0; i < pipeNode.transformations.length; i++) {
-      const t = pipeNode.transformations[i];
-      if (!t) continue;
-      const transformType =
-        t.type === 'transform'
-          ? (t as { transformType: string }).transformType
-          : t.name ?? t.type;
-      const isEffectful =
-        t.type === 'transform'
-          ? (t as { isEffectful: boolean }).isEffectful
-          : false;
+      const t = pipeNode.transformations[i]
+      if (!t) continue
+      const transformType = t.type === "transform"
+        ? (t as { transformType: string }).transformType
+        : t.name ?? t.type
+      const isEffectful = t.type === "transform"
+        ? (t as { isEffectful: boolean }).isEffectful
+        : false
 
       // Type from typeFlow (index i+1) or from outputType on the transform
-      const sig =
-        pipeNode.typeFlow?.[i + 1] ??
-        (t.type === 'transform'
+      const sig = pipeNode.typeFlow?.[i + 1] ??
+        (t.type === "transform"
           ? (t as { outputType?: { successType: string; errorType: string } }).outputType
-          : undefined);
+          : undefined)
 
       if (sig) {
         steps.push({
           successType: sig.successType,
           errorType: sig.errorType,
           transformLabel: transformType,
-          isEffectful,
-        });
+          isEffectful
+        })
       } else {
         steps.push({
-          successType: 'unknown',
-          errorType: 'unknown',
+          successType: "unknown",
+          errorType: "unknown",
           transformLabel: transformType,
-          isEffectful,
-        });
+          isEffectful
+        })
       }
     }
 
     if (steps.length > 0) {
-      chains.push(steps);
+      chains.push(steps)
     }
   }
 
   // Recurse into children
-  const children = Option.getOrElse(getStaticChildren(node), () => []);
+  const children = Option.getOrElse(getStaticChildren(node), () => [])
   for (const child of children) {
-    chains.push(...collectPipeSteps(child));
+    chains.push(...collectPipeSteps(child))
   }
 
-  return chains;
+  return chains
 }
 
 /**
  * Extract generator yield steps as a dataflow chain.
  */
-function collectGeneratorSteps(node: StaticFlowNode): DataflowStep[][] {
-  const chains: DataflowStep[][] = [];
+function collectGeneratorSteps(node: StaticFlowNode): Array<Array<DataflowStep>> {
+  const chains: Array<Array<DataflowStep>> = []
 
-  if (node.type === 'generator') {
+  if (node.type === "generator") {
     const genNode = node as {
-      yields: readonly { variableName?: string; effect: StaticFlowNode }[];
-    };
+      yields: ReadonlyArray<{ variableName?: string; effect: StaticFlowNode }>
+    }
 
-    const steps: DataflowStep[] = [];
+    const steps: Array<DataflowStep> = []
     for (const y of genNode.yields) {
-      const sig =
-        'typeSignature' in y.effect
-          ? (y.effect as { typeSignature?: { successType: string; errorType: string } }).typeSignature
-          : undefined;
+      const sig = "typeSignature" in y.effect
+        ? (y.effect as { typeSignature?: { successType: string; errorType: string } }).typeSignature
+        : undefined
 
       if (sig) {
         steps.push({
           successType: sig.successType,
           errorType: sig.errorType,
           transformLabel: y.variableName ?? y.effect.name,
-          isEffectful: true,
-        });
+          isEffectful: true
+        })
       } else {
         steps.push({
-          successType: 'unknown',
-          errorType: 'unknown',
+          successType: "unknown",
+          errorType: "unknown",
           transformLabel: y.variableName ?? y.effect.name,
-          isEffectful: true,
-        });
+          isEffectful: true
+        })
       }
     }
 
     if (steps.length > 0) {
-      chains.push(steps);
+      chains.push(steps)
     }
   }
 
   // Recurse into children
-  const children = Option.getOrElse(getStaticChildren(node), () => []);
+  const children = Option.getOrElse(getStaticChildren(node), () => [])
   for (const child of children) {
-    chains.push(...collectGeneratorSteps(child));
+    chains.push(...collectGeneratorSteps(child))
   }
 
-  return chains;
+  return chains
 }
 
 /**
@@ -155,73 +150,73 @@ function collectGeneratorSteps(node: StaticFlowNode): DataflowStep[][] {
  */
 export function renderDataflowMermaid(
   ir: StaticEffectIR,
-  options: DataflowOptions = {},
+  options: DataflowOptions = {}
 ): string {
-  const direction = options.direction ?? 'LR';
+  const direction = options.direction ?? "LR"
 
   // Collect all chains from IR
-  const allChains: DataflowStep[][] = [];
+  const allChains: Array<Array<DataflowStep>> = []
   for (const child of ir.root.children) {
-    allChains.push(...collectPipeSteps(child));
-    allChains.push(...collectGeneratorSteps(child));
+    allChains.push(...collectPipeSteps(child))
+    allChains.push(...collectGeneratorSteps(child))
   }
 
   if (allChains.length === 0) {
-    return `flowchart ${direction}\n  NoData((No data transformations))`;
+    return `flowchart ${direction}\n  NoData((No data transformations))`
   }
 
-  const lines: string[] = [`flowchart ${direction}`];
-  const styleLines: string[] = [];
-  let globalIdx = 0;
+  const lines: Array<string> = [`flowchart ${direction}`]
+  const styleLines: Array<string> = []
+  let globalIdx = 0
 
   for (const steps of allChains) {
-    const baseIdx = globalIdx;
+    const baseIdx = globalIdx
 
     for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
-      if (!step) continue;
-      const id = stepId(baseIdx + i);
-      const label = escapeLabel(step.successType);
+      const step = steps[i]
+      if (!step) continue
+      const id = stepId(baseIdx + i)
+      const label = escapeLabel(step.successType)
 
       // Track node for styling
-      if (step.successType === 'unknown') {
-        styleLines.push(`  style ${id} fill:#EEEEEE`);
+      if (step.successType === "unknown") {
+        styleLines.push(`  style ${id} fill:#EEEEEE`)
       } else {
-        styleLines.push(`  style ${id} fill:#E8F5E9`);
+        styleLines.push(`  style ${id} fill:#E8F5E9`)
       }
 
       if (i < steps.length - 1) {
-        const nextStep = steps[i + 1];
-        if (!nextStep) continue;
-        const nextId = stepId(baseIdx + i + 1);
-        const nextLabel = escapeLabel(nextStep.successType);
+        const nextStep = steps[i + 1]
+        if (!nextStep) continue
+        const nextId = stepId(baseIdx + i + 1)
+        const nextLabel = escapeLabel(nextStep.successType)
 
         // Build edge label
-        let edgeLabel = nextStep.transformLabel ?? '';
+        let edgeLabel = nextStep.transformLabel ?? ""
 
         // Annotate error type changes
-        const prevError = step.errorType;
-        const nextError = nextStep.errorType;
-        if (nextError !== prevError && nextError !== 'never' && nextError !== 'unknown') {
-          edgeLabel = edgeLabel ? `${edgeLabel}<br/>E: ${escapeLabel(nextError)}` : `E: ${escapeLabel(nextError)}`;
+        const prevError = step.errorType
+        const nextError = nextStep.errorType
+        if (nextError !== prevError && nextError !== "never" && nextError !== "unknown") {
+          edgeLabel = edgeLabel ? `${edgeLabel}<br/>E: ${escapeLabel(nextError)}` : `E: ${escapeLabel(nextError)}`
         }
 
         // Effectful transforms get bold edges (==>)
-        const arrow = nextStep.isEffectful ? '==>' : '-->';
+        const arrow = nextStep.isEffectful ? "==>" : "-->"
 
         if (i === 0) {
-          lines.push(`  ${id}["${label}"] ${arrow}|${edgeLabel}| ${nextId}["${nextLabel}"]`);
+          lines.push(`  ${id}["${label}"] ${arrow}|${edgeLabel}| ${nextId}["${nextLabel}"]`)
         } else {
-          lines.push(`  ${id} ${arrow}|${edgeLabel}| ${nextId}["${nextLabel}"]`);
+          lines.push(`  ${id} ${arrow}|${edgeLabel}| ${nextId}["${nextLabel}"]`)
         }
       } else if (i === 0) {
         // Single-step chain: just render the node
-        lines.push(`  ${id}["${label}"]`);
+        lines.push(`  ${id}["${label}"]`)
       }
     }
 
-    globalIdx += steps.length;
+    globalIdx += steps.length
   }
 
-  return [...lines, ...styleLines].join('\n');
+  return [...lines, ...styleLines].join("\n")
 }

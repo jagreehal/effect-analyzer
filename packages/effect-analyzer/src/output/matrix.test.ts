@@ -1,17 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import type { StaticEffectIR, ProjectServiceMap } from '../types';
-import { renderDependencyMatrix, renderDependencyMatrixFromServiceMap } from './matrix';
+import { describe, expect, it } from "vitest"
+import type { ProjectServiceMap, StaticEffectIR } from "../types"
+import { renderDependencyMatrix, renderDependencyMatrixFromServiceMap } from "./matrix"
 
 function makeIR(programName: string): StaticEffectIR {
   return {
     root: {
       id: `program-${programName}`,
-      type: 'program',
+      type: "program",
       programName,
-      source: 'generator',
+      source: "generator",
       children: [],
       dependencies: [],
-      errorTypes: [],
+      errorTypes: []
     },
     metadata: {
       analyzedAt: Date.now(),
@@ -27,84 +27,84 @@ function makeIR(programName: string): StaticEffectIR {
         loopCount: 0,
         conditionalCount: 0,
         layerCount: 0,
-        unknownCount: 0,
-      },
+        unknownCount: 0
+      }
     },
-    references: new Map(),
-  };
+    references: new Map()
+  }
 }
 
-describe('renderDependencyMatrix', () => {
-  it('reports the actual program count when no services are detected', () => {
+describe("renderDependencyMatrix", () => {
+  it("reports the actual program count when no services are detected", () => {
     const out = renderDependencyMatrix([
-      makeIR('alphaProgram'),
-      makeIR('betaProgram'),
-    ]);
+      makeIR("alphaProgram"),
+      makeIR("betaProgram")
+    ])
 
-    expect(out).toContain('2 programs × 0 services');
-  });
+    expect(out).toContain("2 programs × 0 services")
+  })
 
-  it('does not drop dependencies when program names collide', () => {
-    const a = makeIR('main');
-    const b = makeIR('main');
+  it("does not drop dependencies when program names collide", () => {
+    const a = makeIR("main")
+    const b = makeIR("main")
 
     a.root.dependencies = [
-      { name: 'Logger', source: 'yield*', kind: 'service' },
-    ];
+      { name: "Logger", source: "yield*", kind: "service" }
+    ]
     b.root.dependencies = [
-      { name: 'Config', source: 'yield*', kind: 'service' },
-    ];
+      { name: "Config", source: "yield*", kind: "service" }
+    ]
 
-    const out = renderDependencyMatrix([a, b]);
+    const out = renderDependencyMatrix([a, b])
 
     // Duplicate names should still preserve the union of discovered dependencies.
-    expect(out).toContain('| Program | Config | Logger |');
-    expect(out).toContain('| main | ✓ | ✓ |');
-  });
-});
+    expect(out).toContain("| Program | Config | Logger |")
+    expect(out).toContain("| main | ✓ | ✓ |")
+  })
+})
 
-describe('renderDependencyMatrixFromServiceMap', () => {
-  it('preserves actual consumer count when program names collide across files', () => {
+describe("renderDependencyMatrixFromServiceMap", () => {
+  it("preserves actual consumer count when program names collide across files", () => {
     const serviceMap: ProjectServiceMap = {
       services: new Map([
         [
-          'Logger',
+          "Logger",
           {
-            serviceId: 'Logger',
-            className: 'Logger',
-            definitionFilePath: '/tmp/services.ts',
-            definitionLocation: { filePath: '/tmp/services.ts', line: 1, column: 0 },
-            definition: { tagId: 'Logger', methods: [], properties: [] },
+            serviceId: "Logger",
+            className: "Logger",
+            definitionFilePath: "/tmp/services.ts",
+            definitionLocation: { filePath: "/tmp/services.ts", line: 1, column: 0 },
+            definition: { tagId: "Logger", methods: [], properties: [] },
             layerImplementations: [],
             consumers: [
-              { programName: 'main', filePath: '/app/a.ts' },
+              { programName: "main", filePath: "/app/a.ts" }
             ],
-            dependencies: [],
-          },
+            dependencies: []
+          }
         ],
         [
-          'Config',
+          "Config",
           {
-            serviceId: 'Config',
-            className: 'Config',
-            definitionFilePath: '/tmp/services.ts',
-            definitionLocation: { filePath: '/tmp/services.ts', line: 1, column: 0 },
-            definition: { tagId: 'Config', methods: [], properties: [] },
+            serviceId: "Config",
+            className: "Config",
+            definitionFilePath: "/tmp/services.ts",
+            definitionLocation: { filePath: "/tmp/services.ts", line: 1, column: 0 },
+            definition: { tagId: "Config", methods: [], properties: [] },
             layerImplementations: [],
             consumers: [
-              { programName: 'main', filePath: '/app/b.ts' },
+              { programName: "main", filePath: "/app/b.ts" }
             ],
-            dependencies: [],
-          },
-        ],
+            dependencies: []
+          }
+        ]
       ]),
       unresolvedServices: [],
-      topologicalOrder: ['Logger', 'Config'],
-    };
+      topologicalOrder: ["Logger", "Config"]
+    }
 
-    const out = renderDependencyMatrixFromServiceMap(serviceMap);
+    const out = renderDependencyMatrixFromServiceMap(serviceMap)
 
     // Both consumers exist even if their program names collide.
-    expect(out).toContain('2 programs × 2 services');
-  });
-});
+    expect(out).toContain("2 programs × 2 services")
+  })
+})

@@ -10,111 +10,108 @@
  * Behaviour is preserved exactly.
  */
 
-import type { PropertyAccessExpression, ArrowFunction, FunctionExpression } from 'ts-morph';
-import type { StaticEffectNode } from './types';
-import {
-  BUILT_IN_TYPE_NAMES,
-  KNOWN_EFFECT_NAMESPACES,
-} from './analysis-patterns';
+import type { ArrowFunction, FunctionExpression, PropertyAccessExpression } from "ts-morph"
+import { BUILT_IN_TYPE_NAMES, KNOWN_EFFECT_NAMESPACES } from "./analysis-patterns"
+import type { StaticEffectNode } from "./types"
 
 export const isPromiseLikeText = (text: string): boolean =>
-  /\bPromise(?:<.*>)?\b/.test(text) || /\bthen\s*\(/.test(text);
+  /\bPromise(?:<.*>)?\b/.test(text) || /\bthen\s*\(/.test(text)
 
 const EFFECT_RUNTIME_PRIMITIVE_PREFIXES = [
-  'Ref.',
-  'SynchronizedRef.',
-  'FiberRef.',
-  'TxRef.',
-  'TRef.',
-  'Queue.',
-  'TQueue.',
-  'TxQueue.',
-  'PubSub.',
-  'TPubSub.',
-  'Deferred.',
-  'TDeferred.',
-  'Semaphore.',
-  'TSemaphore.',
-  'SubscriptionRef.',
-  'Mailbox.',
-];
+  "Ref.",
+  "SynchronizedRef.",
+  "FiberRef.",
+  "TxRef.",
+  "TRef.",
+  "Queue.",
+  "TQueue.",
+  "TxQueue.",
+  "PubSub.",
+  "TPubSub.",
+  "Deferred.",
+  "TDeferred.",
+  "Semaphore.",
+  "TSemaphore.",
+  "SubscriptionRef.",
+  "Mailbox."
+]
 
 export const isEffectRuntimePrimitive = (text: string): boolean =>
-  EFFECT_RUNTIME_PRIMITIVE_PREFIXES.some((prefix) => text.startsWith(prefix));
+  EFFECT_RUNTIME_PRIMITIVE_PREFIXES.some((prefix) => text.startsWith(prefix))
 
 export const isLikelyServiceStreamProperty = (propertyName: string): boolean =>
-  propertyName === 'stream' || propertyName.startsWith('stream');
+  propertyName === "stream" || propertyName.startsWith("stream")
 
 const normalizeInferredServiceType = (typeName: string): string =>
-  typeName.endsWith('Shape') ? typeName.slice(0, -'Shape'.length) : typeName;
+  typeName.endsWith("Shape") ? typeName.slice(0, -"Shape".length) : typeName
 
 const inferServiceTypeFromObjectName = (objectName: string): string | undefined => {
-  if (!/^[a-zA-Z_$][\w$]*$/.test(objectName)) return undefined;
-  if (objectName.length === 0) return undefined;
-  const inferred = objectName[0]!.toUpperCase() + objectName.slice(1);
+  if (!/^[a-zA-Z_$][\w$]*$/.test(objectName)) return undefined
+  if (objectName.length === 0) return undefined
+  const inferred = objectName[0]!.toUpperCase() + objectName.slice(1)
   if (BUILT_IN_TYPE_NAMES.has(inferred) || KNOWN_EFFECT_NAMESPACES.has(inferred)) {
-    return undefined;
+    return undefined
   }
-  return inferred;
-};
+  return inferred
+}
 
 export const tryResolveServicePropertyAccess = (
-  node: PropertyAccessExpression,
-): StaticEffectNode['serviceCall'] => {
-  const objectName = node.getExpression().getText();
-  const methodName = node.getName();
-  const firstSegment = objectName.split('.')[0] ?? objectName;
-  const fallback = inferServiceTypeFromObjectName(objectName);
-  if (KNOWN_EFFECT_NAMESPACES.has(firstSegment)) return undefined;
+  node: PropertyAccessExpression
+): StaticEffectNode["serviceCall"] => {
+  const objectName = node.getExpression().getText()
+  const methodName = node.getName()
+  const firstSegment = objectName.split(".")[0] ?? objectName
+  const fallback = inferServiceTypeFromObjectName(objectName)
+  if (KNOWN_EFFECT_NAMESPACES.has(firstSegment)) return undefined
 
   try {
-    const type = node.getExpression().getType();
-    const symbol = type.getSymbol() ?? type.getAliasSymbol();
-    if (!symbol) return fallback ? { serviceType: fallback, methodName, objectName } : undefined;
-    const typeName = normalizeInferredServiceType(symbol.getName());
+    const type = node.getExpression().getType()
+    const symbol = type.getSymbol() ?? type.getAliasSymbol()
+    if (!symbol) return fallback ? { serviceType: fallback, methodName, objectName } : undefined
+    const typeName = normalizeInferredServiceType(symbol.getName())
     if (
       !typeName ||
-      typeName === '__type' ||
-      typeName === 'unknown' ||
-      typeName === 'any' ||
+      typeName === "__type" ||
+      typeName === "unknown" ||
+      typeName === "any" ||
       BUILT_IN_TYPE_NAMES.has(typeName)
     ) {
-      return fallback ? { serviceType: fallback, methodName, objectName } : undefined;
+      return fallback ? { serviceType: fallback, methodName, objectName } : undefined
     }
-    return { serviceType: typeName, methodName, objectName };
+    return { serviceType: typeName, methodName, objectName }
   } catch {
-    return fallback ? { serviceType: fallback, methodName, objectName } : undefined;
+    return fallback ? { serviceType: fallback, methodName, objectName } : undefined
   }
-};
+}
 
 export const classifyUseCallbackKind = (
-  fnNode: ArrowFunction | FunctionExpression,
-): 'promise' | 'effect' | 'unknown' => {
-  const body = fnNode.getBody();
-  const bodyText = body.getText();
+  fnNode: ArrowFunction | FunctionExpression
+): "promise" | "effect" | "unknown" => {
+  const body = fnNode.getBody()
+  const bodyText = body.getText()
   if (
-    bodyText.includes('Effect.') ||
-    bodyText.includes('yield*') ||
-    bodyText.includes('.pipe(')
+    bodyText.includes("Effect.") ||
+    bodyText.includes("yield*") ||
+    bodyText.includes(".pipe(")
   ) {
-    return 'effect';
+    return "effect"
   }
 
   if (isPromiseLikeText(bodyText)) {
-    return 'promise';
+    return "promise"
   }
 
   try {
-    const fnTypeText = fnNode.getType().getText();
-    if (fnTypeText.includes('Effect<') || fnTypeText.includes('Effect.Effect<')) {
-      return 'effect';
+    const fnTypeText = fnNode.getType().getText()
+    if (fnTypeText.includes("Effect<") || fnTypeText.includes("Effect.Effect<")) {
+      return "effect"
     }
     if (isPromiseLikeText(fnTypeText)) {
-      return 'promise';
+      return "promise"
     }
   } catch {
     // best-effort classification only
   }
 
-  return 'unknown';
-};
+  return "unknown"
+}

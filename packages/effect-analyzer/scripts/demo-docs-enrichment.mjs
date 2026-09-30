@@ -6,7 +6,7 @@ const { lintSourceCode } = await import(join(__dirname, '..', 'dist', 'index.js'
 
 const code = `
 import { Effect, Config } from 'effect';
-export const tok = Config.string('API_TOKEN');
+export const tok = Config.String('API_TOKEN');
 export const p = Effect.gen(function* () {
   console.log('starting');
   return yield* Effect.succeed(1);
