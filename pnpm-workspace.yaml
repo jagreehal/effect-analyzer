@@ -18,3 +18,4 @@ minimumReleaseAgeExclude:
   - oxlint
   - '@oxlint/*'
   - oxlint-tsgolint
+  - '@oxlint-tsgolint/*'
