@@ -107,7 +107,7 @@
     "tsx": "4.23.13"
   },
   "optionalDependencies": {
-    "vscode-languageserver": "^10.1.1",
+    "vscode-languageserver": "^10.1.2",
     "vscode-languageserver-textdocument": "^1.0.14"
   },
   "devDependencies": {
