@@ -19,6 +19,7 @@
     "**/node_modules",
     "**/*.tsbuildinfo",
     "**/CHANGELOG.md",
+    "AGENTS.md",
     "pnpm-lock.yaml",
     "**/___*",
     "**/___*/**",

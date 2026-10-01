@@ -94,7 +94,7 @@
   },
   "homepage": "https://github.com/jagreehal/effect-analyzer/tree/main/packages/effect-analyzer#readme",
   "peerDependencies": {
-    "effect": "^4.0.0-rc.118"
+    "effect": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "effect": {
@@ -102,26 +102,26 @@
     }
   },
   "dependencies": {
-    "@effect/tsgo": "0.46.1",
+    "@effect/tsgo": "0.47.2",
     "ts-morph": "^28.0.0",
-    "tsx": "4.23.13"
+    "tsx": "4.23.15"
   },
   "optionalDependencies": {
-    "vscode-languageserver": "^10.1.1",
-    "vscode-languageserver-textdocument": "^1.0.14"
+    "vscode-languageserver": "^10.1.2",
+    "vscode-languageserver-textdocument": "^1.0.15"
   },
   "devDependencies": {
-    "@stryker-mutator/core": "9.6.1",
-    "@stryker-mutator/vitest-runner": "9.6.1",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
     "@total-typescript/ts-reset": "^0.6.1",
-    "@typeonce/effect-machine": "0.31.2",
-    "@types/node": "^26.4.1",
-    "effect": "4.0.0-rc.118",
-    "oxlint": "1.85.0",
+    "@typeonce/effect-machine": "0.39.0",
+    "@types/node": "^26.6.3",
+    "effect": "4.0.0",
+    "oxlint": "1.86.0",
     "oxlint-tsgolint": "7.0.2003",
     "ts-morph": "^28.0.0",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.2"
   }
 }
