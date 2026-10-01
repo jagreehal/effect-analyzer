@@ -1,5 +1,11 @@
 # effect-analyzer
 
+## 3.8.0
+
+### Minor Changes
+
+- 270601d: Support Effect 4.0.0. The `effect` peer range moves to `^4.0.0`, and `@effect/tsgo` moves to 0.47.2.
+
 ## 3.7.0
 
 ### Minor Changes
