@@ -34,7 +34,7 @@ async function main() {
     OpenApi = httpApi.OpenApi;
   } catch (e) {
     console.error('Error: Effect v4 is required for runtime OpenAPI generation.');
-    console.error('Install it: pnpm add effect@^4.0.0-rc.118');
+    console.error('Install it: pnpm add effect@^4.0.0');
     if (e?.message) console.error('Details:', e.message);
     process.exit(1);
   }

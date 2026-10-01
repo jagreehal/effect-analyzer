@@ -2,6 +2,10 @@ packages:
   - 'packages/*'
   - 'apps/*'
 
+allowBuilds:
+  dprint: true
+  esbuild: true
+
 minimumReleaseAgeExclude:
   - effect
   - '@typeonce/effect-machine'
