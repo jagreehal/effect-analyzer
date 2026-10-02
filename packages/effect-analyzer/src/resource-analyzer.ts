@@ -11,7 +11,7 @@
 
 import { Effect } from "effect"
 import type { CallExpression, PropertyAccessExpression, SourceFile } from "ts-morph"
-import type { AnalysisContext } from "./analysis-context"
+import { type AnalysisContext, withServiceScope } from "./analysis-context"
 import { computeDisplayName, computeSemanticRole, extractLocation, generateId } from "./analysis-utils"
 import { loadTsMorph } from "./ts-morph-loader"
 import type {
@@ -24,16 +24,18 @@ import type {
 } from "./types"
 
 export const analyzeResourceCall = (
-  deps: AnalysisContext,
+  outerDeps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
   warnings: Array<AnalysisWarning>,
-  stats: AnalysisStats
+  stats: AnalysisStats,
+  serviceScope?: Map<string, string>
 ): Effect.Effect<StaticResourceNode, AnalysisError> =>
   Effect.gen(function*() {
+    const deps = withServiceScope(outerDeps, serviceScope)
     const args = call.getArguments()
     const resourceOperation = (/([A-Za-z_$][\w$]*)$/.exec(callee))?.[1] ?? callee
     let acquire: StaticFlowNode
@@ -116,22 +118,34 @@ export const analyzeResourceCall = (
     ) {
       // Finalizer/cleanup patterns - acquire is the surrounding effect (method chain) or unknown
       const expr = call.getExpression()
-      if (expr.getKind() === loadTsMorph().SyntaxKind.PropertyAccessExpression) {
-        const propAccess = expr as PropertyAccessExpression
-        acquire = yield* deps.analyzeEffectExpression(
-          propAccess.getExpression(),
-          sourceFile,
-          filePath,
-          opts,
-          warnings,
-          stats
-        )
+      const dataFirst = (resourceOperation === "onError" || resourceOperation === "onExit") && args.length >= 2
+      if (dataFirst && args[0] && args[1]) {
+        // Effect.onError(effect, cleanup): the effect comes first, then the cleanup.
+        acquire = yield* deps.analyzeEffectExpression(args[0], sourceFile, filePath, opts, warnings, stats)
+        release = yield* deps.analyzeEffectExpression(args[1], sourceFile, filePath, opts, warnings, stats)
       } else {
-        acquire = { id: generateId(), type: "unknown", reason: "Scoped acquire" }
+        // `x.addFinalizer(f)` is a method chain on x. `Effect.onError(f)` is the
+        // data-last form inside a pipe: `Effect` is the module, not the source.
+        const receiver = expr.getKind() === loadTsMorph().SyntaxKind.PropertyAccessExpression
+          ? (expr as PropertyAccessExpression).getExpression().getText()
+          : undefined
+        if (receiver !== undefined && receiver !== "Effect") {
+          const propAccess = expr as PropertyAccessExpression
+          acquire = yield* deps.analyzeEffectExpression(
+            propAccess.getExpression(),
+            sourceFile,
+            filePath,
+            opts,
+            warnings,
+            stats
+          )
+        } else {
+          acquire = { id: generateId(), type: "unknown", reason: "Scoped acquire" }
+        }
+        release = args.length > 0 && args[0]
+          ? yield* deps.analyzeEffectExpression(args[0], sourceFile, filePath, opts, warnings, stats)
+          : { id: generateId(), type: "unknown", reason: "Missing finalizer" }
       }
-      release = args.length > 0 && args[0]
-        ? yield* deps.analyzeEffectExpression(args[0], sourceFile, filePath, opts, warnings, stats)
-        : { id: generateId(), type: "unknown", reason: "Missing finalizer" }
     } else if (resourceOperation === "ensuring") {
       // Effect.ensuring(effect, cleanup)
       const expr = call.getExpression()
@@ -198,6 +212,7 @@ export const analyzeResourceCall = (
     const resourceNode: StaticResourceNode = {
       id: generateId(),
       type: "resource",
+      resourceOperation,
       acquire,
       release,
       use: useEffect,

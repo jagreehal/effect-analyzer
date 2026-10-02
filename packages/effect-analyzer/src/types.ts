@@ -348,6 +348,8 @@ export interface StaticTimeoutNode extends StaticBaseNode {
  */
 export interface StaticResourceNode extends StaticBaseNode {
   readonly type: "resource"
+  /** The combinator, e.g. `acquireRelease`, `ensuring`, `onError`. */
+  readonly resourceOperation?: string | undefined
   /** Acquisition effect */
   readonly acquire: StaticFlowNode
   /** Release effect */
@@ -660,6 +662,11 @@ export interface StaticTransformNode extends StaticBaseNode {
   readonly source?: StaticFlowNode | undefined
   /** The transformation function text (if simple enough to extract). */
   readonly fn?: string | undefined
+  /**
+   * The analyzed callback of a tap (`tap`, `tapError`, …). A tap runs its
+   * callback for its effects, so those effects are steps in their own right.
+   */
+  readonly callback?: StaticFlowNode | undefined
   /** Input type signature (before transform) */
   readonly inputType?: EffectTypeSignature | undefined
   /** Output type signature (after transform) */
@@ -1744,8 +1751,10 @@ export const getStaticChildren = (
     case "schedule":
     case "match":
       return Option.none()
-    case "transform":
-      return node.source ? Option.some([node.source]) : Option.none()
+    case "transform": {
+      const list = [node.source, node.callback].filter((n): n is StaticFlowNode => n !== undefined)
+      return list.length > 0 ? Option.some(list) : Option.none()
+    }
     case "layer":
       return Option.some([...node.operations])
     case "stream":

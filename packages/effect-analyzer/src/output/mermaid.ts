@@ -1043,14 +1043,18 @@ function renderNode(
 
     case "transform": {
       // Rectangle for Transform nodes — recurse into source child
-      if (node.source) {
-        const sourceResult = renderNode(node.source, context, lines, depth + 1)
-        if (sourceResult.lastNodeIds.length > 0) {
-          context.edges.push({ from: sourceResult.lastNodeIds[0]!, to: nodeId })
-        }
-        return { firstNodeId: sourceResult.firstNodeId ?? nodeId, lastNodeIds: [nodeId] }
+      const sourceResult = node.source ? renderNode(node.source, context, lines, depth + 1) : undefined
+      if (sourceResult && sourceResult.lastNodeIds.length > 0) {
+        context.edges.push({ from: sourceResult.lastNodeIds[0]!, to: nodeId })
       }
-      return { firstNodeId: nodeId, lastNodeIds: [nodeId] }
+      // A tap's callback runs alongside: a side branch, not the next step.
+      if (node.callback) {
+        const callbackResult = renderNode(node.callback, context, lines, depth + 1)
+        if (callbackResult.firstNodeId) {
+          context.edges.push({ from: nodeId, to: callbackResult.firstNodeId, label: node.transformType })
+        }
+      }
+      return { firstNodeId: sourceResult?.firstNodeId ?? nodeId, lastNodeIds: [nodeId] }
     }
 
     case "channel": {

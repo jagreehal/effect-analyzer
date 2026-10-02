@@ -41,10 +41,10 @@ StaticEffectIR { root: StaticEffectProgram, metadata, serviceDefinitions, warnin
 - `generator` / `pipe` — Effect.gen blocks and pipe chains
 - `parallel` / `race` — concurrency patterns
 - `error-handler` — catch/catchTag/orDie/ignore (40 handler variants incl. Effect 4 `catchReason`, `catchFilter`, `catchNoSuchElement`); unary combinators passed uncalled in a pipe (`Effect.orDie`) are detected too. `catchTags` keeps each tag's handler in `tagHandlers`. A data-last combinator inside `.pipe` gets a placeholder `source` with `description: 'pipe-input'`; explain prints it as "(the piped effect)"
-- `retry` / `timeout` / `resource` — resilience patterns
+- `retry` / `timeout` / `resource` — resilience patterns. `resource.resourceOperation` names the combinator (`acquireRelease`, `ensuring`, `onError`); data-first `onError`/`onExit` read `(effect, cleanup)`
 - `conditional` / `decision` / `switch` — control flow
 - `layer` / `stream` / `fiber` — Effect ecosystem constructs. A merge-like stream operator keeps the other streams in `branches` (`Stream.merge(a, b)` → `b`), and `getStaticChildren` walks them
-- `transform` — map/flatMap/tap operations
+- `transform` — map/flatMap/tap operations. Taps (`TAP_TRANSFORMS`) analyze their last argument into `callback` (inline function or a reference like `svc.cleanup`; not `tapBoth` objects), and `getStaticChildren` includes it. A ternary over Effects (`c ? a : b`) becomes a `raw-ternary` decision
 - `opaque` / `unknown` — unsupported or unanalyzable
 - Plus: `terminal`, `try-catch`, `loop`, `cause`, `exit`, `schedule`, `match`, `scope-resource`, and more. `loop` records `concurrency` from a trailing `{ concurrency }` option; `parseEffectAllOptions` resolves a named const through the checker
 
@@ -89,7 +89,7 @@ The rendered result goes to stdout; progress and counts go to stderr through `lo
 | `mermaid` | Generic flowchart |
 | `mermaid-paths` | Path-based rendering (with style-guide heuristics) |
 | `mermaid-enhanced` | Enhanced Mermaid with colors/styles |
-| `mermaid-railway` | Happy path + error branches; steps labelled by callee, err nodes by TaggedError `_tag` (`typeSignature.errorTags`) |
+| `mermaid-railway` | Happy path + error branches; steps labelled by callee, err nodes by TaggedError `_tag` (`typeSignature.errorTags`). Error taps (`ERROR_TAP_TRANSFORMS`, `onError`), piped or data-first, draw as `-.->|tapError|` side branches off the guarded step |
 | `mermaid-services` | Service dependency map |
 | `mermaid-errors` | What each handler does to each error (`caught by` / `mapped by` / `dies at` / `swallowed by`); errors nothing intercepts go to a neutral `E (reaches caller)` node. Renders a `((No handlers - see railway))` marker when no handler touches the channel, so auto mode drops it; `--format mermaid-errors` passes `when: 'always'` |
 | `mermaid-decisions` | Control flow |

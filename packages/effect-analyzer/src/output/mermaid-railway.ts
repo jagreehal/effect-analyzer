@@ -1,4 +1,5 @@
 import { Option } from "effect"
+import { ERROR_TAP_TRANSFORMS } from "../analysis-patterns"
 import {
   DEFAULT_LABEL_MAX,
   escapeMermaidLabel as escapeLabel,
@@ -11,6 +12,15 @@ import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from "../
 interface RailwayStep {
   readonly label: string
   readonly errorTypes: ReadonlyArray<string>
+  /** Error taps on this step: what runs on the error rail before it continues. */
+  readonly errorTaps: ReadonlyArray<ErrorTap>
+}
+
+interface ErrorTap {
+  /** The combinator, e.g. `tapError`. */
+  readonly op: string
+  /** What the tap's callback calls, e.g. `catalog.release`. */
+  readonly label: string
 }
 
 interface RailwayOptions {
@@ -177,9 +187,49 @@ type Arrival = { readonly kind: "yielded" } | { readonly kind: "nested" }
 const YIELDED: Arrival = { kind: "yielded" }
 const NESTED: Arrival = { kind: "nested" }
 
+/**
+ * The calls a tap's callback makes, for its label: named effects that aren't
+ * Effect's own combinators (`catalog.release`, not `Effect.ignore`).
+ */
+function describeCallback(callback: StaticFlowNode): string | undefined {
+  const calls: Array<string> = []
+  const visit = (node: StaticFlowNode): void => {
+    if (node.type === "effect" && node.callee && !node.callee.startsWith("Effect.")) {
+      const name = extractFunctionName(node.callee)
+      if (!calls.includes(name)) calls.push(name)
+    }
+    for (const child of Option.getOrElse(getStaticChildren(node), () => [])) visit(child)
+  }
+  visit(callback)
+  return calls.length > 0 ? calls.join(", ") : undefined
+}
+
+/** `tapError` and friends, and `onError`: what runs on the error rail. */
+function asErrorTap(node: StaticFlowNode): ErrorTap | undefined {
+  if (node.type === "transform" && ERROR_TAP_TRANSFORMS.has(node.transformType)) {
+    return {
+      op: node.transformType,
+      label: (node.callback && describeCallback(node.callback)) ?? node.transformType
+    }
+  }
+  if (node.type === "resource" && node.resourceOperation === "onError") {
+    return { op: "onError", label: describeCallback(node.release) ?? "onError" }
+  }
+  return undefined
+}
+
+interface FlattenedSteps {
+  readonly steps: ReadonlyArray<StaticFlowNode>
+  readonly errorTaps: ReadonlyMap<StaticFlowNode, ReadonlyArray<ErrorTap>>
+}
+
 /** Flatten IR children to a linear list of concrete steps for the railway diagram. */
-function flattenNodesToSteps(nodes: ReadonlyArray<StaticFlowNode>): ReadonlyArray<StaticFlowNode> {
+function flattenNodesToSteps(nodes: ReadonlyArray<StaticFlowNode>): FlattenedSteps {
   const steps: Array<StaticFlowNode> = []
+  const errorTaps = new Map<StaticFlowNode, Array<ErrorTap>>()
+
+  const attach = (subject: StaticFlowNode, tap: ErrorTap) =>
+    errorTaps.set(subject, [...(errorTaps.get(subject) ?? []), tap])
 
   const visit = (node: StaticFlowNode, arrival: Arrival): void => {
     if (node.type === "generator") {
@@ -191,11 +241,32 @@ function flattenNodesToSteps(nodes: ReadonlyArray<StaticFlowNode>): ReadonlyArra
 
     // Transparent: recurse into children (pipe wrappers). The arrival belongs to
     // the pipe's subject — its first child — not to its transformations.
+    // An error tap in a pipe hangs off the step the pipe produced: `a.pipe(
+    // Effect.tapError(f))` runs f on a's error rail. It is not a step itself.
     if (isTransparentRailwayNode(node)) {
       const children = Option.getOrElse(getStaticChildren(node), () => [])
+      const before = steps.length
       children.forEach((child, index) => {
+        const tap = index > 0 ? asErrorTap(child) : undefined
+        const subject = steps.at(-1)
+        if (tap && subject && steps.length > before) {
+          attach(subject, tap)
+          return
+        }
         visit(child, index === 0 ? arrival : NESTED)
       })
+      return
+    }
+
+    // Data-first error tap: `Effect.tapError(a, f)` / `Effect.onError(a, f)`
+    // is a's step with f hanging off it, same as the piped form.
+    const tap = asErrorTap(node)
+    const tapped = node.type === "transform" ? node.source : node.type === "resource" ? node.acquire : undefined
+    if (tap && tapped && tapped.type !== "unknown") {
+      const before = steps.length
+      visit(tapped, arrival)
+      const subject = steps.at(-1)
+      if (subject && steps.length > before) attach(subject, tap)
       return
     }
 
@@ -221,14 +292,15 @@ function flattenNodesToSteps(nodes: ReadonlyArray<StaticFlowNode>): ReadonlyArra
     visit(node, NESTED)
   }
 
-  return steps
+  return { steps, errorTaps }
 }
 
 /** Build railway step descriptors from flow nodes. */
-function buildSteps(flat: ReadonlyArray<StaticFlowNode>): ReadonlyArray<RailwayStep> {
-  return flat.map((node) => ({
+function buildSteps({ steps, errorTaps }: FlattenedSteps): ReadonlyArray<RailwayStep> {
+  return steps.map((node) => ({
     label: computeLabel(node),
-    errorTypes: collectErrorTypes(node)
+    errorTypes: collectErrorTypes(node),
+    errorTaps: errorTaps.get(node) ?? []
   }))
 }
 
@@ -237,14 +309,15 @@ function buildSteps(flat: ReadonlyArray<StaticFlowNode>): ReadonlyArray<RailwayS
  *
  * Happy path flows left-to-right with `-->|ok|` edges.
  * Steps with typed errors get `-->|err|` branches to error nodes.
+ * Error taps (`tapError` and friends) hang off a step's error node as dotted
+ * `-.->|tapError|` side branches: they run on the error rail, then it continues.
  */
 export function renderRailwayMermaid(
   ir: StaticEffectIR,
   options: RailwayOptions = {}
 ): string {
   const direction = options.direction ?? "LR"
-  const nodes = flattenNodesToSteps(ir.root.children)
-  const steps = buildSteps(nodes)
+  const steps = buildSteps(flattenNodesToSteps(ir.root.children))
 
   if (steps.length === 0) {
     return `flowchart ${direction}\n  Empty((No steps))`
@@ -296,6 +369,18 @@ export function renderRailwayMermaid(
     const lastId = stepId(steps.length - 1)
     const errLabel = escapeLabel(ir.root.errorTypes.join(" / "))
     errorLines.push(`  ${lastId} -->|err| Errors["${errLabel}"]`)
+  }
+
+  // Error taps branch from the step's error node, or from the step when it has
+  // no typed errors to draw.
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]
+    if (!step) continue
+    const id = stepId(i)
+    const from = hasPerStepErrors && step.errorTypes.length > 0 ? `${id}E` : id
+    step.errorTaps.forEach((tap, t) => {
+      errorLines.push(`  ${from} -.->|${tap.op}| ${id}T${t}["${escapeLabel(tap.label)}"]`)
+    })
   }
 
   return [...lines, ...errorLines].join("\n")

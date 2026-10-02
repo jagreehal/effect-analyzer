@@ -19,7 +19,7 @@ import type {
   SourceFile,
   StringLiteral
 } from "ts-morph"
-import type { AnalysisContext } from "./analysis-context"
+import { type AnalysisContext, withServiceScope } from "./analysis-context"
 import { computeDisplayName, computeSemanticRole, extractLocation, generateId } from "./analysis-utils"
 import { loadTsMorph } from "./ts-morph-loader"
 import type {
@@ -163,16 +163,18 @@ export const classifyErrorHandlerName = (
 }
 
 export const analyzeErrorHandlerCall = (
-  deps: AnalysisContext,
+  outerDeps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
   warnings: Array<AnalysisWarning>,
-  stats: AnalysisStats
+  stats: AnalysisStats,
+  serviceScope?: Map<string, string>
 ): Effect.Effect<StaticErrorHandlerNode, AnalysisError> =>
   Effect.gen(function*() {
+    const deps = withServiceScope(outerDeps, serviceScope)
     const args = call.getArguments()
 
     const handlerType = classifyErrorHandlerName(callee)
