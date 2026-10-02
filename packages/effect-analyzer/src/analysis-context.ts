@@ -30,6 +30,21 @@ export const createAnalysisContext = (
   }
 })
 
+/**
+ * The same context, with a generator's service scope (`s` → `Svc`) carried into
+ * every recursive call that doesn't bring its own. Callbacks inside a pipe step
+ * (`Effect.tapError(() => s.cleanup)`) then resolve `s.cleanup` as a service
+ * call, the same as `s.a` at the head of the pipe.
+ */
+export const withServiceScope = (
+  deps: AnalysisContext,
+  serviceScope: Map<string, string> | undefined
+): AnalysisContext =>
+  serviceScope === undefined ? deps : {
+    analyzeEffectExpression: (node, sourceFile, filePath, opts, warnings, stats, scope) =>
+      deps.analyzeEffectExpression(node, sourceFile, filePath, opts, warnings, stats, scope ?? serviceScope)
+  }
+
 export type BindAnalysisContext<F> = F extends (
   context: AnalysisContext,
   ...args: infer Args

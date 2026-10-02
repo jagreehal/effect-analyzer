@@ -554,6 +554,10 @@ export function explainNode(
       if (node.source) {
         lines.push(...explainNode(node.source, depth + 1, state))
       }
+      if (node.callback) {
+        lines.push(`${pad}  Runs on ${node.transformType}:`)
+        lines.push(...explainNode(node.callback, depth + 2, state))
+      }
       break
     }
 

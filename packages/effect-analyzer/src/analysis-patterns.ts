@@ -167,6 +167,22 @@ export const EFFECTFUL_TRANSFORMS = new Set([
   "ap",
   "flatten"
 ])
+/** Taps run their callback for its effects; the analyzer follows the callback. */
+export const TAP_TRANSFORMS = new Set<StaticTransformNode["transformType"]>([
+  "tap",
+  "tapBoth",
+  "tapError",
+  "tapErrorTag",
+  "tapErrorCause",
+  "tapDefect"
+])
+/** Taps that run only on failure: side branches off the error rail. */
+export const ERROR_TAP_TRANSFORMS = new Set<StaticTransformNode["transformType"]>([
+  "tapError",
+  "tapErrorTag",
+  "tapErrorCause",
+  "tapDefect"
+])
 export const isTransformCall = (callee: string): boolean => callee in TRANSFORM_OPS
 
 export const MATCH_OP_MAP: Record<string, StaticMatchNode["matchOp"]> = {

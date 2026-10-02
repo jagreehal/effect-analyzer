@@ -44,6 +44,27 @@ Linear programs pick railway in auto mode. `--format mermaid-railway` forces it.
 
 Steps are labelled with the callee (`accounts.getBalance`), not a yield binding. Error nodes use the TaggedError `_tag` when the class has one (`Data.TaggedError("NOT_FOUND")` renders as `NOT_FOUND`).
 
+## Error Taps
+
+`tapError`, `tapErrorTag`, `tapErrorCause`, `tapDefect` and `onError` run a callback on the error rail and let the failure continue. The diagram draws each one as a dotted branch off the step it guards, labelled with what the callback calls:
+
+```ts
+yield* bank.charge.pipe(Effect.tapError(() => store.release(id)))
+```
+
+```mermaid
+flowchart LR
+  A["Store"] -->|ok| B["Bank"]
+  B -->|ok| C["bank.charge"]
+  C -->|ok| Done((Success))
+  C -->|err| CE["Declined"]
+  CE -.->|tapError| CT0["store.release"]
+```
+
+When the step has no typed error to draw, the branch starts from the step itself.
+
+You get the same branch from the data-first form (`Effect.tapError(bank.charge, f)`) and from a callback passed by reference (`Effect.tapError(store.release)`).
+
 ## When Auto Mode Selects Railway
 
 Auto mode picks the railway diagram as the baseline when your program has:

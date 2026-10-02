@@ -8,6 +8,7 @@ import type {
   ArrowFunction,
   Block,
   CallExpression,
+  ConditionalExpression,
   ExpressionStatement,
   FunctionExpression,
   Identifier,
@@ -98,6 +99,7 @@ import type {
   AnalyzerOptions,
   EffectTypeSignature,
   LayerLifecycle,
+  StaticDecisionNode,
   StaticEffectNode,
   StaticErrorHandlerNode,
   StaticFiberNode,
@@ -160,7 +162,7 @@ const SCHEMA_OPS = [
  * combinators — cheap, no type-checker needed.
  */
 const EFFECT_PIPE_OP_REGEX =
-  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catch\w*|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|ignore|ignoreLogged|sandbox|unsandbox|flip|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*(?:\(|$)/
+  /^Effect\.(retry|retryOrElse|retryN|timeout(?:Fail|FailCause|Option|To)?|catch\w*|orElse|orElseSucceed|orElseFail|orElseFailWith|orDie|orDieWith|ignore|ignoreLogged|sandbox|unsandbox|flip|tap|tapBoth|tapDefect|tapError|tapErrorCause|tapErrorTag|mapError|mapBoth|withSpan|annotateLogs|annotateSpans|ensuring|ensuringWith|onError|onExit|delay|repeat|repeatN|repeatOrElse|zip|zipLeft|zipRight|matchEffect|match)\s*(?:\(|$)/
 
 const pipeArgsIncludeEffectOp = (call: CallExpression): boolean => {
   for (const arg of call.getArguments()) {
@@ -375,6 +377,33 @@ export const analyzeEffectExpression = (
      * effect type` bucket were `AsExpression`.
      */
     node = unwrapExpression(node)
+
+    // `cond ? effectA : effectB` picks one of two programs. Same decision node
+    // as a ternary over `yield*` in a generator; unknown if neither branch is
+    // an Effect.
+    if (node.getKind() === SyntaxKind.ConditionalExpression) {
+      const ternary = node as ConditionalExpression
+      const analyzeBranch = (branch: Node) =>
+        analyzeEffectExpression(branch, sourceFile, filePath, opts, warnings, stats, serviceScope)
+      const whenTrue = yield* analyzeBranch(ternary.getWhenTrue())
+      const whenFalse = yield* analyzeBranch(ternary.getWhenFalse())
+      if (whenTrue.type !== "unknown" || whenFalse.type !== "unknown") {
+        const condition = ternary.getCondition().getText()
+        const decisionNode: StaticDecisionNode = {
+          id: generateId(),
+          type: "decision",
+          decisionId: generateId(),
+          label: condition.length > 40 ? condition.slice(0, 40) + "..." : condition,
+          condition,
+          source: "raw-ternary",
+          onTrue: [whenTrue],
+          onFalse: [whenFalse],
+          location: extractLocation(node, filePath, opts.includeLocations ?? false)
+        }
+        stats.decisionCount++
+        return decisionNode
+      }
+    }
 
     // Handle function wrappers that return an Effect (common in workflow APIs)
     if (
@@ -1031,7 +1060,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats
+        stats,
+        serviceScope
       )
     }
 
@@ -1087,7 +1117,8 @@ export const analyzeEffectCall = (
             filePath,
             opts,
             warnings,
-            stats
+            stats,
+            serviceScope
           )
         }
       }
@@ -1100,7 +1131,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats
+        stats,
+        serviceScope
       )
     }
 
@@ -1143,7 +1175,8 @@ export const analyzeEffectCall = (
         filePath,
         opts,
         warnings,
-        stats
+        stats,
+        serviceScope
       )
     }
 

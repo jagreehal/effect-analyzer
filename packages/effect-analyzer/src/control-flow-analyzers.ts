@@ -19,7 +19,7 @@ import type {
   SourceFile
 } from "ts-morph"
 import { parseEffectAllOptions } from "./analysis-classifiers"
-import type { AnalysisContext } from "./analysis-context"
+import { type AnalysisContext, withServiceScope } from "./analysis-context"
 import {
   CAUSE_CONSTRUCTORS,
   CAUSE_OP_MAP,
@@ -28,6 +28,7 @@ import {
   EXIT_CONSTRUCTORS,
   EXIT_OP_MAP,
   MATCH_OP_MAP,
+  TAP_TRANSFORMS,
   TRANSFORM_OPS
 } from "./analysis-patterns"
 import { computeDisplayName, computeSemanticRole, extractLocation, generateId } from "./analysis-utils"
@@ -482,16 +483,18 @@ export const analyzeExitCall = (
 
 /** Analyze Effect.map / flatMap / andThen / tap / zip / as / flatten etc. */
 export const analyzeTransformCall = (
-  deps: AnalysisContext,
+  outerDeps: AnalysisContext,
   call: CallExpression,
   callee: string,
   sourceFile: SourceFile,
   filePath: string,
   opts: Required<AnalyzerOptions>,
   warnings: Array<AnalysisWarning>,
-  stats: AnalysisStats
+  stats: AnalysisStats,
+  serviceScope?: Map<string, string>
 ): Effect.Effect<StaticTransformNode, AnalysisError> =>
   Effect.gen(function*() {
+    const deps = withServiceScope(outerDeps, serviceScope)
     const args = call.getArguments()
     const transformType: StaticTransformNode["transformType"] = TRANSFORM_OPS[callee] ?? "other"
     const isEffectful = EFFECTFUL_TRANSFORMS.has(transformType)
@@ -520,6 +523,23 @@ export const analyzeTransformCall = (
       fn = fnText.length <= 120 ? fnText : fnText.slice(0, 120) + "…"
     }
 
+    // A tap's callback is the last argument: a function, or a reference to one
+    // (`Effect.tapError(svc.cleanup)`). Not an object (tapBoth's { onFailure,
+    // onSuccess }, even by reference) or a tag string.
+    let callback: StaticFlowNode | undefined
+    const callbackArg = TAP_TRANSFORMS.has(transformType) ? args.at(-1) : undefined
+    const { SyntaxKind } = loadTsMorph()
+    const callbackKind = callbackArg?.getKind()
+    if (
+      callbackArg &&
+      (callbackKind === SyntaxKind.ArrowFunction ||
+        callbackKind === SyntaxKind.FunctionExpression ||
+        (transformType !== "tapBoth" &&
+          (callbackKind === SyntaxKind.Identifier || callbackKind === SyntaxKind.PropertyAccessExpression)))
+    ) {
+      callback = yield* deps.analyzeEffectExpression(callbackArg, sourceFile, filePath, opts, warnings, stats)
+    }
+
     stats.totalEffects++
 
     const transformNode: StaticTransformNode = {
@@ -529,6 +549,7 @@ export const analyzeTransformCall = (
       isEffectful,
       ...(source !== undefined ? { source } : {}),
       ...(fn !== undefined ? { fn } : {}),
+      ...(callback !== undefined ? { callback } : {}),
       location: extractLocation(call, filePath, opts.includeLocations ?? false)
     }
     return {
