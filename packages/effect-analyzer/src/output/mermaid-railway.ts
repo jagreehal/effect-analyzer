@@ -7,7 +7,7 @@ import {
   truncateDisplayText
 } from "../analysis-utils"
 import { splitTopLevelUnion } from "../type-extractor"
-import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from "../types"
+import { getStaticChildren, type StaticEffectIR, type StaticEffectNode, type StaticFlowNode } from "../types"
 
 interface RailwayStep {
   readonly label: string
@@ -91,7 +91,10 @@ function computeLabel(node: StaticFlowNode): string {
     if (node.type === "retry") return "Retry"
     if (node.type === "conditional") return "Conditional"
     if (node.type === "decision") return node.label || node.condition
-    if (node.type === "effect" && node.wrappedCall) return node.wrappedCall
+    if (node.type === "effect") {
+      const lifted = liftedLabel(node)
+      if (lifted) return lifted
+    }
     if (
       node.displayName &&
       !node.displayName.includes(" <- ") &&
@@ -198,14 +201,25 @@ const NESTED: Arrival = { kind: "nested" }
 function describeCallback(callback: StaticFlowNode): string | undefined {
   const calls: Array<string> = []
   const visit = (node: StaticFlowNode): void => {
-    if (node.type === "effect" && node.callee && !node.callee.startsWith("Effect.")) {
-      const name = extractFunctionName(node.callee)
-      if (!calls.includes(name)) calls.push(name)
-    }
+    const name = node.type !== "effect"
+      ? undefined
+      : liftedLabel(node) ?? (node.callee && !node.callee.startsWith("Effect.")
+        ? extractFunctionName(node.callee)
+        : undefined)
+    if (name && !calls.includes(name)) calls.push(name)
     for (const child of Option.getOrElse(getStaticChildren(node), () => [])) visit(child)
   }
   visit(callback)
   return calls.length > 0 ? calls.join(", ") : undefined
+}
+
+/**
+ * What a lifted step does: the call it wraps (`wallet.audit`), or the field it
+ * sets (`set ledger.balances`).
+ */
+function liftedLabel(node: StaticEffectNode): string | undefined {
+  if (node.wrappedCall) return node.wrappedCall
+  return node.wrappedAssignment ? `set ${node.wrappedAssignment}` : undefined
 }
 
 /** `tapError` and friends, and `onError`: what runs on the error rail. */

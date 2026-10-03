@@ -190,13 +190,16 @@ export function explainNode(
           node.displayName ?? node.callee,
           DEFAULT_LABEL_MAX
         )
+        const via = ` via ${node.callee.replace(/^Effect\./, "")}`
         const desc = node.wrappedCall
-          ? ` via ${node.callee.replace(/^Effect\./, "")}`
+          ? via
           : node.description
           ? ` — ${node.description}`
           : ""
         // If displayName has a binding arrow (e.g. "logger <- Logger"), it's a service yield
-        if (label.includes(" <- ")) {
+        if (node.wrappedAssignment && !node.wrappedCall) {
+          lines.push(`${pad}Sets ${node.wrappedAssignment}${via}`)
+        } else if (label.includes(" <- ")) {
           lines.push(`${pad}Yields ${label}`)
         } else {
           lines.push(`${pad}Calls ${label}${desc}`)

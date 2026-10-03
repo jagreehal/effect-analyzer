@@ -62,7 +62,8 @@ Options:
   --export <name>          For openapi-runtime: export name of HttpApi (default: first/default)
                            For json-schema: export name of the Schema to convert (required)
   -o, --output <file>      Output file (default: stdout)
-  -d, --direction <dir>    Mermaid diagram direction: TB | LR | BT | RL (default: TB)
+  -d, --direction <dir>    Mermaid diagram direction: TB | LR | BT | RL (default: LR for railway, services,
+                           errors, retry, testability and dataflow; TB otherwise)
   --detail <level>         Mermaid detail level: compact | standard | verbose (default: auto based on size)
   --runtime-trace <file>   Overlay a runtime trace on --format mermaid (nested span-tree JSON)
   -c, --compact            Compact output (no formatting)

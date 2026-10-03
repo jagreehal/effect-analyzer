@@ -152,6 +152,8 @@ export interface StaticEffectNode extends StaticBaseNode {
   readonly tracedName?: string | undefined
   /** Call lifted by Effect.tryPromise/promise/try/sync, e.g. `wallet.getBalance` */
   readonly wrappedCall?: string | undefined
+  /** Field a lifted thunk assigns when its body is one assignment, e.g. `ledger.balances` */
+  readonly wrappedAssignment?: string | undefined
 }
 
 /**

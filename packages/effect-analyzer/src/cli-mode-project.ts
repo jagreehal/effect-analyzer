@@ -210,7 +210,7 @@ export const runProjectMode = (
           filePath,
           programs,
           options.colocateSuffix,
-          options.direction,
+          options.direction ?? "TB",
           options.colocateEnhanced,
           programQualityByFile.get(filePath),
           options.styleGuide
@@ -262,7 +262,7 @@ export const runProjectMode = (
           }
 
           // Write project-level service graph (only when colocating)
-          const graphMd = renderServiceGraphMermaid(svcMap, { direction: options.direction })
+          const graphMd = renderServiceGraphMermaid(svcMap, { direction: options.direction ?? "TB" })
           const graphPath = join(resolvedPath, "service-graph.md")
           const graphContent = `# Service Dependency Graph\n\n\`\`\`mermaid\n${graphMd}\n\`\`\`\n`
           yield* cliTry(() => fs.writeFile(graphPath, graphContent, "utf-8")).pipe(
@@ -339,7 +339,7 @@ export const runProjectMode = (
         : renderDependencyMatrix(projectResult.allPrograms)
       yield* Console.log("\n" + matrixOutput)
     } else if (options.format === "mermaid-services") {
-      const svcDir = options.direction === "TB" ? "LR" : options.direction
+      const svcDir = options.direction ?? "LR"
       const svcOutput = options.serviceMap && projectResult.serviceMap
         ? renderServicesMermaidFromMap(projectResult.serviceMap, { direction: svcDir })
         : projectResult.allPrograms.map((ir) => renderServicesMermaid(ir, { direction: svcDir })).join("\n\n---\n\n")

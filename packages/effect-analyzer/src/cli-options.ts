@@ -53,7 +53,8 @@ export interface CLIOptions {
   readonly output: string | undefined
   readonly pretty: boolean
   readonly includeMetadata: boolean
-  readonly direction: MermaidDirection
+  /** Unset unless --direction is passed, so each format keeps its own default. */
+  readonly direction: MermaidDirection | undefined
   readonly detail: "compact" | "standard" | "verbose" | undefined
   /** Path to a span-tree JSON trace to overlay on the mermaid diagram. */
   readonly runtimeTrace: string | undefined
@@ -209,7 +210,7 @@ export function parseArgs(args: ReadonlyArray<string>): {
   let output: string | undefined
   let pretty = true
   let includeMetadata = true
-  let direction: MermaidDirection = "TB"
+  let direction: MermaidDirection | undefined
   let detail: CLIOptions["detail"] = undefined
   let tsconfig: string | undefined
   let colocate = false

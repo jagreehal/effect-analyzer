@@ -175,7 +175,7 @@ export const runDiffMode = (
         } else if (options.format === "mermaid" || options.format === "mermaid-enhanced") {
           sections.push(
             `%% diff: ${afterIR.root.programName}\n${
-              renderDiffMermaid(afterIR, diff, { direction: options.direction })
+              renderDiffMermaid(afterIR, diff, { direction: options.direction ?? "TB" })
             }`
           )
         } else {

@@ -56,6 +56,16 @@ describe("explain shapes", { timeout: 30_000 }, () => {
     expect(railway).toContain(`["wallet.debit"]`)
   })
 
+  it("labels an onError cleanup that restores state with the field it sets", async () => {
+    const ir = await program("persistWithRollback")
+    expect(renderRailwayMermaid(ir)).toContain(`["set ledger.balance"]`)
+    expect(renderExplanation(ir)).toContain("Sets ledger.balance via sync")
+  })
+
+  it("labels an onError cleanup with the call its Effect.sync wraps", async () => {
+    expect(renderRailwayMermaid(await program("debitWithAudit"))).toContain(`["wallet.audit"]`)
+  })
+
   it("names a lone call statement inside a block-bodied Effect.sync", async () => {
     const railway = renderRailwayMermaid(await program("transfer"))
     expect(railway).toContain(`["wallet.audit"]`)
