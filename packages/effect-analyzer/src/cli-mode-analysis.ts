@@ -290,7 +290,7 @@ export const runAnalysis = (
         resolvedPath,
         filteredIrs,
         options.colocateSuffix,
-        options.direction,
+        options.direction ?? "TB",
         options.colocateEnhanced,
         options.quality ? programQualities : undefined,
         options.styleGuide
@@ -302,24 +302,18 @@ export const runAnalysis = (
 
     // Auto-format renderer dispatch map
     const autoRenderers: Record<string, (ir: StaticEffectIR) => string> = {
-      "mermaid": (ir) => renderStaticMermaid(ir, { direction: options.direction }),
-      "mermaid-railway": (ir) =>
-        renderRailwayMermaid(ir, { direction: options.direction === "TB" ? "LR" : options.direction }),
-      "mermaid-services": (ir) =>
-        renderServicesMermaid(ir, { direction: options.direction === "TB" ? "LR" : options.direction }),
-      "mermaid-errors": (ir) =>
-        renderErrorsMermaid(ir, { direction: options.direction === "TB" ? "LR" : options.direction }),
-      "mermaid-decisions": (ir) => renderDecisionsMermaid(ir, { direction: options.direction }),
-      "mermaid-causes": (ir) => renderCausesMermaid(ir, { direction: options.direction }),
-      "mermaid-concurrency": (ir) => renderConcurrencyMermaid(ir, { direction: options.direction }),
+      "mermaid": (ir) => renderStaticMermaid(ir, { direction: options.direction ?? "TB" }),
+      "mermaid-railway": (ir) => renderRailwayMermaid(ir, { direction: options.direction ?? "LR" }),
+      "mermaid-services": (ir) => renderServicesMermaid(ir, { direction: options.direction ?? "LR" }),
+      "mermaid-errors": (ir) => renderErrorsMermaid(ir, { direction: options.direction ?? "LR" }),
+      "mermaid-decisions": (ir) => renderDecisionsMermaid(ir, { direction: options.direction ?? "TB" }),
+      "mermaid-causes": (ir) => renderCausesMermaid(ir, { direction: options.direction ?? "TB" }),
+      "mermaid-concurrency": (ir) => renderConcurrencyMermaid(ir, { direction: options.direction ?? "TB" }),
       "mermaid-timeline": (ir) => renderTimelineMermaid(ir),
-      "mermaid-layers": (ir) => renderLayersMermaid(ir, { direction: options.direction }),
-      "mermaid-retry": (ir) =>
-        renderRetryMermaid(ir, { direction: options.direction === "TB" ? "LR" : options.direction }),
-      "mermaid-testability": (ir) =>
-        renderTestabilityMermaid(ir, { direction: options.direction === "TB" ? "LR" : options.direction }),
-      "mermaid-dataflow": (ir) =>
-        renderDataflowMermaid(ir, { direction: options.direction === "TB" ? "LR" : options.direction })
+      "mermaid-layers": (ir) => renderLayersMermaid(ir, { direction: options.direction ?? "TB" }),
+      "mermaid-retry": (ir) => renderRetryMermaid(ir, { direction: options.direction ?? "LR" }),
+      "mermaid-testability": (ir) => renderTestabilityMermaid(ir, { direction: options.direction ?? "LR" }),
+      "mermaid-dataflow": (ir) => renderDataflowMermaid(ir, { direction: options.direction ?? "LR" })
     }
 
     switch (options.format) {
@@ -343,7 +337,7 @@ export const runAnalysis = (
             // Build rendered output, respecting detail level if specified
             let rendered: string
             if (sel.detail && sel.format === "mermaid") {
-              rendered = renderStaticMermaid(ir, { direction: options.direction, detail: sel.detail })
+              rendered = renderStaticMermaid(ir, { direction: options.direction ?? "TB", detail: sel.detail })
             } else {
               const renderer = autoRenderers[sel.format]
               if (!renderer) continue
@@ -412,7 +406,7 @@ export const runAnalysis = (
           )
           : undefined
         const mermaidOptions = {
-          direction: options.direction,
+          direction: options.direction ?? "TB",
           ...(options.detail ? { detail: options.detail } : {})
         }
         const diagrams: Array<string> = []
@@ -439,7 +433,7 @@ export const runAnalysis = (
           const paths = generatePaths(ir)
           pathDiagrams.push(
             renderPathsMermaid(paths, {
-              direction: options.direction,
+              direction: options.direction ?? "TB",
               styleGuide: options.styleGuide
             })
           )
@@ -451,7 +445,7 @@ export const runAnalysis = (
         const enhancedDiagrams: Array<string> = []
         for (const ir of filteredIrs) {
           enhancedDiagrams.push(renderEnhancedMermaid(ir, {
-            direction: options.direction,
+            direction: options.direction ?? "TB",
             ...(options.detail ? { detail: options.detail } : {})
           }))
         }
@@ -459,35 +453,35 @@ export const runAnalysis = (
         break
       }
       case "mermaid-railway": {
-        const railwayDir = options.direction === "TB" ? "LR" : options.direction
+        const railwayDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderRailwayMermaid(ir, { direction: railwayDir }))
         output = outputs.join("\n\n")
         break
       }
       case "mermaid-services": {
-        const svcDir = options.direction === "TB" ? "LR" : options.direction
+        const svcDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderServicesMermaid(ir, { direction: svcDir }))
         output = outputs.join("\n\n")
         break
       }
       case "mermaid-errors": {
-        const errDir = options.direction === "TB" ? "LR" : options.direction
+        const errDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderErrorsMermaid(ir, { direction: errDir, when: "always" }))
         output = outputs.join("\n\n")
         break
       }
       case "mermaid-decisions": {
-        const outputs = filteredIrs.map((ir) => renderDecisionsMermaid(ir, { direction: options.direction }))
+        const outputs = filteredIrs.map((ir) => renderDecisionsMermaid(ir, { direction: options.direction ?? "TB" }))
         output = outputs.join("\n\n")
         break
       }
       case "mermaid-causes": {
-        const outputs = filteredIrs.map((ir) => renderCausesMermaid(ir, { direction: options.direction }))
+        const outputs = filteredIrs.map((ir) => renderCausesMermaid(ir, { direction: options.direction ?? "TB" }))
         output = outputs.join("\n\n")
         break
       }
       case "mermaid-concurrency": {
-        const outputs = filteredIrs.map((ir) => renderConcurrencyMermaid(ir, { direction: options.direction }))
+        const outputs = filteredIrs.map((ir) => renderConcurrencyMermaid(ir, { direction: options.direction ?? "TB" }))
         output = outputs.join("\n\n")
         break
       }
@@ -501,23 +495,23 @@ export const runAnalysis = (
         // on their own, yet they are exactly what this view draws. An explicit
         // --program still narrows it to that one program.
         const layerIrs = options.program !== undefined ? filteredIrs : irs
-        output = renderProgramsLayersMermaid(layerIrs, { direction: options.direction })
+        output = renderProgramsLayersMermaid(layerIrs, { direction: options.direction ?? "TB" })
         break
       }
       case "mermaid-retry": {
-        const retryDir = options.direction === "TB" ? "LR" : options.direction
+        const retryDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderRetryMermaid(ir, { direction: retryDir }))
         output = outputs.join("\n\n")
         break
       }
       case "mermaid-testability": {
-        const testDir = options.direction === "TB" ? "LR" : options.direction
+        const testDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderTestabilityMermaid(ir, { direction: testDir }))
         output = outputs.join("\n\n")
         break
       }
       case "mermaid-dataflow": {
-        const dfDir = options.direction === "TB" ? "LR" : options.direction
+        const dfDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderDataflowMermaid(ir, { direction: dfDir }))
         output = outputs.join("\n\n")
         break
@@ -539,7 +533,7 @@ export const runAnalysis = (
         )
         const showcaseEntries = generateMultipleShowcase(
           filteredIrs,
-          { direction: options.direction },
+          { direction: options.direction ?? "TB" },
           sourceCode
         )
         const showcasePayload = showcaseEntries.length === 1 ? showcaseEntries[0] : showcaseEntries

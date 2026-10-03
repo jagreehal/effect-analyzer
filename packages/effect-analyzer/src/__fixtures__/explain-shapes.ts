@@ -1,6 +1,7 @@
 /**
  * Fixture: a workflow that yields a sub-program needing another service, a
- * plain-value early return, and promise calls lifted with tryPromise.
+ * plain-value early return, promise calls lifted with tryPromise, and
+ * onError cleanups that restore state or call a function.
  */
 import { Context, Data, Effect } from 'effect';
 
@@ -46,4 +47,25 @@ export const transfer = Effect.fn('transfer')(function* (wallet: Wallet, from: s
     wallet.audit(from);
   });
   return balance;
+});
+
+export const persistWithRollback = Effect.fn('persistWithRollback')(function* (
+  wallet: Wallet,
+  ledger: { balance: number },
+  from: string,
+) {
+  const snapshot = ledger.balance;
+  yield* Effect.tryPromise(() => wallet.debit(from)).pipe(
+    Effect.onError(() =>
+      Effect.sync(() => {
+        ledger.balance = snapshot;
+      }),
+    ),
+  );
+});
+
+export const debitWithAudit = Effect.fn('debitWithAudit')(function* (wallet: Wallet, from: string) {
+  yield* Effect.tryPromise(() => wallet.debit(from)).pipe(
+    Effect.onError(() => Effect.sync(() => wallet.audit(from))),
+  );
 });

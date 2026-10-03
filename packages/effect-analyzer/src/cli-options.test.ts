@@ -236,6 +236,10 @@ describe("parseArgs", () => {
     expect(opts("-f", format).format).toBe(format)
   })
 
+  it("leaves direction unset without --direction, so each format keeps its default", () => {
+    expect(opts().direction).toBeUndefined()
+  })
+
   it.each(["TB", "LR", "BT", "RL"] as const)("--direction %s is accepted", (direction) => {
     expect(opts("--direction", direction).direction).toBe(direction)
     expect(opts("-d", direction).direction).toBe(direction)
@@ -519,7 +523,7 @@ describe("parseArgs", () => {
           format: "auto",
           pretty: true,
           includeMetadata: true,
-          direction: "TB",
+          direction: undefined,
           detail: undefined,
           colocateSuffix: "effect-analysis",
           colocateEnhanced: true,

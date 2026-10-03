@@ -93,6 +93,25 @@ describe("--program", () => {
   })
 })
 
+describe("--direction", () => {
+  it("keeps LR as the railway default and honours an explicit TB", () => {
+    const byDefault = runCli(["src/programs.ts", "--format", "mermaid-railway", "--program", "refund", "--quiet"])
+    expect(byDefault.stdout).toMatch(/^flowchart LR/)
+
+    const topDown = runCli([
+      "src/programs.ts",
+      "--format",
+      "mermaid-railway",
+      "--program",
+      "refund",
+      "-d",
+      "TB",
+      "--quiet"
+    ])
+    expect(topDown.stdout).toMatch(/^flowchart TB/)
+  })
+})
+
 describe("relative paths", () => {
   it("prints the analyzed path relative to cwd", () => {
     const result = runCli(["src/programs.ts", "--format", "explain"])

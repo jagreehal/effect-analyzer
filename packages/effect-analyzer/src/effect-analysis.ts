@@ -1507,6 +1507,9 @@ export const analyzeEffectCall = (
     }
 
     const wrappedCall = LIFTING_CALLEES.has(normalizedCallee) ? liftedCallName(call) : undefined
+    const wrappedAssignment = LIFTING_CALLEES.has(normalizedCallee) && !wrappedCall
+      ? liftedAssignmentTarget(call)
+      : undefined
 
     const filteredRequiredServices = requiredServices?.filter(
       (service) => !isEffectRuntimePrimitive(service.serviceId)
@@ -1535,7 +1538,8 @@ export const analyzeEffectCall = (
       ...(constructorKind ? { constructorKind } : {}),
       ...(fiberRefName ? { fiberRefName } : {}),
       ...(tracedName ? { tracedName } : {}),
-      ...(wrappedCall ? { wrappedCall } : {})
+      ...(wrappedCall ? { wrappedCall } : {}),
+      ...(wrappedAssignment ? { wrappedAssignment } : {})
     }
     const enrichedEffectNode: StaticEffectNode = {
       ...effectNode,
@@ -1555,11 +1559,33 @@ const LIFTING_CALLEES = new Set(["Effect.tryPromise", "Effect.promise", "Effect.
  */
 const liftedCallName = (call: CallExpression): string | undefined => {
   const { Node: TsNode } = loadTsMorph()
+  const returned = liftedResult(call)
+  if (!returned) return undefined
+  let inner = unwrapExpression(returned)
+  if (TsNode.isAwaitExpression(inner)) inner = unwrapExpression(inner.getExpression())
+  if (!TsNode.isCallExpression(inner)) return undefined
+  const name = inner.getExpression().getText()
+  return /^[\w$.]+$/.test(name) ? name : undefined
+}
+
+/**
+ * The thunk a lifting constructor runs: the first argument, or its `try`
+ * property in the `{ try, catch }` form.
+ */
+const liftedThunk = (call: CallExpression): Node | undefined => {
+  const { Node: TsNode } = loadTsMorph()
   let thunk: Node | undefined = call.getArguments()[0]
   if (thunk && TsNode.isObjectLiteralExpression(thunk)) {
     const tryProp = thunk.getProperty("try")
     thunk = tryProp && TsNode.isPropertyAssignment(tryProp) ? tryProp.getInitializer() : tryProp
   }
+  return thunk
+}
+
+/** The expression a lifted thunk evaluates to, when the thunk is a function. */
+const liftedResult = (call: CallExpression): Node | undefined => {
+  const { Node: TsNode } = loadTsMorph()
+  const thunk = liftedThunk(call)
   if (
     !thunk ||
     !(TsNode.isArrowFunction(thunk) || TsNode.isFunctionExpression(thunk) || TsNode.isMethodDeclaration(thunk))
@@ -1567,13 +1593,23 @@ const liftedCallName = (call: CallExpression): string | undefined => {
     return undefined
   }
   const body = thunk.getBody()
-  const returned = body && TsNode.isBlock(body) ? blockResult(body.getStatements()) : body
-  if (!returned) return undefined
-  let inner = unwrapExpression(returned)
-  if (TsNode.isAwaitExpression(inner)) inner = unwrapExpression(inner.getExpression())
-  if (!TsNode.isCallExpression(inner)) return undefined
-  const name = inner.getExpression().getText()
-  return /^[\w$.]+$/.test(name) ? name : undefined
+  return body && TsNode.isBlock(body) ? blockResult(body.getStatements()) : body
+}
+
+/**
+ * The field a lifted thunk assigns when its body is one assignment:
+ * `ledger.balances` in `Effect.sync(() => { ledger.balances = snapshot })`.
+ */
+const liftedAssignmentTarget = (call: CallExpression): string | undefined => {
+  const { Node: TsNode, SyntaxKind } = loadTsMorph()
+  const result = liftedResult(call)
+  if (!result) return undefined
+  const expr = unwrapExpression(result)
+  if (!TsNode.isBinaryExpression(expr) || expr.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) {
+    return undefined
+  }
+  const target = expr.getLeft().getText()
+  return /^[\w$.]+$/.test(target) ? target : undefined
 }
 
 /**

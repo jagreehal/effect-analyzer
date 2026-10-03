@@ -282,7 +282,7 @@ it. Adding a field to that key renumbers every existing finding.
 | `-f, --format <fmt>` | Output format (see table above) |
 | `--export <name>` | For `openapi-runtime`: HttpApi export name |
 | `-o, --output <file>` | Output file (default: stdout) |
-| `-d, --direction <dir>` | Mermaid direction: TB, LR, BT, RL |
+| `-d, --direction <dir>` | Mermaid direction: TB, LR, BT, RL. Unset by default, so each format keeps its own default (LR for railway, services, errors, retry, testability, dataflow) |
 | `--runtime-trace <file>` | Overlay a span-tree JSON trace on `--format mermaid` |
 | `-c, --compact` | Compact output |
 | `--pretty` | Pretty-print (default) |
