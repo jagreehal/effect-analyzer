@@ -64,6 +64,8 @@ effect-analyze ./src/transfer.ts --format mermaid --no-colocate > transfer.mmd
 | `--extensions <list>` | Extensions discovered when walking a directory | `ts,tsx` |
 | `--max-depth <n>` | How deep a directory walk descends | `10` |
 | `--include-trivial` | Include trivial programs (schemas, single-call programs, `Effect.runPromise` entrypoints) that are excluded by default | off |
+| `--program <name>` | Render only the named program, one diagram per run. Naming a program skips the trivial filter. An unknown name lists the programs in the file | all programs |
+| `--ascii` | Replace em dashes, arrows and ellipses with ASCII so you can paste output into docs | off |
 | `--no-metadata` | Exclude analysis metadata from JSON output | off |
 | `-h, --help` | Print help and exit | — |
 | `-v, --version` | Print the analyzer version and exit | — |
@@ -104,7 +106,7 @@ Every error is reported, then the CLI exits 1 without running. A missing value (
 | `--watch` | Re-analyze when the file changes |
 | `--cache` | Cache analysis results in watch mode to skip unchanged files |
 | `--coverage-audit` | Run a project-wide coverage audit (see [Coverage Audit](/effect-analyzer/project/coverage-audit/)) |
-| `--migration` | Alias for `--format migration` |
+| `--migration` | Run the migration assistant. Add `--format json` or `--format markdown` for structured output |
 
 ## Commands
 
@@ -241,6 +243,7 @@ Run deterministic source-level lints. See [Source Linter](/effect-analyzer/proje
 | `--fail-on-stale-suppressions` | Exit non-zero when suppression comments are stale |
 | `--bundle-output <dir>` | Write deterministic artifact bundle (diagnostics, SARIF, summary, rules, session) |
 | `--profile <name>` | Rule profile: `strict`, `ci`, `migration`, `docs` |
+| `--enable-rule <id>` | Turn on an opt-in rule such as `barrel-import-from-effect`. Repeat the flag for several rules |
 
 ## Health Analyzers
 

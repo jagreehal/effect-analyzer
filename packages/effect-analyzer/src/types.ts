@@ -150,6 +150,8 @@ export interface StaticEffectNode extends StaticBaseNode {
   readonly fiberRefName?: string | undefined
   /** Effect.fn traced name */
   readonly tracedName?: string | undefined
+  /** Call lifted by Effect.tryPromise/promise/try/sync, e.g. `wallet.getBalance` */
+  readonly wrappedCall?: string | undefined
 }
 
 /**
@@ -1734,7 +1736,7 @@ export const getStaticChildren = (
     case "resource":
       return Option.some(
         node.use
-          ? [node.acquire, node.release, node.use]
+          ? [node.acquire, node.use, node.release]
           : [node.acquire, node.release]
       )
     case "conditional":

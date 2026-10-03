@@ -220,6 +220,22 @@ npx effect-analyze src/transfer.ts --diff
 
 This is equivalent to `HEAD:src/transfer.ts src/transfer.ts --diff`.
 
+## Before Files Without Effect
+
+Point `--diff` at a legacy file and its migrated version. When the before side has no Effect programs, the analyzer lists the before file's migration opportunities next to the after file's programs and their error and requirement types:
+
+```bash
+npx effect-analyze legacy/charge.ts src/charge.ts --diff
+```
+
+```
+**19 opportunities (6 patterns) -> 4 programs; E = ProviderCallFailed | ProviderHardFail; R = never**
+- L16 **Error subclass** -> Schema.TaggedError
+- L55 **retry loop** -> Effect.retry + Schedule.exponential
+```
+
+Add `--format json` for the same summary as JSON.
+
 ## Git Ref Syntax
 
 Use any git ref with the `ref:path` syntax:

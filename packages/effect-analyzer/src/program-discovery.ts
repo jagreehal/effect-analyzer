@@ -968,14 +968,13 @@ export const findEffectPrograms = (
     }
   }
 
+  // Error classes (Data.TaggedError, Data.Error, Schema.TaggedError) are
+  // types, not programs, so they are deliberately absent.
   const DATA_SCHEMA_CLASS_PATTERNS = [
-    "Data.TaggedError",
     "Data.TaggedClass",
     "Data.Class",
-    "Data.Error",
     "Schema.Class",
     "Schema.TaggedClass",
-    "Schema.TaggedError",
     "Schema.TaggedRequest",
     "Context.Tag",
     "Context.Service",

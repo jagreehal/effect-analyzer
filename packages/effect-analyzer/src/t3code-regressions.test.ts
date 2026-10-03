@@ -69,7 +69,8 @@ describe("t3code-inspired regressions", () => {
     expect(generator?.type).toBe("generator")
     if (generator?.type !== "generator") return
 
-    expect(generator.yields).toHaveLength(2)
+    // succeed, the `if (!fdReady) return Option.none()` early exit, the callback.
+    expect(generator.yields.map((y) => y.effect.type)).toEqual(["effect", "decision", "terminal"])
     const callbackNodes = collectEffectNodes(ir.root.children).filter(
       (node) => node.callee === "Effect.callback"
     )

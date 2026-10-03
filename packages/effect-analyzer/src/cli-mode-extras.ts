@@ -11,22 +11,39 @@ import "./register-node-ts-morph"
 import { Console, Effect, Option } from "effect"
 import * as fs from "node:fs/promises"
 import type { CLIOptions } from "./cli-options"
-import { CliError, cliFail, cliTry } from "./cli-support"
+import { CliError, cliTry, displayPath } from "./cli-support"
 import {
   diffPrograms,
   parseSourceArg,
   renderDiffJSON,
   renderDiffMarkdown,
   renderDiffMermaid,
+  renderMigrationDiffJSON,
+  renderMigrationDiffMarkdown,
   resolveGitHubPR,
-  resolveGitSource
+  resolveGitSource,
+  summarizeMigrationDiff
 } from "./diff"
 import {
   findMigrationOpportunities,
   findMigrationOpportunitiesInProject,
-  formatMigrationReport
+  formatMigrationReport,
+  type MigrationReport
 } from "./migration-assistant"
 import { analyzeEffectFile, analyzeEffectSource } from "./static-analyzer"
+import { AnalysisError } from "./types"
+
+/** A non-Effect "before" side is a migration source, not an error. */
+const noProgramsAsEmpty = <E>(
+  analysis: Effect.Effect<ReadonlyArray<StaticEffectIR>, E>
+): Effect.Effect<ReadonlyArray<StaticEffectIR>, E> =>
+  analysis.pipe(
+    Effect.catch((e) =>
+      e instanceof AnalysisError && e.code === "NO_EFFECTS_FOUND"
+        ? Effect.succeed([] as ReadonlyArray<StaticEffectIR>)
+        : Effect.fail(e)
+    )
+  )
 
 /** Diff mode: compare two versions of Effect programs and render the diff. */
 export const runDiffMode = (
@@ -69,6 +86,10 @@ export const runDiffMode = (
 
     let beforeIRs: ReadonlyArray<StaticEffectIR>
     let afterIRs: ReadonlyArray<StaticEffectIR>
+    // Only used when the before side has no Effect programs.
+    let beforeLabel: string
+    let afterLabel: string
+    let scanBefore: () => ReturnType<typeof findMigrationOpportunities>
 
     // Check for GitHub PR URL — resolve both sides automatically
     const firstSource = sources[0]
@@ -88,17 +109,52 @@ export const runDiffMode = (
       const filePath = sources[1] ?? ""
       const baseSrc = yield* Effect.try(() => resolveGitSource(prInfo.baseRef, filePath))
       const headSrc = yield* Effect.try(() => resolveGitSource(prInfo.headRef, filePath))
-      beforeIRs = yield* analyzeEffectSource(baseSrc, filePath)
+      beforeIRs = yield* noProgramsAsEmpty(analyzeEffectSource(baseSrc, filePath))
       afterIRs = yield* analyzeEffectSource(headSrc, filePath)
+      beforeLabel = `${prInfo.baseRef}:${filePath}`
+      afterLabel = `${prInfo.headRef}:${filePath}`
+      scanBefore = () => findMigrationOpportunities(filePath, baseSrc)
     } else if (sources.length === 1) {
       // Single source: compare HEAD vs working copy
       const filePath = firstSource
       const headSrc = yield* Effect.try(() => resolveGitSource("HEAD", filePath))
-      beforeIRs = yield* analyzeEffectSource(headSrc, filePath)
+      beforeIRs = yield* noProgramsAsEmpty(analyzeEffectSource(headSrc, filePath))
       afterIRs = yield* analyzeEffectFile(filePath)
+      beforeLabel = `HEAD:${filePath}`
+      afterLabel = filePath
+      scanBefore = () => findMigrationOpportunities(filePath, headSrc)
     } else {
-      beforeIRs = yield* resolveSource(parseSourceArg(firstSource))
-      afterIRs = yield* resolveSource(parseSourceArg(sources[1] ?? ""))
+      const beforeArg = firstParsed
+      afterLabel = sources[1] ?? ""
+      beforeIRs = yield* noProgramsAsEmpty(resolveSource(beforeArg))
+      afterIRs = yield* resolveSource(parseSourceArg(afterLabel))
+      beforeLabel = firstSource
+      scanBefore = () =>
+        beforeArg.kind === "git-ref" && beforeArg.ref && beforeArg.filePath
+          ? findMigrationOpportunities(beforeArg.filePath, resolveGitSource(beforeArg.ref, beforeArg.filePath))
+          : findMigrationOpportunities(beforeArg.filePath ?? firstSource)
+    }
+
+    const emit = (output: string) =>
+      Effect.gen(function*() {
+        if (options.output) {
+          const outputPath = options.output
+          yield* cliTry(() => fs.writeFile(outputPath, output, "utf-8"))
+          yield* Console.log(`Diff output written to ${outputPath}`)
+        } else {
+          yield* Console.log(output)
+        }
+      })
+
+    if (beforeIRs.length === 0 && afterIRs.length > 0) {
+      const opportunities = yield* Effect.try(scanBefore)
+      const summary = summarizeMigrationDiff(beforeLabel, afterLabel, opportunities, afterIRs)
+      yield* emit(
+        options.format === "json"
+          ? renderMigrationDiffJSON(summary, { pretty: options.pretty })
+          : renderMigrationDiffMarkdown(summary)
+      )
+      return
     }
 
     // Match programs by name and diff each pair
@@ -170,39 +226,63 @@ export const runDiffMode = (
     const output = options.format === "json"
       ? `[${sections.join(separator)}]`
       : sections.join(separator)
-    if (options.output) {
-      const outputPath = options.output
-      yield* cliTry(() => fs.writeFile(outputPath, output, "utf-8"))
-      yield* Console.log(`Diff output written to ${outputPath}`)
-    } else {
-      yield* Console.log(output)
-    }
+    yield* emit(output)
   })
 
-export const runMigration = (resolvedPath: string): Effect.Effect<void> =>
+/** Markdown table of a migration report, paths relative to cwd. */
+export const renderMigrationMarkdown = (report: MigrationReport): string => {
+  const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim()
+  const total = report.opportunities.length
+  return [
+    "# Migration opportunities",
+    "",
+    `${String(total)} ${total === 1 ? "opportunity" : "opportunities"} in ${String(report.fileCount)} ${
+      report.fileCount === 1 ? "file" : "files"
+    }.`,
+    ...(total === 0 ? [] : [
+      "",
+      "| Location | Pattern | Suggestion |",
+      "| --- | --- | --- |",
+      ...report.opportunities.map((o) =>
+        `| \`${displayPath(o.filePath)}:${String(o.line)}:${String(o.column)}\` | ${cell(o.pattern)} | ${
+          cell(o.suggestion)
+        } |`
+      )
+    ])
+  ].join("\n")
+}
+
+export const runMigration = (
+  resolvedPath: string,
+  output: CLIOptions["migrationOutput"] = "text"
+): Effect.Effect<void> =>
   Effect.gen(function*() {
     const s = yield* cliTry(() => fs.stat(resolvedPath)).pipe(
       Effect.option
     )
     const isDir = Option.isSome(s) && s.value.isDirectory()
-    if (isDir) {
-      const report = yield* cliTry(() => findMigrationOpportunitiesInProject(resolvedPath)).pipe(
-        Effect.catch((e) => cliFail(e instanceof Error ? e.message : String(e), e))
-      )
-      yield* Effect.sync(() => {
-        process.stdout.write(formatMigrationReport(report) + "\n")
+    const report: MigrationReport = isDir
+      ? yield* cliTry(() => findMigrationOpportunitiesInProject(resolvedPath))
+      : {
+        opportunities: yield* Effect.try({
+          try: () => findMigrationOpportunities(resolvedPath),
+          catch: (cause) => new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause })
+        }),
+        fileCount: 1
+      }
+    // JSON keeps absolute paths like every other JSON output; the human
+    // renderings show them relative to cwd.
+    const text = output === "json"
+      ? JSON.stringify(report, null, 2)
+      : output === "markdown"
+      ? renderMigrationMarkdown(report)
+      : formatMigrationReport({
+        ...report,
+        opportunities: report.opportunities.map((o) => ({ ...o, filePath: displayPath(o.filePath) }))
       })
-    } else {
-      const opportunities = yield* Effect.try({
-        try: () => findMigrationOpportunities(resolvedPath),
-        catch: (cause) => new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause })
-      })
-      yield* Effect.sync(() => {
-        process.stdout.write(
-          formatMigrationReport({ opportunities, fileCount: 1 }) + "\n"
-        )
-      })
-    }
+    yield* Effect.sync(() => {
+      process.stdout.write(text + "\n")
+    })
   }).pipe(
     Effect.catch((e) => Console.error(`Migration failed: ${e instanceof Error ? e.message : String(e)}`))
   )

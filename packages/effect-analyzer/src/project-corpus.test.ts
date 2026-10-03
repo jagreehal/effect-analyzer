@@ -7,6 +7,19 @@ import { analyzeProjectCorpus, runCoverageAuditFromCorpus } from "./project-anal
 import { scanProjectCorpus } from "./project-corpus"
 
 describe("project corpus", () => {
+  it("treats a file root as a one-file project", async () => {
+    const root = mkdtempSync(join(tmpdir(), "effect-corpus-file-"))
+    try {
+      const file = join(root, "program.ts")
+      writeFileSync(file, "import { Effect } from \"effect\";\nexport const program = Effect.succeed(1);\n")
+      const corpus = await Effect.runPromise(scanProjectCorpus(file))
+      expect(corpus.files.map((entry) => entry.file)).toEqual([file])
+      expect(corpus.files[0]?.status).toBe("ok")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it("records one outcome for every discovered file in stable order", async () => {
     const root = mkdtempSync(join(tmpdir(), "effect-corpus-"))
     try {

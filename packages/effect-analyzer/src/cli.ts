@@ -19,7 +19,7 @@ import { runLintSourceMode, runReportsMode, runRulesMode } from "./cli-mode-repo
 import { runReviewCommand } from "./cli-mode-review"
 import { runStatechartMode } from "./cli-mode-statechart"
 import { type CLIOptions, parseArgs } from "./cli-options"
-import { cliFail, cliTry, expandCliPaths, resolveCliPath } from "./cli-support"
+import { cliFail, cliTry, displayPath, expandCliPaths, resolveCliPath } from "./cli-support"
 import { renderStatechartsMermaid } from "./output/mermaid-statechart"
 import { analyzeProject } from "./project-analyzer"
 import { detectServiceCycles } from "./service-cycles"
@@ -88,7 +88,7 @@ const runManyPaths = (paths: ReadonlyArray<string>, options: CLIOptions) =>
     for (const path of paths) {
       const resolved = resolveCliPath(path)
       if (!options.quiet) {
-        yield* Console.error(`Analyzing ${resolved}...`)
+        yield* Console.error(`Analyzing ${displayPath(resolved)}...`)
       }
       yield* runAnalysis(resolved, options, collect)
     }
@@ -255,8 +255,9 @@ const main = Effect.gen(function*() {
   }
 
   if (options.format === "migration") {
-    yield* Console.log(`Migration report for ${resolvedPath}...`)
-    yield* runMigration(resolvedPath)
+    // stderr, so `--format json` / `markdown` output stays clean on stdout.
+    if (!options.quiet) yield* Console.error(`Migration report for ${displayPath(resolvedPath)}...`)
+    yield* runMigration(resolvedPath, options.migrationOutput)
     return Exit.succeed(undefined)
   }
 
@@ -295,6 +296,9 @@ const main = Effect.gen(function*() {
   }
 
   if (isDir) {
+    if (options.program) {
+      return yield* cliFail("--program selects a program from one file. Pass the file that defines it.")
+    }
     yield* runProjectMode(resolvedPath, options)
     return Exit.succeed(undefined)
   }
@@ -305,7 +309,7 @@ const main = Effect.gen(function*() {
   }
 
   if (!options.quiet) {
-    yield* Console.error(`Analyzing ${resolvedPath}...`)
+    yield* Console.error(`Analyzing ${displayPath(resolvedPath)}...`)
   }
   yield* runAnalysis(resolvedPath, options)
 

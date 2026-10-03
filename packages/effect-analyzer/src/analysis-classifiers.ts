@@ -9,7 +9,7 @@
  * Behaviour is preserved exactly.
  */
 
-import type { ObjectLiteralExpression, PropertyAssignment } from "ts-morph"
+import type { ObjectLiteralExpression, PropertyAssignment, ShorthandPropertyAssignment } from "ts-morph"
 import { loadTsMorph } from "./ts-morph-loader"
 import type { ChannelOperatorInfo, ConcurrencyMode, ScheduleInfo, SinkOperatorInfo } from "./types"
 
@@ -78,9 +78,13 @@ export function parseEffectAllOptions(
   let batching: boolean | undefined
   let discard: boolean | undefined
   for (const prop of optionsNode.getProperties()) {
-    if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue
-    const name = (prop as PropertyAssignment).getNameNode().getText()
-    const init = (prop as PropertyAssignment).getInitializer()
+    // `{ concurrency }` shorthand reads the binding's type like `{ concurrency: x }`.
+    const isShorthand = prop.getKind() === SyntaxKind.ShorthandPropertyAssignment
+    if (prop.getKind() !== SyntaxKind.PropertyAssignment && !isShorthand) continue
+    const name = (prop as PropertyAssignment | ShorthandPropertyAssignment).getNameNode().getText()
+    const init = isShorthand
+      ? (prop as ShorthandPropertyAssignment).getNameNode()
+      : (prop as PropertyAssignment).getInitializer()
     if (!init) continue
     const text = init.getText()
     if (name === "concurrency") {
@@ -99,6 +103,13 @@ export function parseEffectAllOptions(
     }
   }
   return { concurrency, batching, discard }
+}
+
+const DURATION_UNITS: Record<string, string> = {
+  millis: "ms",
+  seconds: "s",
+  minutes: "m",
+  hours: "h"
 }
 
 /** Parse schedule expression text into ScheduleInfo (GAP 8). */
@@ -123,8 +134,21 @@ export function parseScheduleInfo(scheduleText: string): ScheduleInfo | undefine
   const recursMatch = /recurs\s*\(\s*(\d+)\s*\)/.exec(t)
   if (recursMatch) maxRetries = Number.parseInt(recursMatch[1]!, 10)
   const recurUpToMatch = /recurUpTo\s*\(\s*(\d+)\s*\)/.exec(t)
+  // `times: N` in retry options or `Schedule.upTo({ times: N })`.
+  const timesMatch = /\btimes\s*:\s*(\d+)/.exec(t)
   if (recurUpToMatch) maxRetries = Number.parseInt(recurUpToMatch[1]!, 10)
+  else if (timesMatch) maxRetries = Number.parseInt(timesMatch[1]!, 10)
   else if (t.includes("forever") || t.includes("Schedule.forever")) maxRetries = "unlimited"
+
+  // First argument of the base strategy: `exponential(Duration.millis(10))` -> "10ms".
+  const delayMatch =
+    /(?:exponential|fibonacci|spaced|fixed|linear)\(\s*(Duration\.(\w+)\(\s*(\d+)\s*\)|["'][^"']+["']|\d+)/
+      .exec(t)
+  const initialDelay = delayMatch
+    ? delayMatch[2] !== undefined
+      ? `${delayMatch[3]}${DURATION_UNITS[delayMatch[2]] ?? ` ${delayMatch[2]}`}`
+      : delayMatch[1]!.replace(/["']/g, "")
+    : undefined
 
   const jittered = t.includes("jittered") || t.includes("Schedule.jittered")
   const conditions: Array<string> = []
@@ -151,6 +175,7 @@ export function parseScheduleInfo(scheduleText: string): ScheduleInfo | undefine
   return {
     baseStrategy,
     maxRetries,
+    ...(initialDelay !== undefined ? { initialDelay } : {}),
     jittered,
     conditions
   }

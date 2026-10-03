@@ -9,6 +9,7 @@
  */
 
 import { Option } from "effect"
+import { canonicalizeServiceDisplayName } from "./analysis-utils"
 import type { StaticEffectIR, StaticFlowNode } from "./types"
 import { getStaticChildren, isStaticLayerNode } from "./types"
 
@@ -81,13 +82,25 @@ export const buildServiceRegistry = (
       }
     }
 
-    // Dependencies
+    // Dependencies: a layer dependency provides, anything else is required.
+    // Dependency names are canonical (`FileSystem.FileSystem`), so one already
+    // listed above under its raw id (`FileSystem`) is skipped.
+    const requiredIds = new Set(
+      (ir.root.requiredServices ?? []).map((req) => canonicalizeServiceDisplayName(req.serviceId))
+    )
     for (const dep of ir.root.dependencies) {
-      if (dep.isLayer) {
-        const files = provided.get(dep.name) ?? []
-        files.push(filePath)
-        provided.set(dep.name, files)
-      }
+      if (!dep.isLayer && requiredIds.has(dep.name)) continue
+      const target = dep.isLayer ? provided : required
+      const files = target.get(dep.name) ?? []
+      files.push(filePath)
+      target.set(dep.name, files)
+    }
+
+    // Layers built anywhere in the program, including by factory functions
+    for (const service of collectLayerProvides(ir.root.children)) {
+      const files = provided.get(service) ?? []
+      files.push(filePath)
+      provided.set(service, files)
     }
   }
 
@@ -97,6 +110,12 @@ export const buildServiceRegistry = (
     provided: new Map([...provided.entries()].map(([k, v]) => [k, [...new Set(v)]]))
   }
 }
+
+const collectLayerProvides = (nodes: ReadonlyArray<StaticFlowNode>): Array<string> =>
+  nodes.flatMap((node) => [
+    ...(isStaticLayerNode(node) ? node.provides ?? [] : []),
+    ...collectLayerProvides(Option.getOrElse(getStaticChildren(node), () => []))
+  ])
 
 export const analyzeServiceHealth = (
   registry: ServiceRegistry,

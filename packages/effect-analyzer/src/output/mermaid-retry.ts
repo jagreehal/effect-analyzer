@@ -108,7 +108,8 @@ export function renderRetryMermaid(
     } else if (node.type === "timeout") {
       const timeoutNode = node
       const duration = timeoutNode.duration ?? "?"
-      const timeoutLabel = escapeLabel(`timeout: ${duration}ms`)
+      // Bare numbers are milliseconds; Duration expressions carry their own unit.
+      const timeoutLabel = escapeLabel(`timeout: ${duration}${/^\d+$/.test(duration) ? "ms" : ""}`)
 
       lines.push(`  ${prefix}_Op[${opLabel}] -->|within| ${prefix}_T[${timeoutLabel}]`)
 

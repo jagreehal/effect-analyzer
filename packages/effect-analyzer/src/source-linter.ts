@@ -1365,9 +1365,22 @@ export interface SourceLintResult {
   readonly issues: ReadonlyArray<LintIssue>
 }
 
+/**
+ * Rules that only run when asked for. `barrel-import-from-effect` mirrors an
+ * Effect v3 bundling convention; in Effect v4 `import { Effect } from "effect"`
+ * is the documented form, so the rule is off by default.
+ */
+export const OPT_IN_SOURCE_RULES = ["barrel-import-from-effect"] as const
+
+export interface SourceLintOptions {
+  /** Opt-in rules (see `OPT_IN_SOURCE_RULES`) to run in addition to the defaults. */
+  readonly enableRules?: ReadonlyArray<string> | undefined
+}
+
 export const lintSourceFile = (
   sf: SourceFile,
-  filePath?: string
+  filePath?: string,
+  options: SourceLintOptions = {}
 ): SourceLintResult => {
   const fp = filePath ?? sf.getFilePath()
   // Skip dtslint type-test files entirely. These intentionally use degenerate
@@ -1395,7 +1408,9 @@ export const lintSourceFile = (
   issues.push(...checkConfigSecretWithoutRedacted(sf, ctx))
   issues.push(...checkReturnEffectFromSync(sf, ctx))
   issues.push(...checkYieldPromise(sf, ctx))
-  issues.push(...checkBarrelImportFromEffect(sf, ctx))
+  if (options.enableRules?.includes("barrel-import-from-effect")) {
+    issues.push(...checkBarrelImportFromEffect(sf, ctx))
+  }
   issues.push(...checkArrayPushSpread(sf, ctx))
   issues.push(...checkTryPromiseWithoutCatch(sf, ctx))
   issues.push(...checkUnsafeApiUsage(sf, ctx))
@@ -1506,12 +1521,16 @@ export const lintSourceFile = (
 /**
  * Lint a TypeScript source string. Convenience wrapper for tests/CLI.
  */
-export const lintSourceCode = (code: string, filePath = "temp.ts"): SourceLintResult => {
+export const lintSourceCode = (
+  code: string,
+  filePath = "temp.ts",
+  options: SourceLintOptions = {}
+): SourceLintResult => {
   const { Project } = loadTsMorph()
   const project = new Project({
     useInMemoryFileSystem: true,
     compilerOptions: { strict: true, esModuleInterop: true }
   })
   const sf = project.createSourceFile(filePath, code)
-  return lintSourceFile(sf, filePath)
+  return lintSourceFile(sf, filePath, options)
 }

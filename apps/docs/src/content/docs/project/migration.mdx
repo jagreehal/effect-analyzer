@@ -25,9 +25,21 @@ npx effect-analyze ./src --format migration
 
 This scans all TypeScript files in the directory and produces a consolidated report of migration opportunities.
 
+## Pattern Findings
+
+The assistant first looks for whole shapes and lists them before line-level findings. Each one carries `kind: "pattern"`, the Effect APIs to reach for (`effectApi`) and a short `explanation`:
+
+| Pattern | Suggestion |
+|---|---|
+| Retry loop (a loop with `try/catch` and a sleep or `setTimeout`) | `Effect.retry` + `Schedule.exponential` |
+| Timeout race (`Promise.race` or a `new Promise` whose `setTimeout` rejects) | `Effect.timeout` / `Effect.timeoutOrElse` |
+| `class X extends Error` | `Schema.TaggedError` |
+| Class with constructor-injected dependencies | `Context.Service` + `Layer.effect` |
+| `try/finally` that releases a resource | `Effect.acquireUseRelease` |
+
 ## Detected Patterns
 
-The migration assistant detects the following patterns and suggests their Effect equivalents:
+The migration assistant also detects the following syntax and suggests its Effect equivalent:
 
 | Pattern | Suggestion |
 |---|---|
@@ -51,6 +63,12 @@ The migration assistant uses heuristic pattern matching, not type analysis. It m
 </Aside>
 
 ## Report Output
+
+Pass `--format json` for machine-readable findings, or `--format markdown` for a table you can paste into an issue:
+
+```bash
+npx effect-analyze ./src/legacy-service.ts --migration --format markdown
+```
 
 The migration report includes:
 

@@ -61,6 +61,7 @@ import {
 } from "./analysis-utils"
 import { analyzeEffectCall, analyzeEffectExpression, analyzePipeChain } from "./effect-analysis"
 import { extractServiceDefinitionsFromFile, getWorkflowBodyNodeForRunCall } from "./program-discovery"
+import { resolveRetryPolicy } from "./retry-timeout-analyzers"
 import { loadTsMorph } from "./ts-morph-loader"
 import { extractEffectTypeSignature, extractServiceRequirements } from "./type-extractor"
 import type {
@@ -530,6 +531,20 @@ function isFunctionBoundary(node: Node): boolean {
     kind === SyntaxKind.ClassExpression ||
     kind === SyntaxKind.Constructor
   )
+}
+
+/**
+ * Boundary-aware check: does `node` contain a `return value` of the enclosing
+ * function? A bare `return` carries nothing to draw, so it does not count.
+ */
+function containsEarlyReturn(node: Node): boolean {
+  const { Node: TsNode } = loadTsMorph()
+  let found = false
+  node.forEachChild((child) => {
+    if (found || isFunctionBoundary(child)) return
+    found = (TsNode.isReturnStatement(child) && child.getExpression() !== undefined) || containsEarlyReturn(child)
+  })
+  return found
 }
 
 /**
@@ -1190,7 +1205,7 @@ function analyzeStatement(
       // IfStatement
       // -------------------------------------------------------------------
       case SyntaxKind.IfStatement: {
-        if (!containsGeneratorYield(stmt)) return []
+        if (!containsGeneratorYield(stmt) && !containsEarlyReturn(stmt)) return []
         const ifStmt = stmt as IfStatement
         const condition = ifStmt.getExpression().getText()
 
@@ -1607,7 +1622,19 @@ function analyzeStatement(
             }
           }
 
-          if (entries.length === 0) return []
+          if (entries.length === 0) {
+            // A plain value returned from inside a branch is still an early exit.
+            if (isFunctionBoundary(retStmt.getParentOrThrow().getParentOrThrow())) return []
+            const valueText = expr.getText().replace(/\s+/g, " ")
+            const earlyReturn: StaticTerminalNode = {
+              id: generateId(),
+              type: "terminal",
+              terminalKind: "return",
+              displayName: `return ${valueText.length > 40 ? valueText.slice(0, 40) + "..." : valueText}`
+            }
+            ctx.stats.terminalCount++
+            return [{ effect: earlyReturn }]
+          }
           const termNode: StaticTerminalNode = {
             id: generateId(),
             type: "terminal",
@@ -2088,11 +2115,10 @@ const applyOuterPipeTransformsToGen = (
       // Effect.retry(schedule)
       if (/^Effect\.retry\s*\(/.test(text)) {
         const source = wrapChildren(current)
-        const scheduleArg = argArgs[0]
-        const schedule = scheduleArg?.getText()
-        const scheduleNode = scheduleArg
+        const { schedule, scheduleInfo, scheduleExpr } = resolveRetryPolicy(argArgs[0])
+        const scheduleNode = scheduleExpr
           ? yield* analyzeEffectExpression(
-            scheduleArg,
+            scheduleExpr,
             sourceFile,
             filePath,
             opts,
@@ -2107,6 +2133,7 @@ const applyOuterPipeTransformsToGen = (
           source,
           ...(schedule ? { schedule } : {}),
           ...(scheduleNode ? { scheduleNode } : {}),
+          ...(scheduleInfo ? { scheduleInfo } : {}),
           hasFallback: false,
           retryEdgeLabel: schedule ? `retry: ${schedule}` : "retry",
           location

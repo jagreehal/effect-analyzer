@@ -8,7 +8,8 @@ const COMPOSITE_CHILD_TYPES: ReadonlySet<string> = new Set([
   "race",
   "error-handler",
   "retry",
-  "timeout"
+  "timeout",
+  "resource"
 ])
 
 /**
@@ -31,7 +32,8 @@ export const isTrivialProgram = (ir: StaticEffectIR): boolean => {
     }
   }
   // A direct program with one child is trivial unless that child is a whole
-  // chain: a pipe, a stream pipeline, a loop, or a handler/resilience wrapper.
+  // chain: a pipe, a stream pipeline, a loop, a handler/resilience wrapper,
+  // or an acquire/use/release resource.
   if (source === "direct" && children.length <= 1) {
     return !COMPOSITE_CHILD_TYPES.has(children[0]?.type ?? "")
   }

@@ -9,7 +9,7 @@ import { spawn } from "child_process"
 import { Console, Data, Effect, Option } from "effect"
 import { existsSync } from "fs"
 import * as fs from "fs/promises"
-import { isAbsolute, resolve, sep } from "path"
+import { isAbsolute, relative, resolve, sep } from "path"
 import type { LintFinding } from "./lint-session"
 
 /**
@@ -84,6 +84,12 @@ export const resolveCliPath = (inputPath: string | undefined): string => {
 
   return fromCurrent
 }
+
+/**
+ * A path as a person reads it: relative to cwd, so terminal output and pasted
+ * docs do not carry the author's home directory. JSON keeps absolute paths.
+ */
+export const displayPath = (path: string): string => relative(process.cwd(), path) || "."
 
 /** Shell metacharacters that make an argument a pattern rather than a path. */
 const GLOB_MAGIC = /[*?[\]{}]/

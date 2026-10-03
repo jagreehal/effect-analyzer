@@ -93,3 +93,24 @@ export function renderLayersMermaid(
 
   return lines.join("\n")
 }
+
+/**
+ * One layers diagram for a set of programs, such as every program in a file.
+ * A program that is nothing but a layer (`const XLive = Layer.succeed(...)`, or
+ * a factory `(deps) => Layer.succeed(...)`) names that layer.
+ */
+export function renderProgramsLayersMermaid(
+  irs: ReadonlyArray<StaticEffectIR>,
+  options: LayersOptions = {}
+): string {
+  const first = irs[0]
+  if (!first) return `flowchart ${options.direction ?? "TB"}\n  NoLayers((No layers))`
+  const children = irs.flatMap(({ root }) =>
+    root.children.map((child) =>
+      child.type === "layer" && child.name === undefined && root.children.length === 1
+        ? { ...child, name: root.programName }
+        : child
+    )
+  )
+  return renderLayersMermaid({ ...first, root: { ...first.root, children } }, options)
+}

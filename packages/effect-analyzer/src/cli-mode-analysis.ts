@@ -15,10 +15,10 @@ import { Console, Effect } from "effect"
 import * as fs from "node:fs/promises"
 import { dirname, join, resolve } from "path"
 import { getCached, setCached } from "./analysis-cache"
-import { countMeaningfulNodes } from "./analysis-utils"
+import { countMeaningfulNodes, toAsciiText } from "./analysis-utils"
 import { analyze } from "./analyze"
 import type { CLIOptions, TestRunner } from "./cli-options"
-import { cliFail, cliTry, createStyle } from "./cli-support"
+import { cliFail, cliTry, createStyle, displayPath } from "./cli-support"
 import { computeDiagramFidelity, formatDiagramFidelity } from "./diagram-fidelity"
 import { computeProgramDiagramQuality, type DiagramQualityHintInput } from "./diagram-quality"
 import { loadDiagramQualityHintsFromEslintJson } from "./diagram-quality-eslint"
@@ -39,7 +39,7 @@ import { renderConcurrencyMermaid } from "./output/mermaid-concurrency"
 import { renderDataflowMermaid } from "./output/mermaid-dataflow"
 import { renderDecisionsMermaid } from "./output/mermaid-decisions"
 import { renderErrorsMermaid } from "./output/mermaid-errors"
-import { renderLayersMermaid } from "./output/mermaid-layers"
+import { renderLayersMermaid, renderProgramsLayersMermaid } from "./output/mermaid-layers"
 import { renderRailwayMermaid } from "./output/mermaid-railway"
 import { renderRetryMermaid } from "./output/mermaid-retry"
 import { renderServicesMermaid } from "./output/mermaid-services"
@@ -216,9 +216,21 @@ export const runAnalysis = (
       )
     }
 
-    // Filter trivial programs by default (class definitions, schema declarations,
-    // runPromise entrypoints, single-expression direct programs)
-    if (!options.includeTrivial) {
+    // --program picks one program by name. Naming it is an explicit request, so
+    // the trivial filter does not apply.
+    if (options.program !== undefined) {
+      const wanted = options.program
+      const selected = filteredIrs.filter((ir) => ir.root.programName === wanted)
+      if (selected.length === 0) {
+        const names = [...new Set(filteredIrs.map((ir) => ir.root.programName))]
+        return yield* cliFail(
+          `No program named "${wanted}" in ${displayPath(resolvedPath)}. Programs: ${names.join(", ") || "(none)"}`
+        )
+      }
+      filteredIrs = selected
+    } else if (!options.includeTrivial) {
+      // Filter trivial programs by default (class definitions, schema declarations,
+      // runPromise entrypoints, single-expression direct programs)
       const beforeCount = filteredIrs.length
       filteredIrs = filteredIrs.filter((program) => !isTrivialProgram(program))
       const removed = beforeCount - filteredIrs.length
@@ -269,7 +281,11 @@ export const runAnalysis = (
 
     // Single file: write the adjacent markdown and still print the diagram.
     // An explicit -o names where output goes, so it opts out unless --colocate.
-    if (!options.noColocate && (options.output === undefined || options.colocate)) {
+    // A --program run shows part of the file, so it must not overwrite the
+    // colocated analysis of the whole file.
+    if (
+      !options.noColocate && options.program === undefined && (options.output === undefined || options.colocate)
+    ) {
       const outputFile = yield* writeColocatedOutputForFile(
         resolvedPath,
         filteredIrs,
@@ -279,7 +295,7 @@ export const runAnalysis = (
         options.quality ? programQualities : undefined,
         options.styleGuide
       )
-      yield* Console.error(`Written: ${outputFile}`)
+      yield* Console.error(`Written: ${displayPath(outputFile)}`)
     }
 
     let output = ""
@@ -481,8 +497,11 @@ export const runAnalysis = (
         break
       }
       case "mermaid-layers": {
-        const outputs = filteredIrs.map((ir) => renderLayersMermaid(ir, { direction: options.direction }))
-        output = outputs.join("\n\n")
+        // One diagram for all programs. Layer definitions are trivial programs
+        // on their own, yet they are exactly what this view draws. An explicit
+        // --program still narrows it to that one program.
+        const layerIrs = options.program !== undefined ? filteredIrs : irs
+        output = renderProgramsLayersMermaid(layerIrs, { direction: options.direction })
         break
       }
       case "mermaid-retry": {
@@ -548,6 +567,7 @@ export const runAnalysis = (
       }
     }
 
+    if (options.ascii) output = toAsciiText(output)
     const outputPath = options.output
     if (outputPath) {
       yield* cliTry(() => fs.writeFile(outputPath, output, "utf-8"))

@@ -57,7 +57,8 @@ Commands (a drop-in replacement for the effect-tsgo CLI):
   verbose output, enhanced Mermaid, colors). Use --no-colocate to skip writing files.
 
 Options:
-  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | mermaid-statechart | svg-statechart | statechart-html | xstate-config | statechart-coverage | stats | migration | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime | json-schema (default: auto)
+  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | mermaid-statechart | svg-statechart | statechart-html | xstate-config | statechart-coverage | stats | migration | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime | json-schema | markdown (default: auto; markdown only with --migration)
+  --program <name>         Render only the named program from a multi-program file (any format)
   --export <name>          For openapi-runtime: export name of HttpApi (default: first/default)
                            For json-schema: export name of the Schema to convert (required)
   -o, --output <file>      Output file (default: stdout)
@@ -77,9 +78,11 @@ Options:
   --colocate-suffix <s>    Suffix for colocated files (default: "effect-analysis")
                            Result: foo/bar.ts -> foo/bar.effect-analysis.md
   -q, --quiet              Minimal output (no per-file lines)
+  --ascii                  ASCII-only output: em dashes, arrows and ellipses become - -> ...
   --no-color               Disable colored output
   -w, --watch              Watch mode: re-analyze on file change
-  -m, --migration          Run migration assistant (report try/catch, Promise.*, etc.)
+  -m, --migration          Run migration assistant (report try/catch, Promise.*, etc.);
+                           combine with --format json or --format markdown
   --include-trivial        Keep trivial programs that are filtered from diagrams by default
   --diff                   Compare two sources and report the structural change between them.
                            Each source is <git-ref>:<path> or a plain path:
@@ -129,6 +132,8 @@ Options:
   --max-files <n>          Analyze at most n files (cursor-window mode)
   --cursor <n>             Start from nth file in sorted file list (resumable window)
   --lint-source            Run deterministic source lints on a file or directory
+  --enable-rule <code>     Turn on an opt-in source rule (repeatable): barrel-import-from-effect
+                           (off by default: import { Effect } from "effect" is idiomatic in Effect v4)
   --tsgo[=<tsconfig>]      Merge type-aware Effect diagnostics from @effect/tsgo
                            using the target project's TypeScript 7 installation
   --sarif                  Emit SARIF 2.1.0 output (for --lint-source)
@@ -143,7 +148,7 @@ Options:
   --bundle-output <dir>    Write deterministic artifact bundle (diagnostics, sarif, summary, rules, session)
   --scorecard              Emit deterministic per-file lint scorecard (for --lint-source)
   --agent-report           Generate prioritized improvement backlog for coding agents (JSON + markdown)
-  --error-channel          Analyze error channels across project (generic errors, unhandled types, missing catchTag) — supports --format json
+  --error-channel          Analyze error channels across a project or a single file (generic errors, unhandled types, missing catchTag) — supports --format json
   --service-health         Analyze service dependency health (unsatisfied, dead services, layer inefficiencies) — supports --format json
   --performance            Detect performance anti-patterns (sequential could be parallel, unbounded concurrency, etc.) — supports --format json
   --coupling               Analyze module coupling (fan-in/fan-out; annotate intentional hubs with // effect-analyzer-known-hub or @known-hub JSDoc tag; supports --format json)

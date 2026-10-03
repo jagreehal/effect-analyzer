@@ -38,6 +38,7 @@ const TURNS_ON: ReadonlyArray<Row> = [
   [["--json-summary"], "jsonSummary"],
   [["--quiet"], "quiet"],
   [["-q"], "quiet"],
+  [["--ascii"], "ascii"],
   [["--quality"], "quality"],
   [["--assert-diagram-fidelity"], "assertDiagramFidelity"],
   [["--style-guide"], "styleGuide"],
@@ -446,9 +447,38 @@ describe("parseArgs", () => {
   })
 
   describe("derived defaults", () => {
-    it("--migration forces the migration format, overriding --format", () => {
+    it("--migration forces the migration format and keeps --format as its output", () => {
       expect(opts("--migration").format).toBe("migration")
+      expect(opts("--migration").migrationOutput).toBe("text")
       expect(opts("--format", "json", "--migration").format).toBe("migration")
+      expect(opts("--format", "json", "--migration").migrationOutput).toBe("json")
+      expect(opts("-m", "--format", "markdown").migrationOutput).toBe("markdown")
+    })
+
+    it("accepts --format markdown only with --migration", () => {
+      expect(parseArgs(["--format", "markdown"]).errors).toEqual([
+        "--format markdown is only accepted with --migration."
+      ])
+      expect(parseArgs(["--format", "markdown", "--migration"]).errors).toEqual([])
+    })
+
+    it("--program selects one program by name", () => {
+      expect(defaults().program).toBeUndefined()
+      expect(opts("--program", "transfer").program).toBe("transfer")
+      expect(opts("--program=transfer").program).toBe("transfer")
+      expect(parseArgs(["--program"]).errors).toEqual([
+        "Missing value for --program. See --help for accepted values."
+      ])
+    })
+
+    it("--enable-rule opts into rules that are off by default", () => {
+      expect(defaults().enableRules).toEqual([])
+      expect(opts("--enable-rule", "barrel-import-from-effect").enableRules).toEqual([
+        "barrel-import-from-effect"
+      ])
+      expect(parseArgs(["--enable-rule", "nope"]).errors).toEqual([
+        "Unknown value for --enable-rule: nope. Accepted: barrel-import-from-effect."
+      ])
     })
 
     it("turns the style guide on for mermaid-paths unless it was refused", () => {

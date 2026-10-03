@@ -26,6 +26,7 @@ import {
   cliFail,
   cliTry,
   createStyle,
+  displayPath,
   extractBaselineFindings,
   writeAnalyzerOutput
 } from "./cli-support"
@@ -67,7 +68,9 @@ export const runLintSourceMode = (
 ): Effect.Effect<void, CliError> =>
   Effect.gen(function*() {
     const targetPath = resolve(pathArg ?? ".")
-    const scan = yield* cliTry(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }))
+    const scan = yield* cliTry(() =>
+      runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject, enableRules: options.enableRules })
+    )
     const scorecard = options.scorecard ? buildLintScorecard(scan.findings) : undefined
     const timestamp = DateTime.formatIso(yield* DateTime.now)
     let baselineSummary:
@@ -213,11 +216,13 @@ export const runReportsMode = (
     const style = createStyle(options.color)
 
     if (!options.quiet) {
-      yield* Console.log(`\n${style.bold(style.cyan("Analyzing"))} ${targetPath} for agent report...\n`)
+      yield* Console.log(`\n${style.bold(style.cyan("Analyzing"))} ${displayPath(targetPath)} for agent report...\n`)
     }
 
     // Run lint scan
-    const scan = yield* cliTry(() => runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject }))
+    const scan = yield* cliTry(() =>
+      runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject, enableRules: options.enableRules })
+    )
 
     // Analyze project to get IRs
     const projectResult = yield* analyzeProject(targetPath, {

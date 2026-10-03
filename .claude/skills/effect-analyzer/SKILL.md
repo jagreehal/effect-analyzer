@@ -41,9 +41,9 @@ StaticEffectIR { root: StaticEffectProgram, metadata, serviceDefinitions, warnin
 - `generator` / `pipe` — Effect.gen blocks and pipe chains
 - `parallel` / `race` — concurrency patterns
 - `error-handler` — catch/catchTag/orDie/ignore (40 handler variants incl. Effect 4 `catchReason`, `catchFilter`, `catchNoSuchElement`); unary combinators passed uncalled in a pipe (`Effect.orDie`) are detected too. `catchTags` keeps each tag's handler in `tagHandlers`. A data-last combinator inside `.pipe` gets a placeholder `source` with `description: 'pipe-input'`; explain prints it as "(the piped effect)"
-- `retry` / `timeout` / `resource` — resilience patterns. `resource.resourceOperation` names the combinator (`acquireRelease`, `ensuring`, `onError`); data-first `onError`/`onExit` read `(effect, cleanup)`
+- `retry` / `timeout` / `resource` — resilience patterns. `resolveRetryPolicy` (`retry-timeout-analyzers.ts`) unwraps `{ schedule, times, while, until }`, follows schedule consts and shorthand properties to their `Schedule.*` chain, and `timeoutOrElse({ duration })` reads its duration. `resource.resourceOperation` names the combinator (`acquireRelease`, `acquireUseRelease`, `ensuring`, `onError`); data-first `onError`/`onExit` read `(effect, cleanup)`. Diagrams run `acquireUseRelease` as acquire → use → release; a scoped `acquireRelease` releases at scope close, so `mermaid` draws it as a dashed `on scope close` edge and railway shows only the acquire
 - `conditional` / `decision` / `switch` — control flow
-- `layer` / `stream` / `fiber` — Effect ecosystem constructs. A merge-like stream operator keeps the other streams in `branches` (`Stream.merge(a, b)` → `b`), and `getStaticChildren` walks them
+- `layer` / `stream` / `fiber` — Effect ecosystem constructs. `mermaid-layers` draws every layer in the file, including factories such as `(dep) => Layer.succeed(Tag, ...)`, in one diagram. A merge-like stream operator keeps the other streams in `branches` (`Stream.merge(a, b)` → `b`), and `getStaticChildren` walks them
 - `transform` — map/flatMap/tap operations. Taps (`TAP_TRANSFORMS`) analyze their last argument into `callback` (inline function or a reference like `svc.cleanup`; not `tapBoth` objects), and `getStaticChildren` includes it. A ternary over Effects (`c ? a : b`) becomes a `raw-ternary` decision
 - `opaque` / `unknown` — unsupported or unanalyzable
 - Plus: `terminal`, `try-catch`, `loop`, `cause`, `exit`, `schedule`, `match`, `scope-resource`, and more. `loop` records `concurrency` from a trailing `{ concurrency }` option; `parseEffectAllOptions` resolves a named const through the checker
@@ -105,7 +105,7 @@ The rendered result goes to stdout; progress and counts go to stderr through `lo
 | `statechart-html` | Local visualizer page: SVG, coverage, XState export |
 | `xstate-config` | `createMachine()` config for stately.ai/viz |
 | `statechart-coverage` | Completeness report; exits non-zero on warnings (CI gate) |
-| `explain` | Plain-English narrative |
+| `explain` | Plain-English narrative: steps, `Type: Effect<A, E, R>`, services (including those of yielded sub-programs), error paths, concurrency. Steps lifted with `tryPromise`/`promise`/`try`/`sync` are named after the wrapped call (`wallet.getBalance`); plain-value early returns show as `Returns ...` |
 | `summary` | One-liner |
 | `stats` | Complexity metrics |
 | `matrix` | Dependency matrix |
@@ -113,7 +113,7 @@ The rendered result goes to stdout; progress and counts go to stderr through `lo
 | `api-docs` | API documentation (HttpApi) |
 | `openapi-paths` | OpenAPI paths JSON |
 | `openapi-runtime` | Runtime OpenAPI via `OpenApi.fromApi()` |
-| `migration` | Migration opportunities |
+| `migration` | Migration opportunities: pattern findings first (retry loop, timeout race, `Error` subclass, constructor injection, `try/finally` release) with `kind`, `effectApi` and `explanation`, then syntax findings |
 
 ### Diff & Regression Detection
 
@@ -127,7 +127,10 @@ effect-analyze --diff gh:#123                        # GitHub PR auto-discover
 effect-analyze --diff gh:#123 src/wf.ts              # GitHub PR specific file
 effect-analyze --diff v1.ts v2.ts --regression       # Flag removed programs as regressions
 effect-analyze --diff v1.ts v2.ts --include-trivial  # Include trivial changes
+effect-analyze --diff before.ts after.ts            # before.ts without Effect: migration summary
 ```
+
+When the before side has no Effect programs, `summarizeMigrationDiff` (`diff/migration-diff.ts`) reports its migration opportunities against the after side's programs and their E and R (markdown, or `--format json`).
 
 Renderers: `renderDiffMarkdown()`, `renderDiffJSON()`, `renderDiffMermaid()`
 
@@ -297,7 +300,10 @@ it. Adding a field to that key renumbers every existing finding.
 | `--no-color` | Disable colors |
 | `-w, --watch` | Watch mode (watches the containing directory, so atomic saves survive) |
 | `--cache` | Cache for watch |
-| `-m, --migration` | Migration assistant |
+| `-m, --migration` | Migration assistant (`--format json` or `markdown` for structured output) |
+| `--program <name>` | Render only the named program (one diagram per run; skips the trivial filter) |
+| `--ascii` | Replace em dashes, arrows and ellipses with ASCII |
+| `--enable-rule <id>` | Turn on an opt-in source rule, e.g. `barrel-import-from-effect` (repeatable) |
 | `--diff` | Semantic diff mode |
 | `--regression` | Flag regressions in diff |
 | `--include-trivial` | Include trivial diff changes |

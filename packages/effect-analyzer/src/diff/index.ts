@@ -1,4 +1,6 @@
 export { diffPrograms } from "./diff-engine"
+export { renderMigrationDiffJSON, renderMigrationDiffMarkdown, summarizeMigrationDiff } from "./migration-diff"
+export type { MigrationDiff, MigrationDiffProgram } from "./migration-diff"
 export { renderDiffJSON } from "./render-json"
 export { renderDiffMarkdown } from "./render-markdown"
 export { renderDiffMermaid } from "./render-mermaid"

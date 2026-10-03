@@ -14,10 +14,11 @@ import { Console, DateTime, Effect } from "effect"
 import * as fs from "node:fs/promises"
 import { join, resolve } from "path"
 import { Project } from "ts-morph"
+import { toAsciiText } from "./analysis-utils"
 import { type AuditPolicy, evaluateAuditPolicy } from "./audit-policy"
 import { buildProgramQualities, loadQualityHintsByFile, writeTestStubsForFile } from "./cli-mode-analysis"
 import type { CLIOptions } from "./cli-options"
-import { cliFail, cliTry, createStyle } from "./cli-support"
+import { cliFail, cliTry, createStyle, displayPath } from "./cli-support"
 import { computeDiagramFidelity, formatDiagramFidelity } from "./diagram-fidelity"
 import { buildTopOffendersReport, computeFileDiagramQuality } from "./diagram-quality"
 import { extractHttpApiStructure, type HttpApiStructure } from "./http-api-extractor"
@@ -99,7 +100,7 @@ export const runProjectMode = (
     const style = createStyle(useColor)
 
     if (!options.quiet) {
-      yield* Console.log(style.bold(`Analyzing ${resolvedPath}...`))
+      yield* Console.log(style.bold(`Analyzing ${displayPath(resolvedPath)}...`))
     }
 
     const projectResult = yield* analyzeProject(resolvedPath, {
@@ -344,7 +345,8 @@ export const runProjectMode = (
         : projectResult.allPrograms.map((ir) => renderServicesMermaid(ir, { direction: svcDir })).join("\n\n---\n\n")
       yield* Console.log("\n" + svcOutput)
     } else if (options.format === "explain") {
-      yield* Console.log("\n" + renderMultipleExplanations(projectResult.allPrograms))
+      const explained = renderMultipleExplanations(projectResult.allPrograms)
+      yield* Console.log("\n" + (options.ascii ? toAsciiText(explained) : explained))
     } else if (options.format === "summary") {
       yield* Console.log("\n" + renderMultipleSummaries(projectResult.allPrograms))
     } else if (options.format === "architecture") {

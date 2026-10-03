@@ -1506,6 +1506,8 @@ export const analyzeEffectCall = (
       }
     }
 
+    const wrappedCall = LIFTING_CALLEES.has(normalizedCallee) ? liftedCallName(call) : undefined
+
     const filteredRequiredServices = requiredServices?.filter(
       (service) => !isEffectRuntimePrimitive(service.serviceId)
     )
@@ -1532,7 +1534,8 @@ export const analyzeEffectCall = (
       ...(provideKind ? { provideKind } : {}),
       ...(constructorKind ? { constructorKind } : {}),
       ...(fiberRefName ? { fiberRefName } : {}),
-      ...(tracedName ? { tracedName } : {})
+      ...(tracedName ? { tracedName } : {}),
+      ...(wrappedCall ? { wrappedCall } : {})
     }
     const enrichedEffectNode: StaticEffectNode = {
       ...effectNode,
@@ -1541,6 +1544,49 @@ export const analyzeEffectCall = (
     }
     return enrichedEffectNode
   })
+
+/** Constructors that lift one promise-returning or throwing call into an Effect. */
+const LIFTING_CALLEES = new Set(["Effect.tryPromise", "Effect.promise", "Effect.try", "Effect.sync"])
+
+/**
+ * The call a lifting constructor wraps: `wallet.getBalance` in
+ * `Effect.tryPromise({ try: () => wallet.getBalance(id), catch })` or
+ * `Effect.tryPromise(() => wallet.getBalance(id))`.
+ */
+const liftedCallName = (call: CallExpression): string | undefined => {
+  const { Node: TsNode } = loadTsMorph()
+  let thunk: Node | undefined = call.getArguments()[0]
+  if (thunk && TsNode.isObjectLiteralExpression(thunk)) {
+    const tryProp = thunk.getProperty("try")
+    thunk = tryProp && TsNode.isPropertyAssignment(tryProp) ? tryProp.getInitializer() : tryProp
+  }
+  if (
+    !thunk ||
+    !(TsNode.isArrowFunction(thunk) || TsNode.isFunctionExpression(thunk) || TsNode.isMethodDeclaration(thunk))
+  ) {
+    return undefined
+  }
+  const body = thunk.getBody()
+  const returned = body && TsNode.isBlock(body) ? blockResult(body.getStatements()) : body
+  if (!returned) return undefined
+  let inner = unwrapExpression(returned)
+  if (TsNode.isAwaitExpression(inner)) inner = unwrapExpression(inner.getExpression())
+  if (!TsNode.isCallExpression(inner)) return undefined
+  const name = inner.getExpression().getText()
+  return /^[\w$.]+$/.test(name) ? name : undefined
+}
+
+/**
+ * The expression a block body hands back: its `return` value, or the call in a
+ * block that is a single statement, as in `Effect.sync(() => { release(c) })`.
+ */
+const blockResult = (statements: ReadonlyArray<Node>): Node | undefined => {
+  const { Node: TsNode } = loadTsMorph()
+  const returned = statements.find(TsNode.isReturnStatement)?.getExpression()
+  if (returned) return returned
+  const [only] = statements
+  return statements.length === 1 && only && TsNode.isExpressionStatement(only) ? only.getExpression() : undefined
+}
 
 /**
  * Try to resolve a service method call from a CallExpression.
