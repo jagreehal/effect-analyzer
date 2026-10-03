@@ -9,6 +9,7 @@
 import type { CouplingIssueType, CouplingPriorityMap } from "./agent-report"
 import { printHelp, printVersion } from "./cli-help"
 import type { FailOnSeverity } from "./lint-session"
+import { OPT_IN_SOURCE_RULES } from "./source-linter"
 import { parseTsgoProjectArgument } from "./tsgo-diagnostics"
 
 export type MermaidDirection = "TB" | "LR" | "BT" | "RL"
@@ -67,6 +68,12 @@ export interface CLIOptions {
   readonly colocateEnhanced: boolean
   readonly watch: boolean
   readonly migration: boolean
+  /** Rendering for the migration report: `--format json` / `--format markdown` alongside `--migration`. */
+  readonly migrationOutput: "text" | "json" | "markdown"
+  /** Render only the program with this name (`--program`). */
+  readonly program: string | undefined
+  /** Opt-in source lint rules (`--enable-rule`). */
+  readonly enableRules: ReadonlyArray<string>
   readonly cache: boolean
   readonly coverageAudit: boolean
   readonly showSuspiciousZeros: boolean
@@ -86,6 +93,8 @@ export interface CLIOptions {
   readonly minAuditEffectAdoption: number | undefined
   readonly minAuditSourceResolution: number | undefined
   readonly quiet: boolean
+  /** Replace typographic symbols (em dashes, arrows) in rendered output with ASCII. */
+  readonly ascii: boolean
   readonly color: boolean
   readonly quality: boolean
   readonly assertDiagramFidelity: boolean
@@ -209,6 +218,9 @@ export function parseArgs(args: ReadonlyArray<string>): {
   let colocateEnhanced = true
   let watch = false
   let migration = false
+  let markdownFormat = false
+  let program: string | undefined
+  const enableRules: Array<string> = []
   let cache = false
   let coverageAudit = false
   let showSuspiciousZeros = false
@@ -230,6 +242,7 @@ export function parseArgs(args: ReadonlyArray<string>): {
   let minAuditEffectAdoption: number | undefined
   let minAuditSourceResolution: number | undefined
   let quiet = false
+  let ascii = false
   let color = true
   let quality = false
   let assertDiagramFidelity = false
@@ -339,6 +352,9 @@ export function parseArgs(args: ReadonlyArray<string>): {
         value === "openapi-runtime"
       ) {
         format = value
+      } else if (value === "markdown") {
+        // Only the migration report renders markdown; checked once argv is read.
+        markdownFormat = true
       } else {
         rejectValue("--format", value)
       }
@@ -420,6 +436,14 @@ export function parseArgs(args: ReadonlyArray<string>): {
       watch = true
     } else if (arg === "--migration" || arg === "-m") {
       migration = true
+    } else if (arg === "--program" || arg.startsWith("--program=")) {
+      const value = arg === "--program" ? args[++i] : arg.slice("--program=".length)
+      if (value) program = value
+      else rejectValue("--program", value)
+    } else if (arg === "--enable-rule" || arg.startsWith("--enable-rule=")) {
+      const value = arg === "--enable-rule" ? args[++i] : arg.slice("--enable-rule=".length)
+      if ((OPT_IN_SOURCE_RULES as ReadonlyArray<string | undefined>).includes(value)) enableRules.push(value!)
+      else rejectValue("--enable-rule", value, OPT_IN_SOURCE_RULES)
     } else if (arg === "--cache") {
       cache = true
     } else if (arg === "--coverage-audit") {
@@ -475,6 +499,8 @@ export function parseArgs(args: ReadonlyArray<string>): {
       jsonSummary = true
     } else if (arg === "--quiet" || arg === "-q") {
       quiet = true
+    } else if (arg === "--ascii") {
+      ascii = true
     } else if (arg === "--no-color") {
       color = false
     } else if (arg === "--quality") {
@@ -668,6 +694,12 @@ export function parseArgs(args: ReadonlyArray<string>): {
   // In diff mode, all positional args are diff sources
   const diffSources = diff ? positionalArgs : []
 
+  if (markdownFormat && !migration) errors.push("--format markdown is only accepted with --migration.")
+  const migrationOutput: CLIOptions["migrationOutput"] = markdownFormat
+    ? "markdown"
+    : format === "json"
+    ? "json"
+    : "text"
   if (migration) format = "migration"
 
   // Format-dependent defaults: mermaid-paths benefits from style-guide heuristics
@@ -698,6 +730,9 @@ export function parseArgs(args: ReadonlyArray<string>): {
     colocateEnhanced,
     watch,
     migration,
+    migrationOutput,
+    program,
+    enableRules,
     cache,
     coverageAudit,
     showSuspiciousZeros,
@@ -717,6 +752,7 @@ export function parseArgs(args: ReadonlyArray<string>): {
     minAuditEffectAdoption,
     minAuditSourceResolution,
     quiet,
+    ascii,
     color,
     quality,
     assertDiagramFidelity,

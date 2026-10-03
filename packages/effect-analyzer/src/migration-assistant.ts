@@ -6,7 +6,8 @@
 
 import { readdir } from "node:fs/promises"
 import { extname, join } from "path"
-import { Project, SyntaxKind } from "ts-morph"
+import { Node, Project, SyntaxKind } from "ts-morph"
+import type { SourceFile } from "ts-morph"
 
 // =============================================================================
 // Types
@@ -19,6 +20,16 @@ export interface MigrationOpportunity {
   readonly pattern: string
   readonly suggestion: string
   readonly codeSnippet?: string | undefined
+  /**
+   * `pattern`: a multi-statement idiom (retry loop, timeout race, resource
+   * release, ...) with a direct Effect replacement. `syntax`: a single
+   * construct. Pattern findings are listed first.
+   */
+  readonly kind?: "pattern" | "syntax" | undefined
+  /** Effect APIs the pattern maps to, e.g. `["Effect.retry", "Schedule.exponential"]`. */
+  readonly effectApi?: ReadonlyArray<string> | undefined
+  /** One or two sentences on why the Effect version is better. */
+  readonly explanation?: string | undefined
 }
 
 export interface MigrationReport {
@@ -57,8 +68,166 @@ function addOpportunity(
     column,
     pattern,
     suggestion,
-    codeSnippet: snippet ?? defaultSnippet
+    codeSnippet: snippet ?? defaultSnippet,
+    kind: "syntax"
   })
+}
+
+// =============================================================================
+// Pattern-level detection
+// =============================================================================
+
+const TIMER_CLEANUP = new Set(["clearTimeout", "clearInterval"])
+const SLEEP_NAMES = /^(sleep|delay|wait|backoff)$/i
+const LOOP_KINDS: ReadonlySet<SyntaxKind> = new Set([
+  SyntaxKind.ForStatement,
+  SyntaxKind.ForOfStatement,
+  SyntaxKind.ForInStatement,
+  SyntaxKind.WhileStatement,
+  SyntaxKind.DoStatement
+])
+
+function calleeName(call: Node): string {
+  return Node.isCallExpression(call) ? call.getExpression().getText() : ""
+}
+
+/** `setTimeout(...)` / `sleep(...)` anywhere under `node`. */
+function containsSleep(node: Node): boolean {
+  return node.getDescendantsOfKind(SyntaxKind.CallExpression).some((c) => {
+    const name = calleeName(c)
+    return name === "setTimeout" || SLEEP_NAMES.test(name.split(".").pop() ?? "")
+  })
+}
+
+/** `setTimeout(() => reject(...), ms)` anywhere under `node`. */
+function containsTimeoutReject(node: Node): boolean {
+  return node.getDescendantsOfKind(SyntaxKind.CallExpression).some((c) =>
+    calleeName(c) === "setTimeout" &&
+    c.getDescendantsOfKind(SyntaxKind.CallExpression).some((inner) => calleeName(inner) === "reject")
+  )
+}
+
+function isErrorSubclass(cls: Node): boolean {
+  if (!Node.isClassDeclaration(cls)) return false
+  const base = cls.getExtends()?.getExpression().getText()
+  return base !== undefined && /^(Error|TypeError|RangeError)$/.test(base)
+}
+
+const PRIMITIVE_TYPES = new Set(["string", "number", "boolean", "bigint", "unknown", "any"])
+
+function findPatternOpportunities(filePath: string, sourceFile: SourceFile): Array<MigrationOpportunity> {
+  const found: Array<MigrationOpportunity> = []
+  const add = (
+    node: Node,
+    pattern: string,
+    suggestion: string,
+    effectApi: ReadonlyArray<string>,
+    explanation: string
+  ) => {
+    const before = found.length
+    addOpportunity(found, filePath, node, sourceFile, pattern, suggestion)
+    found[before] = { ...found[before]!, kind: "pattern", effectApi, explanation }
+  }
+
+  // (a) for/while loop + try/catch + sleep -> Effect.retry + Schedule
+  const loops = [
+    ...sourceFile.getDescendantsOfKind(SyntaxKind.ForStatement),
+    ...sourceFile.getDescendantsOfKind(SyntaxKind.WhileStatement),
+    ...sourceFile.getDescendantsOfKind(SyntaxKind.DoStatement)
+  ]
+  for (const loop of loops) {
+    // Only a try whose nearest loop is this one, so an outer loop around a
+    // retry loop is not reported again.
+    const tries = loop.getStatement().getDescendantsOfKind(SyntaxKind.TryStatement).filter((t) =>
+      t.getCatchClause() !== undefined && t.getFirstAncestor((a) => LOOP_KINDS.has(a.getKind())) === loop
+    )
+    if (tries.length > 0 && containsSleep(loop.getStatement())) {
+      add(
+        loop,
+        "retry loop",
+        "Effect.retry(effect, { schedule: Schedule.exponential(\"10 millis\"), times: n, while: isRetryable })",
+        ["Effect.retry", "Schedule.exponential"],
+        "A hand-rolled attempt counter, catch and sleep becomes a declarative Schedule: the backoff, attempt cap and retryable-error predicate are data, and the sleep is interruptible."
+      )
+    }
+  }
+
+  // (b) Promise.race / new Promise executor with setTimeout(() => reject()) -> Effect.timeout
+  const timeoutApi = ["Effect.timeout", "Effect.timeoutOrElse"]
+  const timeoutExplanation =
+    "Racing against a setTimeout reject leaks the timer and leaves the losing promise running. Effect.timeout interrupts the slow effect and fails with a typed error (or Effect.timeoutOrElse maps it to your own)."
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (calleeName(call) === "Promise.race" && containsTimeoutReject(call)) {
+      add(
+        call,
+        "timeout race",
+        "Effect.timeoutOrElse(effect, { duration: Duration.millis(ms), orElse: () => Effect.fail(new TimedOut()) })",
+        timeoutApi,
+        timeoutExplanation
+      )
+    }
+  }
+  for (const expr of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+    const insideRace = expr.getAncestors().some((a) => calleeName(a) === "Promise.race")
+    if (expr.getExpression().getText() === "Promise" && !insideRace && containsTimeoutReject(expr)) {
+      add(
+        expr,
+        "timeout race",
+        "Effect.timeoutOrElse(effect, { duration: Duration.millis(ms), orElse: () => Effect.fail(new TimedOut()) })",
+        timeoutApi,
+        timeoutExplanation
+      )
+    }
+  }
+
+  for (const cls of sourceFile.getDescendantsOfKind(SyntaxKind.ClassDeclaration)) {
+    const name = cls.getName() ?? "AnonymousError"
+    // (c) class X extends Error -> Schema.TaggedError
+    if (isErrorSubclass(cls)) {
+      add(
+        cls,
+        "Error subclass",
+        `class ${name} extends Schema.TaggedError<${name}>()("${name}", { ...fields })`,
+        ["Schema.TaggedError"],
+        "A tagged error carries a `_tag` the compiler tracks in the E channel, so callers handle it with Effect.catchTag instead of instanceof checks, and its fields are a Schema."
+      )
+      continue
+    }
+    // (d) constructor-injected dependencies -> Context.Service + Layer
+    const deps = cls.getConstructors()[0]?.getParameters().filter((p) => {
+      const type = p.getTypeNode()?.getText()
+      return type !== undefined && !PRIMITIVE_TYPES.has(type)
+    }) ?? []
+    if (deps.length > 0) {
+      add(
+        cls,
+        "constructor-injected class",
+        `class ${name} extends Context.Service<${name}, Shape>()("${name}") {} + Layer.effect(${name}, Effect.gen(...yield* ${
+          deps.map((d) => d.getTypeNode()!.getText()).join(", yield* ")
+        }))`,
+        ["Context.Service", "Layer.effect"],
+        "Constructor injection becomes a service tag plus a Layer: dependencies show up in the R channel, and tests swap a Layer instead of hand-building the object graph."
+      )
+    }
+  }
+
+  // (e) try/finally that releases something -> Effect.acquireUseRelease
+  for (const tryStmt of sourceFile.getDescendantsOfKind(SyntaxKind.TryStatement)) {
+    const fin = tryStmt.getFinallyBlock()
+    if (!fin) continue
+    const calls = fin.getDescendantsOfKind(SyntaxKind.CallExpression).map(calleeName)
+    if (calls.some((c) => !TIMER_CLEANUP.has(c))) {
+      add(
+        tryStmt,
+        "try/finally release",
+        "Effect.acquireUseRelease(acquire, (resource) => use(resource), (resource) => release(resource))",
+        ["Effect.acquireUseRelease"],
+        "The release runs on success, failure and interruption, and acquire/use/release are separate steps, so the cleanup cannot be skipped by an early return or forgotten in a new branch."
+      )
+    }
+  }
+
+  return found.sort((a, b) => a.line - b.line || a.column - b.column)
 }
 
 /**
@@ -73,6 +242,8 @@ export function findMigrationOpportunities(
   const sourceFile = source
     ? project.createSourceFile(filePath, source)
     : project.addSourceFileAtPath(filePath)
+
+  const patterns = findPatternOpportunities(filePath, sourceFile)
 
   // try/catch -> Effect.try / Effect.tryPromise
   for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.TryStatement)) {
@@ -1176,7 +1347,7 @@ export function findMigrationOpportunities(
     }
   }
 
-  return opportunities
+  return [...patterns, ...opportunities]
 }
 
 /**
@@ -1221,6 +1392,7 @@ export function formatMigrationReport(report: MigrationReport): string {
   for (const o of report.opportunities) {
     lines.push(`  ${o.filePath}:${o.line}:${o.column}  ${o.pattern}`)
     lines.push(`    →  ${o.suggestion}`)
+    if (o.explanation) lines.push(`    Why: ${o.explanation}`)
     if (o.codeSnippet) lines.push(`    Snippet: ${o.codeSnippet.slice(0, 60)}...`)
     lines.push("")
   }

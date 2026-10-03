@@ -104,7 +104,7 @@ describe("cli --lint-source --tsgo", () => {
   it("tells language-service findings apart from the analyzer’s own", () => {
     withProject((srcDir, tsconfig) => {
       const findings = parseFindings(
-        runLint([srcDir, "--lint-source", "--tsgo", tsconfig]).stdout
+        runLint([srcDir, "--lint-source", "--tsgo", tsconfig, "--enable-rule", "barrel-import-from-effect"]).stdout
       )
 
       const floating = findings.find((f) => f.rule === "floatingEffect")
@@ -122,7 +122,7 @@ describe("cli --lint-source --tsgo", () => {
 
   it("reports only the built-in rules without --tsgo", () => {
     withProject((srcDir) => {
-      const result = runLint([srcDir, "--lint-source"])
+      const result = runLint([srcDir, "--lint-source", "--enable-rule", "barrel-import-from-effect"])
       expect(result.status).toBe(0)
 
       const rules = new Set(parseFindings(result.stdout).map((f) => f.rule))

@@ -93,6 +93,8 @@ interface Edge {
   from: string
   to: string
   label?: string
+  /** Drawn dashed: a deferred step that sits outside the main sequence. */
+  dashed?: boolean
 }
 
 interface Subgraph {
@@ -228,10 +230,11 @@ function renderStaticMermaidInternal(
   lines.push("")
   lines.push("  %% Edges")
   for (const edge of context.edges) {
-    if (edge.label && opts.showConditions) {
-      lines.push(`  ${edge.from} -->|${escapeLabel(edge.label)}| ${edge.to}`)
+    const arrow = edge.dashed ? "-.->" : "-->"
+    if (edge.label && (opts.showConditions || edge.dashed)) {
+      lines.push(`  ${edge.from} ${arrow}|${escapeLabel(edge.label)}| ${edge.to}`)
     } else {
-      lines.push(`  ${edge.from} --> ${edge.to}`)
+      lines.push(`  ${edge.from} ${arrow} ${edge.to}`)
     }
   }
 
@@ -763,23 +766,33 @@ function renderNode(
     }
 
     case "resource": {
+      // acquire -> [operation] -> use -> release: the order the runtime runs them.
       const acquireResult = renderNode(node.acquire, context, lines, depth + 1)
-      const resourceId = `resource_${++context.nodeCounter}`
-      lines.push(`  ${resourceId}["Resource"]`)
-      context.styleClasses.set(resourceId, "resourceStyle")
-      if (acquireResult.lastNodeIds.length > 0) {
-        context.edges.push({
-          from: acquireResult.lastNodeIds[0]!,
-          to: resourceId
-        })
+      for (const lastId of acquireResult.lastNodeIds) {
+        context.edges.push({ from: lastId, to: nodeId })
       }
-      let lastIds = [resourceId]
+      let lastIds = [nodeId]
       if (node.use) {
         const useResult = renderNode(node.use, context, lines, depth + 1)
         if (useResult.firstNodeId) {
-          context.edges.push({ from: resourceId, to: useResult.firstNodeId })
+          context.edges.push({ from: nodeId, to: useResult.firstNodeId })
+          lastIds = useResult.lastNodeIds
         }
-        lastIds = useResult.lastNodeIds
+      }
+      const releaseResult = renderNode(node.release, context, lines, depth + 1)
+      // A scoped acquireRelease releases when its scope closes, after every
+      // later step, so the release hangs off the resource as a side edge.
+      if (releaseResult.firstNodeId && !node.use && node.resourceOperation?.startsWith("acquireRelease")) {
+        context.edges.push({ from: nodeId, to: releaseResult.firstNodeId, label: "on scope close", dashed: true })
+      } else if (releaseResult.firstNodeId) {
+        const label = node.resourceOperation === "onError" ? "on error" : "release"
+        for (const lastId of lastIds) {
+          context.edges.push({ from: lastId, to: releaseResult.firstNodeId, label })
+        }
+        // onError cleanup runs only on failure; success skips it.
+        lastIds = node.resourceOperation === "onError"
+          ? [...lastIds, ...releaseResult.lastNodeIds]
+          : releaseResult.lastNodeIds
       }
       return {
         firstNodeId: acquireResult.firstNodeId ?? nodeId,
@@ -1571,8 +1584,8 @@ function collectEnhancedAnnotations(
         break
       case "resource":
         visit(node.acquire)
-        visit(node.release)
         if (node.use) visit(node.use)
+        visit(node.release)
         break
       case "conditional":
         visit(node.onTrue)

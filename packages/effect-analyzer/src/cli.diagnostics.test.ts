@@ -14,13 +14,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 const REPO_ROOT = resolve(__dirname, "..")
 
-/** A floating Effect (`floatingEffect`) plus a barrel import (analyzer rule). */
+/** A floating Effect (`floatingEffect`) plus a spread push (analyzer rule `array-push-spread`). */
 const SOURCE = `import { Effect } from 'effect';
 
 export const program = Effect.gen(function* () {
   Effect.succeed(1);
   return yield* Effect.succeed(2);
 });
+
+export const append = (arr: Array<number>, xs: Array<number>) => arr.push(...xs);
 `
 
 const withProject = (

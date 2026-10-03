@@ -43,6 +43,22 @@ const api = HttpApi.make("api").add(
     expect(result[0].groups[0].endpoints[0]).toMatchObject({ name: "get", method: "GET", path: "/" })
   })
 
+  it("reads the endpoint, not the middleware, when an endpoint chains .middleware(...)", () => {
+    const source = `
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
+export const WebhookApi = HttpApi.make("WebhookApi").add(
+  HttpApiGroup.make("webhooks").add(
+    HttpApiEndpoint.post("receive", "/webhooks/payments", {
+      success: Schema.Struct({ received: Schema.Literal(true) }),
+    }).middleware(RequireSignature),
+  ),
+)
+`
+    const endpoints = extractFromSource(source)[0]?.groups[0]?.endpoints ?? []
+    expect(endpoints).toHaveLength(1)
+    expect(endpoints[0]).toMatchObject({ name: "receive", method: "POST", path: "/webhooks/payments" })
+  })
+
   it("extracts multiple groups", () => {
     const source = `
 import { HttpApi, HttpApiGroup, HttpApiEndpoint } from "@effect/platform"

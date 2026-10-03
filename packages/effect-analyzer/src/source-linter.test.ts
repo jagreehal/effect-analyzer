@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest"
 import { lintSourceCode } from "./source-linter"
 import { RULE_DOCS } from "./source-linter-docs"
 
+const lintWithBarrel = (code: string, filePath?: string) =>
+  lintSourceCode(code, filePath, { enableRules: ["barrel-import-from-effect"] })
+
 describe("source-linter: untagged-throw", () => {
   it("does NOT flag throw inside Effect.try({ try, catch }) — idiomatic", () => {
     const { issues } = lintSourceCode(
@@ -703,8 +706,16 @@ describe("source-linter: yield-promise", () => {
 })
 
 describe("source-linter: barrel-import-from-effect", () => {
-  it("flags import { Effect } from \"effect\"", () => {
+  it("is off by default: import { Effect } from \"effect\" is idiomatic in Effect v4", () => {
     const { issues } = lintSourceCode(
+      `import { Effect } from 'effect';
+       export const x = Effect.succeed(1);`
+    )
+    expect(issues.filter((i) => i.rule === "barrel-import-from-effect")).toEqual([])
+  })
+
+  it("flags import { Effect } from \"effect\"", () => {
+    const { issues } = lintWithBarrel(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`
     )
@@ -714,7 +725,7 @@ describe("source-linter: barrel-import-from-effect", () => {
   })
 
   it("flags each named specifier separately", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { Effect, Layer, Context } from 'effect';
        export const x = Effect.succeed(1);`
     )
@@ -722,7 +733,7 @@ describe("source-linter: barrel-import-from-effect", () => {
   })
 
   it("flags @effect/platform barrel imports", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { HttpClient } from '@effect/platform';
        declare const x: typeof HttpClient;`
     )
@@ -730,7 +741,7 @@ describe("source-linter: barrel-import-from-effect", () => {
   })
 
   it("respects aliased imports in the suggestion", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { Effect as E } from 'effect';
        export const x = E.succeed(1);`
     )
@@ -739,7 +750,7 @@ describe("source-linter: barrel-import-from-effect", () => {
   })
 
   it("does not flag namespace imports", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import * as Effect from 'effect/Effect';
        export const x = Effect.succeed(1);`
     )
@@ -747,7 +758,7 @@ describe("source-linter: barrel-import-from-effect", () => {
   })
 
   it("does not flag type-only imports", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import type { Effect } from 'effect';
        declare const x: Effect.Effect<number>;`
     )
@@ -755,7 +766,7 @@ describe("source-linter: barrel-import-from-effect", () => {
   })
 
   it("does not flag type-only named specifiers", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { type Effect, Layer } from 'effect';
        declare const x: Effect.Effect<number>;
        export const y = Layer.empty;`
@@ -766,7 +777,7 @@ describe("source-linter: barrel-import-from-effect", () => {
   })
 
   it("does not flag non-Effect packages", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { describe } from 'vitest';
        describe('x', () => {});`
     )
@@ -938,7 +949,7 @@ describe("source-linter: docs + example enrichment", () => {
   })
 
   it("attaches docsUrl + example to barrel-import-from-effect", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`
     )
@@ -971,7 +982,7 @@ describe("source-linter: docs + example enrichment", () => {
 
 describe("source-linter: noise-reduction scoping", () => {
   it("does not flag barrel-import-from-effect in test files", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`,
       "/repo/packages/foo/test/Bar.test.ts"
@@ -980,7 +991,7 @@ describe("source-linter: noise-reduction scoping", () => {
   })
 
   it("does not flag barrel-import-from-effect inside __tests__ dirs", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`,
       "/repo/src/__tests__/User.ts"
@@ -989,7 +1000,7 @@ describe("source-linter: noise-reduction scoping", () => {
   })
 
   it("still flags barrel-import-from-effect in src files", () => {
-    const { issues } = lintSourceCode(
+    const { issues } = lintWithBarrel(
       `import { Effect } from 'effect';
        export const x = Effect.succeed(1);`,
       "/repo/packages/foo/src/Bar.ts"

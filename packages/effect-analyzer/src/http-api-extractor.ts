@@ -212,31 +212,23 @@ function collectEndpointsFromGroup(
 
   const addArgs = collectAddArgsFromChain(groupMakeNode)
 
+  // Walk a method chain (`.annotate`, `.addSuccess`, `.middleware`, ...) back to
+  // the `HttpApiEndpoint.<method>(name, path)` call it starts from.
   function findEndpointBase(call: CallExpression): CallExpression | undefined {
     let current: Node = call
-    const schemaMethods = [".annotate", ".addSuccess", ".setPayload", ".setUrlParams", ".setQueryParams", ".addFailure"]
     for (let i = 0; i < 15; i++) {
-      if (current.getKind() !== SyntaxKind.CallExpression) return undefined
-      const c = current as CallExpression
-      const expr = c.getExpression().getText()
-      for (const m of methods) {
-        const hasMethod = expr.includes(`HttpApiEndpoint.${m}`) || expr.includes(`HttpApiEndpoint.${m}(`)
-        const notChained = !schemaMethods.some((s) => expr.endsWith(s) || expr.includes(s))
-        if (hasMethod && !expr.includes(".annotate") && notChained) {
-          return c
-        }
-      }
-      const isChained = schemaMethods.some((s) => expr.endsWith(s) || expr.includes(s))
-      if (isChained) {
-        const receiver = c.getExpression()
-        if (receiver.getKind() === SyntaxKind.CallExpression) {
-          current = receiver
-        } else {
-          current = (receiver as PropertyAccessExpression).getExpression()
-        }
+      if (current.getKind() === SyntaxKind.TaggedTemplateExpression) {
+        current = (current as TaggedTemplateExpression).getTag()
         continue
       }
-      return undefined
+      if (current.getKind() !== SyntaxKind.CallExpression) return undefined
+      const callee = (current as CallExpression).getExpression()
+      const text = callee.getText()
+      if (methods.some((m) => text === `HttpApiEndpoint.${m}` || text.endsWith(`.HttpApiEndpoint.${m}`))) {
+        return current as CallExpression
+      }
+      if (callee.getKind() !== SyntaxKind.PropertyAccessExpression) return undefined
+      current = (callee as PropertyAccessExpression).getExpression()
     }
     return undefined
   }

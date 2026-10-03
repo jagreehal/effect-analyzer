@@ -11,6 +11,8 @@ import { getStaticChildren, type StaticEffectIR, type StaticFlowNode } from "../
 
 interface RailwayStep {
   readonly label: string
+  /** A branch returns a plain value: the program can succeed early here. */
+  readonly returnsEarly: boolean
   readonly errorTypes: ReadonlyArray<string>
   /** Error taps on this step: what runs on the error rail before it continues. */
   readonly errorTaps: ReadonlyArray<ErrorTap>
@@ -88,6 +90,8 @@ function computeLabel(node: StaticFlowNode): string {
     if (node.type === "error-handler") return "Error Handler"
     if (node.type === "retry") return "Retry"
     if (node.type === "conditional") return "Conditional"
+    if (node.type === "decision") return node.label || node.condition
+    if (node.type === "effect" && node.wrappedCall) return node.wrappedCall
     if (
       node.displayName &&
       !node.displayName.includes(" <- ") &&
@@ -270,11 +274,25 @@ function flattenNodesToSteps(nodes: ReadonlyArray<StaticFlowNode>): FlattenedSte
       return
     }
 
+    // acquireUseRelease runs acquire -> use -> release in turn. A scoped
+    // acquireRelease releases when its scope closes, after every later step,
+    // so only the acquire belongs in the sequence.
+    if (node.type === "resource" && node.use !== undefined) {
+      for (const phase of [node.acquire, node.use, node.release]) {
+        if (phase.type !== "unknown") visit(phase, YIELDED)
+      }
+      return
+    }
+    if (node.type === "resource" && node.resourceOperation?.startsWith("acquireRelease")) {
+      if (node.acquire.type !== "unknown") visit(node.acquire, YIELDED)
+      return
+    }
+
     // Skip entirely: error handlers, transforms, streams, etc.
     if (isSkippedRailwayNode(node)) return
 
     // Opaque: shown as a single box, never recursed into (loops, conditionals,
-    // parallel, race, retry, timeout, resource).
+    // parallel, race, retry, timeout, other resources).
     if (isOpaqueRailwayStep(node)) {
       steps.push(node)
       return
@@ -295,10 +313,17 @@ function flattenNodesToSteps(nodes: ReadonlyArray<StaticFlowNode>): FlattenedSte
   return { steps, errorTaps }
 }
 
+/** A `return value` (no effect) somewhere inside a decision's branches. */
+function hasPlainEarlyReturn(node: StaticFlowNode): boolean {
+  if (node.type === "terminal") return node.terminalKind === "return" && !node.value?.length
+  return Option.getOrElse(getStaticChildren(node), () => []).some(hasPlainEarlyReturn)
+}
+
 /** Build railway step descriptors from flow nodes. */
 function buildSteps({ steps, errorTaps }: FlattenedSteps): ReadonlyArray<RailwayStep> {
   return steps.map((node) => ({
     label: computeLabel(node),
+    returnsEarly: node.type === "decision" && hasPlainEarlyReturn(node),
     errorTypes: collectErrorTypes(node),
     errorTaps: errorTaps.get(node) ?? []
   }))
@@ -370,6 +395,10 @@ export function renderRailwayMermaid(
     const errLabel = escapeLabel(ir.root.errorTypes.join(" / "))
     errorLines.push(`  ${lastId} -->|err| Errors["${errLabel}"]`)
   }
+
+  steps.forEach((step, i) => {
+    if (step.returnsEarly) errorLines.push(`  ${stepId(i)} -.->|early return| Done`)
+  })
 
   // Error taps branch from the step's error node, or from the step when it has
   // no typed errors to draw.

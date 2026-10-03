@@ -359,10 +359,9 @@ function handleResourceNode(
   currentState: PathState,
   context: PathContext
 ): Array<PathState> {
-  const resourceNodes: Array<StaticFlowNode> = [node.acquire, node.release]
-  if (node.use) {
-    resourceNodes.push(node.use)
-  }
+  const resourceNodes: Array<StaticFlowNode> = node.use
+    ? [node.acquire, node.use, node.release]
+    : [node.acquire, node.release]
   return generatePathsForNodes(resourceNodes, currentState, context)
 }
 

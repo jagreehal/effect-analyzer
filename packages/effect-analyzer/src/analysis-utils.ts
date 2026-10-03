@@ -650,6 +650,24 @@ export const createEmptyStats = (): AnalysisStats => ({
 /** Default max length for user-visible labels (diagrams, explain, IR display names). */
 export const DEFAULT_LABEL_MAX = 60
 
+const ASCII_REPLACEMENTS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/[\u2014\u2013\u2012\u2212]/g, "-"],
+  [/\u2192/g, "->"],
+  [/\u2190/g, "<-"],
+  [/\u21d2/g, "=>"],
+  [/\u2026/g, "..."],
+  [/\u26a0\ufe0f?/g, "!"],
+  [/[\u2018\u2019]/g, "'"],
+  [/[\u201c\u201d]/g, "\""],
+  [/\u2264/g, "<="],
+  [/\u2265/g, ">="],
+  [/[\u2022\u00b7]/g, "*"]
+]
+
+/** Replace the typographic symbols renderers emit (dashes, arrows, ellipsis) with ASCII. */
+export const toAsciiText = (text: string): string =>
+  ASCII_REPLACEMENTS.reduce((acc, [pattern, ascii]) => acc.replace(pattern, ascii), text)
+
 /**
  * Truncate a string to `max` characters, appending an ellipsis if truncated.
  * Use for any user-facing label in output renderers.
@@ -708,7 +726,7 @@ export function extractFunctionName(callee: string): string {
 export function computeDisplayName(node: StaticFlowNode, variableName?: string): string {
   switch (node.type) {
     case "effect": {
-      const fnName = extractFunctionName(node.callee)
+      const fnName = node.wrappedCall ?? extractFunctionName(node.callee)
       if (node.usePattern) {
         const wrapper = node.serviceCall?.serviceType ?? node.usePattern.wrapperName
         return truncate(`${wrapper}.use`, 60)

@@ -272,6 +272,8 @@ export interface SourceLintScanOptions {
    * diagnostics from the bundled `@effect/tsgo` bridge are merged in.
    */
   readonly tsgoProject?: string | undefined
+  /** Opt-in source rules to run, e.g. `barrel-import-from-effect`. */
+  readonly enableRules?: ReadonlyArray<string> | undefined
 }
 
 export const runSourceLintScan = async (
@@ -292,7 +294,7 @@ export const runSourceLintScan = async (
         .filter((s) => !s.reason || s.reason.trim().length === 0)
         .map((s) => ({ ...s, filePath }))
     )
-    const lint = lintSourceCode(source, filePath)
+    const lint = lintSourceCode(source, filePath, { enableRules: options.enableRules })
     const rawFindings = lint.issues.map((issue) => toFinding(filePath, issue))
     const applied = applySuppressions(rawFindings, suppressions)
     findings.push(...applied.findings.filter((x) => !x.suppressed))

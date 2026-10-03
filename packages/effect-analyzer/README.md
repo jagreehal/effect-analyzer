@@ -37,6 +37,12 @@ npx effect-analyze ./src/transfer.ts --format mermaid-railway
 # Plain-English explanation of what a program does
 npx effect-analyze ./src/transfer.ts --format explain
 
+# One program out of a multi-program file (works with every format)
+npx effect-analyze ./src/transfer.ts --format mermaid --program transfer
+
+# Migration opportunities in non-Effect code, as JSON or a markdown table
+npx effect-analyze ./src/legacy.ts --migration --format markdown
+
 # Compare two versions
 npx effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff
 
@@ -418,6 +424,10 @@ type-aware Effect diagnostics from `@effect/tsgo` in one report:
 npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json
 npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=error
 ```
+
+`barrel-import-from-effect` is off by default, because `import { Effect } from "effect"`
+is the documented form in Effect v4. Turn it on with
+`--enable-rule barrel-import-from-effect` if your bundle needs per-module imports.
 
 Every finding carries `source` and, for language service diagnostics, the
 `377xxx` `code`. `--fail-on` gates the exit status on severity; without it a run

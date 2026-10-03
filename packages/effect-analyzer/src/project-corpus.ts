@@ -60,7 +60,12 @@ export const discoverProjectFiles = async (
         files.push(fullPath)
       }
     }
-  } catch {
+  } catch (error) {
+    // A file passed as the root is a one-file project, so every project-wide
+    // report (--error-channel, --service-health, ...) also works on one file.
+    if (currentDepth === 0 && (error as NodeJS.ErrnoException).code === "ENOTDIR") {
+      return extensions.includes(extname(dir)) ? [dir] : []
+    }
     // An unreadable directory contributes no files. Individual analysis failures
     // remain visible in the corpus once a file has been discovered.
   }

@@ -6,6 +6,7 @@
  */
 
 import { canonicalizeServiceDisplayName, DEFAULT_LABEL_MAX, isConcurrent, truncateDisplayText } from "../analysis-utils"
+import { formatTypeSignature, splitTopLevelUnion } from "../type-extractor"
 import type { StaticEffectIR, StaticEffectProgram, StaticFlowNode } from "../types"
 
 // ---------------------------------------------------------------------------
@@ -111,6 +112,13 @@ const shouldSuppressExplainEffectNode = (node: Extract<StaticFlowNode, { type: "
 // Core recursive walker
 // ---------------------------------------------------------------------------
 
+/** The effect a wrapper applies to; a data-last call inside `.pipe` wraps the pipe's base. */
+function explainSource(source: StaticFlowNode, depth: number, state: WalkState): Array<string> {
+  return source.type === "effect" && source.description === "pipe-input"
+    ? [`${indent(depth)}  (the piped effect)`]
+    : explainNode(source, depth + 1, state)
+}
+
 /**
  * Recursively walks a `StaticFlowNode` and produces indented description lines.
  */
@@ -182,7 +190,11 @@ export function explainNode(
           node.displayName ?? node.callee,
           DEFAULT_LABEL_MAX
         )
-        const desc = node.description ? ` — ${node.description}` : ""
+        const desc = node.wrappedCall
+          ? ` via ${node.callee.replace(/^Effect\./, "")}`
+          : node.description
+          ? ` — ${node.description}`
+          : ""
         // If displayName has a binding arrow (e.g. "logger <- Logger"), it's a service yield
         if (label.includes(" <- ")) {
           lines.push(`${pad}Yields ${label}`)
@@ -296,11 +308,7 @@ export function explainNode(
         default:
           lines.push(`${pad}Handles errors (${node.handlerType})${tagInfo}:`)
       }
-      if (node.source.type === "effect" && node.source.description === "pipe-input") {
-        lines.push(`${pad}  (the piped effect)`)
-      } else {
-        lines.push(...explainNode(node.source, depth + 1, state))
-      }
+      lines.push(...explainSource(node.source, depth, state))
       if (node.handler) {
         lines.push(`${pad}  Handler:`)
         lines.push(...explainNode(node.handler, depth + 2, state))
@@ -319,14 +327,18 @@ export function explainNode(
           ? `max ${node.scheduleInfo.maxRetries}`
           : ""
         const stratPart = node.scheduleInfo.baseStrategy
-        const parts = [maxPart, stratPart].filter(Boolean).join(", ")
+        const jitterPart = node.scheduleInfo.jittered ? "jittered" : ""
+        const predicateParts = node.scheduleInfo.conditions
+          .filter((c) => c === "while" || c === "until")
+          .map((c) => `${c} predicate`)
+        const parts = [maxPart, stratPart, jitterPart, ...predicateParts].filter(Boolean).join(", ")
         lines.push(`${pad}Retries (${parts}):`)
       } else if (node.schedule) {
         lines.push(`${pad}Retries with ${node.schedule}:`)
       } else {
         lines.push(`${pad}Retries:`)
       }
-      lines.push(...explainNode(node.source, depth + 1, state))
+      lines.push(...explainSource(node.source, depth, state))
       if (node.hasFallback) {
         lines.push(`${pad}  (with fallback on exhaustion)`)
       }
@@ -337,7 +349,7 @@ export function explainNode(
     case "timeout": {
       const dur = node.duration ? ` after ${node.duration}` : ""
       lines.push(`${pad}Times out${dur}:`)
-      lines.push(...explainNode(node.source, depth + 1, state))
+      lines.push(...explainSource(node.source, depth, state))
       if (node.hasFallback) {
         lines.push(`${pad}  (with fallback on timeout)`)
       }
@@ -430,7 +442,8 @@ export function explainNode(
               lines.push(...explainNode(child, depth + 1, state))
             }
           } else {
-            lines.push(`${pad}Returns`)
+            const value = node.displayName?.replace(/^return /, "")
+            lines.push(value ? `${pad}Returns ${value}` : `${pad}Returns`)
           }
           break
         }
@@ -675,7 +688,11 @@ function renderProgram(program: StaticEffectProgram, _ir: StaticEffectIR): strin
   // Footer sections
   const footer: Array<string> = []
 
-  // Services required
+  if (program.typeSignature) {
+    footer.push(`  Type: ${formatTypeSignature(program.typeSignature)}`)
+  }
+
+  // Services required: direct ones first, then the rest of R (sub-programs' needs).
   const services = new Set<string>()
   for (const dep of program.dependencies) {
     if (dep.name !== "Effect") {
@@ -687,6 +704,10 @@ function renderProgram(program: StaticEffectProgram, _ir: StaticEffectIR): strin
       services.add(canonicalizeServiceDisplayName(svc))
     }
   })
+  const requirements = program.typeSignature?.requirementsType
+  for (const name of requirements ? splitTopLevelUnion(requirements) : []) {
+    if (name !== "never" && name !== "unknown") services.add(canonicalizeServiceDisplayName(name))
+  }
   if (services.size > 0) {
     footer.push(`  Services required: ${Array.from(services).join(", ")}`)
   }

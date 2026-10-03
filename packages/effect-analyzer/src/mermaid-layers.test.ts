@@ -1,5 +1,7 @@
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { renderLayersMermaid } from "./output/mermaid-layers"
+import { renderLayersMermaid, renderProgramsLayersMermaid } from "./output/mermaid-layers"
+import { analyzeEffectSource } from "./static-analyzer"
 import type { StaticEffectIR, StaticLayerNode } from "./types"
 
 const makeMetadata = () => ({
@@ -167,5 +169,32 @@ describe("renderLayersMermaid", () => {
     // Styling classes present
     expect(result).toContain("layerStyle")
     expect(result).toContain("serviceStyle")
+  })
+})
+
+describe("renderProgramsLayersMermaid", () => {
+  it("draws factory-built layers from every program in one diagram, named after the program", async () => {
+    // A service whose layer comes from a factory function that takes its dependency.
+    const irs = await Effect.runPromise(analyzeEffectSource(`
+      import { Context, Effect, Layer } from 'effect';
+      export type Mailer = { send(to: string): Promise<void> };
+      export class OrderNotifier extends Context.Service<OrderNotifier, {
+        readonly notify: (id: string) => Effect.Effect<void>
+      }>()('OrderNotifier') {}
+      export const OrderNotifierLive = (mailer: Mailer): Layer.Layer<OrderNotifier> =>
+        Layer.succeed(OrderNotifier, { notify: (id: string) => Effect.promise(() => mailer.send(id)) });
+      export const notify = Effect.gen(function* () {
+        const notifier = yield* OrderNotifier;
+        yield* notifier.notify('o-1');
+      });
+    `))
+    const out = renderProgramsLayersMermaid(irs)
+    expect(out.match(/flowchart/g)).toHaveLength(1)
+    expect(out).toContain("[\"OrderNotifierLive\"]")
+    expect(out).toMatch(/-->\|provides\| OrderNotifier/)
+  })
+
+  it("renders one empty diagram when no program builds a layer", () => {
+    expect(renderProgramsLayersMermaid([])).toContain("NoLayers")
   })
 })
