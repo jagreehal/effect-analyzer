@@ -1,5 +1,11 @@
 # effect-analyzer
 
+## 3.9.1
+
+### Patch Changes
+
+- 8d7c0b7: `--direction` applies to every diagram format, including `mermaid-railway`, `mermaid-services`, `mermaid-errors`, `mermaid-retry`, `mermaid-testability` and `mermaid-dataflow`. Railway `onError` and `tapError` boxes name the call their cleanup wraps, or the field it sets (`set ledger.balances`), and `explain` reads `Sets ledger.balances via sync`.
+
 ## 3.9.0
 
 ### Minor Changes
