@@ -67,7 +67,7 @@ Trace the full dependency chain for a node:
 import { getTransitiveDependencies } from "effect-analyzer/analysis"
 
 const deps = getTransitiveDependencies(graph, "step-4")
-// All nodes that step-4 transitively depends on
+// Every node step-4 depends on, nearest first
 ```
 
 ## Finding Cycles
@@ -77,7 +77,7 @@ Detect circular dependencies in the data flow:
 ```ts
 import { findCycles } from "effect-analyzer/analysis"
 
-const cycles = findCycles(graph)
+const cycles = findCycles(graph) // up to 100; pass a second argument to change the cap
 if (cycles.length > 0) {
   console.log("Circular dependencies found:", cycles)
 }

@@ -4,8 +4,9 @@
  * Verifies that all service requirements are satisfied (layers provide required services).
  */
 
+import { isAcyclic } from "@statelyai/graph"
 import { Option } from "effect"
-import { buildLayerDependencyGraph } from "./layer-graph"
+import { buildLayerDependencyGraph, toLayerDependencyEdges } from "./layer-graph"
 import type { ServiceFlowAnalysis } from "./service-flow"
 import { analyzeServiceFlow } from "./service-flow"
 import type { SourceLocation, StaticEffectIR, StaticFlowNode } from "./types"
@@ -30,49 +31,6 @@ export interface DICompletenessReport {
   layerGraphAcyclic: boolean
   valid: boolean
   readonly layerConflicts?: Array<{ serviceId: string; providers: Array<SourceLocation> }>
-}
-
-function detectLayerCycles(layerGraph: ReturnType<typeof buildLayerDependencyGraph>): boolean {
-  const adjacency = new Map<string, Array<string>>()
-  const providerByService = new Map<string, Array<string>>()
-
-  for (const layer of layerGraph.layers) {
-    for (const svc of layer.provides) {
-      const providers = providerByService.get(svc) ?? []
-      providers.push(layer.id)
-      providerByService.set(svc, providers)
-    }
-  }
-
-  for (const layer of layerGraph.layers) {
-    const deps: Array<string> = []
-    for (const req of layer.requires) {
-      for (const provider of providerByService.get(req) ?? []) {
-        if (provider !== layer.id) deps.push(provider)
-      }
-    }
-    adjacency.set(layer.id, deps)
-  }
-
-  const visiting = new Set<string>()
-  const visited = new Set<string>()
-
-  const hasCycle = (node: string): boolean => {
-    if (visiting.has(node)) return true
-    if (visited.has(node)) return false
-    visiting.add(node)
-    for (const next of adjacency.get(node) ?? []) {
-      if (hasCycle(next)) return true
-    }
-    visiting.delete(node)
-    visited.add(node)
-    return false
-  }
-
-  for (const layerId of adjacency.keys()) {
-    if (hasCycle(layerId)) return false
-  }
-  return true
 }
 
 // =============================================================================
@@ -131,7 +89,7 @@ export function checkDICompleteness(ir: StaticEffectIR): DICompletenessReport {
       })
     }
   }
-  const layerGraphAcyclic = detectLayerCycles(layerGraph)
+  const layerGraphAcyclic = isAcyclic(toLayerDependencyEdges(layerGraph))
 
   // Detect layer conflicts: multiple layers providing the same service
   const serviceProviderIds = new Map<string, Array<string>>()

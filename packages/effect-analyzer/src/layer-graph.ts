@@ -5,6 +5,8 @@
  * (provides, requires, merge/provide edges) for visualization.
  */
 
+import { createGraph, genCycles, getPathNodes, getStronglyConnectedComponents } from "@statelyai/graph"
+import type { Graph } from "@statelyai/graph"
 import { Option } from "effect"
 import type { StaticEffectIR, StaticFlowNode } from "./types"
 import { getStaticChildren } from "./types"
@@ -103,11 +105,10 @@ export interface LayerCycle {
 }
 
 /**
- * Detect cycles in the layer provides→requires graph.
- * Returns all unique cycles found with the full cycle path.
+ * The layer graph as layer → provider-layer edges, one per pair (a layer
+ * depends on every layer that provides a service it requires).
  */
-export function detectLayerCycles(graph: LayerDependencyGraph): Array<LayerCycle> {
-  // Build adjacency: layer → layers it depends on (via requires → provider lookup)
+export function toLayerDependencyEdges(graph: LayerDependencyGraph): Graph {
   const providerByService = new Map<string, Array<string>>()
   for (const layer of graph.layers) {
     for (const svc of layer.provides) {
@@ -117,45 +118,49 @@ export function detectLayerCycles(graph: LayerDependencyGraph): Array<LayerCycle
     }
   }
 
-  const adjacency = new Map<string, Array<string>>()
+  const pairs = new Set<string>()
+  const edges: Array<{ id: string; sourceId: string; targetId: string }> = []
   for (const layer of graph.layers) {
-    const deps: Array<string> = []
     for (const req of layer.requires) {
       for (const provider of providerByService.get(req) ?? []) {
-        if (provider !== layer.id) deps.push(provider)
+        const pair = JSON.stringify([layer.id, provider])
+        if (provider !== layer.id && !pairs.has(pair)) {
+          pairs.add(pair)
+          edges.push({ id: `${edges.length}`, sourceId: layer.id, targetId: provider })
+        }
       }
     }
-    adjacency.set(layer.id, deps)
   }
 
+  return createGraph({ nodes: graph.layers.map((layer) => ({ id: layer.id })), edges })
+}
+
+/**
+ * Detect cycles in the layer provides→requires graph.
+ * Returns up to `limit` elementary cycles, each path closed by repeating its first layer.
+ */
+export function detectLayerCycles(
+  graph: LayerDependencyGraph,
+  limit = 100
+): Array<LayerCycle> {
   const cycles: Array<LayerCycle> = []
-  const visiting = new Set<string>()
-  const visited = new Set<string>()
-
-  function dfs(node: string, path: Array<string>): void {
-    if (visited.has(node)) return
-    if (visiting.has(node)) {
-      const cycleStart = path.indexOf(node)
-      if (cycleStart >= 0) {
-        cycles.push({ path: [...path.slice(cycleStart), node] })
-      }
-      return
-    }
-    visiting.add(node)
-    path.push(node)
-    for (const next of adjacency.get(node) ?? []) {
-      dfs(next, path)
-    }
-    path.pop()
-    visiting.delete(node)
-    visited.add(node)
+  if (limit <= 0) return cycles
+  for (const cycle of genCycles(toLayerDependencyEdges(graph))) {
+    cycles.push({ path: getPathNodes(cycle).map((node) => node.id) })
+    if (cycles.length >= limit) break
   }
-
-  for (const layerId of adjacency.keys()) {
-    dfs(layerId, [])
-  }
-
   return cycles
+}
+
+/** Layers on at least one cycle: members of a strongly connected component larger than one. */
+function getLayerCycleComponents(graph: LayerDependencyGraph): Map<string, number> {
+  const componentOf = new Map<string, number>()
+  getStronglyConnectedComponents(toLayerDependencyEdges(graph))
+    .filter((scc) => scc.length > 1)
+    .forEach((scc, i) => {
+      for (const node of scc) componentOf.set(node.id, i)
+    })
+  return componentOf
 }
 
 // =============================================================================
@@ -286,12 +291,13 @@ export function renderLayerGraphMermaid(graph: LayerDependencyGraph): string {
   lines.push("graph TD")
   lines.push("")
 
-  const cycles = detectLayerCycles(graph)
-  const cycleEdges = new Set<string>()
-  for (const cycle of cycles) {
-    for (let i = 0; i < cycle.path.length - 1; i++) {
-      cycleEdges.add(`${cycle.path[i]}→${cycle.path[i + 1]}`)
-    }
+  // A requires edge is on a cycle when some provider of the service sits in
+  // the same component as the requiring layer.
+  const componentOf = getLayerCycleComponents(graph)
+  const isCycleEdge = (e: LayerGraphEdge): boolean => {
+    const component = componentOf.get(e.from)
+    return component !== undefined
+      && (graph.serviceToLayers.get(e.to) ?? []).some((p) => p !== e.from && componentOf.get(p) === component)
   }
 
   const depths = computeLayerDepths(graph)
@@ -312,11 +318,10 @@ export function renderLayerGraphMermaid(graph: LayerDependencyGraph): string {
   lines.push("")
 
   for (const e of graph.edges) {
-    const isCycleEdge = cycleEdges.has(`${e.from}→${e.to}`)
     if (e.kind === "provides") {
       lines.push(`  ${sanitizeId(e.from)} -.->|provides| ${sanitizeId(e.to)}`)
     } else if (e.kind === "requires") {
-      if (isCycleEdge) {
+      if (isCycleEdge(e)) {
         lines.push(`  ${sanitizeId(e.from)} -->|⚠ CYCLE| ${sanitizeId(e.to)}`)
       } else {
         lines.push(`  ${sanitizeId(e.from)} --> ${sanitizeId(e.to)}`)
@@ -339,13 +344,9 @@ export function renderLayerGraphMermaid(graph: LayerDependencyGraph): string {
   }
 
   // Cycle warning styling
-  if (cycles.length > 0) {
+  if (componentOf.size > 0) {
     lines.push("  classDef cycleNode fill:#FFCDD2,stroke:#C62828,stroke-width:3px")
-    const cycleNodes = new Set<string>()
-    for (const cycle of cycles) {
-      for (const id of cycle.path) cycleNodes.add(id)
-    }
-    for (const id of cycleNodes) {
+    for (const id of componentOf.keys()) {
       lines.push(`  class ${sanitizeId(id)} cycleNode`)
     }
   }

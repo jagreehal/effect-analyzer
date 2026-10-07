@@ -469,6 +469,7 @@ dprint formats the repo (`dprint.json`): double quotes, no semicolons, 120 colum
 - **Unwrap before reading an expression:** `unwrapExpression(node)` from `analysis-utils.ts` strips `as`, `satisfies`, `!`, `<T>` and parens. `analysis-utils.ts` imports nothing local, which is what keeps `core-analysis` ↔ `effect-analysis` acyclic
 - **Typed errors:** `AnalysisError` with codes (`NO_EFFECTS_FOUND`, `FILE_NOT_FOUND`)
 - **Semantic roles:** Nodes tagged with `SemanticRole` for filtering/styling
+- **Graph algorithms:** cycles, strongly connected components, topological order and reachability come from `@statelyai/graph`. Convert to its `{ nodes, edges }` shape with one edge per node pair (see `toLayerDependencyEdges` in `layer-graph.ts`, `toStepGraph` in `data-flow.ts`). Cycle enumeration grows exponentially, so cap it (`genCycles` plus a limit) or use `getStronglyConnectedComponents` when you only need membership
 
 ## Common Mistakes
 
