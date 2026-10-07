@@ -1,5 +1,12 @@
 # effect-analyzer
 
+## 3.9.1
+
+### Patch Changes
+
+- bf0ec0a: Cycle detection for layers and data flow reports each cycle once, including cycles that pass back through a layer you reached earlier. `detectLayerCycles` and `findCycles` take an optional `limit` (default 100). `getTransitiveDependencies` returns each step once, nearest first. The `mermaid-layers` diagram labels cycle edges `⚠ CYCLE` and renders densely connected layer graphs in milliseconds.
+- 8d7c0b7: `--direction` applies to every diagram format, including `mermaid-railway`, `mermaid-services`, `mermaid-errors`, `mermaid-retry`, `mermaid-testability` and `mermaid-dataflow`. Railway `onError` and `tapError` boxes name the call their cleanup wraps, or the field it sets (`set ledger.balances`), and `explain` reads `Sets ledger.balances via sync`.
+
 ## 3.9.0
 
 ### Minor Changes
