@@ -348,9 +348,9 @@ Topological order of data flow nodes.
 
 All transitive dependencies of a node.
 
-### `findCycles(graph)`
+### `findCycles(graph, limit?)`
 
-Detect circular dependencies in the data flow.
+Detect circular dependencies in the data flow. Returns at most `limit` cycles (default 100), because densely connected graphs have exponentially many.
 
 ### `validateDataFlow(graph)`
 
@@ -400,9 +400,9 @@ Build a dependency graph of all layers in a set of IRs.
 
 Render the layer graph as Mermaid.
 
-### `detectLayerCycles(graph)`
+### `detectLayerCycles(graph, limit?)`
 
-Find circular layer dependencies.
+Find circular layer dependencies. Returns at most `limit` cycles (default 100), each reported once.
 
 ### `detectDiamondDependencies(graph)`
 

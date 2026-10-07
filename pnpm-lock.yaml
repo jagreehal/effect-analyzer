@@ -214,6 +214,9 @@ importers:
       '@effect/tsgo':
         specifier: 0.47.2
         version: 0.47.2
+      '@statelyai/graph':
+        specifier: 2.5.1
+        version: 2.5.1(cytoscape@3.34.2)(d3-force@3.0.0)(d3-hierarchy@3.1.2)(zod@4.5.4)
       ts-morph:
         specifier: ^28.0.0
         version: 28.0.0
@@ -2007,6 +2010,50 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
+
+  '@statelyai/graph@2.5.1':
+    resolution: {integrity: sha512-7E2hSRsCZMzV5V8fnSuWE84RycEf8PZE4SX/WBcuod832BiFRYPvMwrbPR4hvHWR6lrAbQjSebSktf4Jz0GAZw==}
+    peerDependencies:
+      '@dagrejs/dagre': ^3.0.0 || ^4.0.0
+      '@hpcc-js/wasm-graphviz': ^1.0.0
+      cytoscape: ^3.0.0
+      d3-force: ^3.0.0
+      d3-hierarchy: ^3.0.0
+      dotparser: ^1.0.0
+      elkjs: ^0.9.0 || ^0.10.0 || ^0.11.0
+      fast-xml-parser: ^5.0.0
+      graphology: ^0.26.0
+      graphology-layout-forceatlas2: ^0.10.0
+      webcola: ^3.4.0
+      xstate: ^5.19.0
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      '@dagrejs/dagre':
+        optional: true
+      '@hpcc-js/wasm-graphviz':
+        optional: true
+      cytoscape:
+        optional: true
+      d3-force:
+        optional: true
+      d3-hierarchy:
+        optional: true
+      dotparser:
+        optional: true
+      elkjs:
+        optional: true
+      fast-xml-parser:
+        optional: true
+      graphology:
+        optional: true
+      graphology-layout-forceatlas2:
+        optional: true
+      webcola:
+        optional: true
+      xstate:
+        optional: true
+      zod:
+        optional: true
 
   '@stryker-mutator/api@10.0.0':
     resolution: {integrity: sha512-ZtAJ0ZT3MVRCWJTBE2h90XB/6E+4lifHYtcTyNG6nU2nLekPgTo4gD5esjX6Okxo1b/JB4jJzyxYB54fwKAoJw==}
@@ -5612,6 +5659,13 @@ snapshots:
   '@shikijs/vscode-textmate@10.0.2': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
+
+  '@statelyai/graph@2.5.1(cytoscape@3.34.2)(d3-force@3.0.0)(d3-hierarchy@3.1.2)(zod@4.5.4)':
+    optionalDependencies:
+      cytoscape: 3.34.2
+      d3-force: 3.0.0
+      d3-hierarchy: 3.1.2
+      zod: 4.5.4
 
   '@stryker-mutator/api@10.0.0':
     dependencies:

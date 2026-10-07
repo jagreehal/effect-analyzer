@@ -1,3 +1,4 @@
+import { createGraph, getStronglyConnectedComponents } from "@statelyai/graph"
 import type { ProjectServiceMap } from "./types"
 
 export interface ServiceCycle {
@@ -5,72 +6,22 @@ export interface ServiceCycle {
   readonly size: number
 }
 
-const canonicalizeCycle = (cycle: ReadonlyArray<string>): ReadonlyArray<string> => {
-  if (cycle.length === 0) return cycle
-  const base = [...cycle]
-  let minIdx = 0
-  for (let i = 1; i < base.length; i++) {
-    if (base[i]!.localeCompare(base[minIdx]!) < 0) minIdx = i
-  }
-  const rotated = [...base.slice(minIdx), ...base.slice(0, minIdx)]
-  return rotated
-}
-
 export const detectServiceCycles = (serviceMap: ProjectServiceMap): ReadonlyArray<ServiceCycle> => {
-  const graph = new Map<string, ReadonlyArray<string>>()
+  const edges: Array<{ id: string; sourceId: string; targetId: string }> = []
   for (const [serviceId, artifact] of serviceMap.services) {
-    const deps = artifact.dependencies.filter((dep) => serviceMap.services.has(dep)).sort((a, b) => a.localeCompare(b))
-    graph.set(serviceId, deps)
-  }
-
-  const indexByNode = new Map<string, number>()
-  const lowLink = new Map<string, number>()
-  const onStack = new Set<string>()
-  const stack: Array<string> = []
-  let index = 0
-  const cycles: Array<ServiceCycle> = []
-
-  const strongConnect = (node: string): void => {
-    indexByNode.set(node, index)
-    lowLink.set(node, index)
-    index++
-    stack.push(node)
-    onStack.add(node)
-
-    const neighbors = graph.get(node) ?? []
-    for (const next of neighbors) {
-      if (!indexByNode.has(next)) {
-        strongConnect(next)
-        lowLink.set(node, Math.min(lowLink.get(node) ?? 0, lowLink.get(next) ?? 0))
-      } else if (onStack.has(next)) {
-        lowLink.set(node, Math.min(lowLink.get(node) ?? 0, indexByNode.get(next) ?? 0))
-      }
-    }
-
-    if (lowLink.get(node) === indexByNode.get(node)) {
-      const scc: Array<string> = []
-      let w: string | undefined
-      do {
-        w = stack.pop()
-        if (!w) break
-        onStack.delete(w)
-        scc.push(w)
-      } while (w !== node)
-
-      const hasSelfLoop = (graph.get(node) ?? []).includes(node)
-      if (scc.length > 1 || hasSelfLoop) {
-        const canonical = canonicalizeCycle(scc.sort((a, b) => a.localeCompare(b)))
-        cycles.push({ services: canonical, size: canonical.length })
-      }
+    for (const dep of artifact.dependencies) {
+      if (serviceMap.services.has(dep)) edges.push({ id: `${edges.length}`, sourceId: serviceId, targetId: dep })
     }
   }
+  const graph = createGraph({ nodes: [...serviceMap.services.keys()].map((id) => ({ id })), edges })
+  const selfLoops = new Set(edges.filter((e) => e.sourceId === e.targetId).map((e) => e.sourceId))
 
-  for (const node of [...graph.keys()].sort((a, b) => a.localeCompare(b))) {
-    if (!indexByNode.has(node)) strongConnect(node)
-  }
-
-  return cycles.sort((a, b) => {
-    if (b.size !== a.size) return b.size - a.size
-    return a.services.join("|").localeCompare(b.services.join("|"))
-  })
+  return getStronglyConnectedComponents(graph)
+    .map((scc) => scc.map((node) => node.id))
+    .filter((ids) => ids.length > 1 || selfLoops.has(ids[0]!))
+    .map((ids) => ({ services: ids.sort((a, b) => a.localeCompare(b)), size: ids.length }))
+    .sort((a, b) => {
+      if (b.size !== a.size) return b.size - a.size
+      return a.services.join("|").localeCompare(b.services.join("|"))
+    })
 }

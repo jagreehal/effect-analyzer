@@ -6,6 +6,8 @@
  * - Service reads: effect nodes that require services from Context
  */
 
+import { createGraph, genBFS, genCycles, getPathNodes, getTopologicalSort } from "@statelyai/graph"
+import type { Graph } from "@statelyai/graph"
 import { Option } from "effect"
 import type { StaticEffectIR, StaticEffectNode, StaticFlowNode } from "./types"
 import { getStaticChildren } from "./types"
@@ -153,50 +155,25 @@ export function buildDataFlowGraph(ir: StaticEffectIR): DataFlowGraph {
 // Analysis Utilities
 // =============================================================================
 
+/** Step dependencies as a graph, without the implicit `__context__` source; one edge per step pair. */
+function toStepGraph(graph: DataFlowGraph): Graph {
+  const ids = new Set(graph.nodes.map((node) => node.id))
+  const pairs = new Set<string>()
+  const edges: Array<{ id: string; sourceId: string; targetId: string }> = []
+  for (const edge of graph.edges) {
+    const pair = JSON.stringify([edge.from, edge.to])
+    if (ids.has(edge.from) && ids.has(edge.to) && !pairs.has(pair)) {
+      pairs.add(pair)
+      edges.push({ id: `${edges.length}`, sourceId: edge.from, targetId: edge.to })
+    }
+  }
+  return createGraph({ nodes: graph.nodes.map((node) => ({ id: node.id })), edges })
+}
+
 export function getDataFlowOrder(
   graph: DataFlowGraph
 ): Array<string> | undefined {
-  const inDegree = new Map<string, number>()
-  const adjacency = new Map<string, Array<string>>()
-
-  for (const node of graph.nodes) {
-    inDegree.set(node.id, 0)
-    adjacency.set(node.id, [])
-  }
-
-  for (const edge of graph.edges) {
-    if (edge.from === "__context__") continue
-    const targets = adjacency.get(edge.from) ?? []
-    targets.push(edge.to)
-    adjacency.set(edge.from, targets)
-    inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1)
-  }
-
-  const queue: Array<string> = []
-  for (const [id, degree] of inDegree) {
-    if (id !== "__context__" && degree === 0) {
-      queue.push(id)
-    }
-  }
-
-  const result: Array<string> = []
-  while (queue.length > 0) {
-    const current = queue.shift()
-    if (current === undefined) break
-    result.push(current)
-    for (const neighbor of adjacency.get(current) ?? []) {
-      const newDegree = (inDegree.get(neighbor) ?? 0) - 1
-      inDegree.set(neighbor, newDegree)
-      if (newDegree === 0) {
-        queue.push(neighbor)
-      }
-    }
-  }
-
-  if (result.length !== graph.nodes.length) {
-    return undefined
-  }
-  return result
+  return getTopologicalSort(toStepGraph(graph))?.map((node) => node.id)
 }
 
 export function getProducers(
@@ -229,64 +206,19 @@ export function getTransitiveDependencies(
   graph: DataFlowGraph,
   stepId: string
 ): Array<string> {
-  const visited = new Set<string>()
-  const result: Array<string> = []
-
-  function visit(id: string): void {
-    if (visited.has(id) || id === "__context__") return
-    visited.add(id)
-    for (const edge of graph.edges) {
-      if (edge.to === id) {
-        result.push(edge.from)
-        visit(edge.from)
-      }
-    }
-  }
-
-  visit(stepId)
-  return result
+  return [...genBFS(toStepGraph(graph), { from: stepId, direction: "incoming" })]
+    .map((node) => node.id)
+    .filter((id) => id !== stepId)
 }
 
-export function findCycles(graph: DataFlowGraph): Array<Array<string>> {
+/** Returns up to `limit` circular dependencies. */
+export function findCycles(graph: DataFlowGraph, limit = 100): Array<Array<string>> {
   const cycles: Array<Array<string>> = []
-  const visited = new Set<string>()
-  const recStack = new Set<string>()
-  const adjacency = new Map<string, Array<string>>()
-
-  for (const node of graph.nodes) {
-    adjacency.set(node.id, [])
+  if (limit <= 0) return cycles
+  for (const cycle of genCycles(toStepGraph(graph))) {
+    cycles.push(getPathNodes(cycle).slice(0, -1).map((node) => node.id))
+    if (cycles.length >= limit) break
   }
-  for (const edge of graph.edges) {
-    if (edge.from === "__context__") continue
-    const targets = adjacency.get(edge.from) ?? []
-    targets.push(edge.to)
-    adjacency.set(edge.from, targets)
-  }
-
-  function dfs(id: string, path: Array<string>): void {
-    visited.add(id)
-    recStack.add(id)
-    path.push(id)
-
-    for (const neighbor of adjacency.get(id) ?? []) {
-      if (!visited.has(neighbor)) {
-        dfs(neighbor, path)
-      } else if (recStack.has(neighbor)) {
-        const cycleStart = path.indexOf(neighbor)
-        cycles.push(path.slice(cycleStart))
-      }
-    }
-
-    path.pop()
-    recStack.delete(id)
-  }
-
-  for (const node of graph.nodes) {
-    if (!visited.has(node.id)) {
-      dfs(node.id, [])
-    }
-  }
-
   return cycles
 }
 
