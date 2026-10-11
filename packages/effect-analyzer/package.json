@@ -103,7 +103,7 @@
   },
   "dependencies": {
     "@statelyai/graph": "2.5.1",
-    "@effect/tsgo": "0.47.2",
+    "@effect/tsgo": "0.51.1",
     "ts-morph": "^28.0.0",
     "tsx": "4.23.15"
   },
@@ -118,7 +118,7 @@
     "@typeonce/effect-machine": "0.39.0",
     "@types/node": "^26.6.3",
     "effect": "4.0.0",
-    "oxlint": "1.86.0",
+    "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
     "ts-morph": "^28.0.0",
     "tsup": "^8.5.1",
