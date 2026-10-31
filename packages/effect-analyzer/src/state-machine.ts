@@ -35,6 +35,7 @@ import {
   stringValue,
   unwrap
 } from "./state-machine-ast"
+import { xstateMachinesIn } from "./state-machine-xstate"
 import type { SourceLocation } from "./types"
 
 // =============================================================================
@@ -71,7 +72,7 @@ export interface StateInvoke {
 
 export interface StateMachine {
   readonly name: string
-  readonly source: "effect-machine" | "machine-json"
+  readonly source: "effect-machine" | "machine-json" | "xstate"
   readonly initial: string | undefined
   /** Every state path in the machine, parents included. */
   readonly states: ReadonlyArray<string>
@@ -943,6 +944,7 @@ export function analyzeStateMachines(
       if (machine) machines.push(machine)
     }
   }
+  machines.push(...xstateMachinesIn(sf, filePath))
 
   const analysis = { machines }
   if (source === undefined && mtimeMs !== undefined) {

@@ -161,7 +161,7 @@ npx effect-analyze ./examples/pokemon/src/machines/selection.ts --format xstate-
 ```
 
 ```ts
-export const SelectionMachineMachine = createMachine({
+export const SelectionMachine = createMachine({
   id: 'SelectionMachine',
   initial: 'form',
   states: {
@@ -204,6 +204,39 @@ Three things to note, because they are the general rules:
 - **The invoked child is labelled with its declared id** (`search`), followed
   through the local factory that builds it. `Machine.child('selection', M)` is
   read the same way.
+
+## XState and @xstate/effect
+
+The analyzer reads XState v6 and `@xstate/effect` machines too. It recognizes
+these calls when you import them from `xstate` or `@xstate/effect`:
+
+```ts
+createMachine({...})
+setup({...}).createMachine({...})
+setupEffect({...}).createMachine({...})
+```
+
+The config literal goes through the [MachineJSON](#machinejson) reader, so
+states, `on`, `always`, `after`, `invoke` (`onDone` / `onError`), `entry` /
+`exit` and `type: 'final' | 'parallel'` all carry through.
+
+For a transition function such as
+`onDone: ({ event }) => ({ target: 'deployed', context })`, the analyzer reads
+the `target` of each returned object (a string or an array). Each branch gets a
+guard built from the `if` and ternary conditions that lead to it, joined with
+`&&`, with `!(x)` for any earlier `if (x) return ...`. A returned object with no
+`target` becomes a self-transition.
+
+When the root has no `initial` (a parallel or atomic root), or carries its own
+`on` / `after` / `invoke` handlers, the diagram shows it as one state named
+after the machine's variable.
+
+[`examples/xstate-effect-workflows`](https://github.com/jagreehal/effect-analyzer/tree/main/examples/xstate-effect-workflows)
+holds worked examples:
+
+```bash
+npx effect-analyze examples/xstate-effect-workflows/approval.ts --format statechart-html
+```
 
 ## MachineJSON
 

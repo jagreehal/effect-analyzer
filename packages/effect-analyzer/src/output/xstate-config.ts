@@ -219,7 +219,7 @@ export function renderXStateConfig(machine: StateMachine): string {
   const lines = [
     "import { createMachine } from 'xstate';",
     "",
-    `export const ${identifier(machine.name)}Machine = createMachine({`,
+    `export const ${identifier(machine.name).replace(/(?<![Mm]achine)$/, "Machine")} = createMachine({`,
     `  id: ${str(machine.name)},`
   ]
   if (machine.initial) {

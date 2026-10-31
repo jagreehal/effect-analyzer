@@ -102,27 +102,29 @@
     }
   },
   "dependencies": {
-    "@statelyai/graph": "2.5.1",
-    "@effect/tsgo": "0.47.2",
+    "@effect/tsgo": "0.63.0",
+    "@statelyai/graph": "2.6.0",
     "ts-morph": "^28.0.0",
     "tsx": "4.23.15"
   },
   "optionalDependencies": {
-    "vscode-languageserver": "^10.1.2",
-    "vscode-languageserver-textdocument": "^1.0.15"
+    "vscode-languageserver": "^11.0.0",
+    "vscode-languageserver-textdocument": "^1.0.16"
   },
   "devDependencies": {
-    "@stryker-mutator/core": "10.0.0",
-    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "@total-typescript/ts-reset": "^0.6.1",
-    "@typeonce/effect-machine": "0.39.0",
-    "@types/node": "^26.6.3",
-    "effect": "4.0.0",
-    "oxlint": "1.86.0",
-    "oxlint-tsgolint": "7.0.2003",
+    "@typeonce/effect-machine": "0.46.0",
+    "@types/node": "^26.6.6",
+    "@xstate/effect": "1.0.0-alpha.10",
+    "effect": "4.0.7",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "ts-morph": "^28.0.0",
-    "tsup": "^8.5.1",
+    "tsup": "^9.0.0",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5",
+    "xstate": "6.0.0-alpha.71"
   }
 }

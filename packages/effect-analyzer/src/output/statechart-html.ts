@@ -22,18 +22,21 @@ export function renderStatechartVisualizerHTML(
     const coverage = byName.get(machine.name)
     const warnings = coverage?.findings.filter((finding) => finding.severity === "warning").length ?? 0
     const config = renderXStateConfig(machine)
+    const svg = renderStatechartSVG(machine, coverage)
+    // Beside the 390px sidebar the diagram gets ~780px; wider ones go full width.
+    const wide = Number(/width="(\d+)"/.exec(svg)?.[1] ?? 0) > 780
     return `<section class="machine" id="${esc(machine.name)}">
   <header>
     <div>
       <h2>${esc(machine.name)}</h2>
-      <p>${machine.source} / ${machine.transitions.length} transitions / ${machine.states.length} states</p>
+      <p>${esc(machine.source)} / ${machine.transitions.length} transitions / ${machine.states.length} states</p>
     </div>
     <div class="${warnings > 0 ? "badge warn" : "badge"}">${
       coverage ? pct(coverage.coverageRatio) : "n/a"
     } coverage</div>
   </header>
-  <div class="grid">
-    <div class="diagram">${renderStatechartSVG(machine, coverage)}</div>
+  <div class="${wide ? "grid wide" : "grid"}">
+    <div class="diagram">${svg}</div>
     <aside>
       <h3>Coverage</h3>
       <ul>
@@ -73,6 +76,8 @@ p,li{color:var(--muted)}
 .badge{border:1px solid var(--accent);color:#bfdbfe;border-radius:999px;padding:6px 10px;font-size:13px;font-weight:700;white-space:nowrap}
 .badge.warn{border-color:var(--warn);color:#fed7aa}
 .grid{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:0}
+.grid.wide{grid-template-columns:1fr}
+.grid.wide aside{border-left:0;border-top:1px solid var(--line)}
 .diagram{padding:18px;overflow:auto;background:#16191f}
 aside{border-left:1px solid var(--line);padding:18px;background:var(--panel2)}
 ul{padding-left:18px;margin:0 0 18px}
@@ -87,7 +92,7 @@ svg{max-width:none}
   <section class="hero">
     <div>
       <h1>Effect Statecharts</h1>
-      <p>Plain Effect source, XState-style visualization, no XState runtime dependency.</p>
+      <p>Read statically from source (effect-machine or XState): diagram, coverage and an XState config. Nothing is executed.</p>
     </div>
     <div class="badge">${machines.length} machine${machines.length === 1 ? "" : "s"}</div>
   </section>

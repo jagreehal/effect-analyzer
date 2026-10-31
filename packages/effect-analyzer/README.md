@@ -244,7 +244,8 @@ Machines written with [`@typeonce/effect-machine`](https://github.com/typeonce-d
 statically and rendered as XState-style statecharts. Nested and parallel state
 trees, final states, entry/exit actions, invoked children, and eventless
 (`always`) transitions all carry through. Nothing is executed: the analyzer only
-reads your source. See the full guide in the
+reads your source. XState v6 and `@xstate/effect` machines (`createMachine`,
+`setup().createMachine`, `setupEffect().createMachine`) are read the same way. See the full guide in the
 [State Machines](https://jagreehal.github.io/effect-analyzer/reference/state-machines/)
 docs.
 
