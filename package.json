@@ -15,7 +15,7 @@
     "format:check": "dprint check",
     "test": "turbo test",
     "type-check": "turbo type-check",
-    "tc:examples": "pnpm --dir packages/effect-analyzer exec tsc -p ../../examples/migrate-one-file/tsconfig.json",
+    "tc:examples": "pnpm --dir packages/effect-analyzer exec tsc -p ../../examples/migrate-one-file/tsconfig.json && pnpm --dir packages/effect-analyzer exec tsc -p ../../examples/xstate-effect-workflows/tsconfig.json",
     "clean": "turbo clean",
     "quality": "turbo run build --concurrency=1 && turbo run lint && dprint check && turbo run type-check && turbo run test && pnpm run tc:examples",
     "changeset": "changeset",
@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
-    "dprint": "^0.58.0",
-    "turbo": "^2.11.5"
+    "dprint": "^0.64.3",
+    "turbo": "^2.11.10"
   }
 }

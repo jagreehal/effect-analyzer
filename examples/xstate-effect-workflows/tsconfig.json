@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "typeRoots": ["../../packages/effect-analyzer/node_modules/@types"],
+    "types": ["node"],
+    // Not a workspace package: resolve effect, xstate and @xstate/effect from
+    // the analyzer package's install (both alphas are its devDependencies).
+    "paths": {
+      "effect": ["../../packages/effect-analyzer/node_modules/effect/dist/index.d.ts"],
+      "effect/*": ["../../packages/effect-analyzer/node_modules/effect/dist/*.d.ts"],
+      "xstate": ["../../packages/effect-analyzer/node_modules/xstate/dist/xstate.cjs.d.mts"],
+      "@xstate/effect": ["../../packages/effect-analyzer/node_modules/@xstate/effect/dist/xstate-effect.d.ts"]
+    },
+    "noEmit": true
+  },
+  "include": ["*.ts"]
+}
