@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/pipe-heavy.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/pipe-heavy.ts`
 - **Analyzed**: 2026-05-22T16:10:33.388Z
 - **Source Type**: pipe
 - **TypeScript Version**: 6.0.2
@@ -99,7 +99,7 @@ pipeHeavyProgram (pipe):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/pipe-heavy.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/pipe-heavy.ts`
 - **Analyzed**: 2026-05-22T16:10:33.388Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

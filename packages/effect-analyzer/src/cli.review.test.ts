@@ -143,6 +143,66 @@ describe("cli review", () => {
     }
   }, 20_000)
 
+  it("lists a step swapped in place for a reviewer to confirm instead of passing it as low risk", () => {
+    const root = mkdtempSync(join(tmpdir(), "effect-analyze-review-"))
+    const program = (call: string) => `
+import { Effect } from "effect";
+
+declare const db: { remove: (id: string) => Effect.Effect<void>; archive: (id: string) => Effect.Effect<void> };
+
+export const retire = Effect.gen(function* () {
+  yield* Effect.log("start");
+  yield* ${call}("u1");
+  yield* Effect.log("done");
+});
+`
+    try {
+      gitIn(root, "init", "-q")
+      writeFileSync(join(root, "retire.ts"), program("db.remove"))
+      gitIn(root, "add", "retire.ts")
+      gitIn(root, "commit", "-qm", "v1")
+      writeFileSync(join(root, "retire.ts"), program("db.archive"))
+
+      const r = spawnSync(process.execPath, [CLI, "review", "--base", "HEAD"], { cwd: root, encoding: "utf8" })
+      expect(r.status, r.stderr).toBe(0)
+      expect(r.stdout).toContain("1 replaced step to confirm")
+      expect(r.stdout).not.toContain("🟢 Low")
+      expect(r.stdout).toContain("| Replaced steps | ⚠️ | `retire`: `db.remove` → `db.archive` |")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 20_000)
+
+  it("keeps source text inside its table cell when a callee carries pipes and backticks", () => {
+    const root = mkdtempSync(join(tmpdir(), "effect-analyze-review-"))
+    const program = (call: string) => `
+import { Effect } from "effect";
+
+declare const db: Record<string, (id: string) => Effect.Effect<void>>;
+
+export const retire = Effect.gen(function* () {
+  yield* Effect.log("start");
+  yield* ${call}("u1");
+  yield* Effect.log("done");
+});
+`
+    try {
+      gitIn(root, "init", "-q")
+      writeFileSync(join(root, "retire.ts"), program("db.remove"))
+      gitIn(root, "add", "retire.ts")
+      gitIn(root, "commit", "-qm", "v1")
+      writeFileSync(join(root, "retire.ts"), program("db[`a|b`]"))
+
+      const r = spawnSync(process.execPath, [CLI, "review", "--base", "HEAD"], { cwd: root, encoding: "utf8" })
+      expect(r.status, r.stderr).toBe(0)
+      const row = r.stdout.split("\n").find((line) => line.startsWith("| Replaced steps |")) ?? ""
+      expect(row).toContain("`db.remove` → `db['a\\|b']`")
+      expect(row.split(/(?<!\\)\|/).length).toBe(5)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 20_000)
+
   it("follows a rename instead of reporting every program in the file as removed", () => {
     const root = mkdtempSync(join(tmpdir(), "effect-analyze-review-"))
     try {

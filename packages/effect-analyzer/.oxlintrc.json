@@ -93,7 +93,19 @@
     "effecttsgo/try-catch-in-effect-gen": "error",
     "effecttsgo/lazy-effect": "error",
     "effecttsgo/floating-effect": "error",
-    "effecttsgo/missing-return-yield-star": "error"
+    "effecttsgo/missing-return-yield-star": "error",
+    "effecttsgo/effect-succeed-with-undefined": "error",
+    "effecttsgo/effect-try-without-catch": "error",
+    "effecttsgo/fail-cause-to-constructor": "error",
+    "effecttsgo/manual-metric-tap-to-track": "error",
+    "effecttsgo/map-map-error-to-map-both": "error",
+    "effecttsgo/map-some-catch-no-such-element": "error",
+    "effecttsgo/match-boolean-to-is-success": "error",
+    "effecttsgo/provide-merge-all-to-array": "error",
+    "effecttsgo/result-match-to-from-result": "error",
+    "effecttsgo/suspend-fail-to-fail-sync": "error",
+    "effecttsgo/type-union-to-schema-union": "error",
+    "effecttsgo/yield-in-call-argument": "error"
   },
   "overrides": [
     {

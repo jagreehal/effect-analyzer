@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
 - **Analyzed**: 2026-05-22T16:10:33.068Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -71,7 +71,7 @@ branchingGenProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
 - **Analyzed**: 2026-05-22T16:10:33.069Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -125,7 +125,7 @@ fetchMaybeUser (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
 - **Analyzed**: 2026-05-22T16:10:33.070Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -224,7 +224,7 @@ matchProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/match-and-branching.ts`
 - **Analyzed**: 2026-05-22T16:10:33.071Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

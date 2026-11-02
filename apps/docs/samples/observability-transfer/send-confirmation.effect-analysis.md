@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/send-confirmation.ts`
+- **File**: `apps/docs/samples/observability-transfer/send-confirmation.ts`
 - **Analyzed**: 2026-09-11T05:50:34.501Z
 - **Source Type**: direct
 

@@ -353,9 +353,8 @@ const main = Effect.gen(function*() {
 /**
  * Exit once stdout has drained.
  *
- * `process.exit` discards data still queued on a pipe, which silently truncated
- * every JSON report larger than the pipe buffer. Writing to a file hid it
- * because file writes complete synchronously.
+ * `process.exit` discards data still queued on a pipe, so waiting for `drain`
+ * keeps JSON reports larger than the pipe buffer whole.
  */
 const exitWhenFlushed = (code: number): void => {
   process.exitCode = code

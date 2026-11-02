@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/apps/docs/samples/observability-transfer/execute-transfer.ts`
+- **File**: `apps/docs/samples/observability-transfer/execute-transfer.ts`
 - **Analyzed**: 2026-09-11T05:50:33.653Z
 - **Source Type**: direct
 

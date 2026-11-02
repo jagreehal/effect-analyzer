@@ -5,7 +5,8 @@ const KIND_ICONS: Record<string, string> = {
   removed: "-",
   unchanged: " ",
   renamed: "~",
-  moved: ">"
+  moved: ">",
+  replaced: "~"
 }
 
 function formatStepLine(entry: StepDiffEntry): string {
@@ -15,6 +16,8 @@ function formatStepLine(entry: StepDiffEntry): string {
   switch (entry.kind) {
     case "renamed":
       return `${icon} **${callee}** (renamed from \`${entry.previousStepId}\` → \`${entry.stepId}\`)`
+    case "replaced":
+      return `${icon} **${callee}** (replaces \`${entry.previousCallee ?? ""}\`)`
     case "moved":
       return `${icon} **${callee}** (moved from \`${entry.containerBefore}\` → \`${entry.containerAfter}\`)`
     case "added":
@@ -47,6 +50,7 @@ export function renderDiffMarkdown(
   lines.push(`| Removed | ${diff.summary.stepsRemoved} |`)
   lines.push(`| Renamed | ${diff.summary.stepsRenamed} |`)
   lines.push(`| Moved | ${diff.summary.stepsMoved} |`)
+  lines.push(`| Replaced | ${diff.summary.stepsReplaced} |`)
   lines.push(`| Unchanged | ${diff.summary.stepsUnchanged} |`)
   lines.push(`| Structural changes | ${diff.summary.structuralChanges} |`)
   if (diff.summary.hasRegressions) {

@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.787Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -75,7 +75,7 @@ swallowedErrorProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.790Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -148,7 +148,7 @@ swallowedErrorWithLog (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.791Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -202,7 +202,7 @@ swallowedErrorWithLog (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.796Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -360,7 +360,7 @@ largeGenBlock (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.797Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -418,7 +418,7 @@ smallGenBlock (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.802Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -484,7 +484,7 @@ provideMergeChainProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.803Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -568,7 +568,7 @@ sequentialFailValidation (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.805Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -634,7 +634,7 @@ deferredNoResolve (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.807Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -704,7 +704,7 @@ deferredResolved (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.808Z
 - **Source Type**: run
 - **TypeScript Version**: 6.0.2
@@ -758,7 +758,7 @@ run-10 (run):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.809Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -812,7 +812,7 @@ rawSideEffectInGen (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.814Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -883,7 +883,7 @@ mutableInConcurrent (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.818Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -959,7 +959,7 @@ flatMapChain (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.820Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1027,7 +1027,7 @@ flatMapShort (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.820Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1081,7 +1081,7 @@ runPromiseThenChain (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues-extra.ts`
 - **Analyzed**: 2026-05-22T16:10:32.821Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

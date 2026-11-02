@@ -1,7 +1,7 @@
 /**
- * Regression test: `call().pipe(Effect.withSpan("x"))` is an annotation, not a
- * step. It used to emit a "Pipe (0 steps)" node between every real call, and a
- * member chain wrapped across lines used to label as `deps .fetchRate`.
+ * `call().pipe(Effect.withSpan("x"))` is an annotation, not a step: the IR has
+ * no "Pipe (0 steps)" node between real calls, and a member chain wrapped
+ * across lines labels as `deps.fetchRate`.
  */
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"

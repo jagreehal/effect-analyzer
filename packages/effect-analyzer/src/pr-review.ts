@@ -202,7 +202,7 @@ const reviewPrograms = (
     }
     const diff = diffPrograms(b, a, { regressionMode: true })
     const changed = diff.summary.stepsAdded + diff.summary.stepsRemoved + diff.summary.stepsRenamed +
-        diff.summary.stepsMoved + diff.summary.structuralChanges > 0
+        diff.summary.stepsMoved + diff.summary.stepsReplaced + diff.summary.structuralChanges > 0
     programs.push({
       name,
       kind: changed ? "changed" : "unchanged",
@@ -265,6 +265,25 @@ const newFindingsOf = (
   return fresh
 }
 
+/** Source-derived text on one line, so it cannot end a fence, row or list item. */
+const oneLine = (text: string): string => text.replace(/\s+/g, " ").replace(/`{3,}/g, "'")
+/** Plain text safe inside a markdown table cell. */
+const cell = (text: string): string => oneLine(text).replaceAll("|", "\\|")
+/** A code span that source text cannot break out of. */
+const code = (text: string): string => `\`${cell(text).replaceAll("`", "'")}\``
+
+/** Each in-place step swap as `` `program`: `before` → `after` ``, for reviewers to confirm. */
+const replacementsOf = (files: ReadonlyArray<ReviewFile>): ReadonlyArray<string> =>
+  files.flatMap((f) =>
+    f.programs.flatMap((p) =>
+      counted(
+        (p.diff?.steps ?? []).filter((s) => s.kind === "replaced").map((s) =>
+          `${code(p.name)}: ${code(s.previousCallee ?? "")} → ${code(s.callee ?? s.stepId)}`
+        )
+      )
+    )
+  )
+
 const riskOf = (
   regressions: ReadonlyArray<ReviewRegression>,
   findings: ReadonlyArray<ReviewFinding>,
@@ -279,7 +298,7 @@ const riskOf = (
         p.after.complexity > (p.before?.complexity ?? 0)
     )
   )
-  if (findings.length > 0 || complexityJump) return "moderate"
+  if (findings.length > 0 || complexityJump || replacementsOf(files).length > 0) return "moderate"
   return "low"
 }
 
@@ -319,7 +338,7 @@ export const buildReview = (options: ReviewOptions): Effect.Effect<ReviewReport,
           const removed = [
             ...counted(p.diff.structuralChanges.filter((c) => c.kind === "removed").map((c) => c.description)),
             ...counted(
-              p.diff.steps.filter((s) => s.kind === "removed").map((s) => `step \`${s.callee ?? s.stepId}\` removed`)
+              p.diff.steps.filter((s) => s.kind === "removed").map((s) => `step ${code(s.callee ?? s.stepId)} removed`)
             )
           ]
           regressions.push({ file: file.path, program: p.name, description: removed.join(", ") })
@@ -375,6 +394,7 @@ const describeChange = (p: ReviewProgram): string => {
   if (d.summary.stepsRemoved) parts.push(`−${String(d.summary.stepsRemoved)} steps`)
   if (d.summary.stepsMoved) parts.push(`${String(d.summary.stepsMoved)} moved`)
   if (d.summary.stepsRenamed) parts.push(`${String(d.summary.stepsRenamed)} renamed`)
+  if (d.summary.stepsReplaced) parts.push(`${String(d.summary.stepsReplaced)} replaced`)
   for (
     const c of counted(
       d.structuralChanges.map((c) => `\`${c.nodeType}\` ${c.kind}${c.kind === "removed" ? " ⚠️" : ""}`)
@@ -396,6 +416,8 @@ const riskReason = (r: ReviewReport): string => {
   const warnings = r.newFindings.length - errors
   if (errors) parts.push(`${String(errors)} new lint error${errors === 1 ? "" : "s"}`)
   if (warnings) parts.push(`${String(warnings)} new lint warning${warnings === 1 ? "" : "s"}`)
+  const replaced = replacementsOf(r.files).length
+  if (replaced) parts.push(`${String(replaced)} replaced step${replaced === 1 ? "" : "s"} to confirm`)
   return parts.length ? ` · ${parts.join(", ")}` : ""
 }
 
@@ -428,7 +450,7 @@ export const renderReviewMarkdown = (
     )
     for (const p of touched) {
       lines.push(
-        `| \`${p.file}\` | \`${p.name}\` | ${describeChange(p)} | ${arrow(p.before?.steps, p.after?.steps)} | ${
+        `| ${code(p.file)} | ${code(p.name)} | ${describeChange(p)} | ${arrow(p.before?.steps, p.after?.steps)} | ${
           arrow(p.before?.errors.length, p.after?.errors.length)
         } | ${arrow(p.before?.complexity, p.after?.complexity)} |`
       )
@@ -437,15 +459,18 @@ export const renderReviewMarkdown = (
   }
 
   // Checks
+  const replacements = replacementsOf(r.files)
   const errorTypesAdded = touched.flatMap((p) =>
-    (p.after?.errors ?? []).filter((e) => !(p.before?.errors ?? []).includes(e)).map((e) => `\`${p.name}\`: ${e}`)
+    (p.after?.errors ?? []).filter((e) => !(p.before?.errors ?? []).includes(e)).map((e) =>
+      `${code(p.name)}: ${cell(e)}`
+    )
   )
   const complexityWarnings = programs
     .filter((p) =>
       p.after && p.after.complexity >= DEFAULT_THRESHOLDS.cyclomaticWarning &&
       p.after.complexity > (p.before?.complexity ?? 0)
     )
-    .map((p) => `\`${p.name}\` ${arrow(p.before?.complexity, p.after?.complexity)}`)
+    .map((p) => `${code(p.name)} ${arrow(p.before?.complexity, p.after?.complexity)}`)
   const check = (name: string, ok: boolean, warn: boolean, details: string) =>
     `| ${name} | ${ok ? "✅" : warn ? "⚠️" : "❌"} | ${details} |`
   lines.push(
@@ -459,7 +484,13 @@ export const renderReviewMarkdown = (
       false,
       r.regressions.length === 0
         ? "nothing removed"
-        : r.regressions.map((x) => `\`${x.program}\`: ${x.description}`).join("<br>")
+        : r.regressions.map((x) => `${code(x.program)}: ${x.description}`).join("<br>")
+    ),
+    check(
+      "Replaced steps",
+      replacements.length === 0,
+      true,
+      replacements.length === 0 ? "none" : replacements.join("<br>")
     ),
     check(
       "New lint findings",
@@ -468,7 +499,7 @@ export const renderReviewMarkdown = (
       r.newFindings.length === 0
         ? "none"
         : r.newFindings.map((f) =>
-          `${severityIcon(f.severity)} \`${f.file}:${String(f.line)}\` ${f.rule}: ${f.message}`
+          `${severityIcon(f.severity)} ${code(`${f.file}:${String(f.line)}`)} ${cell(f.rule)}: ${cell(f.message)}`
         ).join("<br>")
     ),
     check(
@@ -491,7 +522,7 @@ export const renderReviewMarkdown = (
   for (const p of withDiagram.slice(0, MAX_DIAGRAMS)) {
     lines.push(
       options?.diagrams === "collapsed" ? "<details>" : "<details open>",
-      `<summary>🛤️ \`${p.name}\` — ${p.kind === "added" ? "new" : "after"} (\`${p.file}\`)</summary>`,
+      `<summary>🛤️ ${code(p.name)} — ${p.kind === "added" ? "new" : "after"} (${code(p.file)})</summary>`,
       "",
       "```mermaid",
       p.railway,
@@ -504,11 +535,13 @@ export const renderReviewMarkdown = (
       for (const s of steps) {
         const sign = s.kind === "added" ? "+" : s.kind === "removed" ? "-" : "!"
         lines.push(
-          `${sign} ${s.callee ?? s.stepId}${
+          `${sign} ${oneLine(s.callee ?? s.stepId)}${
             s.kind === "moved"
               ? ` (moved ${s.containerBefore ?? ""} → ${s.containerAfter ?? ""})`
               : s.kind === "renamed"
               ? ` (renamed from ${s.previousStepId ?? ""})`
+              : s.kind === "replaced"
+              ? ` (replaces ${oneLine(s.previousCallee ?? "")})`
               : ""
           }`
         )
@@ -532,13 +565,15 @@ export const renderReviewMarkdown = (
     )
     for (const x of r.regressions) {
       lines.push(
-        `- ${x.file}: \`${x.program}\` — ${
-          x.description.replaceAll("`", "")
+        `- ${oneLine(x.file)}: ${code(x.program)} — ${
+          oneLine(x.description.replaceAll("`", ""))
         }. Was this removal intended? If not, restore it.`
       )
     }
     for (const f of r.newFindings) {
-      lines.push(`- ${f.file}:${String(f.line)} [${f.rule}] ${f.message}${f.suggestion ? ` Fix: ${f.suggestion}` : ""}`)
+      lines.push(
+        oneLine(`- ${f.file}:${String(f.line)} [${f.rule}] ${f.message}${f.suggestion ? ` Fix: ${f.suggestion}` : ""}`)
+      )
     }
     lines.push("```", "", "</details>", "")
   }

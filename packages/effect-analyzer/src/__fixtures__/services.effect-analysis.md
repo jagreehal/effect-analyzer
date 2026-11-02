@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.350Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -67,7 +67,7 @@ UserRepoLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.352Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -132,7 +132,7 @@ AppConfigLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.353Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -197,7 +197,7 @@ CustomServiceLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.359Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -260,7 +260,7 @@ DbLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.361Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -365,7 +365,7 @@ AppLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.361Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -419,7 +419,7 @@ UserRepo (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.361Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -473,7 +473,7 @@ AppConfig (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.361Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -527,7 +527,7 @@ CustomService (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/services.ts`
 - **Analyzed**: 2026-05-22T16:10:34.362Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2

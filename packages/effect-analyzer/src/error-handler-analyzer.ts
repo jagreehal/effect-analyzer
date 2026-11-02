@@ -198,7 +198,7 @@ export const analyzeErrorHandlerCall = (
     const analyze = (n: Node) => deps.analyzeEffectExpression(n, sourceFile, filePath, opts, warnings, stats)
     // An object literal (catchTags, match) is a bag of handlers, not an Effect.
     const analyzeHandler = (n: Node) =>
-      n.getKind() === SyntaxKind.ObjectLiteralExpression ? Effect.succeed(undefined) : analyze(n)
+      n.getKind() === SyntaxKind.ObjectLiteralExpression ? Effect.undefined : analyze(n)
 
     // Three call shapes:
     //   effect.catch(fn)               method on an Effect value

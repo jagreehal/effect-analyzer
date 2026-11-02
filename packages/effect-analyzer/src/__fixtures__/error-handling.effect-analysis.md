@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/error-handling.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/error-handling.ts`
 - **Analyzed**: 2026-05-22T16:10:32.355Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -87,7 +87,7 @@ catchProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/error-handling.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/error-handling.ts`
 - **Analyzed**: 2026-05-22T16:10:32.356Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -170,7 +170,7 @@ catchTagProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/error-handling.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/error-handling.ts`
 - **Analyzed**: 2026-05-22T16:10:32.358Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -244,7 +244,7 @@ retryProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/error-handling.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/error-handling.ts`
 - **Analyzed**: 2026-05-22T16:10:32.359Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -316,7 +316,7 @@ timeoutProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/error-handling.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/error-handling.ts`
 - **Analyzed**: 2026-05-22T16:10:32.360Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -398,7 +398,7 @@ orElseProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/error-handling.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/error-handling.ts`
 - **Analyzed**: 2026-05-22T16:10:32.361Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/migration-targets.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/migration-targets.ts`
 - **Analyzed**: 2026-05-22T16:10:33.145Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2

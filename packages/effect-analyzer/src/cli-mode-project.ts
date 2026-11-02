@@ -62,7 +62,8 @@ export const runCoverageAuditCli = (
         suspiciousZeros: audit.suspiciousZeros.length
       }, policy)
       : undefined
-    const timestamp = DateTime.formatIso(yield* DateTime.now)
+    const now = yield* DateTime.now
+    const timestamp = DateTime.formatIso(now)
     const render = (mode: "human" | "quiet" | "json") =>
       renderProjectCoverageReport(audit, {
         mode,
@@ -166,7 +167,7 @@ export const runProjectMode = (
           resolvedPath
         )
         yield* cliTry(() => fs.writeFile(architecturePath, architectureContent, "utf-8")).pipe(
-          Effect.catch(() => Effect.succeed(undefined))
+          Effect.catch(() => Effect.undefined)
         )
         if (!options.quiet) {
           yield* Console.log(
@@ -266,7 +267,7 @@ export const runProjectMode = (
           const graphPath = join(resolvedPath, "service-graph.md")
           const graphContent = `# Service Dependency Graph\n\n\`\`\`mermaid\n${graphMd}\n\`\`\`\n`
           yield* cliTry(() => fs.writeFile(graphPath, graphContent, "utf-8")).pipe(
-            Effect.catch(() => Effect.succeed(undefined))
+            Effect.catch(() => Effect.undefined)
           )
           if (!options.quiet) {
             yield* Console.log(
@@ -306,7 +307,7 @@ export const runProjectMode = (
         const apiDocsPath = join(resolvedPath, "api-docs.md")
         const apiDocsContent = renderApiDocsMarkdown(apiStructures)
         yield* cliTry(() => fs.writeFile(apiDocsPath, apiDocsContent, "utf-8")).pipe(
-          Effect.catch(() => Effect.succeed(undefined))
+          Effect.catch(() => Effect.undefined)
         )
         if (!options.quiet) {
           yield* Console.log(
@@ -323,7 +324,7 @@ export const runProjectMode = (
         resolvedPath
       )
       yield* cliTry(() => fs.writeFile(architecturePath, architectureContent, "utf-8")).pipe(
-        Effect.catch(() => Effect.succeed(undefined))
+        Effect.catch(() => Effect.undefined)
       )
       if (!options.quiet) {
         yield* Console.log(

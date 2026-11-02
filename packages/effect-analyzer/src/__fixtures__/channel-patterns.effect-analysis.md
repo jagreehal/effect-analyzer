@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/channel-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/channel-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:29.947Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

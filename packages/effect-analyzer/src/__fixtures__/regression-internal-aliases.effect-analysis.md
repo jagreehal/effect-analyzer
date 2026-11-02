@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/regression-internal-aliases.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/regression-internal-aliases.ts`
 - **Analyzed**: 2026-05-22T16:10:33.934Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -62,7 +62,7 @@ build (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/regression-internal-aliases.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/regression-internal-aliases.ts`
 - **Analyzed**: 2026-05-22T16:10:33.934Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

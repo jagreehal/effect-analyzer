@@ -39,7 +39,7 @@ export interface ScanReport {
   readonly filteredByEffectFamilyCalls?: boolean
 }
 
-export const DEFAULT_EFFECT_REPO_PATH = "/Users/jreehal/dev/temp/effect"
+export const DEFAULT_EFFECT_REPO_PATH = ".cache/effect-repo"
 
 export function getEffectRepoPath(): string {
   return resolve(process.env.EFFECT_REPO_PATH ?? DEFAULT_EFFECT_REPO_PATH)

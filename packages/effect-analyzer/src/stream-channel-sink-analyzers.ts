@@ -2,14 +2,9 @@
  * Stream / Channel / Sink call analyzers.
  *
  * These functions parse Stream.*, Channel.* and Sink.* call expressions into
- * their corresponding IR nodes. They recursively analyse argument expressions,
- * which used to create a circular import on `analyzeEffectExpression` — so the
- * dependency is now passed in via the `AnalyzerDeps` parameter, keeping the
- * module acyclic.
- *
- * Extracted from effect-analysis.ts as part of the strangler-fig cleanup.
- * Behaviour is preserved exactly; the only change is `analyzeEffectExpression`
- * is now accessed via `deps.analyzeEffectExpression` instead of a direct call.
+ * their corresponding IR nodes. They analyse argument expressions recursively
+ * through `deps.analyzeEffectExpression`, passed in via `AnalyzerDeps`, which
+ * keeps the module acyclic.
  */
 
 import { Effect } from "effect"
@@ -223,9 +218,8 @@ export function analyzeStreamCall(
     const branchArgs = isMerge ? streamArgs.slice(dataLast ? 0 : 1) : []
     const branches: Array<StaticFlowNode> = []
     for (const arg of branchArgs) {
-      branches.push(
-        yield* deps.analyzeEffectExpression(arg, sourceFile, filePath, opts, warnings, stats, serviceScope)
-      )
+      const branch = yield* deps.analyzeEffectExpression(arg, sourceFile, filePath, opts, warnings, stats, serviceScope)
+      branches.push(branch)
     }
 
     let source: StaticFlowNode

@@ -450,7 +450,7 @@ describe("effect-analyzer", () => {
   })
 
   // ==========================================================================
-  // Path Generator (parity with awaitly-analyze)
+  // Path Generator
   // ==========================================================================
 
   describe("Path Generator", () => {
@@ -559,7 +559,7 @@ describe("effect-analyzer", () => {
   })
 
   // ==========================================================================
-  // Complexity (parity with awaitly-analyze)
+  // Complexity
   // ==========================================================================
 
   describe("Complexity", () => {
@@ -630,7 +630,7 @@ describe("effect-analyzer", () => {
   })
 
   // ==========================================================================
-  // Test Matrix (parity with awaitly-analyze)
+  // Test Matrix
   // ==========================================================================
 
   describe("Test Matrix", () => {

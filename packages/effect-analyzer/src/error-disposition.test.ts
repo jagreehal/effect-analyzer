@@ -1,7 +1,6 @@
 /**
- * `catchTag` and `orDie` both shrink `E`. They are opposites, and the analyzer
- * used to report both as "handled" — so a program that turned every typed
- * error into a defect looked identical to one that dealt with them.
+ * `catchTag` and `orDie` both shrink `E`, with opposite meanings: the analyzer
+ * reports the first as handled and the second as converted to a defect.
  */
 import { Effect } from "effect"
 import { dirname, resolve } from "node:path"

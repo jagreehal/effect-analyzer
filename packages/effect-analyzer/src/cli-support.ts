@@ -26,20 +26,26 @@ export class CliError extends Data.TaggedError("CliError")<{
 export const cliFail = (message: string, cause?: unknown): Effect.Effect<never, CliError> =>
   Effect.fail(cause === undefined ? new CliError({ message }) : new CliError({ message, cause }))
 
+const toCliError = (cause: unknown) =>
+  new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause })
+
 /** `Effect.tryPromise` with the CLI's tagged error instead of an untyped channel. */
 export const cliTry = <A>(thunk: () => Promise<A>): Effect.Effect<A, CliError> =>
   Effect.tryPromise({
     try: thunk,
-    catch: (cause) => new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause })
+    catch: toCliError
   })
+
+/** Sync sibling of {@link cliTry}: a throw becomes a `CliError` carrying its message. */
+export const cliTrySync = <A>(thunk: () => A): Effect.Effect<A, CliError> =>
+  Effect.try({ try: thunk, catch: toCliError })
 
 /**
  * Read each file into a line array for fix generation.
  *
  * Files that cannot be read are skipped, not fatal — a single unreadable file
- * must not abort an `--improve` run over a whole project. Exported so that skip
- * is testable; it previously used `try/catch` around a `yield*`, which cannot
- * catch an Effect failure, so the guard never fired.
+ * must not abort an `--improve` run over a whole project. Exported so the skip
+ * is testable.
  */
 export const buildSourceLinesMap = (
   filePaths: Iterable<string>

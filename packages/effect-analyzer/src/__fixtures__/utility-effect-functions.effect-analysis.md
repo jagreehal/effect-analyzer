@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/utility-effect-functions.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/utility-effect-functions.ts`
 - **Analyzed**: 2026-05-22T16:10:34.861Z
 - **Source Type**: functionDeclaration
 - **TypeScript Version**: 6.0.2
@@ -66,7 +66,7 @@ requireItem (functionDeclaration):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/utility-effect-functions.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/utility-effect-functions.ts`
 - **Analyzed**: 2026-05-22T16:10:34.862Z
 - **Source Type**: functionDeclaration
 - **TypeScript Version**: 6.0.2

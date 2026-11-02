@@ -1,8 +1,6 @@
 /**
- * A mistyped path used to produce three lines: the mode's own actionable
- * message, a shorter restatement, and `JSON.stringify(cause)` of the Effect
- * failure. The third leaked `{"_id":"Cause","failures":[...]}` to a user who
- * has no reason to know the program is written in Effect.
+ * A mistyped path prints the mode's own actionable message once, with no
+ * restatement and no serialised Effect `Cause`.
  */
 import { spawnSync } from "node:child_process"
 import { join, resolve } from "node:path"

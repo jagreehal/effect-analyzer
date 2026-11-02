@@ -293,6 +293,7 @@ export const analyzePipeChain = (
 
     // Extract type flow through pipe chain
     let typeFlow: Array<EffectTypeSignature> | undefined
+    // oxlint-disable-next-line effecttsgo/effect-try-without-catch -- failure is swallowed below
     yield* Effect.try(() => {
       const typeChecker = sourceFile.getProject().getTypeChecker()
       const flow: Array<EffectTypeSignature> = []
@@ -1836,6 +1837,7 @@ const analyzeLayerCall = (
     // Fallback: Layer type RIn extraction when requires is empty (GAP Layer requires)
     if (requiresSet.size === 0) {
       // Type extraction can fail; an empty requires set is the fallback.
+      // oxlint-disable-next-line effecttsgo/effect-try-without-catch -- failure is swallowed below
       yield* Effect.try(() => {
         const layerSig = extractLayerTypeSignature(call)
         if (layerSig?.requiredType && layerSig.requiredType !== "never") {

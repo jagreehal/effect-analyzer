@@ -1,10 +1,8 @@
 /**
  * The CLI exits with `process.exit`, which discards whatever is still queued on
- * a piped stdout. Any JSON report larger than the pipe buffer was therefore
- * truncated mid-string — valid-looking output, unparseable, no error, non-zero
- * chance a consumer treats the short read as the whole report.
- *
- * Redirecting to a file hid it, so only a piped run reproduces it.
+ * a piped stdout, so it waits for stdout to drain first. A large JSON report
+ * must arrive whole through a pipe. Only a piped run exercises this, since
+ * file writes complete synchronously.
  */
 
 import { spawnSync } from "node:child_process"

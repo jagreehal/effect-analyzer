@@ -1,5 +1,5 @@
 {
-  "notes": "Observed on 2026-02-25 against /Users/jagreehal/dev/js/awaitly/__temp/effect/packages with KNOWN_EFFECT_INTERNALS_ROOT set. Tighten budgets over time.",
+  "notes": "Observed on 2026-02-25 against the Effect repo packages with KNOWN_EFFECT_INTERNALS_ROOT set. Tighten budgets over time.",
   "maxFailed": 0,
   "maxUnknownNodeRate": 0.1463,
   "maxSuspiciousZeros": 63,

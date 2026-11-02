@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.228Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -77,7 +77,7 @@ validateUserProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.241Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -137,7 +137,7 @@ encodeUserProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.253Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -216,7 +216,7 @@ processApiResponseProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.255Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -276,7 +276,7 @@ createUserIdProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.256Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -330,7 +330,7 @@ EmailSchema (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.256Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -384,7 +384,7 @@ PositiveInt (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.257Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -438,7 +438,7 @@ UserId (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.257Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -492,7 +492,7 @@ AddressSchema (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.258Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -546,7 +546,7 @@ UserSchema (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.259Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -600,7 +600,7 @@ CreateUserRequest (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.260Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -654,7 +654,7 @@ StatusSchema (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.260Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -708,7 +708,7 @@ ApiResponse (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.262Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -762,7 +762,7 @@ ValidationError (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.263Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -816,7 +816,7 @@ GetUserRequest (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.265Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -870,7 +870,7 @@ DateFromString (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/schema-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.266Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

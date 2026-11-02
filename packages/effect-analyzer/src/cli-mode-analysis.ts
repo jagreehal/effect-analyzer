@@ -157,10 +157,8 @@ export const runAnalysis = (
   Effect.gen(function*() {
     const style = createStyle(options.color && process.stdout.isTTY)
 
-    // Every progress line goes through here so none can forget `--quiet`.
-    // The counts used to ignore it while the line explaining them respected
-    // it, which left `--quiet` reporting "Found 2 program(s)" above a single
-    // diagram with nothing saying where the other one went.
+    // Every progress line goes through here so each one respects `--quiet`,
+    // the program counts included.
     //
     // Progress goes to stderr: stdout carries the diagram or the JSON, and a
     // status line in the middle of it makes `> out.mmd` produce a file that
@@ -398,13 +396,8 @@ export const runAnalysis = (
       }
       case "mermaid": {
         const traceFile = options.runtimeTrace
-        const runtimeTrace = traceFile
-          ? traceFromSpanTree(
-            JSON.parse(
-              yield* cliTry(() => fs.readFile(resolve(traceFile), "utf8"))
-            ) as SpanTree
-          )
-          : undefined
+        const traceJson = traceFile ? yield* cliTry(() => fs.readFile(resolve(traceFile), "utf8")) : undefined
+        const runtimeTrace = traceJson === undefined ? undefined : traceFromSpanTree(JSON.parse(traceJson) as SpanTree)
         const mermaidOptions = {
           direction: options.direction ?? "TB",
           ...(options.detail ? { detail: options.detail } : {})
@@ -422,7 +415,8 @@ export const runAnalysis = (
             )
             continue
           }
-          diagrams.push(yield* renderMermaid(ir, mermaidOptions))
+          const diagram = yield* renderMermaid(ir, mermaidOptions)
+          diagrams.push(diagram)
         }
         output = diagrams.join("\n\n")
         break

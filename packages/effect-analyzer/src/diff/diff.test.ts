@@ -102,6 +102,55 @@ describe("diffPrograms", () => {
     expect(diff.summary.hasRegressions).toBe(true)
   })
 
+  it("reports a step swapped in place for another callee as replaced, not a regression", () => {
+    const before = makeIR("prog", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "Effect.try" },
+      { id: "s3", callee: "Effect.log" }
+    ])
+    const after = makeIR("prog", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "cliTrySync" },
+      { id: "s3", callee: "Effect.log" }
+    ])
+    const diff = diffPrograms(before, after, { regressionMode: true })
+
+    expect(diff.steps.find((s) => s.kind === "replaced")).toMatchObject({
+      callee: "cliTrySync",
+      previousCallee: "Effect.try"
+    })
+    expect(diff.summary).toMatchObject({ stepsReplaced: 1, stepsRemoved: 0, stepsAdded: 0, hasRegressions: false })
+  })
+
+  it("pairs a duplicate callee with the step at its own position before reporting a replacement", () => {
+    const before = makeIR("prog", [
+      { id: "s1", callee: "Effect.succeed" },
+      { id: "s2", callee: "Effect.succeed" }
+    ])
+    const after = makeIR("prog", [
+      { id: "s1", callee: "Effect.undefined" },
+      { id: "s2", callee: "Effect.succeed" }
+    ])
+    const diff = diffPrograms(before, after, { regressionMode: true })
+
+    expect(diff.steps.find((s) => s.kind === "replaced")).toMatchObject({ stepId: "s1", previousStepId: "s1" })
+    expect(diff.summary).toMatchObject({ stepsReplaced: 1, stepsRemoved: 0, hasRegressions: false })
+  })
+
+  it("still reports a removal when the program loses a step without a replacement", () => {
+    const before = makeIR("prog", [
+      { id: "s1", callee: "Effect.try" },
+      { id: "s2", callee: "Effect.log" }
+    ])
+    const after = makeIR("prog", [
+      { id: "s2", callee: "Effect.log" },
+      { id: "s3", callee: "cliTrySync" }
+    ])
+    const diff = diffPrograms(before, after, { regressionMode: true })
+
+    expect(diff.summary).toMatchObject({ stepsReplaced: 0, stepsRemoved: 1, hasRegressions: true })
+  })
+
   it("treats same callee with different id as unchanged (content-based matching)", () => {
     const before = makeIR("prog", [{ id: "s1", callee: "Effect.succeed" }])
     const after = makeIR("prog", [{ id: "s1-new", callee: "Effect.succeed" }])

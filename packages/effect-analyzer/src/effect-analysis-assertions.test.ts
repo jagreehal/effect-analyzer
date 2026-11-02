@@ -1,15 +1,7 @@
 /**
  * A type assertion is not a program. `Effect.succeed(1) as Effect.Effect<number>`
- * is the same effect as `Effect.succeed(1)`, and the analyzer used to give up
- * at the `as` and emit an unknown node.
- *
- * Auditing Effect's own source found this is the single largest resolution gap
- * in the analyzer: of 141 nodes landing in the `Could not determine effect
- * type` bucket, 108 were `AsExpression`. Effect code asserts constantly, so the
- * walker was blinding itself on one of the language's most common wrappers.
- *
- * `unwrapExpression` in core-analysis.ts already handled exactly this set. It
- * was never exported, so the classifier could not reach it.
+ * is the same effect as `Effect.succeed(1)`, so the analyzer looks through the
+ * `as` with `unwrapExpression` and classifies the inner call.
  */
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"

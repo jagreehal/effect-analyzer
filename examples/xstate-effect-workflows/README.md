@@ -1,6 +1,6 @@
 # XState + Effect workflows
 
-Machines built with `@xstate/effect@1.0.0-alpha.10` and `xstate@6.0.0-alpha.71`,
+Machines built with `@xstate/effect@1.0.0-alpha.12` and `xstate@6.0.0-alpha.73`,
 for trying the statechart outputs. MIT licensed, see [LICENSE](./LICENSE).
 
 | File                                      | What the analyzer reads                                                                                  |

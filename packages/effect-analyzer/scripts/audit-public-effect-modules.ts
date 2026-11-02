@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import { join, resolve } from "path"
 import { analyze } from "../src/analyze"
 
-const DEFAULT_EFFECT_REPO_PATH = "/Users/jreehal/dev/temp/effect"
+const DEFAULT_EFFECT_REPO_PATH = ".cache/effect-repo"
 
 function getEffectRepoPath(): string {
   return resolve(process.env.EFFECT_REPO_PATH ?? DEFAULT_EFFECT_REPO_PATH)

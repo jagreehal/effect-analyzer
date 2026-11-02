@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/cli-script.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/cli-script.ts`
 - **Analyzed**: 2026-05-22T16:10:30.041Z
 - **Source Type**: pipe
 - **TypeScript Version**: 6.0.2
@@ -84,7 +84,7 @@ cliMain (pipe):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/cli-script.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/cli-script.ts`
 - **Analyzed**: 2026-05-22T16:10:30.043Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -152,7 +152,7 @@ cliMain (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/cli-script.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/cli-script.ts`
 - **Analyzed**: 2026-05-22T16:10:30.043Z
 - **Source Type**: run
 - **TypeScript Version**: 6.0.2
@@ -206,7 +206,7 @@ email.try (run):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/cli-script.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/cli-script.ts`
 - **Analyzed**: 2026-05-22T16:10:30.044Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -260,7 +260,7 @@ parseEmailArg (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/cli-script.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/cli-script.ts`
 - **Analyzed**: 2026-05-22T16:10:30.045Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

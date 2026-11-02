@@ -1,8 +1,8 @@
 /**
  * Mermaid diagram generation for Effect IR
  *
- * Aligned with awaitly-analyze: Start/End nodes, explicit edges,
- * optional subgraphs for parallel/race, sequential flow for pipe/generator.
+ * Start/End nodes, explicit edges, optional subgraphs for parallel/race,
+ * and sequential flow for pipe/generator.
  */
 
 import { Effect, Option } from "effect"
@@ -86,7 +86,7 @@ const DEFAULT_OPTIONS:
   }
 
 // =============================================================================
-// Internal types (awaitly-style context and result)
+// Internal types (context and result)
 // =============================================================================
 
 interface Edge {

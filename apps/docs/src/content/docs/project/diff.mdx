@@ -7,7 +7,7 @@ sidebar:
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **semantic diff** compares two versions of an Effect program at the IR level, not the text level. It reports structural changes (steps added, removed, moved, or renamed) giving you a meaningful view of what changed in the program's behavior.
+The **semantic diff** compares two versions of an Effect program at the IR level, not the text level. It reports structural changes (steps added, removed, moved, renamed, or replaced) giving you a meaningful view of what changed in the program's behavior.
 
 This is especially useful when **reviewing AI-generated code** where the text diff can be large and hard to follow, but the structural change may be quite targeted.
 
@@ -162,26 +162,27 @@ npx effect-analyze \
 
 | Metric | Count |
 |--------|-------|
-| Added | 8 |
-| Removed | 1 |
-| Renamed | 0 |
+| Added | 6 |
+| Removed | 0 |
+| Renamed | 1 |
 | Moved | 0 |
+| Replaced | 0 |
 | Unchanged | 7 |
-| Structural changes | 1 |
+| Structural changes | 2 |
 
 ## Step Changes
 
-- transfers.execute (removed)
+~ transfers.execute (renamed from effect-13 → effect-31)
 + FraudScreening (added)
 + Notifications (added)
 + fraud.screen (added)
-+ transfers.execute(...).pipe (added)
-+ notifications.sendConfirmation (added)
 + Effect.retry (added)
-+ Schedule.exponential (added)
++ Schedule.exponential('200 millis').pipe (added)
++ notifications.sendConfirmation (added)
 
 ## Structural Changes
 
+- + pipe block added
 - + retry block added
 
 ## Added program: FraudScreening
@@ -191,9 +192,9 @@ npx effect-analyze \
 ### What a reviewer learns in 10 seconds
 
 1. **7 unchanged steps**: the core flow (validate, get rate, check balance, fail path) is untouched
-2. **1 removed step** (`transfers.execute`): replaced by the `.pipe(Effect.retry(...))` variant
+2. **Nothing removed**: `transfers.execute` is still there, now wrapped in `.pipe(Effect.retry(...))`
 3. **2 new service dependencies**: `FraudScreening` and `Notifications` are new blast radius
-4. **1 structural change**: a `retry` block was added (exponential backoff on the transfer)
+4. **2 structural changes**: a `pipe` and a `retry` block wrap the transfer in exponential backoff
 5. **New error surface**: the railway diagram shows `FraudRisk` and `ConfirmationFailed` as new error branches
 
 <Aside type="tip" title="Key reviewer question">
@@ -259,9 +260,10 @@ The diff engine classifies every step in both versions:
 |---|---|---|
 | **Unchanged** | Step exists in both versions with the same structure | `validation.validate` stayed the same |
 | **Added** | Step exists only in the new version | `fraud.screen` is new |
-| **Removed** | Step exists only in the old version | `transfers.execute` was replaced |
+| **Removed** | Step exists only in the old version, with nothing in its place | A `retry` step was deleted |
 | **Moved** | Step exists in both but in a different structural container | A step moved from sequential into `Effect.all` |
 | **Renamed** | Same callee but different binding name | `const result` → `const transfer` |
+| **Replaced** | A different callee at the same position in the program | `Effect.try` → a `cliTrySync` helper that wraps it |
 
 Beyond individual steps, the diff also reports:
 
@@ -326,7 +328,7 @@ Flag removed steps as regressions. Useful in CI to catch when an AI agent accide
 npx effect-analyze HEAD:src/transfer.ts src/transfer.ts --diff --regression
 ```
 
-In regression mode, the summary includes a `hasRegressions` flag set to `true` if any step or structural block was removed. Combine with `--format json` to parse in CI:
+In regression mode, the summary includes a `hasRegressions` flag set to `true` if any step or structural block was removed. A replaced step does not count: the program still runs a step there. Check `summary.stepsReplaced` too if your gate should stop on swaps. `effect-analyze review` lists each replacement under **Replaced steps** and grades the change moderate, so a reviewer confirms it. Combine with `--format json` to parse in CI:
 
 ```bash
 # Fail the build if the AI removed any steps

@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
 - **Analyzed**: 2026-05-22T16:10:34.786Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -66,7 +66,7 @@ userLookupProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
 - **Analyzed**: 2026-05-22T16:10:34.788Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -131,7 +131,7 @@ liveRepoLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
 - **Analyzed**: 2026-05-22T16:10:34.789Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -196,7 +196,7 @@ mockRepoLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
 - **Analyzed**: 2026-05-22T16:10:34.790Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -250,7 +250,7 @@ withLiveLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
 - **Analyzed**: 2026-05-22T16:10:34.790Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -304,7 +304,7 @@ withMockLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/testing-mocks.ts`
 - **Analyzed**: 2026-05-22T16:10:34.790Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2

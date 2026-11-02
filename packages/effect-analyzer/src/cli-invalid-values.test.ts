@@ -1,11 +1,10 @@
 /**
- * An unrecognised enum value used to leave the option at its default and say
- * nothing. `--format nosuchformat` exited 0 and wrote the `auto` format, so a
- * typo in a CI pipeline produced the wrong artifact and passed.
+ * An unrecognised enum value such as `--format nosuchformat` makes the CLI
+ * report the typo and exit non-zero.
  *
- * `parseArgs` stays pure and still leaves the option at its default, which is
- * what `REJECTS` in cli-options.test.ts pins. What is new is that it records
- * why, so the CLI can report the typo and exit non-zero instead of guessing.
+ * `parseArgs` stays pure and leaves the option at its default, which is what
+ * `REJECTS` in cli-options.test.ts pins. It also records the rejected value,
+ * so the CLI can report it.
  */
 import { describe, expect, it } from "vitest"
 import { parseArgs } from "./cli-options"

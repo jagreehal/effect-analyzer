@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/early-return-fail.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/early-return-fail.ts`
 - **Analyzed**: 2026-05-22T16:10:31.822Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
