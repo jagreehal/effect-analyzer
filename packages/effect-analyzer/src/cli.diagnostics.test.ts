@@ -561,10 +561,9 @@ describe("effect-analyze diagnostics / upstream invocation failures", () => {
 /**
  * The project's own plugin configuration must reach `@effect/tsgo` untouched.
  *
- * This regressed once: the wrapper looked for a plugin named `@effect/tsgo`,
- * never found the canonical `@effect/language-service`, and forwarded
- * `--lspconfig {}` — replacing every configured severity with the rule
- * defaults, silently. Fixtures using the same wrong name hid it.
+ * The wrapper reads the plugin entry named `@effect/language-service` and
+ * forwards its severities, so `--lspconfig` never resets them to the rule
+ * defaults. The fixtures use the canonical plugin name.
  */
 describe("effect-analyze diagnostics / project configuration", () => {
   const withConfiguredProject = (

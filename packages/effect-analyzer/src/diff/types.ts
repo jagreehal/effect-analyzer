@@ -4,12 +4,15 @@ export type StepChangeKind =
   | "unchanged"
   | "renamed"
   | "moved"
+  | "replaced"
 
 export interface StepDiffEntry {
   kind: StepChangeKind
   stepId: string
   previousStepId?: string
   callee?: string
+  /** For `replaced`: the callee the step had before. */
+  previousCallee?: string
   containerBefore?: string
   containerAfter?: string
 }
@@ -25,6 +28,7 @@ export interface DiffSummary {
   stepsRemoved: number
   stepsRenamed: number
   stepsMoved: number
+  stepsReplaced: number
   stepsUnchanged: number
   structuralChanges: number
   hasRegressions: boolean

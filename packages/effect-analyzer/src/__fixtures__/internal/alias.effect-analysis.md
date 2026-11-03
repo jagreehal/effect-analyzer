@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/internal/alias.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/internal/alias.ts`
 - **Analyzed**: 2026-05-22T16:10:32.571Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

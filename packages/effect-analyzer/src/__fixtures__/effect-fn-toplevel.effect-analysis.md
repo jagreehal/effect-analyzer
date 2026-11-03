@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/effect-fn-toplevel.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/effect-fn-toplevel.ts`
 - **Analyzed**: 2026-05-22T16:10:31.900Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -73,7 +73,7 @@ processOrder (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/effect-fn-toplevel.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/effect-fn-toplevel.ts`
 - **Analyzed**: 2026-05-22T16:10:31.902Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

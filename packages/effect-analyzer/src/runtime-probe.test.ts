@@ -148,7 +148,7 @@ describe("probeJsonSchema", () => {
       required: ReadonlyArray<string>
     }
 
-    // The shape the static walker got wrong: a struct whose field is an array.
+    // A struct whose field is an array.
     expect(schema.type).toBe("object")
     expect(schema.properties["tags"]).toMatchObject({ type: "array", items: { type: "string" } })
     expect(schema.required).toEqual(expect.arrayContaining(["name", "age", "tags"]))

@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.test.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.test.ts`
 - **Analyzed**: 2026-05-22T16:10:30.785Z
 - **Source Type**: run
 - **TypeScript Version**: 6.0.2

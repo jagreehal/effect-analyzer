@@ -125,7 +125,7 @@ effect-analyze --diff src/wf.ts                     # HEAD vs working copy
 effect-analyze --diff main:src/wf.ts src/wf.ts      # Git ref vs local
 effect-analyze --diff gh:#123                        # GitHub PR auto-discover
 effect-analyze --diff gh:#123 src/wf.ts              # GitHub PR specific file
-effect-analyze --diff v1.ts v2.ts --regression       # Flag removed programs as regressions
+effect-analyze --diff v1.ts v2.ts --regression       # Flag removed steps and blocks as regressions; a step swapped in place is `replaced`, not removed
 effect-analyze --diff v1.ts v2.ts --include-trivial  # Include trivial changes
 effect-analyze --diff before.ts after.ts            # before.ts without Effect: migration summary
 ```
@@ -259,10 +259,9 @@ does.**
 
 No `--lspconfig` is ever synthesised. `@effect/tsgo` reads the project's own
 plugin entry, whose canonical name is **`@effect/language-service`** (upstream
-`etscore.EffectPluginName`), not `@effect/tsgo`. Getting that name wrong once
-cost real user configuration: the lookup missed, fell back to `{}`, and passing
-that as `--lspconfig` silently replaced every configured severity with the rule
-defaults. Fixtures that also used the wrong name hid it. If a project has no
+`etscore.EffectPluginName`), not `@effect/tsgo`. A lookup under any other name
+falls back to `{}`, and passing that as `--lspconfig` would reset every
+configured severity to the rule defaults. Fixtures use the canonical name. If a project has no
 plugin entry the language service is off and `filesChecked` is `0` — that is
 upstream's behaviour, to be reported, not worked around.
 
@@ -459,6 +458,8 @@ pnpm quality     # build, lint, dprint check, type-check, test, example type-che
 ## Code Style
 
 dprint formats the repo (`dprint.json`): double quotes, no semicolons, 120 columns, no trailing commas. oxlint (`packages/effect-analyzer/.oxlintrc.json`) treats every rule as an error or off; generic array types (`ReadonlyArray<T>`) and inline `type` imports are required. CLI error text goes to `process.stderr.write`, since `no-console` applies outside tests.
+
+Type-aware Effect rules come from `@effect/tsgo` as `effecttsgo/*` in the same config. Most tsgo rules default to off, so enable a new one there explicitly. Wrap sync throwing calls in CLI modes with `cliTrySync` (and promises with `cliTry`) from `cli-support.ts` so failures surface as a `CliError`. `global-json` and `global-json-in-effect` stay off: the CLI serialises its own output with `JSON`.
 
 ## Key Patterns
 

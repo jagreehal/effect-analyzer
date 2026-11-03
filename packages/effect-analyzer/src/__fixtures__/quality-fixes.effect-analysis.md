@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.482Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -62,7 +62,7 @@ validateUser (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.484Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -122,7 +122,7 @@ validateUserDecode (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.487Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -190,7 +190,7 @@ namedStepsProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.488Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -249,7 +249,7 @@ spanAnnotatedProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.489Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -303,7 +303,7 @@ verboseLabelsProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.491Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -362,7 +362,7 @@ chainedWithSpanProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.496Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -429,7 +429,7 @@ multiSpanProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/quality-fixes.ts`
 - **Analyzed**: 2026-05-22T16:10:33.497Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

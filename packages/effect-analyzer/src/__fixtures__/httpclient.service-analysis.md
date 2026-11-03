@@ -3,7 +3,7 @@
 ## Definition
 
 - **Class**: `HttpClient`
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts:41`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts:41`
 - **Tag**: `'HttpClient'`
 - **Type**: `{
     readonly get: <A>(url: string) => Effect.Effect<A, HttpError>;

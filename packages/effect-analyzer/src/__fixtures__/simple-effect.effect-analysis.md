@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/simple-effect.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/simple-effect.ts`
 - **Analyzed**: 2026-05-22T16:10:34.438Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -64,7 +64,7 @@ simpleProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/simple-effect.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/simple-effect.ts`
 - **Analyzed**: 2026-05-22T16:10:34.441Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2

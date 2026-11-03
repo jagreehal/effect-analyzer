@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
 - **Analyzed**: 2026-05-22T16:10:33.222Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -56,7 +56,7 @@ normalizeEmail (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
 - **Analyzed**: 2026-05-22T16:10:33.224Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -110,7 +110,7 @@ persistUser (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
 - **Analyzed**: 2026-05-22T16:10:33.225Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -178,7 +178,7 @@ nestedHelperProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/nested-helpers.ts`
 - **Analyzed**: 2026-05-22T16:10:33.225Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

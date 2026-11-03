@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/wrapper-bootstrap.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/wrapper-bootstrap.ts`
 - **Analyzed**: 2026-05-22T16:10:34.937Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -56,7 +56,7 @@ program (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/wrapper-bootstrap.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/wrapper-bootstrap.ts`
 - **Analyzed**: 2026-05-22T16:10:34.939Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -119,7 +119,7 @@ AppLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/wrapper-bootstrap.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/wrapper-bootstrap.ts`
 - **Analyzed**: 2026-05-22T16:10:34.939Z
 - **Source Type**: run
 - **TypeScript Version**: 6.0.2

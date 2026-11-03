@@ -41,7 +41,9 @@ export function renderDiffMermaid(
   const addedIds = new Set(diff.steps.filter((s) => s.kind === "added").map((s) => s.stepId))
   const _removedIds = new Set(diff.steps.filter((s) => s.kind === "removed").map((s) => s.stepId))
   const movedIds = new Set(diff.steps.filter((s) => s.kind === "moved").map((s) => s.stepId))
-  const renamedIds = new Set(diff.steps.filter((s) => s.kind === "renamed").map((s) => s.stepId))
+  const renamedIds = new Set(
+    diff.steps.filter((s) => s.kind === "renamed" || s.kind === "replaced").map((s) => s.stepId)
+  )
 
   // Walk the "after" IR to build ir-id → mermaid-id mapping
   // We parse the mermaid output to find which mermaid node id corresponds to which IR node id

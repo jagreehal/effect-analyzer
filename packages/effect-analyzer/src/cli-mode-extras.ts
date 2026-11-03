@@ -11,7 +11,7 @@ import "./register-node-ts-morph"
 import { Console, Effect, Option } from "effect"
 import * as fs from "node:fs/promises"
 import type { CLIOptions } from "./cli-options"
-import { CliError, cliTry, displayPath } from "./cli-support"
+import { cliTry, cliTrySync, displayPath } from "./cli-support"
 import {
   diffPrograms,
   parseSourceArg,
@@ -61,7 +61,7 @@ export const runDiffMode = (
       if (arg.kind === "git-ref" && arg.ref && arg.filePath) {
         const { ref, filePath: fp } = arg
         return Effect.gen(function*() {
-          const src = yield* Effect.try(() => resolveGitSource(ref, fp))
+          const src = yield* cliTrySync(() => resolveGitSource(ref, fp))
           return yield* analyzeEffectSource(src, fp)
         })
       }
@@ -100,15 +100,15 @@ export const runDiffMode = (
     const firstParsed = parseSourceArg(firstSource)
     if (firstParsed.kind === "github-pr" && firstParsed.prUrl) {
       const prUrl = firstParsed.prUrl
-      const prInfo = yield* Effect.try(() => resolveGitHubPR(prUrl))
+      const prInfo = yield* cliTrySync(() => resolveGitHubPR(prUrl))
       // For PR diffs, we need a specific file path
       if (sources.length < 2) {
         yield* Console.error("GitHub PR diff requires a file path: --diff <pr-url> <file-path>")
         return
       }
       const filePath = sources[1] ?? ""
-      const baseSrc = yield* Effect.try(() => resolveGitSource(prInfo.baseRef, filePath))
-      const headSrc = yield* Effect.try(() => resolveGitSource(prInfo.headRef, filePath))
+      const baseSrc = yield* cliTrySync(() => resolveGitSource(prInfo.baseRef, filePath))
+      const headSrc = yield* cliTrySync(() => resolveGitSource(prInfo.headRef, filePath))
       beforeIRs = yield* noProgramsAsEmpty(analyzeEffectSource(baseSrc, filePath))
       afterIRs = yield* analyzeEffectSource(headSrc, filePath)
       beforeLabel = `${prInfo.baseRef}:${filePath}`
@@ -117,7 +117,7 @@ export const runDiffMode = (
     } else if (sources.length === 1) {
       // Single source: compare HEAD vs working copy
       const filePath = firstSource
-      const headSrc = yield* Effect.try(() => resolveGitSource("HEAD", filePath))
+      const headSrc = yield* cliTrySync(() => resolveGitSource("HEAD", filePath))
       beforeIRs = yield* noProgramsAsEmpty(analyzeEffectSource(headSrc, filePath))
       afterIRs = yield* analyzeEffectFile(filePath)
       beforeLabel = `HEAD:${filePath}`
@@ -147,7 +147,7 @@ export const runDiffMode = (
       })
 
     if (beforeIRs.length === 0 && afterIRs.length > 0) {
-      const opportunities = yield* Effect.try(scanBefore)
+      const opportunities = yield* cliTrySync(scanBefore)
       const summary = summarizeMigrationDiff(beforeLabel, afterLabel, opportunities, afterIRs)
       yield* emit(
         options.format === "json"
@@ -264,10 +264,7 @@ export const runMigration = (
     const report: MigrationReport = isDir
       ? yield* cliTry(() => findMigrationOpportunitiesInProject(resolvedPath))
       : {
-        opportunities: yield* Effect.try({
-          try: () => findMigrationOpportunities(resolvedPath),
-          catch: (cause) => new CliError({ message: cause instanceof Error ? cause.message : String(cause), cause })
-        }),
+        opportunities: yield* cliTrySync(() => findMigrationOpportunities(resolvedPath)),
         fileCount: 1
       }
     // JSON keeps absolute paths like every other JSON output; the human

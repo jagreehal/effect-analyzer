@@ -11,6 +11,8 @@ interface StepContext {
   callee: string
   containerType: string
   index: number
+  /** Child-index path from the program root, e.g. `0.3.1`. */
+  path: string
   /** Content-based fingerprint for stable matching */
   fingerprint: string
 }
@@ -46,7 +48,8 @@ function computeFingerprint(node: StaticFlowNode): string {
 function collectStepsWithContext(
   node: StaticFlowNode | StaticEffectProgram,
   containerType = "root",
-  index = 0
+  index = 0,
+  path = ""
 ): Array<StepContext> {
   const results: Array<StepContext> = []
 
@@ -56,6 +59,7 @@ function collectStepsWithContext(
       callee: node.callee,
       containerType,
       index,
+      path,
       fingerprint: computeFingerprint(node)
     })
     // Still recurse into callbackBody via getStaticChildren
@@ -67,7 +71,7 @@ function collectStepsWithContext(
   let childIdx = 0
   for (const child of children) {
     // For effect nodes at this level, the container is the current node type
-    const childResults = collectStepsWithContext(child, nextContainer, childIdx)
+    const childResults = collectStepsWithContext(child, nextContainer, childIdx, `${path}.${String(childIdx)}`)
     results.push(...childResults)
     childIdx++
   }
@@ -114,7 +118,7 @@ export function diffPrograms(
   // Pass 1: Match by fingerprint (content-based, stable across analysis runs)
   // Sub-pass 1a: match same-container fingerprints first to avoid cross-container
   // matches stealing candidates when duplicates exist.
-  function matchByFingerprint(requireSameContainer: boolean): void {
+  function matchByFingerprint(scope: "path" | "container" | "any"): void {
     for (let bIdx = 0; bIdx < beforeSteps.length; bIdx++) {
       if (matchedBeforeIdx.has(bIdx)) continue
       const beforeStep = beforeSteps[bIdx]
@@ -125,9 +129,8 @@ export function diffPrograms(
       for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
         if (!matchedAfterIdx.has(aIdx) && afterSteps[aIdx]?.fingerprint === beforeStep.fingerprint) {
           const afterCandidate = afterSteps[aIdx]
-          if (requireSameContainer && afterCandidate && afterCandidate.containerType !== beforeStep.containerType) {
-            continue
-          }
+          if (scope === "path" && afterCandidate?.path !== beforeStep.path) continue
+          if (scope === "container" && afterCandidate?.containerType !== beforeStep.containerType) continue
           candidates.push(aIdx)
         }
       }
@@ -167,9 +170,11 @@ export function diffPrograms(
       }
     }
   }
-  // First match within same container, then allow cross-container moves
-  matchByFingerprint(true)
-  matchByFingerprint(false)
+  // Exact position first, so a duplicate callee elsewhere cannot take a step's
+  // own match; then the same container; then cross-container moves.
+  matchByFingerprint("path")
+  matchByFingerprint("container")
+  matchByFingerprint("any")
 
   // Pass 2: Rename detection — match unmatched by callee
   if (detectRenames) {
@@ -196,7 +201,27 @@ export function diffPrograms(
     }
   }
 
-  // Pass 3: Remaining unmatched → removed / added
+  // Pass 3: A step swapped for a different callee at the same tree position is
+  // a replacement, such as `Effect.try` → a helper that wraps it.
+  for (let aIdx = 0; aIdx < afterSteps.length; aIdx++) {
+    if (matchedAfterIdx.has(aIdx)) continue
+    const afterStep = afterSteps[aIdx]
+    if (!afterStep) continue
+    const bIdx = beforeSteps.findIndex((bStep, bi) => !matchedBeforeIdx.has(bi) && bStep.path === afterStep.path)
+    const matchedBefore = beforeSteps[bIdx]
+    if (!matchedBefore) continue
+    matchedBeforeIdx.add(bIdx)
+    matchedAfterIdx.add(aIdx)
+    entries.push({
+      kind: "replaced",
+      stepId: afterStep.stepId,
+      previousStepId: matchedBefore.stepId,
+      callee: afterStep.callee,
+      previousCallee: matchedBefore.callee
+    })
+  }
+
+  // Pass 4: Remaining unmatched → removed / added
   for (let bIdx = 0; bIdx < beforeSteps.length; bIdx++) {
     if (!matchedBeforeIdx.has(bIdx)) {
       const bs = beforeSteps[bIdx]
@@ -254,6 +279,7 @@ export function diffPrograms(
     stepsRemoved: entries.filter((e) => e.kind === "removed").length,
     stepsRenamed: entries.filter((e) => e.kind === "renamed").length,
     stepsMoved: entries.filter((e) => e.kind === "moved").length,
+    stepsReplaced: entries.filter((e) => e.kind === "replaced").length,
     stepsUnchanged: entries.filter((e) => e.kind === "unchanged").length,
     structuralChanges: structuralChanges.length,
     hasRegressions: regressionMode

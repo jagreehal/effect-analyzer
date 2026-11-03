@@ -3,7 +3,7 @@
 ## Definition
 
 - **Class**: `Database`
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts:20`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts:20`
 - **Tag**: `'Database'`
 - **Type**: `{
     readonly query: (sql: string) => Effect.Effect<unknown[], DatabaseError>;

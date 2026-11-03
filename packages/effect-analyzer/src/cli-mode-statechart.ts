@@ -62,6 +62,7 @@ export const runStatechartMode = (
     for (const file of files) {
       // Unparseable files are skipped, not fatal.
       machines.push(
+        // oxlint-disable-next-line effecttsgo/effect-try-without-catch -- failure is swallowed below
         ...(yield* Effect.try(() => analyzeStateMachines(file).machines).pipe(
           Effect.orElseSucceed(() => [] as ReadonlyArray<StateMachine>)
         ))

@@ -1,8 +1,7 @@
 /**
  * Showcase Output Generator
  *
- * Produces rich per-step detail from the Effect IR, matching the structure
- * of awaitly-analyze's analyzer-showcase.data.json format.
+ * Produces per-step detail from the Effect IR in the analyzer-showcase.data.json format.
  */
 
 import { Option } from "effect"

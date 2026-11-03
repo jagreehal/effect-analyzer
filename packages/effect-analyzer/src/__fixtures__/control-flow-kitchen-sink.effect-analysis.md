@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.870Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -108,7 +108,7 @@ deeplyNested (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.874Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -197,7 +197,7 @@ nestedTernary (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.878Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -279,7 +279,7 @@ chainedShortCircuit (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.882Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -412,7 +412,7 @@ allLoopTypes (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.884Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -479,7 +479,7 @@ tryCatchOnly (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.888Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -542,7 +542,7 @@ tryFinallyOnly (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.891Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -614,7 +614,7 @@ tryReturnFinally (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.893Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -699,7 +699,7 @@ nestedTryCatch (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.895Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -766,7 +766,7 @@ tryCatchRethrow (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.897Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -871,7 +871,7 @@ switchMixedTerminators (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.900Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -981,7 +981,7 @@ switchAllReturns (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.903Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1072,7 +1072,7 @@ returnFromNestedIf (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.906Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1140,7 +1140,7 @@ throwWithYieldValue (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.909Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1245,7 +1245,7 @@ guardClauses (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.913Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1319,7 +1319,7 @@ yieldsInUnusualPositions (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.917Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1385,7 +1385,7 @@ expressionUnwrapping (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.919Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1443,7 +1443,7 @@ nestedFunctionBoundary (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.921Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1497,7 +1497,7 @@ makeHelper (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.922Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1551,7 +1551,7 @@ program-19 (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.925Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1640,7 +1640,7 @@ ifElseChain (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.927Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1716,7 +1716,7 @@ labeledBreak (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.930Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1780,7 +1780,7 @@ forOfHeaderYield (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.932Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1852,7 +1852,7 @@ whileComplexCondition (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.937Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1965,7 +1965,7 @@ switchInsideLoop (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.953Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2151,7 +2151,7 @@ checkoutWorkflow (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.959Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2269,7 +2269,7 @@ dataPipeline (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.964Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2400,7 +2400,7 @@ stateMachine (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.967Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2474,7 +2474,7 @@ mixedExpressionBranching (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.969Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2545,7 +2545,7 @@ racePattern (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.973Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2627,7 +2627,7 @@ forOfEarlyExit (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.975Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2691,7 +2691,7 @@ whileWithContinue (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.980Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2767,7 +2767,7 @@ conditionalParallel (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.983Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2869,7 +2869,7 @@ tripleNestedTry (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.986Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -2937,7 +2937,7 @@ forLoopHeaderYields (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.989Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -3033,7 +3033,7 @@ complexReturns (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.992Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -3122,7 +3122,7 @@ doWhileRetry (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:30.996Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -3242,7 +3242,7 @@ switchWithBlocks (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:31.000Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -3362,7 +3362,7 @@ maxNestingDepth (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/control-flow-kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:31.003Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2

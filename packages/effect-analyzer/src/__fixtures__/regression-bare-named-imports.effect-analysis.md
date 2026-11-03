@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/regression-bare-named-imports.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/regression-bare-named-imports.ts`
 - **Analyzed**: 2026-05-22T16:10:33.788Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -56,7 +56,7 @@ directProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/regression-bare-named-imports.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/regression-bare-named-imports.ts`
 - **Analyzed**: 2026-05-22T16:10:33.789Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

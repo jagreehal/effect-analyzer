@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.657Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -72,7 +72,7 @@ genWithServices (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.662Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -152,7 +152,7 @@ parallelProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.663Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -231,7 +231,7 @@ raceProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.666Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -327,7 +327,7 @@ streamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.681Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -395,7 +395,7 @@ schemaProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.682Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -502,7 +502,7 @@ errorHandlingProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.688Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -573,7 +573,7 @@ fiberProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.690Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -654,7 +654,7 @@ scopedProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.692Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -719,7 +719,7 @@ LoggerLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.693Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -784,7 +784,7 @@ ConfigLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.694Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -839,7 +839,7 @@ AppLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.696Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -893,7 +893,7 @@ UserSchema (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.698Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -967,7 +967,7 @@ resourceProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.699Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1036,7 +1036,7 @@ conditionalProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.701Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1101,7 +1101,7 @@ loopProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.704Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1173,7 +1173,7 @@ pipeChainProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.704Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -1227,7 +1227,7 @@ Logger (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/kitchen-sink.ts`
 - **Analyzed**: 2026-05-22T16:10:32.704Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2

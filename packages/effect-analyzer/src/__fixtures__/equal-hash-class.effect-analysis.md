@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/equal-hash-class.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/equal-hash-class.ts`
 - **Analyzed**: 2026-05-22T16:10:32.277Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -56,7 +56,7 @@ MyPoint (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/equal-hash-class.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/equal-hash-class.ts`
 - **Analyzed**: 2026-05-22T16:10:32.279Z
 - **Source Type**: classMethod
 - **TypeScript Version**: 6.0.2

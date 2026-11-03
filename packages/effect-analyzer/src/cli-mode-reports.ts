@@ -72,7 +72,8 @@ export const runLintSourceMode = (
       runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject, enableRules: options.enableRules })
     )
     const scorecard = options.scorecard ? buildLintScorecard(scan.findings) : undefined
-    const timestamp = DateTime.formatIso(yield* DateTime.now)
+    const now = yield* DateTime.now
+    const timestamp = DateTime.formatIso(now)
     let baselineSummary:
       | {
         readonly new: number
@@ -341,9 +342,11 @@ export const runRulesMode = (
       const explained = options.explainRule ? explainRule(options.explainRule) : undefined
       payload = explained ? [explained] : []
     }
+    const now = yield* DateTime.now
+    const generatedAt = DateTime.formatIso(now)
     const envelope = {
       meta: {
-        generatedAt: DateTime.formatIso(yield* DateTime.now),
+        generatedAt,
         command: options.listRules
           ? "list-rules"
           : options.indexRules

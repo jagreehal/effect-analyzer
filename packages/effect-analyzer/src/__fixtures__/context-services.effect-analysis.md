@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.296Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -72,7 +72,7 @@ serviceProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.301Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -154,7 +154,7 @@ databaseProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.305Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -251,7 +251,7 @@ nestedServiceProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.306Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -315,7 +315,7 @@ result (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.311Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -373,7 +373,7 @@ nestedServiceProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.317Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -453,7 +453,7 @@ ConfigLive (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.318Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -526,7 +526,7 @@ ConfigLive.get (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.324Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -600,7 +600,7 @@ DatabaseLive (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.325Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -654,7 +654,7 @@ DatabaseLive.query (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.326Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -716,7 +716,7 @@ DatabaseLive.transaction (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.332Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -783,7 +783,7 @@ programWithFreshLayer (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.333Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -848,7 +848,7 @@ LoggerLive (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.337Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -949,7 +949,7 @@ AppLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.338Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1009,7 +1009,7 @@ programWithLayer (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.340Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1063,7 +1063,7 @@ programWithMergedLayers (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.340Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -1117,7 +1117,7 @@ Database (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.341Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -1171,7 +1171,7 @@ Config (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/context-services.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/context-services.ts`
 - **Analyzed**: 2026-05-22T16:10:30.341Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2

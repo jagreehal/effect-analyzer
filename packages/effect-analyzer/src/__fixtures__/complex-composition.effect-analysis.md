@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.127Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -79,7 +79,7 @@ conditionalWhenProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.130Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -156,7 +156,7 @@ conditionalUnlessProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.134Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -225,7 +225,7 @@ complexConditionalProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.136Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -306,7 +306,7 @@ resultA.onTrue (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.138Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -360,7 +360,7 @@ recursiveProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.145Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -429,7 +429,7 @@ repeatProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.152Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -498,7 +498,7 @@ concurrentForEachProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.153Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -564,7 +564,7 @@ results (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.162Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -678,7 +678,7 @@ chainedErrorHandlerProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.166Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -760,7 +760,7 @@ catchCauseProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.167Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -814,7 +814,7 @@ result (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.171Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -901,7 +901,7 @@ tapErrorProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.174Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -998,7 +998,7 @@ orElseChainProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.186Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1105,7 +1105,7 @@ mixedParallelSequentialProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.194Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1239,7 +1239,7 @@ raceWithFallbackProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.196Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1306,7 +1306,7 @@ optionToEffectProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.200Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1373,7 +1373,7 @@ eitherToEffectProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.202Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1444,7 +1444,7 @@ optionWithinEffectProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.205Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1498,7 +1498,7 @@ arrayOperationsProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.206Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2
@@ -1567,7 +1567,7 @@ conditionalIfProgram (direct):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/complex-composition.ts`
 - **Analyzed**: 2026-05-22T16:10:30.209Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

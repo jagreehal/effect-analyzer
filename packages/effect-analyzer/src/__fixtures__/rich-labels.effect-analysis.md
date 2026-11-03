@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
 - **Analyzed**: 2026-05-22T16:10:34.111Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -99,7 +99,7 @@ richProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
 - **Analyzed**: 2026-05-22T16:10:34.116Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -170,7 +170,7 @@ parallelProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
 - **Analyzed**: 2026-05-22T16:10:34.117Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -243,7 +243,7 @@ conditionalProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
 - **Analyzed**: 2026-05-22T16:10:34.118Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -297,7 +297,7 @@ UserRepo (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/rich-labels.ts`
 - **Analyzed**: 2026-05-22T16:10:34.118Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2

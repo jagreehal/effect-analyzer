@@ -59,7 +59,7 @@ export const runOpenApiRuntime = (
       child.stdout?.on("data", (d) => process.stdout.write(d as Uint8Array))
     }
     child.on("close", (code) => {
-      if (code === 0) resume(Effect.succeed(undefined))
+      if (code === 0) resume(Effect.undefined)
       else resume(cliFail(`OpenAPI runtime exited with code ${code}`))
     })
     child.on("error", (err: unknown) => {
@@ -134,6 +134,7 @@ export const runApiDocsMode = (
     const allStructures: Array<HttpApiStructure> = []
     for (const file of files) {
       // Unparseable files are skipped, not fatal.
+      // oxlint-disable-next-line effecttsgo/effect-try-without-catch -- failure is swallowed below
       const structures = yield* Effect.try(() => extractHttpApiStructure(project.addSourceFileAtPath(file), file)).pipe(
         Effect.orElseSucceed(() => [] as ReadonlyArray<HttpApiStructure>)
       )

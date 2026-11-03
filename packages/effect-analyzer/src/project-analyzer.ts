@@ -480,6 +480,7 @@ export function analyzeProjectCorpus(
     // Optionally build the deduplicated service map
     let serviceMap: ProjectServiceMap | undefined
     if (options.buildServiceMap) {
+      // oxlint-disable-next-line effecttsgo/effect-try-without-catch -- failure is swallowed below
       serviceMap = yield* Effect.try(() => {
         const { Project } = loadTsMorph()
         const project = new Project({

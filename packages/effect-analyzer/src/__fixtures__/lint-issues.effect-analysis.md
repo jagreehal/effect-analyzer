@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
 - **Analyzed**: 2026-05-22T16:10:32.898Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -60,7 +60,7 @@ untaggedYieldProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
 - **Analyzed**: 2026-05-22T16:10:32.902Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -120,7 +120,7 @@ missingHandlerProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
 - **Analyzed**: 2026-05-22T16:10:32.903Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -178,7 +178,7 @@ deadCodeProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
 - **Analyzed**: 2026-05-22T16:10:32.908Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -271,7 +271,7 @@ complexLayerProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
 - **Analyzed**: 2026-05-22T16:10:32.910Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -352,7 +352,7 @@ catchProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/lint-issues.ts`
 - **Analyzed**: 2026-05-22T16:10:32.912Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2

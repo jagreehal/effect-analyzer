@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/rc-ref-reloadable.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/rc-ref-reloadable.ts`
 - **Analyzed**: 2026-05-22T16:10:33.579Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -21,7 +21,7 @@ flowchart TB
   n2["rcRef.create (concurrency)"]
   n3["Pipe (1 steps)"]
   n4["ref"]
-  n5["RcRef.get (service-call) R: '/Users/jreehal/dev/node-examples/effect-analyzer/node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef'"]
+  n5["RcRef.get (service-call) R: 'node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef'"]
   n6["reloadable.create (concurrency)"]
   n7["Pipe (1 steps)"]
   n8["rel"]
@@ -78,7 +78,7 @@ prog (generator):
   1. ref = rcRef.create
   2. n = Pipes ref through:
     Calls ref
-    Calls "/Users/jreehal/dev/node-examples/effect-analyzer/node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef".get — service-call
+    Calls "node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef".get — service-call
   3. rel = reloadable.create
   4. v = Pipes rel through:
     Calls rel
@@ -87,13 +87,13 @@ prog (generator):
     Calls rel
     Calls __object.reload — service-call
 
-  Services required: "/Users/jreehal/dev/node-examples/effect-analyzer/node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef", __object
+  Services required: "node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef", __object
   Concurrency: sequential (no parallelism)
 ```
 
 
 ## Dependencies
 
-- `"/Users/jreehal/dev/node-examples/effect-analyzer/node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef"`: "/Users/jreehal/dev/node-examples/effect-analyzer/node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef"
+- `"node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef"`: "node_modules/.pnpm/effect@3.21.2/node_modules/effect/dist/dts/RcRef"
 - `__object`: __object
 

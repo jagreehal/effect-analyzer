@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.519Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -71,7 +71,7 @@ simpleStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.521Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -160,7 +160,7 @@ mappedStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.523Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -255,7 +255,7 @@ filteredStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.526Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -378,7 +378,7 @@ pipelineStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.528Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -467,7 +467,7 @@ scannedStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.529Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -556,7 +556,7 @@ flatMappedStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.531Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -653,7 +653,7 @@ errorHandledStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.535Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -762,7 +762,7 @@ timeoutStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.537Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -831,7 +831,7 @@ sinkStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.538Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -900,7 +900,7 @@ foldSinkStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.539Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -985,7 +985,7 @@ mergedStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.541Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1070,7 +1070,7 @@ zippedStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.543Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -1159,7 +1159,7 @@ repeatingEffectStreamProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/stream-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:34.548Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2

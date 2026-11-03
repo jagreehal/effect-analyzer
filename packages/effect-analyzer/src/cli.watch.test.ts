@@ -65,8 +65,8 @@ describe("effect-analyze --watch", () => {
   // for the rest of the process: no error, no exit, a watcher that is still
   // "running" and permanently deaf.
   //
-  // The previous test only proves the unlink is noticed. This one proves the
-  // watcher is still alive afterwards, which is the half that was broken.
+  // The previous test checks that the CLI notices the unlink. This one checks
+  // that the watcher keeps running afterwards.
   it("keeps watching after the file is replaced rather than modified", async () => {
     root = mkdtempSync(join(tmpdir(), "effect-analyzer-atomic-save-"))
     const source = join(root, "checkout.ts")
@@ -108,10 +108,8 @@ describe("effect-analyze --watch", () => {
 
   // Watch mode renders through `captureStdout`, which swaps the global
   // `process.stdout.write`. Overlapping analyses restore it in the order they
-  // finish, so a burst of saves used to be able to leave stdout pointing at a
-  // capture buffer nobody reads — every later frame written into the void, the
-  // watcher alive but permanently silent. A burst must not cost us the frames
-  // that come after it.
+  // finish, so after a burst of saves stdout must point back at the terminal
+  // and later frames must still render.
   it("still renders after a burst of rapid saves", async () => {
     root = mkdtempSync(join(tmpdir(), "effect-analyzer-burst-"))
     const source = join(root, "checkout.ts")
@@ -130,8 +128,8 @@ describe("effect-analyze --watch", () => {
 
     await waitFor(() => stdout, "flowchart")
 
-    // Spread across several debounce windows on purpose: coalescing within one
-    // window is exactly what would hide the bug.
+    // Spread across several debounce windows so coalescing within one window
+    // cannot mask a dropped event.
     for (let save = 0; save < 8; save += 1) {
       writeFileSync(source, `${VALID_SOURCE}\n// burst ${String(save)}\n`, "utf8")
       await sleep(200)

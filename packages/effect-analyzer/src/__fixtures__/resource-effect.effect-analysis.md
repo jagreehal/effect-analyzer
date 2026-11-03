@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/resource-effect.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/resource-effect.ts`
 - **Analyzed**: 2026-05-22T16:10:34.013Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -56,7 +56,7 @@ resourceProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/resource-effect.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/resource-effect.ts`
 - **Analyzed**: 2026-05-22T16:10:34.018Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -132,7 +132,7 @@ ensuringProgram (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/resource-effect.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/resource-effect.ts`
 - **Analyzed**: 2026-05-22T16:10:34.018Z
 - **Source Type**: direct
 - **TypeScript Version**: 6.0.2

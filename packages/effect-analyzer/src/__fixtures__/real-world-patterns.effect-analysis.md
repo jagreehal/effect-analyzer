@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.674Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -101,7 +101,7 @@ apiCallWithRetry (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.679Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -167,7 +167,7 @@ cachedApiCall (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.682Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -237,7 +237,7 @@ getUserWithCache (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.685Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -311,7 +311,7 @@ batchFetchUsers (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.689Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -416,7 +416,7 @@ authenticatedCall (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.693Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -501,7 +501,7 @@ dbTransaction (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.694Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -573,7 +573,7 @@ result (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.701Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -683,7 +683,7 @@ processUserWorkflow (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.702Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -737,7 +737,7 @@ result (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.707Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -845,7 +845,7 @@ withCircuitBreaker (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.712Z
 - **Source Type**: generator
 - **TypeScript Version**: 6.0.2
@@ -917,7 +917,7 @@ result (generator):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.712Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -971,7 +971,7 @@ UserId (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.713Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -1025,7 +1025,7 @@ HttpClient (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.713Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
@@ -1079,7 +1079,7 @@ Cache (class):
 
 ## Metadata
 
-- **File**: `/Users/jreehal/dev/node-examples/effect-analyzer/packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
+- **File**: `packages/effect-analyzer/src/__fixtures__/real-world-patterns.ts`
 - **Analyzed**: 2026-05-22T16:10:33.714Z
 - **Source Type**: class
 - **TypeScript Version**: 6.0.2
