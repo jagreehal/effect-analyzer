@@ -73,7 +73,8 @@ Options:
   --max-depth <n>          How deep a directory walk descends (default: 10)
   --no-metadata            Exclude metadata from output
   --colocate               Write analysis next to source (default: on for a single
-                           file, off when -o is given)
+                           file, off when -o is given). A mermaid-* format writes
+                           only that diagram
   --no-colocate            Print only; do not write the adjacent analysis file
   --no-colocate-enhanced   Use standard Mermaid in colocated docs (default: enhanced)
   --colocate-suffix <s>    Suffix for colocated files (default: "effect-analysis")
@@ -188,7 +189,7 @@ Examples:
   effect-analyze ./workflow.ts --format svg-statechart -o sc.html  # Self-contained XState-styled SVG
   effect-analyze ./workflow.ts --format statechart-html -o sc.html  # Local visualizer page
   effect-analyze ./workflow.ts --format xstate-config   # XState v5 createMachine() code for stately.ai/viz
-  effect-analyze ./workflow.ts --format machine-json -o machine.json   # XState v6 MachineJSON for machineFromJSON
+  effect-analyze ./workflow.ts --format machine-json -o machine.json   # XState v6 MachineJSON (machines or railway Effect IR)
   effect-analyze ./workflow.ts --format statechart-coverage   # Completeness report (exit 1 on warnings — CI gate)
   effect-analyze ./src --format api-docs   # Extract HttpApi structure, emit API docs markdown
   effect-analyze ./src --format openapi-paths -o paths.json  # Emit OpenAPI paths JSON

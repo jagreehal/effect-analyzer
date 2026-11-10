@@ -79,7 +79,7 @@ export interface StateInvoke {
 
 export interface StateMachine {
   readonly name: string
-  readonly source: "effect-machine" | "machine-json" | "xstate"
+  readonly source: "effect-machine" | "machine-json" | "xstate" | "effect-ir"
   readonly initial: string | undefined
   /** Every state path in the machine, parents included. */
   readonly states: ReadonlyArray<string>
@@ -107,6 +107,11 @@ export interface StateMachine {
   readonly exitActions?: Readonly<Record<string, ReadonlyArray<string>>>
   /** Invoked-child metadata per state (`invoke:` in the handler tree). */
   readonly invokes?: Readonly<Record<string, ReadonlyArray<StateInvoke>>>
+  /**
+   * XState `tags` per state path. Railway machines use `success` / `error` so
+   * visualizers can tone happy vs error-rail finals differently.
+   */
+  readonly stateTags?: Readonly<Record<string, ReadonlyArray<string>>>
 }
 
 /** Explicit finals when the source declares them; else no-outgoing inference. */

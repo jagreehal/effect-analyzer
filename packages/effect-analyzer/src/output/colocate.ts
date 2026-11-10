@@ -2,7 +2,7 @@
  * Colocated output - writes analysis files next to source files
  */
 
-import { Data, DateTime, Effect } from "effect"
+import { Data, Effect } from "effect"
 import * as fs from "node:fs/promises"
 import * as path from "path"
 import { generatePaths } from "../path-generator"
@@ -124,12 +124,8 @@ export const renderColocatedMarkdown = (
     // Metadata
     sections.push("## Metadata")
     sections.push("")
-    sections.push(`- **File**: \`${ir.metadata.filePath}\``)
-    sections.push(`- **Analyzed**: ${DateTime.formatIso(DateTime.makeUnsafe(ir.metadata.analyzedAt))}`)
+    sections.push(`- **File**: \`${path.basename(ir.metadata.filePath)}\``)
     sections.push(`- **Source Type**: ${ir.root.source}`)
-    if (ir.metadata.tsVersion) {
-      sections.push(`- **TypeScript Version**: ${ir.metadata.tsVersion}`)
-    }
     sections.push("")
 
     // Mermaid diagram
@@ -216,12 +212,8 @@ export const renderColocatedMarkdownForFile = (
       sections.push(`# Effect Analysis: ${ir.root.programName}`, "")
 
       sections.push("## Metadata", "")
-      sections.push(`- **File**: \`${ir.metadata.filePath}\``)
-      sections.push(`- **Analyzed**: ${DateTime.formatIso(DateTime.makeUnsafe(ir.metadata.analyzedAt))}`)
+      sections.push(`- **File**: \`${path.basename(ir.metadata.filePath)}\``)
       sections.push(`- **Source Type**: ${ir.root.source}`)
-      if (ir.metadata.tsVersion) {
-        sections.push(`- **TypeScript Version**: ${ir.metadata.tsVersion}`)
-      }
       sections.push("", "")
 
       sections.push("## Effect Flow", "", "```mermaid")
@@ -349,6 +341,24 @@ export const writeColocatedOutputForFile = (
     return outputPath
   })
 
+/** Write only the given Mermaid diagrams, each in its own fence. */
+export const writeColocatedDiagrams = (
+  filePath: string,
+  suffix: string,
+  diagrams: ReadonlyArray<string>
+): Effect.Effect<string, ColocateWriteError> =>
+  Effect.gen(function*() {
+    const outputPath = deriveOutputPath(filePath, suffix)
+    const content = diagrams.map((d) => "```mermaid\n" + d + "\n```\n").join("\n")
+
+    yield* Effect.tryPromise({
+      try: () => fs.writeFile(outputPath, content, "utf-8"),
+      catch: (cause) => new ColocateWriteError({ outputPath, cause })
+    })
+
+    return outputPath
+  })
+
 /**
  * Write colocated output file for an IR (single program; multi-program files overwrite).
  */
@@ -388,7 +398,7 @@ export const renderServiceArtifactMarkdown = (
   sections.push("## Definition")
   sections.push("")
   sections.push(`- **Class**: \`${artifact.className}\``)
-  sections.push(`- **File**: \`${artifact.definitionFilePath}:${artifact.definitionLocation.line}\``)
+  sections.push(`- **File**: \`${path.basename(artifact.definitionFilePath)}:${artifact.definitionLocation.line}\``)
   sections.push(`- **Tag**: \`'${artifact.serviceId}'\``)
   if (artifact.interfaceTypeText) {
     sections.push(`- **Type**: \`${artifact.interfaceTypeText}\``)

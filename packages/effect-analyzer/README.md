@@ -233,7 +233,7 @@ Auto-mode picks the most relevant views for your program, or choose explicitly:
 | `svg-statechart`      | Self-contained, XState-styled statechart SVG                                  |
 | `statechart-html`     | Local visualizer page with SVG, coverage, and XState export                   |
 | `xstate-config`       | `createMachine()` config for the [Stately visualizer](https://stately.ai/viz) |
-| `machine-json`        | XState v6 `MachineJSON`, for `machineFromJSON`                                |
+| `machine-json`        | XState v6 `MachineJSON`, for `machineFromJSON` (also railway Effect programs) |
 
 [See all formats →](https://jagreehal.github.io/effect-analyzer/diagrams/all-formats/)
 
@@ -263,7 +263,9 @@ npx effect-analyze ./workflow.ts --format statechart-html
 npx effect-analyze ./workflow.ts --format xstate-config
 
 # XState v6 MachineJSON: load it with machineFromJSON(json, { guards, actions, actors })
+# Also works for linear Effect programs (railway steps → states, ok/err events)
 npx effect-analyze ./workflow.ts --format machine-json -o checkout.json
+npx effect-analyze ./src/transfer.ts --format machine-json -o transfer.json
 
 # Files that also contain Effect programs: default view runs Effect analysis,
 # then appends any detected statecharts

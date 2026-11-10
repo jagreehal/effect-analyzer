@@ -114,10 +114,16 @@ This reports cyclomatic complexity, cognitive complexity, path count, nesting de
 
 ## Saving Output to a File
 
-The default already writes `transfer.effect-analysis.md`. Use `-o` when you want a different path, and `--no-colocate` when you only want that file (or stdout):
+The default already writes the full report to `transfer.effect-analysis.md`. Pass a `mermaid-*` format to write only that diagram there, in a Mermaid fence:
 
 ```bash
-npx effect-analyze ./transfer.ts --format mermaid-railway -o transfer-diagram.md --no-colocate
+npx effect-analyze ./transfer.ts --format mermaid-railway
+```
+
+Use `-o` for a different path. It writes the raw diagram and skips the adjacent file:
+
+```bash
+npx effect-analyze ./transfer.ts --format mermaid-railway -o transfer.mmd
 ```
 
 ## Watch Mode

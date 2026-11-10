@@ -23,7 +23,7 @@ import { computeDiagramFidelity, formatDiagramFidelity } from "./diagram-fidelit
 import { computeProgramDiagramQuality, type DiagramQualityHintInput } from "./diagram-quality"
 import { loadDiagramQualityHintsFromEslintJson } from "./diagram-quality-eslint"
 import { selectFormats } from "./output/auto-format"
-import { writeColocatedOutputForFile } from "./output/colocate"
+import { writeColocatedDiagrams, writeColocatedOutputForFile } from "./output/colocate"
 import { renderExplanation, renderMultipleExplanations } from "./output/explain"
 import { renderJSON, renderMultipleJSON } from "./output/json"
 import { renderDependencyMatrix } from "./output/matrix"
@@ -281,9 +281,10 @@ export const runAnalysis = (
     // An explicit -o names where output goes, so it opts out unless --colocate.
     // A --program run shows part of the file, so it must not overwrite the
     // colocated analysis of the whole file.
-    if (
-      !options.noColocate && options.program === undefined && (options.output === undefined || options.colocate)
-    ) {
+    const colocate = !options.noColocate && options.program === undefined &&
+      (options.output === undefined || options.colocate)
+    // An explicit mermaid-* format colocates just that diagram (after the switch).
+    if (colocate && !options.format.startsWith("mermaid")) {
       const outputFile = yield* writeColocatedOutputForFile(
         resolvedPath,
         filteredIrs,
@@ -297,6 +298,11 @@ export const runAnalysis = (
     }
 
     let output = ""
+    let colocatedDiagrams: ReadonlyArray<string> = []
+    const joinDiagrams = (rendered: ReadonlyArray<string>): string => {
+      colocatedDiagrams = rendered
+      return rendered.join("\n\n")
+    }
 
     // Auto-format renderer dispatch map
     const autoRenderers: Record<string, (ir: StaticEffectIR) => string> = {
@@ -402,11 +408,11 @@ export const runAnalysis = (
           direction: options.direction ?? "TB",
           ...(options.detail ? { detail: options.detail } : {})
         }
-        const diagrams: Array<string> = []
+        const rendered: Array<string> = []
         for (const ir of filteredIrs) {
           if (runtimeTrace) {
             const overlay = renderMermaidWithRuntimeTrace(ir, runtimeTrace, mermaidOptions)
-            diagrams.push(
+            rendered.push(
               `${overlay.mermaid}\n%% runtime overlay: ` +
                 `${overlay.matchedSpanIds.length} matched, ` +
                 `${overlay.suffixMatchedSpanIds.length} matched by suffix, ` +
@@ -416,9 +422,9 @@ export const runAnalysis = (
             continue
           }
           const diagram = yield* renderMermaid(ir, mermaidOptions)
-          diagrams.push(diagram)
+          rendered.push(diagram)
         }
-        output = diagrams.join("\n\n")
+        output = joinDiagrams(rendered)
         break
       }
       case "mermaid-paths": {
@@ -432,7 +438,7 @@ export const runAnalysis = (
             })
           )
         }
-        output = pathDiagrams.join("\n\n")
+        output = joinDiagrams(pathDiagrams)
         break
       }
       case "mermaid-enhanced": {
@@ -443,45 +449,45 @@ export const runAnalysis = (
             ...(options.detail ? { detail: options.detail } : {})
           }))
         }
-        output = enhancedDiagrams.join("\n\n")
+        output = joinDiagrams(enhancedDiagrams)
         break
       }
       case "mermaid-railway": {
         const railwayDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderRailwayMermaid(ir, { direction: railwayDir }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-services": {
         const svcDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderServicesMermaid(ir, { direction: svcDir }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-errors": {
         const errDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderErrorsMermaid(ir, { direction: errDir, when: "always" }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-decisions": {
         const outputs = filteredIrs.map((ir) => renderDecisionsMermaid(ir, { direction: options.direction ?? "TB" }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-causes": {
         const outputs = filteredIrs.map((ir) => renderCausesMermaid(ir, { direction: options.direction ?? "TB" }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-concurrency": {
         const outputs = filteredIrs.map((ir) => renderConcurrencyMermaid(ir, { direction: options.direction ?? "TB" }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-timeline": {
         const outputs = filteredIrs.map((ir) => renderTimelineMermaid(ir))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-layers": {
@@ -489,25 +495,25 @@ export const runAnalysis = (
         // on their own, yet they are exactly what this view draws. An explicit
         // --program still narrows it to that one program.
         const layerIrs = options.program !== undefined ? filteredIrs : irs
-        output = renderProgramsLayersMermaid(layerIrs, { direction: options.direction ?? "TB" })
+        output = joinDiagrams([renderProgramsLayersMermaid(layerIrs, { direction: options.direction ?? "TB" })])
         break
       }
       case "mermaid-retry": {
         const retryDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderRetryMermaid(ir, { direction: retryDir }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-testability": {
         const testDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderTestabilityMermaid(ir, { direction: testDir }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "mermaid-dataflow": {
         const dfDir = options.direction ?? "LR"
         const outputs = filteredIrs.map((ir) => renderDataflowMermaid(ir, { direction: dfDir }))
-        output = outputs.join("\n\n")
+        output = joinDiagrams(outputs)
         break
       }
       case "stats": {
@@ -553,6 +559,11 @@ export const runAnalysis = (
         output = renderDependencyMatrix(filteredIrs)
         break
       }
+    }
+
+    if (colocate && colocatedDiagrams.length > 0) {
+      const outputFile = yield* writeColocatedDiagrams(resolvedPath, options.colocateSuffix, colocatedDiagrams)
+      yield* Console.error(`Written: ${displayPath(outputFile)}`)
     }
 
     if (options.ascii) output = toAsciiText(output)
