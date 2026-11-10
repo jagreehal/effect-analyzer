@@ -68,6 +68,7 @@ export {
 } from "./state-machine-json"
 // Statechart renderers, so MachineJSON machines (which the CLI does not
 // discover in source) can be rendered programmatically too.
+export { renderMachineJSON, toMachineJSON } from "./output/machine-json"
 export { renderStatechartMermaid, renderStatechartsMermaid } from "./output/mermaid-statechart"
 export { renderStatechartSVG } from "./output/svg-statechart"
 export { renderXStateConfig } from "./output/xstate-config"

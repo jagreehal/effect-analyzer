@@ -293,14 +293,34 @@ const config = renderXStateConfig(machine)
 ```bash
 npx effect-analyze ./workflow.ts --format statechart-html -o statechart.html
 npx effect-analyze ./workflow.ts --format xstate-config
+npx effect-analyze ./workflow.ts --format machine-json -o machine.json
 npx effect-analyze ./workflow.ts --format mermaid-statechart
 npx effect-analyze ./workflow.ts --format svg-statechart
 npx effect-analyze ./workflow.ts --format statechart-coverage
 ```
 
 `statechart-html` is the local visualizer: SVG diagram, coverage report, and
-paste-ready XState config in one page. `xstate-config` is for
-[stately.ai/viz](https://stately.ai/viz) import.
+paste-ready XState config in one page. `xstate-config` writes XState v5
+`createMachine` code for [stately.ai/viz](https://stately.ai/viz) import.
+`machine-json` writes XState v6 `MachineJSON`, the format v6's `machineToJSON`
+writes and `machineFromJSON` loads.
+
+```ts
+import { machineFromJSON } from "xstate"
+import json from "./machine.json"
+
+const machine = machineFromJSON(json, {
+  guards: { hasItems: ({ context }) => context.items.length > 0 },
+  actions: { persistDraft: () => {} },
+  actors: { charge }
+})
+```
+
+Guards, actions and invoked actors stay named, so you supply their
+implementations. A compound state's `onDone` goes in
+`on: { "xstate.done.state": { target, matches: { stateId } } }`, the form
+`machineFromJSON` reads. With several machines in the input, `machine-json`
+prints a JSON array with one document per machine.
 
 ## Coverage Gate
 
@@ -342,7 +362,7 @@ terminal state — never fail the gate.
 ## Detection Diagnostics
 
 Statechart formats (`mermaid-statechart`, `svg-statechart`, `statechart-html`,
-`xstate-config`, `statechart-coverage`) print a header naming each machine
+`xstate-config`, `machine-json`, `statechart-coverage`) print a header naming each machine
 found and its state and event counts. When none are found, they list
 declarations that came close and why — a `Machine.make` whose state tree is
 imported, or a `Machine.states` / `Machine.defineStates` tree no machine in the

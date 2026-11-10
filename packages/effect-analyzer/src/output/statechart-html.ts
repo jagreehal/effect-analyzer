@@ -1,5 +1,6 @@
 import type { StateMachine } from "../state-machine"
 import type { StateMachineCoverage } from "../state-machine-coverage"
+import { renderMachineJSON } from "./machine-json"
 import { renderCoverageReport } from "./statechart-coverage"
 import { renderStatechartSVG } from "./svg-statechart"
 import { renderXStateConfig } from "./xstate-config"
@@ -46,8 +47,10 @@ export function renderStatechartVisualizerHTML(
     }</li>
         <li>initial: ${esc(machine.initial ?? "unknown")}</li>
       </ul>
-      <h3>XState export</h3>
+      <h3>XState v5 config (stately.ai/viz)</h3>
       <pre><code>${esc(config)}</code></pre>
+      <h3>XState v6 MachineJSON</h3>
+      <pre><code>${esc(renderMachineJSON([machine]))}</code></pre>
     </aside>
   </div>
 </section>`
@@ -73,6 +76,7 @@ p,li{color:var(--muted)}
 .machine>header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid var(--line)}
 .machine h2{font-size:19px}
 .machine h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px}
+.machine pre+h3{margin-top:16px}
 .badge{border:1px solid var(--accent);color:#bfdbfe;border-radius:999px;padding:6px 10px;font-size:13px;font-weight:700;white-space:nowrap}
 .badge.warn{border-color:var(--warn);color:#fed7aa}
 .grid{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:0}
@@ -92,7 +96,7 @@ svg{max-width:none}
   <section class="hero">
     <div>
       <h1>Effect Statecharts</h1>
-      <p>Read statically from source (effect-machine or XState): diagram, coverage and an XState config. Nothing is executed.</p>
+      <p>Read statically from source (effect-machine or XState): diagram, coverage, and XState v5 and v6 exports. Nothing is executed.</p>
     </div>
     <div class="badge">${machines.length} machine${machines.length === 1 ? "" : "s"}</div>
   </section>

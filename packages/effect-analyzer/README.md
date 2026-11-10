@@ -233,6 +233,7 @@ Auto-mode picks the most relevant views for your program, or choose explicitly:
 | `svg-statechart`      | Self-contained, XState-styled statechart SVG                                  |
 | `statechart-html`     | Local visualizer page with SVG, coverage, and XState export                   |
 | `xstate-config`       | `createMachine()` config for the [Stately visualizer](https://stately.ai/viz) |
+| `machine-json`        | XState v6 `MachineJSON`, for `machineFromJSON`                                |
 
 [See all formats →](https://jagreehal.github.io/effect-analyzer/diagrams/all-formats/)
 
@@ -260,6 +261,9 @@ npx effect-analyze ./workflow.ts --format statechart-html
 # An XState createMachine() config — paste into stately.ai/viz for the real
 # interactive visualizer, generated straight from your Effect code
 npx effect-analyze ./workflow.ts --format xstate-config
+
+# XState v6 MachineJSON: load it with machineFromJSON(json, { guards, actions, actors })
+npx effect-analyze ./workflow.ts --format machine-json -o checkout.json
 
 # Files that also contain Effect programs: default view runs Effect analysis,
 # then appends any detected statecharts
@@ -315,6 +319,12 @@ every region. Targets are read from the `full`, `local` and `branch` builders;
 label, and an invoke's `.onDone` / `.onFailure` become completion transitions.
 XState `MachineJSON` (from Stately or any tool that emits it) can be ingested
 too, and runs through the same renderers and coverage engine.
+
+`xstate-config` writes XState v5 code for stately.ai/viz. For XState v6, use
+`machine-json`: it writes the same JSON as v6's `machineToJSON`. Guards, actions
+and invoked actors stay named (`{ "type": "hasItems" }`), and you pass their
+implementations to `machineFromJSON`. A guard read from a condition keeps the
+condition text as its name.
 
 #### Completeness checking
 

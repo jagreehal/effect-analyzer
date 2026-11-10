@@ -189,6 +189,7 @@ const FORMATS: ReadonlyArray<CLIOptions["format"]> = [
   "svg-statechart",
   "statechart-html",
   "xstate-config",
+  "machine-json",
   "statechart-coverage",
   "stats",
   "migration",

@@ -100,6 +100,7 @@
     "effecttsgo/manual-metric-tap-to-track": "error",
     "effecttsgo/map-map-error-to-map-both": "error",
     "effecttsgo/map-some-catch-no-such-element": "error",
+    "effecttsgo/match-to-result-or-option": "error",
     "effecttsgo/match-boolean-to-is-success": "error",
     "effecttsgo/provide-merge-all-to-array": "error",
     "effecttsgo/result-match-to-from-result": "error",

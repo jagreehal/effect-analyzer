@@ -57,7 +57,7 @@ Commands (a drop-in replacement for the effect-tsgo CLI):
   verbose output, enhanced Mermaid, colors). Use --no-colocate to skip writing files.
 
 Options:
-  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | mermaid-statechart | svg-statechart | statechart-html | xstate-config | statechart-coverage | stats | migration | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime | json-schema | markdown (default: auto; markdown only with --migration)
+  -f, --format <format>    Output format: auto | json | mermaid | mermaid-paths | mermaid-enhanced | mermaid-railway | mermaid-services | mermaid-errors | mermaid-decisions | mermaid-causes | mermaid-concurrency | mermaid-timeline | mermaid-layers | mermaid-retry | mermaid-testability | mermaid-dataflow | mermaid-statechart | svg-statechart | statechart-html | xstate-config | machine-json | statechart-coverage | stats | migration | showcase | explain | summary | matrix | architecture | api-docs | openapi-paths | openapi-runtime | json-schema | markdown (default: auto; markdown only with --migration)
   --program <name>         Render only the named program from a multi-program file (any format)
   --export <name>          For openapi-runtime: export name of HttpApi (default: first/default)
                            For json-schema: export name of the Schema to convert (required)
@@ -187,7 +187,8 @@ Examples:
   effect-analyze ./workflow.ts --format mermaid-statechart   # State machine → mermaid stateDiagram-v2
   effect-analyze ./workflow.ts --format svg-statechart -o sc.html  # Self-contained XState-styled SVG
   effect-analyze ./workflow.ts --format statechart-html -o sc.html  # Local visualizer page
-  effect-analyze ./workflow.ts --format xstate-config   # Emit createMachine() config for stately.ai/viz
+  effect-analyze ./workflow.ts --format xstate-config   # XState v5 createMachine() code for stately.ai/viz
+  effect-analyze ./workflow.ts --format machine-json -o machine.json   # XState v6 MachineJSON for machineFromJSON
   effect-analyze ./workflow.ts --format statechart-coverage   # Completeness report (exit 1 on warnings — CI gate)
   effect-analyze ./src --format api-docs   # Extract HttpApi structure, emit API docs markdown
   effect-analyze ./src --format openapi-paths -o paths.json  # Emit OpenAPI paths JSON

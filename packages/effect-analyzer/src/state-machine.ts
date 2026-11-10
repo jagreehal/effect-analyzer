@@ -49,6 +49,13 @@ export interface StateTransition {
   /** Guard condition text when the transition is conditional (best-effort). */
   readonly guard?: string
   /**
+   * The source wrote no target: the transition stays in `from` without exiting
+   * or re-entering it. `to` is `from` so graphs still draw a self-edge, but
+   * exporters must omit the target, because `target: from` would re-enter a
+   * compound state and reset its children to their initial states.
+   */
+  readonly targetless?: true
+  /**
    * Named action labels attached to the transition. Labels only: the analyzer
    * renders and exports them but never runs anything.
    */
@@ -107,6 +114,67 @@ export function finalStatesOf(machine: StateMachine): ReadonlySet<string> {
   if (machine.finalStates !== undefined) return new Set(machine.finalStates)
   const hasOutgoing = new Set(machine.transitions.map((t) => t.from))
   return new Set(machine.states.filter((s) => !hasOutgoing.has(s)))
+}
+
+/** A machine's flat state paths arranged as the nested tree XState configs use. */
+export interface StateTree {
+  /** Child paths per parent path; `''` is the root. Dotted names imply their ancestors. */
+  readonly childrenOf: ReadonlyMap<string, ReadonlyArray<string>>
+  /** Non-initial transitions per source path. */
+  readonly transitionsFrom: ReadonlyMap<string, ReadonlyArray<StateTransition>>
+  /** The child key a compound state starts in. */
+  readonly initialChild: (path: string) => string
+  readonly parallel: ReadonlySet<string>
+}
+
+export function nestStates(machine: StateMachine): StateTree {
+  const childrenOf = new Map<string, Array<string>>()
+  const known = new Set<string>()
+  for (const state of machine.states) {
+    let path = ""
+    for (const seg of state.split(".")) {
+      const parent = path
+      path = path === "" ? seg : `${path}.${seg}`
+      if (known.has(path)) continue
+      known.add(path)
+      childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), path])
+    }
+  }
+
+  const transitionsFrom = new Map<string, Array<StateTransition>>()
+  for (const path of known) transitionsFrom.set(path, [])
+  const compoundInitial = new Map<string, string>() // parent path → initial child path
+  for (const t of machine.transitions) {
+    if (t.trigger === "initial") {
+      if (!compoundInitial.has(t.from)) compoundInitial.set(t.from, t.to)
+      continue
+    }
+    transitionsFrom.get(t.from)?.push(t)
+  }
+  // A dotted machine.initial implies the initial child at every level it passes.
+  if (machine.initial?.includes(".")) {
+    const segs = machine.initial.split(".")
+    let path = segs[0] ?? ""
+    for (const seg of segs.slice(1)) {
+      const child = `${path}.${seg}`
+      if (!compoundInitial.has(path)) compoundInitial.set(path, child)
+      path = child
+    }
+  }
+  /** Direct child key on the way from `path` to the full path `target`. */
+  const childKeyToward = (path: string, target: string): string | undefined =>
+    target.startsWith(`${path}.`) ? target.slice(path.length + 1).split(".")[0] : undefined
+
+  const initialChild = (path: string): string => {
+    const first = childrenOf.get(path)?.[0] ?? ""
+    const target = compoundInitial.get(path)
+    return (target !== undefined ? childKeyToward(path, target) : undefined) ??
+      childKeyToward(path, first) ??
+      first.split(".").pop() ??
+      ""
+  }
+
+  return { childrenOf, transitionsFrom, initialChild, parallel: new Set(machine.parallelStates ?? []) }
 }
 
 export interface StateMachineAnalysis {
