@@ -1,7 +1,7 @@
 /**
  * Statechart modes: diagram, coverage gate, XState export, and the local
- * visualizer page. Dispatched early because they read machines straight from
- * source rather than going through the Effect IR pipeline.
+ * visualizer page. Prefer explicit machines in source; when none are found,
+ * fall back to railway-shaped Effect IR → StateMachine for linear programs.
  */
 
 /**
@@ -13,9 +13,11 @@ import { Console, Effect, Option } from "effect"
 import * as fs from "node:fs/promises"
 import { basename, extname, join } from "path"
 import type { CLIOptions } from "./cli-options"
-import { cliTry, openInBrowser } from "./cli-support"
+import { cliTry, displayPath, openInBrowser } from "./cli-support"
+import { writeColocatedDiagrams } from "./output/colocate"
 import { renderMachineJSON } from "./output/machine-json"
-import { renderStatechartsMermaid } from "./output/mermaid-statechart"
+import { renderStatechartMermaid } from "./output/mermaid-statechart"
+import { irsToStateMachines } from "./output/railway-machine"
 import { renderCoverageReport, summarizeCoverage } from "./output/statechart-coverage"
 import { renderStatechartVisualizerHTML } from "./output/statechart-html"
 import { renderStatechartHTML, renderStatechartSVG } from "./output/svg-statechart"
@@ -23,11 +25,13 @@ import { renderXStateConfig } from "./output/xstate-config"
 import { analyzeStateMachines, type StateMachine, summarizeAlphabet } from "./state-machine"
 import { computeStateMachineCoverage, type StateMachineCoverage } from "./state-machine-coverage"
 import { diagnoseStateMachines } from "./state-machine-diagnostics"
+import { analyzeEffectFile } from "./static-analyzer"
+import { isTrivialProgram } from "./trivial-programs"
 
 /**
  * Run a statechart format (mermaid-statechart | svg-statechart | statechart-html | xstate-config | machine-json).
- * These read `@typeonce/effect-machine` machines directly from source
- * (`Machine.make({...}).handle({...})`) — no Effect IR required.
+ * Reads `@typeonce/effect-machine` / XState machines from source first. When
+ * none are found, builds railway machines from Effect programs in the same files.
  */
 export const runStatechartMode = (
   resolvedPath: string,
@@ -65,9 +69,22 @@ export const runStatechartMode = (
       machines.push(
         // oxlint-disable-next-line effecttsgo/effect-try-without-catch -- failure is swallowed below
         ...(yield* Effect.try(() => analyzeStateMachines(file).machines).pipe(
-          Effect.orElseSucceed(() => [] as ReadonlyArray<StateMachine>)
+          Effect.orElseSucceed((): ReadonlyArray<StateMachine> => [])
         ))
       )
+    }
+
+    if (machines.length === 0) {
+      const fromIr = yield* Effect.forEach(files, (file) =>
+        analyzeEffectFile(file).pipe(
+          Effect.map((irs) =>
+            irsToStateMachines(
+              options.includeTrivial ? irs : irs.filter((ir) => !isTrivialProgram(ir))
+            )
+          ),
+          Effect.orElseSucceed((): ReadonlyArray<StateMachine> => [])
+        ))
+      machines.push(...fromIr.flat())
     }
 
     if (machines.length === 0) {
@@ -80,7 +97,7 @@ export const runStatechartMode = (
       })
       if (rejections.length === 0) {
         yield* Console.error(
-          "No state machines found. See https://jagreehal.github.io/effect-analyzer/reference/state-machines/ for the Machine.make(...).handle(...) shape."
+          "No state machines found. Pass a Machine.make(...).handle(...) / XState machine, or an Effect program with railway steps. See https://jagreehal.github.io/effect-analyzer/reference/state-machines/."
         )
       } else {
         yield* Console.error(
@@ -143,7 +160,15 @@ export const runStatechartMode = (
         })
       }
     } else {
-      output = renderStatechartsMermaid({ machines }, coverages)
+      const diagrams = machines.map((m, i) => renderStatechartMermaid(m, coverages[i]))
+      output = diagrams.join("\n\n")
+      // Same rule as the other mermaid-* formats: a single file colocates the diagram.
+      const colocate = files[0] === resolvedPath && !options.noColocate && options.program === undefined &&
+        (options.output === undefined || options.colocate)
+      if (colocate) {
+        const outputFile = yield* writeColocatedDiagrams(resolvedPath, options.colocateSuffix, diagrams)
+        yield* Console.error(`Written: ${displayPath(outputFile)}`)
+      }
     }
 
     // HTML formats are documents, not pipeable text: when no -o is given, write

@@ -70,6 +70,7 @@ export {
 // discover in source) can be rendered programmatically too.
 export { renderMachineJSON, toMachineJSON } from "./output/machine-json"
 export { renderStatechartMermaid, renderStatechartsMermaid } from "./output/mermaid-statechart"
+export { irsToStateMachines, irToStateMachine } from "./output/railway-machine"
 export { renderStatechartSVG } from "./output/svg-statechart"
 export { renderXStateConfig } from "./output/xstate-config"
 export type * from "./types"

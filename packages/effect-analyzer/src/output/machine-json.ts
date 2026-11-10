@@ -89,6 +89,7 @@ export function toMachineJSON(machine: StateMachine): MachineJSON {
     }
     const entry = machine.entryActions?.[path]
     const exit = machine.exitActions?.[path]
+    const tags = machine.stateTags?.[path]
     const type = parallel.has(path) ? "parallel" : kids.length === 0 && finals.has(path) ? "final" : undefined
 
     return {
@@ -96,6 +97,7 @@ export function toMachineJSON(machine: StateMachine): MachineJSON {
       ...(kids.length > 0 && type !== "parallel" ? { initial: initialChild(path) } : {}),
       ...(entry !== undefined ? { entry: entry.map((t) => ({ type: t })) } : {}),
       ...(exit !== undefined ? { exit: exit.map((t) => ({ type: t })) } : {}),
+      ...(tags !== undefined && tags.length > 0 ? { tags: [...tags] } : {}),
       ...(invoke.length > 0 ? { invoke: invoke.length === 1 && invoke[0] ? invoke[0] : invoke } : {}),
       ...(on.length > 0 ? { on: Object.fromEntries(on) } : {}),
       ...(always.length > 0 ? { always: value(path, always) } : {}),

@@ -81,6 +81,8 @@ export interface MachineJSONStateNode {
   readonly after?: Record<string, MachineJSONValue>
   /** Compound completion as `machineToJSON` writes it. */
   readonly onDone?: MachineJSONValue
+  /** XState state tags (`success` / `error` for railway finals). */
+  readonly tags?: string | ReadonlyArray<string>
 }
 
 /**
@@ -478,6 +480,13 @@ export function fromMachineJSON(
     ? Object.keys(schemaEvents)
     : observedEvents
 
+  const stateTags: Record<string, ReadonlyArray<string>> = {}
+  for (const { path, node } of entries) {
+    if (node.tags === undefined) continue
+    const tags = typeof node.tags === "string" ? [node.tags] : [...node.tags]
+    if (tags.length > 0) stateTags[path] = tags
+  }
+
   return {
     name: options?.name ?? json.id ?? "machine",
     source: "machine-json",
@@ -503,6 +512,7 @@ export function fromMachineJSON(
       : {}),
     ...(Object.keys(entryActions).length > 0 ? { entryActions } : {}),
     ...(Object.keys(exitActions).length > 0 ? { exitActions } : {}),
-    ...(Object.keys(invokes).length > 0 ? { invokes } : {})
+    ...(Object.keys(invokes).length > 0 ? { invokes } : {}),
+    ...(Object.keys(stateTags).length > 0 ? { stateTags } : {})
   }
 }

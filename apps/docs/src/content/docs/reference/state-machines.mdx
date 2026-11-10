@@ -321,6 +321,14 @@ paste-ready XState config in one page. `xstate-config` writes XState v5
 `machine-json` writes XState v6 `MachineJSON`, the format v6's `machineToJSON`
 writes and `machineFromJSON` loads.
 
+When the file has no `Machine.make` or XState machine, the statechart formats
+build one from each Effect program instead, using the `--format mermaid-railway`
+step model. Each step becomes a state with an `ok` event to the next step and an
+`err` event to its error state. Error taps run on the error rail in callback
+order, so `.pipe(Effect.tapError(a), Effect.tapError(b))` reaches `a` and then
+`b`. The `Success` final carries the `success` tag; error and tap finals carry
+`error`.
+
 ```ts
 import { machineFromJSON } from "xstate"
 import json from "./machine.json"
