@@ -1,5 +1,12 @@
 # effect-analyzer-docs
 
+## 0.0.9
+
+### Patch Changes
+
+- 4e752b4: Show live statecharts on the State Machines page. `pnpm generate:machines` exports the door, editor and approval machines with `--format machine-json`, and an autovisualizer embed draws each one so readers can send events and step through it.
+- 76030ff: Require Node 24 or newer. The package declares `engines.node >=24` and the GitHub Action checks for Node 24. Move the Action to `jagreehal/effect-analyzer@v4`, which runs `effect-analyzer@4`. The workflow examples use `node-version: 24` with the Node 24 releases of `actions/checkout`, `actions/setup-node`, `pnpm/action-setup` and `github/codeql-action`.
+
 ## 0.0.8
 
 ### Patch Changes
