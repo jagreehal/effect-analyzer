@@ -1,0 +1,49 @@
+{
+  "id": "EditorMachine",
+  "initial": "workspace",
+  "states": {
+    "workspace": {
+      "type": "parallel",
+      "states": {
+        "document": {
+          "initial": "Clean",
+          "states": {
+            "Clean": {
+              "on": {
+                "Edit": {
+                  "target": "Dirty"
+                }
+              }
+            },
+            "Dirty": {
+              "on": {
+                "Save": {
+                  "target": "Clean"
+                }
+              }
+            }
+          }
+        },
+        "connection": {
+          "initial": "Online",
+          "states": {
+            "Online": {
+              "on": {
+                "Disconnect": {
+                  "target": "Offline"
+                }
+              }
+            },
+            "Offline": {
+              "on": {
+                "Reconnect": {
+                  "target": "Online"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

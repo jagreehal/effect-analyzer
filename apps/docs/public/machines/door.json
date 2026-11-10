@@ -1,0 +1,20 @@
+{
+  "id": "DoorMachine",
+  "initial": "Closed",
+  "states": {
+    "Closed": {
+      "on": {
+        "Toggle": {
+          "target": "Open"
+        }
+      }
+    },
+    "Open": {
+      "on": {
+        "Toggle": {
+          "target": "Closed"
+        }
+      }
+    }
+  }
+}

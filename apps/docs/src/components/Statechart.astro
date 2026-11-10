@@ -1,0 +1,29 @@
+---
+// Embeds public/machines/<src>; `pnpm generate:machines` writes those files.
+interface Props {
+  src: string;
+  events?: string;
+  walkthrough?: string;
+}
+const { src, ...rest } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<script
+  is:inline
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/autovisualizer@0.1.0/public/embed/embed.js"
+></script>
+<auto-visualizer src={`${base}/machines/${src}`} {...rest}></auto-visualizer>
+<script is:inline>
+  // Match the Starlight theme picker; the embed defaults to the OS setting.
+  if (!window.__statechartTheme) {
+    window.__statechartTheme = true;
+    const sync = () => {
+      const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+      for (const el of document.querySelectorAll('auto-visualizer')) el.setAttribute('theme', theme);
+    };
+    new MutationObserver(sync).observe(document.documentElement, { attributeFilter: ['data-theme'] });
+    sync();
+  }
+</script>

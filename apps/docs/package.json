@@ -9,7 +9,8 @@
     "dev": "astro dev",
     "build": "astro build && node ./scripts/check-playground-worker.mjs",
     "preview": "astro preview",
-    "clean": "rm -rf dist .astro"
+    "clean": "rm -rf dist .astro",
+    "generate:machines": "pnpm --dir ../../packages/effect-analyzer build && for f in samples/machines/door.ts samples/machines/editor.ts ../../examples/xstate-effect-workflows/approval.ts; do node ../../packages/effect-analyzer/dist/cli.js $f --format machine-json -o public/machines/$(basename $f .ts).json; done && pnpm -w exec dprint fmt apps/docs/public/machines/*.json"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.7",

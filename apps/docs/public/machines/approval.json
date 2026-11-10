@@ -1,0 +1,56 @@
+{
+  "id": "approvalMachine",
+  "initial": "awaitingApproval",
+  "states": {
+    "awaitingApproval": {
+      "on": {
+        "APPROVE": {
+          "target": "deploying"
+        },
+        "CANCEL": {
+          "target": "cancelled"
+        }
+      },
+      "after": {
+        "30000": {
+          "target": "expired"
+        }
+      }
+    },
+    "deploying": {
+      "invoke": {
+        "src": "deploy",
+        "onDone": {
+          "target": "deployed"
+        },
+        "onError": {
+          "target": "failed"
+        }
+      },
+      "on": {
+        "CANCEL": {
+          "target": "cancelled"
+        }
+      }
+    },
+    "failed": {
+      "on": {
+        "RETRY": {
+          "target": "deploying"
+        },
+        "CANCEL": {
+          "target": "cancelled"
+        }
+      }
+    },
+    "deployed": {
+      "type": "final"
+    },
+    "expired": {
+      "type": "final"
+    },
+    "cancelled": {
+      "type": "final"
+    }
+  }
+}

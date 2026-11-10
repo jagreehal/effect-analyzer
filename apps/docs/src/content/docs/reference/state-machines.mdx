@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Statechart from '../../../components/Statechart.astro';
 
 Write state machines with
 [`@typeonce/effect-machine`](https://github.com/typeonce-dev/effect-machine) —
@@ -43,6 +44,11 @@ export const DoorMachine = Machine.make({
   Open: { on: { Toggle: (to) => to.full.Closed() } },
 })
 ```
+
+The analyzer reads that machine and exports it as MachineJSON. Send `Toggle`
+to step through it:
+
+<Statechart src="door.json" />
 
 <Aside type="note" title="Both API generations are read">
 The examples here use the `Machine.states` / `Machine.events` descriptors
@@ -100,6 +106,12 @@ export const EditorStates = Machine.states({
   },
 })
 ```
+
+Add a handler per leaf
+([`editor.ts`](https://github.com/jagreehal/effect-analyzer/blob/main/apps/docs/samples/machines/editor.ts))
+and both regions run at once. Each event moves its own region:
+
+<Statechart src="editor.json" />
 
 Nesting becomes dotted paths (`workspace.document.Clean`) that nest in the
 mermaid diagram and the exported XState config (absolute `#id.path` targets so
@@ -237,6 +249,10 @@ holds worked examples:
 ```bash
 npx effect-analyze examples/xstate-effect-workflows/approval.ts --format statechart-html
 ```
+
+`--format machine-json` exports the same machine:
+
+<Statechart src="approval.json" />
 
 ## MachineJSON
 
