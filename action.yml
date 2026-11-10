@@ -34,8 +34,8 @@ inputs:
     description: 'Railway diagrams in the comment: open (expanded) or collapsed.'
     default: 'open'
   cli:
-    description: 'Command that runs the analyzer. Pin an exact version with "npx -y -p effect-analyzer@3.5.0 effect-analyze", or use your own install ("pnpm exec effect-analyze").'
-    default: 'npx -y -p effect-analyzer@3 effect-analyze'
+    description: 'Command that runs the analyzer. Pin an exact version with "npx -y -p effect-analyzer@4.0.0 effect-analyze", or use your own install ("pnpm exec effect-analyze").'
+    default: 'npx -y -p effect-analyzer@4 effect-analyze'
   github-token:
     description: 'Token used to post the comment.'
     default: ${{ github.token }}
@@ -65,8 +65,8 @@ runs:
         head="${INPUT_HEAD:-${PR_HEAD:-HEAD}}"
         # First push of a branch has an all-zero "before".
         case "$base" in ''|0000000000000000000000000000000000000000) base=HEAD~1; git fetch --no-tags --deepen=1 origin 2>/dev/null || true ;; esac
-        node -e 'process.exit(+process.versions.node.split(".")[0] >= 22 ? 0 : 1)' \
-          || { echo "::error::effect-analyzer needs Node 22+; add actions/setup-node with node-version: 22 before this step"; exit 1; }
+        node -e 'process.exit(+process.versions.node.split(".")[0] >= 24 ? 0 : 1)' \
+          || { echo "::error::effect-analyzer needs Node 24+; add actions/setup-node with node-version: 24 before this step"; exit 1; }
         # A shallow checkout has neither side; fetch just those commits.
         git fetch --no-tags --depth=1 origin "$base" "$head" 2>/dev/null || true
         echo "base=$base" >> "$GITHUB_OUTPUT"

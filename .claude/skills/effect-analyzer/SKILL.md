@@ -162,10 +162,10 @@ or a program that crossed the cyclomatic warning threshold, else `low`. The
 markdown starts with `<!-- effect-analyzer-review -->` so a bot can find and
 update its own comment; JSON output embeds the markdown so a bot needs one run.
 The repo-root `action.yml` is a composite action wrapping this command (default
-`cli` runs `effect-analyzer@3`; a comment that cannot be posted, as on a fork PR,
+`cli` runs `effect-analyzer@4`; a comment that cannot be posted, as on a fork PR,
 is a `::warning`, not a failure; annotation text is workflow-command escaped in
-jq); `release.yml` moves the `v3` tag on publish so `uses:
-jagreehal/effect-analyzer@v3` tracks 3.x; `.github/workflows/effect-review.yml`
+jq); `release.yml` moves the `v4` tag on publish so `uses:
+jagreehal/effect-analyzer@v4` tracks 4.x; `.github/workflows/effect-review.yml`
 dogfoods it with the branch's own build.
 
 ### Runtime Overlay

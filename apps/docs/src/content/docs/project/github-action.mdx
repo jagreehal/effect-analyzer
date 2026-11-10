@@ -80,11 +80,11 @@ common damage an automated refactor does — impossible to miss.
      review:
        runs-on: ubuntu-latest
        steps:
-         - uses: actions/checkout@v4
-         - uses: actions/setup-node@v4
+         - uses: actions/checkout@v7
+         - uses: actions/setup-node@v7
            with:
-             node-version: 22
-         - uses: jagreehal/effect-analyzer@v3
+             node-version: 24
+         - uses: jagreehal/effect-analyzer@v4
            with:
              path: src
    ```
@@ -97,11 +97,11 @@ common damage an automated refactor does — impossible to miss.
 </Steps>
 
 That is all. Nothing is installed in the repository: the action fetches the current
-3.x `effect-analyzer` release through `npx` on the runner.
+4.x `effect-analyzer` release through `npx` on the runner.
 
 ### Requirements
 
-- **Node 22 or newer** on the runner — add `actions/setup-node` as above. The action
+- **Node 24 or newer** on the runner — add `actions/setup-node` as above. The action
   fails with a clear message otherwise.
 - **`pull-requests: write`** permission, so the comment can be posted. Omit it and the
   review still runs, still writes the job summary and annotations, and skips the comment.
@@ -129,7 +129,7 @@ Every input has a working default. Override only what you need.
 | `fail-on-regression` | `false` | Fail the job when merge risk is **high** |
 | `include-tests` | `false` | Also review `*.test.ts` / `*.spec.ts` files, for projects whose Effect programs live in their tests |
 | `diagrams` | `open` | Railway diagrams in the comment: `open` (expanded) or `collapsed` |
-| `cli` | `npx -y -p effect-analyzer@3 effect-analyze` | Command that runs the analyzer. Pin an exact version or use your project's install |
+| `cli` | `npx -y -p effect-analyzer@4 effect-analyze` | Command that runs the analyzer. Pin an exact version or use your project's install |
 | `github-token` | `github.token` | Token used to post the comment |
 
 Outputs: `risk` (`low` \| `moderate` \| `high`) and `report` (path of the markdown file).
@@ -139,16 +139,16 @@ Outputs: `risk` (`low` \| `moderate` \| `high`) and `report` (path of the markdo
 Two things have a version: the action (the shell that posts the comment) and the
 analyzer it runs.
 
-- **The action** — `@v3` follows the latest 3.x release, the way `actions/checkout@v4`
+- **The action** — `@v4` follows the latest 4.x release, the way `actions/checkout@v7`
   does; the tag moves on every release. For a fixed action, pin a release tag
-  (`@effect-analyzer@3.5.0`) or a commit SHA.
-- **The analyzer** — the default `cli` runs `effect-analyzer@3`, so it also follows
-  3.x. To freeze it:
+  (`@effect-analyzer@4.0.0`) or a commit SHA.
+- **The analyzer** — the default `cli` runs `effect-analyzer@4`, so it also follows
+  4.x. To freeze it:
 
 ```yaml
-- uses: jagreehal/effect-analyzer@v3
+- uses: jagreehal/effect-analyzer@v4
   with:
-    cli: npx -y -p effect-analyzer@3.5.0 effect-analyze
+    cli: npx -y -p effect-analyzer@4.0.0 effect-analyze
 ```
 
 Or use your project's own install, below, and let your lockfile decide.
@@ -161,9 +161,9 @@ agree on the version:
 <Tabs>
   <TabItem label="pnpm">
     ```yaml
-    - uses: pnpm/action-setup@v4
+    - uses: pnpm/action-setup@v6
     - run: pnpm install --frozen-lockfile
-    - uses: jagreehal/effect-analyzer@v3
+    - uses: jagreehal/effect-analyzer@v4
       with:
         cli: pnpm exec effect-analyze
     ```
@@ -171,7 +171,7 @@ agree on the version:
   <TabItem label="npm">
     ```yaml
     - run: npm ci
-    - uses: jagreehal/effect-analyzer@v3
+    - uses: jagreehal/effect-analyzer@v4
       with:
         cli: npx effect-analyze
     ```
@@ -179,7 +179,7 @@ agree on the version:
   <TabItem label="yarn">
     ```yaml
     - run: yarn install --immutable
-    - uses: jagreehal/effect-analyzer@v3
+    - uses: jagreehal/effect-analyzer@v4
       with:
         cli: yarn effect-analyze
     ```
@@ -192,7 +192,7 @@ agree on the version:
 review ignores the rest:
 
 ```yaml
-- uses: jagreehal/effect-analyzer@v3
+- uses: jagreehal/effect-analyzer@v4
   with:
     path: packages/api/src packages/workers/src
 ```
@@ -206,7 +206,7 @@ Turn on the gate, then add **Effect review** to the branch protection rules or r
 for your default branch:
 
 ```yaml
-- uses: jagreehal/effect-analyzer@v3
+- uses: jagreehal/effect-analyzer@v4
   with:
     path: src
     fail-on-regression: true
@@ -218,7 +218,7 @@ The job fails only when risk is **high**: a structural regression or a new lint
 To decide for yourself, branch on the output:
 
 ```yaml
-- uses: jagreehal/effect-analyzer@v3
+- uses: jagreehal/effect-analyzer@v4
   id: effect
   with:
     path: src
@@ -231,7 +231,7 @@ To decide for yourself, branch on the output:
 Some teams want the report only in the job summary, with nothing posted to the thread:
 
 ```yaml
-- uses: jagreehal/effect-analyzer@v3
+- uses: jagreehal/effect-analyzer@v4
   with:
     path: src
     comment: false
@@ -308,8 +308,8 @@ review comment` warning in the run. Check `permissions: pull-requests: write` is
 the job or workflow, and that the PR is not from a fork. The report is still in the job
 summary.
 
-**"effect-analyzer needs Node 22+"** — add `actions/setup-node@v4` with
-`node-version: 22` (or newer) before the action.
+**"effect-analyzer needs Node 24+"** — add `actions/setup-node@v7` with
+`node-version: 24` (or newer) before the action.
 
 **"Cannot resolve 'x'. Fetch it first"** — the base or head commit is not in the
 checkout. The action fetches both refs itself; if you pass a custom `base`, make sure it
