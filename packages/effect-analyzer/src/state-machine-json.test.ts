@@ -155,7 +155,7 @@ describe("fromMachineJSON", () => {
       states: { Idle: { on: { Ping: { guard: { type: "g" } } } } }
     })
     expect(m.transitions).toEqual([
-      { from: "Idle", event: "Ping", to: "Idle", guard: "g" }
+      { from: "Idle", event: "Ping", to: "Idle", targetless: true, guard: "g" }
     ])
   })
 

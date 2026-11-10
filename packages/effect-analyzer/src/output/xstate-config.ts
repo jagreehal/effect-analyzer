@@ -12,7 +12,7 @@
  * absolute `#id.path` targets so cross-level transitions resolve.
  */
 
-import { finalStatesOf } from "../state-machine"
+import { finalStatesOf, nestStates } from "../state-machine"
 import type { StateMachine, StateTransition } from "../state-machine"
 
 /** A single-quoted string literal, escaping backslashes and apostrophes. */
@@ -30,8 +30,9 @@ function identifier(name: string): string {
   return prefixed === "" ? "Machine" : prefixed
 }
 
-interface Target {
+export interface Target {
   readonly to: string
+  readonly targetless?: true
   readonly guard?: string
   readonly actions?: ReadonlyArray<string>
 }
@@ -44,16 +45,19 @@ function sameActions(
   return left.length === right.length && left.every((value, i) => value === right[i])
 }
 
-function dedupe(ts: ReadonlyArray<StateTransition>): Array<Target> {
+export function dedupe(ts: ReadonlyArray<StateTransition>): Array<Target> {
   const out: Array<Target> = []
   for (const t of ts) {
     if (
       !out.some(
-        (x) => x.to === t.to && x.guard === t.guard && sameActions(x.actions, t.actions)
+        (x) =>
+          x.to === t.to && x.targetless === t.targetless && x.guard === t.guard &&
+          sameActions(x.actions, t.actions)
       )
     ) {
       out.push({
         to: t.to,
+        ...(t.targetless ? { targetless: true as const } : {}),
         ...(t.guard !== undefined ? { guard: t.guard } : {}),
         ...(t.actions !== undefined ? { actions: t.actions } : {})
       })
@@ -68,63 +72,24 @@ export function renderXStateConfig(machine: StateMachine): string {
   const ref = (to: string): string => hierarchical ? str(`#${machine.name}.${to}`) : str(to)
   const strList = (xs: ReadonlyArray<string>): string => `[${xs.map(str).join(", ")}]`
   const transitionObj = (x: Target): string => {
-    const fields = [`target: ${ref(x.to)}`]
+    const fields = x.targetless ? [] : [`target: ${ref(x.to)}`]
     if (x.guard !== undefined) fields.push(`guard: ${str(x.guard)}`)
     if (x.actions !== undefined) fields.push(`actions: ${strList(x.actions)}`)
-    return `{ ${fields.join(", ")} }`
+    return fields.length === 0 ? "{}" : `{ ${fields.join(", ")} }`
   }
   /** String shorthand for a single bare target, else an array of objects. */
   const targetValue = (targets: ReadonlyArray<Target>): string => {
     const first = targets[0]
     return targets.length === 1 &&
         first &&
+        !first.targetless &&
         first.guard === undefined &&
         first.actions === undefined
       ? ref(first.to)
       : `[${targets.map(transitionObj).join(", ")}]`
   }
 
-  // Build the state tree: dotted names nest, ancestor segments are implied.
-  const childrenOf = new Map<string, Array<string>>() // parent path ('' = root) → child paths
-  const known = new Set<string>()
-  for (const state of machine.states) {
-    let path = ""
-    for (const seg of state.split(".")) {
-      const parent = path
-      path = path === "" ? seg : `${path}.${seg}`
-      if (known.has(path)) continue
-      known.add(path)
-      childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), path])
-    }
-  }
-
-  const byFrom = new Map<string, Array<StateTransition>>()
-  for (const path of known) byFrom.set(path, [])
-  const compoundInitial = new Map<string, string>() // parent path → initial child path
-  for (const t of machine.transitions) {
-    if (t.trigger === "initial") {
-      if (!compoundInitial.has(t.from)) compoundInitial.set(t.from, t.to)
-      continue
-    }
-    byFrom.get(t.from)?.push(t)
-  }
-  // A dotted machine.initial implies the initial child at every level it passes.
-  if (machine.initial?.includes(".")) {
-    const segs = machine.initial.split(".")
-    let path = segs[0] ?? ""
-    for (const seg of segs.slice(1)) {
-      const child = `${path}.${seg}`
-      if (!compoundInitial.has(path)) compoundInitial.set(path, child)
-      path = child
-    }
-  }
-  /** Direct child key on the way from `path` to the full path `target`. */
-  const childKeyToward = (path: string, target: string): string | undefined =>
-    target.startsWith(`${path}.`)
-      ? target.slice(path.length + 1).split(".")[0]
-      : undefined
-
-  const parallel = new Set(machine.parallelStates ?? [])
+  const { childrenOf, transitionsFrom: byFrom, initialChild, parallel } = nestStates(machine)
 
   const renderNode = (path: string, indent: string): string => {
     const label = path.includes(".") ? (path.split(".").pop() ?? path) : path
@@ -144,9 +109,7 @@ export function renderXStateConfig(machine: StateMachine): string {
     const invokes = machine.invokes?.[path] ?? []
     if (invokes.length > 0) {
       const configs = invokes.map((invoke, invokeIndex) => {
-        const belongsToInvoke = (t: StateTransition): boolean =>
-          t.invokeIndex === invokeIndex ||
-          (t.invokeIndex === undefined && invokes.length === 1)
+        const belongsToInvoke = (t: StateTransition): boolean => t.invokeIndex === invokeIndex
         const invokeDones = dones.filter(belongsToInvoke)
         const invokeErrors = errors.filter(belongsToInvoke)
         const fields = [`src: ${str(invoke.src)}`]
@@ -165,6 +128,9 @@ export function renderXStateConfig(machine: StateMachine): string {
           : `invoke: [${configs.join(", ")}]`
       )
     }
+    // A done transition no invoke owns is the compound state's own completion.
+    const completion = dones.filter((t) => t.invokeIndex === undefined)
+    if (completion.length > 0) parts.push(`onDone: ${targetValue(dedupe(completion))}`)
 
     if (events.length > 0) {
       const byEvent = new Map<string, Array<StateTransition>>()
@@ -198,12 +164,7 @@ export function renderXStateConfig(machine: StateMachine): string {
         // Every region is entered; parallel nodes carry no initial.
         parts.push(`type: 'parallel'`)
       } else {
-        const target = compoundInitial.get(path)
-        const initKey = (target !== undefined ? childKeyToward(path, target) : undefined) ??
-          childKeyToward(path, kids[0] ?? "") ??
-          (kids[0] ?? "").split(".").pop() ??
-          ""
-        parts.push(`initial: ${str(initKey)}`)
+        parts.push(`initial: ${str(initialChild(path))}`)
       }
       const inner = kids.map((kid) => renderNode(kid, `${indent}    `)).join(",\n")
       parts.push(`states: {\n${inner}\n${indent}  }`)

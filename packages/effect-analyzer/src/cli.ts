@@ -38,6 +38,7 @@ const SINGLE_PATH_FORMATS = new Set<CLIOptions["format"]>([
   "svg-statechart",
   "statechart-html",
   "xstate-config",
+  "machine-json",
   "statechart-coverage"
 ])
 
@@ -271,6 +272,7 @@ const main = Effect.gen(function*() {
     options.format === "svg-statechart" ||
     options.format === "statechart-html" ||
     options.format === "xstate-config" ||
+    options.format === "machine-json" ||
     options.format === "statechart-coverage"
   ) {
     yield* runStatechartMode(resolvedPath, options)

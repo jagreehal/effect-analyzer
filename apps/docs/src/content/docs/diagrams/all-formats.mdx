@@ -52,7 +52,8 @@ Effect program. See [State Machines](/effect-analyzer/reference/state-machines/)
 | Mermaid statechart | `--format mermaid-statechart` | Machine as `stateDiagram-v2`, coverage-annotated | Embedding in markdown |
 | SVG statechart | `--format svg-statechart` | Self-contained XState-styled SVG | Sharing a single file |
 | Local visualizer | `--format statechart-html` | One page: SVG, coverage report, XState config | Reviewing a machine |
-| XState config | `--format xstate-config` | Paste-ready `createMachine({...})` | [stately.ai/viz](https://stately.ai/viz) import |
+| XState config | `--format xstate-config` | Paste-ready XState v5 `createMachine({...})` | [stately.ai/viz](https://stately.ai/viz) import |
+| MachineJSON | `--format machine-json` | XState v6 machine-as-data JSON | Loading with `machineFromJSON` |
 | Coverage report | `--format statechart-coverage` | Unhandled events, unreachable states, dead ends | CI gate (exits non-zero on warnings) |
 
 ```bash

@@ -37,6 +37,7 @@ export interface CLIOptions {
     | "svg-statechart"
     | "statechart-html"
     | "xstate-config"
+    | "machine-json"
     | "statechart-coverage"
     | "stats"
     | "migration"
@@ -339,6 +340,7 @@ export function parseArgs(args: ReadonlyArray<string>): {
         value === "svg-statechart" ||
         value === "statechart-html" ||
         value === "xstate-config" ||
+        value === "machine-json" ||
         value === "statechart-coverage" ||
         value === "stats" ||
         value === "migration" ||

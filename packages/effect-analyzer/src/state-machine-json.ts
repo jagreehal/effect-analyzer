@@ -47,6 +47,8 @@ export interface MachineJSONTransition {
   readonly target?: string | ReadonlyArray<string>
   readonly guard?: MachineJSONGuard
   readonly actions?: ReadonlyArray<MachineJSONAction>
+  /** Event properties the transition requires, e.g. `{ stateId }` on `xstate.done.state`. */
+  readonly matches?: Readonly<Record<string, unknown>>
 }
 
 type MachineJSONSingleValue = string | MachineJSONTransition | MachineJSONUnserializable
@@ -77,7 +79,15 @@ export interface MachineJSONStateNode {
   readonly on?: Record<string, MachineJSONValue>
   readonly always?: MachineJSONValue
   readonly after?: Record<string, MachineJSONValue>
+  /** Compound completion as `machineToJSON` writes it. */
+  readonly onDone?: MachineJSONValue
 }
+
+/**
+ * The event a compound state raises when its children reach a final state.
+ * MachineJSON keys it in `on` with `matches: { stateId }`.
+ */
+export const DONE_STATE_EVENT = "xstate.done.state"
 
 export interface MachineJSON {
   readonly id?: string
@@ -290,24 +300,42 @@ export function fromMachineJSON(
   const observedEvents: Array<string> = []
   const seenEvents = new Set<string>()
 
+  /**
+   * `#id` or `#id.child.path`: XState ids every node `rootId.path`, which is how
+   * v6's `machineToJSON` writes cross-level targets (`#order.paying.charging`).
+   */
+  const byId = (ref: string): string => {
+    const exact = idToPath.get(ref)
+    if (exact !== undefined) return exact
+    const segs = ref.split(".")
+    for (let i = segs.length - 1; i > 0; i--) {
+      const prefix = segs.slice(0, i).join(".")
+      const rest = segs.slice(i).join(".")
+      if (prefix === json.id) return rest
+      const base = idToPath.get(prefix)
+      if (base !== undefined) return `${base}.${rest}`
+    }
+    return ref
+  }
+
   const resolveTarget = (
     target: string,
     from: string,
     parentPath: string | undefined
   ): string => {
-    if (target.startsWith("#")) return idToPath.get(target.slice(1)) ?? target.slice(1)
+    if (target.startsWith("#")) return byId(target.slice(1))
     if (target.startsWith(".")) return `${from}${target}`
     return parentPath === undefined ? target : `${parentPath}.${target}`
   }
 
   const resolveInitialTarget = (target: string, from?: string): string => {
-    if (target.startsWith("#")) return idToPath.get(target.slice(1)) ?? target.slice(1)
+    if (target.startsWith("#")) return byId(target.slice(1))
     if (from === undefined) return target.startsWith(".") ? target.slice(1) : target
     return `${from}.${target.startsWith(".") ? target.slice(1) : target}`
   }
 
-  // Emit one transition per normalized branch of a value, self-edging on a
-  // targetless (internal / automatic-without-target) transition.
+  // Emit one transition per normalized branch of a value. A targetless branch
+  // becomes a self-edge marked `targetless`, so exporters can omit its target.
   const emit = (
     from: string,
     event: string,
@@ -322,6 +350,7 @@ export function fromMachineJSON(
         from,
         event,
         to: norm.target === undefined ? from : resolveTarget(norm.target, from, parentPath),
+        ...(norm.target === undefined ? { targetless: true as const } : {}),
         ...(norm.guard !== undefined ? { guard: norm.guard } : {}),
         ...(norm.actions !== undefined ? { actions: norm.actions } : {}),
         ...(trigger !== undefined ? { trigger } : {}),
@@ -401,12 +430,21 @@ export function fromMachineJSON(
     if (on !== undefined) {
       requireObject(on, `state '${from}'.on`)
       for (const [event, value] of Object.entries(on)) {
+        if (event === DONE_STATE_EVENT) {
+          emit(from, "onDone", value, `state '${from}' event '${event}'`, parentPath, "done")
+          continue
+        }
         if (!seenEvents.has(event)) {
           seenEvents.add(event)
           observedEvents.push(event)
         }
         emit(from, event, value, `state '${from}' event '${event}'`, parentPath)
       }
+    }
+
+    // Compound completion: a reachability edge, not an event.
+    if (node.onDone !== undefined) {
+      emit(from, "onDone", node.onDone, `state '${from}'.onDone`, parentPath, "done")
     }
 
     // Eventless: fires automatically when the state is entered and its guard

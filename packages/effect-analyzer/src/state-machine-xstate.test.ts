@@ -119,7 +119,7 @@ describe("xstate extraction edge cases", () => {
     expect(m?.entryActions).toEqual({ a: ["log"] })
     expect(m?.transitions).toEqual([
       { from: "a", event: "GO", to: "b", guard: "isReady", actions: ["save"] },
-      { from: "a", event: "PING", to: "a" }
+      { from: "a", event: "PING", to: "a", targetless: true }
     ])
   })
 })
@@ -182,7 +182,7 @@ describe("transition-function guards", () => {
   it("keeps a targetless branch as a guarded self-transition", () => {
     expect(edgesOf(`({ event }) => event.ok ? { target: "b" } : {}`)).toEqual([
       { from: "a", event: "GO", to: "b", guard: "event.ok" },
-      { from: "a", event: "GO", to: "a", guard: "!(event.ok)" }
+      { from: "a", event: "GO", to: "a", targetless: true, guard: "!(event.ok)" }
     ])
   })
 
@@ -190,7 +190,7 @@ describe("transition-function guards", () => {
     expect(edgesOf(`({ event }) => event.ok ? (event.fast ? { target: "b" } : { target: "c" }) : {}`)).toEqual([
       { from: "a", event: "GO", to: "b", guard: "event.ok && event.fast" },
       { from: "a", event: "GO", to: "c", guard: "event.ok && !(event.fast)" },
-      { from: "a", event: "GO", to: "a", guard: "!(event.ok)" }
+      { from: "a", event: "GO", to: "a", targetless: true, guard: "!(event.ok)" }
     ])
   })
 
@@ -198,8 +198,8 @@ describe("transition-function guards", () => {
     // Unparenthesized, a = true and c = false would wrongly take the b branch.
     expect(edgesOf(`({ event }) => event.a || event.b ? (event.c ? { target: "b" } : {}) : {}`)).toEqual([
       { from: "a", event: "GO", to: "b", guard: "(event.a || event.b) && event.c" },
-      { from: "a", event: "GO", to: "a", guard: "(event.a || event.b) && !(event.c)" },
-      { from: "a", event: "GO", to: "a", guard: "!(event.a || event.b)" }
+      { from: "a", event: "GO", to: "a", targetless: true, guard: "(event.a || event.b) && !(event.c)" },
+      { from: "a", event: "GO", to: "a", targetless: true, guard: "!(event.a || event.b)" }
     ])
   })
 
@@ -211,7 +211,7 @@ describe("transition-function guards", () => {
     }`)).toEqual([
       { from: "a", event: "GO", to: "c", guard: "event.done" },
       { from: "a", event: "GO", to: "b", guard: "!(event.done) && event.ok" },
-      { from: "a", event: "GO", to: "a", guard: "!(event.done) && !(event.ok)" }
+      { from: "a", event: "GO", to: "a", targetless: true, guard: "!(event.done) && !(event.ok)" }
     ])
   })
 
@@ -223,7 +223,7 @@ describe("transition-function guards", () => {
     }`)).toEqual([
       { from: "a", event: "GO", to: "b", guard: "event.ok && event.fast" },
       { from: "a", event: "GO", to: "c", guard: "event.ok && !(event.fast) && event.x" },
-      { from: "a", event: "GO", to: "a", guard: "event.ok && !(event.fast) && !(event.x)" }
+      { from: "a", event: "GO", to: "a", targetless: true, guard: "event.ok && !(event.fast) && !(event.x)" }
     ])
   })
 })

@@ -14,6 +14,7 @@ import * as fs from "node:fs/promises"
 import { basename, extname, join } from "path"
 import type { CLIOptions } from "./cli-options"
 import { cliTry, openInBrowser } from "./cli-support"
+import { renderMachineJSON } from "./output/machine-json"
 import { renderStatechartsMermaid } from "./output/mermaid-statechart"
 import { renderCoverageReport, summarizeCoverage } from "./output/statechart-coverage"
 import { renderStatechartVisualizerHTML } from "./output/statechart-html"
@@ -24,7 +25,7 @@ import { computeStateMachineCoverage, type StateMachineCoverage } from "./state-
 import { diagnoseStateMachines } from "./state-machine-diagnostics"
 
 /**
- * Run a statechart format (mermaid-statechart | svg-statechart | statechart-html | xstate-config).
+ * Run a statechart format (mermaid-statechart | svg-statechart | statechart-html | xstate-config | machine-json).
  * These read `@typeonce/effect-machine` machines directly from source
  * (`Machine.make({...}).handle({...})`) — no Effect IR required.
  */
@@ -122,6 +123,8 @@ export const runStatechartMode = (
     let output: string
     if (options.format === "xstate-config") {
       output = machines.map(renderXStateConfig).join("\n\n")
+    } else if (options.format === "machine-json") {
+      output = renderMachineJSON(machines)
     } else if (options.format === "statechart-html") {
       output = renderStatechartVisualizerHTML(machines, coverages)
     } else if (options.format === "svg-statechart") {
