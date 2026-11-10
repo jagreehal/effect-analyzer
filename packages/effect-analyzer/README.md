@@ -136,10 +136,10 @@ permissions:
   contents: read
   pull-requests: write
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v4
-    with: { node-version: 22 }
-  - uses: jagreehal/effect-analyzer@v3
+  - uses: actions/checkout@v7
+  - uses: actions/setup-node@v7
+    with: { node-version: 24 }
+  - uses: jagreehal/effect-analyzer@v4
     with:
       path: src
       fail-on-regression: true   # optional gate

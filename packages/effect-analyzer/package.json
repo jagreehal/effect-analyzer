@@ -126,5 +126,8 @@
     "typescript": "^7.0.2",
     "vitest": "^5.1.0",
     "xstate": "6.0.0-alpha.73"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

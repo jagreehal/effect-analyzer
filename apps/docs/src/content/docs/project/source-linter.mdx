@@ -152,7 +152,7 @@ Upload to GitHub Code Scanning in a workflow:
   run: pnpm exec effect-analyze ./src --lint-source --sarif -o findings.sarif
 
 - name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
+  uses: github/codeql-action/upload-sarif@v4
   with:
     sarif_file: findings.sarif
 ```
