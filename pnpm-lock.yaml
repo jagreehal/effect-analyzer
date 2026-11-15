@@ -3339,8 +3339,8 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  json-rpc-2.0@1.7.1:
-    resolution: {integrity: sha512-JqZjhjAanbpkXIzFE7u8mE/iFblawwlXtONaCvRqI+pyABVz7B4M1EUNpyVW+dZjqgQ2L5HFmZCmOCgUKm00hg==}
+  json-rpc-2.0@1.8.1:
+    resolution: {integrity: sha512-BmN42JKn6FI36pcMMzHCXQhpKNEfbeqgSIcUYHKnifq0/4Ey6PDinovwUOgajT7NsgUtpWdDXaCWlpI4LHXN3g==}
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
@@ -5919,7 +5919,7 @@ snapshots:
       diff-match-patch: 1.0.5
       emoji-regex: 10.6.0
       execa: 9.6.1
-      json-rpc-2.0: 1.7.1
+      json-rpc-2.0: 1.8.1
       lodash.groupby: 4.6.0
       minimatch: 10.2.5
       mutation-server-protocol: 0.4.1
@@ -7191,7 +7191,7 @@ snapshots:
 
   jsesc@3.1.0: {}
 
-  json-rpc-2.0@1.7.1: {}
+  json-rpc-2.0@1.8.1: {}
 
   json-schema-traverse@1.0.0: {}
 
