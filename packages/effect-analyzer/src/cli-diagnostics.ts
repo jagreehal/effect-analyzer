@@ -8,14 +8,22 @@
  * passed through byte for byte, so its formatting and its diagnostic ordering
  * are its own. We strip only our two additions (`--no-analyzer`, `--fail-on`)
  * and, when we have findings to contribute, splice them into the stream it
- * produced. A run with nothing to add *is* the upstream run.
+ * produced. A run with nothing to add is the upstream run. A project
+ * without the plugin entry is checked with the rule defaults.
  */
 
 import { spawnSync } from "node:child_process"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { lintSourceCode } from "./source-linter"
-import { readTsgoProjectFiles, resolveTsgoBin, spawnTsgoDiagnostics, TsgoDiagnosticsError } from "./tsgo-diagnostics"
+import {
+  DEFAULT_LSPCONFIG,
+  parseTsgoOutput,
+  readTsgoProjectFiles,
+  resolveTsgoBin,
+  spawnTsgoDiagnostics,
+  TsgoDiagnosticsError
+} from "./tsgo-diagnostics"
 
 /**
  * `@effect/tsgo` subcommands we forward verbatim.
@@ -312,12 +320,21 @@ export const splitTrailer = (
   stdout: string
 ): { readonly body: string; readonly trailer: string } => {
   const match =
-    /(?:Effect version per file:\n(?:  .*\n)*)?Checked \d+ files out of \d+ files\. \n\d+ errors, \d+ warnings and \d+ messages\.\n$/
+    /(?:Effect version per file:\n(?:  .*\n)*)?Checked \d+ files out of \d+ files\. \n(?:Skipped \d+ files?[^\n]*\n)?\d+ errors, \d+ warnings and \d+ messages\.\n$/
       .exec(
         stdout
       )
   if (!match) return { body: stdout, trailer: "" }
   return { body: stdout.slice(0, match.index), trailer: match[0] }
+}
+
+/** Whether upstream skipped every file because no tsconfig enables the plugin. */
+export const checkedNothingForWantOfPlugin = (stdout: string, format: DiagnosticsFormat): boolean => {
+  if (format === "json") {
+    const summary = parseTsgoOutput(stdout)?.summary
+    return summary !== undefined && summary.filesChecked === 0 && summary.filesWithoutPlugin > 0
+  }
+  return /Checked 0 files out of \d+ files\. \nSkipped /.test(splitTrailer(stdout).trailer)
 }
 
 /** Rewrite upstream's counts line so it accounts for the analyzer's findings. */
@@ -465,12 +482,18 @@ export const runDiagnosticsCommand = async (
   const invocation = splitDiagnosticsArgs(args)
   if (invocation.errors.length > 0) throw new TsgoDiagnosticsError(invocation.errors.join("\n"))
 
-  // Forwarded exactly as given. `@effect/tsgo` reads the project's own
-  // `@effect/language-service` plugin options, so synthesising a `--lspconfig`
-  // here would replace the severities a project configured with rule defaults.
-  const tsgo = spawnTsgoDiagnostics(invocation.forwarded, {
-    inheritStderr: invocation.progress
-  })
+  // Forwarded exactly as given first: `@effect/tsgo` reads the project's own
+  // plugin options, and a `--lspconfig` would replace the severities it
+  // configured. A run that skipped every file for want of those options is
+  // repeated with the rule defaults.
+  const spawn = (argv: ReadonlyArray<string>) =>
+    spawnTsgoDiagnostics(argv, {
+      inheritStderr: invocation.progress
+    })
+  const configured = spawn(invocation.forwarded)
+  const tsgo = invocation.lspconfig === undefined && checkedNothingForWantOfPlugin(configured.stdout, invocation.format)
+    ? spawn([...invocation.forwarded, "--lspconfig", DEFAULT_LSPCONFIG])
+    : configured
 
   // Upstream did not produce a report: its output and its status are the whole
   // answer, and nothing of ours belongs in them.

@@ -11,6 +11,7 @@ import { Console, Effect, Exit, Option } from "effect"
 import * as fs from "node:fs/promises"
 import { basename, resolve } from "path"
 import { isProxiedTsgoCommand, proxyTsgoCommand, runDiagnosticsCommand } from "./cli-diagnostics"
+import { reportLanguageService } from "./cli-language-service"
 import { runAnalysis } from "./cli-mode-analysis"
 import { runApiDocsMode, runJsonSchemaMode, runOpenApiRuntime } from "./cli-mode-api"
 import { runDiffMode, runExtraAnalyzers, runMigration } from "./cli-mode-extras"
@@ -97,6 +98,7 @@ const runManyPaths = (paths: ReadonlyArray<string>, options: CLIOptions) =>
     if (collect) {
       yield* Console.log(`[${documents.join(",")}]`)
     }
+    yield* reportLanguageService(paths.map(resolveCliPath), options)
   })
 
 const main = Effect.gen(function*() {
@@ -306,7 +308,11 @@ const main = Effect.gen(function*() {
   }
 
   if (options.watch) {
-    yield* runWatchMode(resolvedPath, options, (path, watchOpts) => runAnalysis(path, watchOpts))
+    yield* runWatchMode(
+      resolvedPath,
+      options,
+      (path, watchOpts) => runAnalysis(path, watchOpts).pipe(Effect.tap(() => reportLanguageService([path], watchOpts)))
+    )
     return yield* Effect.never
   }
 
@@ -314,6 +320,7 @@ const main = Effect.gen(function*() {
     yield* Console.error(`Analyzing ${displayPath(resolvedPath)}...`)
   }
   yield* runAnalysis(resolvedPath, options)
+  yield* reportLanguageService([resolvedPath], options)
 
   // Discoverability: in the default (auto) view, surface any state machines in
   // the file so users find the feature without knowing the --format flag.

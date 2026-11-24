@@ -48,11 +48,16 @@ These rules are AST-based and deliberately narrow. For the ~95 **type-aware**
 Effect rules — floating effects, missing context/error channels, Effect-native
 replacements for `fetch` / `console` / `Date` / `process.env`, Schema checks —
 use the official [`@effect/tsgo`](https://github.com/Effect-TS/tsgo) language
-service. effect-analyzer does not reimplement them; it merges them in:
+service. effect-analyzer does not reimplement them; it runs them for you:
 
 ```bash
-effect-analyze ./src --lint-source --tsgo=./tsconfig.json
+effect-analyze ./src --lint-source
 ```
+
+It needs no setup. Each file is checked under the nearest `tsconfig.json` that
+includes it, or the one you give to `--tsconfig`. Your `@effect/language-service`
+plugin options apply when you have them, and the rule defaults otherwise. Plain runs print the same errors and warnings on
+stderr, and `--agent-report` and `review` include them. `--no-tsgo` turns them off.
 
 Every merged finding carries a `source` field (`tsgo` or `analyzer`) and, for
 language service diagnostics, the `code` in the `377xxx` range. Gate on those
@@ -67,10 +72,12 @@ The run summary also reports what the language service actually covered:
 }
 ```
 
-`unchecked` lists files the linter scanned that the tsconfig does not include,
-so a partially checked run cannot be mistaken for a clean one.
+`unchecked` lists files the linter scanned that the language service did not
+check: left out of their tsconfig, or with no `effect` installed to supply types.
+`skipped` and stderr give the reason.
 
-Bare `--tsgo` uses `tsconfig.json`. When options come before the source path,
+`--tsgo` checks one named project and fails if it cannot run. Bare `--tsgo` uses
+`tsconfig.json`. When options come before the source path,
 use `--tsgo=path/to/tsconfig.json` to provide an explicit project without
 ambiguity.
 
@@ -81,9 +88,9 @@ leaves the exit status alone, so a caller can tell an advisory run apart from a
 broken one. `--fail-on` turns findings into a gate:
 
 ```bash
-effect-analyze ./src --lint-source --tsgo=./tsconfig.json              # always exit 0
-effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=error
-effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=warning
+effect-analyze ./src --lint-source              # advisory, exits 0
+effect-analyze ./src --lint-source --fail-on=error
+effect-analyze ./src --lint-source --fail-on=warning
 ```
 
 `--fail-on=<severity>` exits 1 when any finding is at or above that severity.
@@ -97,10 +104,9 @@ reports the analyzer's rules in the same stream. See the
 [CLI reference](/effect-analyzer/reference/cli/#diagnostics).
 
 `@effect/tsgo` is a required effect-analyzer dependency, so the bridge and its
-platform binary are installed automatically. It resolves the target project's
-`typescript` package and selects the native artifact matching that exact
-version (which is why the project needs TypeScript 7+). The CLI therefore uses
-the same compiler generation and Effect language-service rules as the editor.
+platform binary are installed automatically. A project with its own TypeScript 7
+is checked with that version, so the CLI and the editor agree. Other projects use
+the TypeScript 7 that ships with effect-analyzer.
 
 <Aside type="caution">
 Rules that duplicated a type-aware `@effect/tsgo` equivalent (`effect-fail-untagged`,

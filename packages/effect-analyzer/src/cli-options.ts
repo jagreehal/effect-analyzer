@@ -124,6 +124,8 @@ export interface CLIOptions {
   readonly cursor: number
   readonly lintSource: boolean
   readonly tsgoProject: string | undefined
+  /** Run the Effect language service without being asked; `--no-tsgo` clears it. */
+  readonly tsgo: boolean
   readonly sarif: boolean
   readonly baseline: string | undefined
   readonly failOnNew: boolean
@@ -273,6 +275,7 @@ export function parseArgs(args: ReadonlyArray<string>): {
   let cursor = 0
   let lintSource = false
   let tsgoProject: string | undefined
+  let tsgo = true
   let sarif = false
   let baseline: string | undefined
   let failOnNew = false
@@ -589,6 +592,8 @@ export function parseArgs(args: ReadonlyArray<string>): {
       const parsed = parseTsgoProjectArgument(args, i, pathArg !== undefined)
       tsgoProject = parsed.project
       i += parsed.consumed
+    } else if (arg === "--no-tsgo") {
+      tsgo = false
     } else if (arg.startsWith("--tsgo=")) {
       tsgoProject = arg.slice("--tsgo=".length)
     } else if (arg === "--sarif") {
@@ -784,6 +789,7 @@ export function parseArgs(args: ReadonlyArray<string>): {
     cursor,
     lintSource,
     tsgoProject,
+    tsgo,
     sarif,
     baseline,
     failOnNew,

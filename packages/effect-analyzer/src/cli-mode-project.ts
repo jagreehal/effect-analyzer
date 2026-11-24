@@ -16,6 +16,7 @@ import { join, resolve } from "path"
 import { Project } from "ts-morph"
 import { toAsciiText } from "./analysis-utils"
 import { type AuditPolicy, evaluateAuditPolicy } from "./audit-policy"
+import { reportLanguageService } from "./cli-language-service"
 import { buildProgramQualities, loadQualityHintsByFile, writeTestStubsForFile } from "./cli-mode-analysis"
 import type { CLIOptions } from "./cli-options"
 import { cliFail, cliTry, createStyle, displayPath } from "./cli-support"
@@ -118,6 +119,17 @@ export const runProjectMode = (
     const end = options.maxFiles ? start + options.maxFiles : sortedEntries.length
     const windowedEntries = sortedEntries.slice(start, Math.min(end, sortedEntries.length))
     const byFile = new Map(windowedEntries)
+    // Files with no program to draw count too, unless the run was narrowed to a window.
+    yield* reportLanguageService(
+      options.cursor > 0 || options.maxFiles !== undefined
+        ? [...byFile.keys()]
+        : [
+          ...projectResult.byFile.keys(),
+          ...projectResult.zeroProgramFiles,
+          ...projectResult.failedFiles.map((f) => f.file)
+        ],
+      options
+    )
     if (options.assertDiagramFidelity) {
       let hasInexactDiagram = false
       for (const [filePath, programs] of byFile) {

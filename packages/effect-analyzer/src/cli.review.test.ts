@@ -97,7 +97,7 @@ describe("cli review", () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
-  }, 30_000)
+  }, 60_000)
 
   it("skips test files unless --include-tests", () => {
     const root = mkdtempSync(join(tmpdir(), "effect-analyze-review-"))

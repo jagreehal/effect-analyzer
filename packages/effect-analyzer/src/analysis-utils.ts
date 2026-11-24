@@ -717,6 +717,11 @@ export function extractFunctionName(callee: string): string {
   return withoutArgs
 }
 
+export const plainYieldLabel = (node: Extract<StaticFlowNode, { type: "opaque" }>): string | undefined =>
+  node.reason === "plain-yield"
+    ? `yield without *: ${truncate(node.sourceText.replace(/^yield\s+/, ""), 40)}`
+    : undefined
+
 /**
  * Compute a human-readable display label for a StaticFlowNode.
  *
@@ -831,7 +836,7 @@ export function computeDisplayName(node: StaticFlowNode, variableName?: string):
       return node.label ? `${node.terminalKind} ${node.label}` : node.terminalKind
 
     case "opaque":
-      return `Opaque: ${truncate(node.reason, 25)}`
+      return plainYieldLabel(node) ?? `Opaque: ${truncate(node.reason, 25)}`
 
     case "unknown":
       return `Unknown: ${truncate(node.reason, 30)}`

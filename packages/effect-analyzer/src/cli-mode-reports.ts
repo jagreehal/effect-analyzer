@@ -19,6 +19,7 @@ import {
   renderAgentReportMarkdown,
   renderAgentReportSummary
 } from "./agent-report"
+import { tsgoNotices } from "./cli-language-service"
 import type { CLIOptions } from "./cli-options"
 import {
   buildSourceLinesMap,
@@ -69,8 +70,16 @@ export const runLintSourceMode = (
   Effect.gen(function*() {
     const targetPath = resolve(pathArg ?? ".")
     const scan = yield* cliTry(() =>
-      runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject, enableRules: options.enableRules })
+      runSourceLintScan(targetPath, {
+        tsgoProject: options.tsgoProject,
+        autoTsgo: options.tsgo,
+        tsconfig: options.tsconfig,
+        enableRules: options.enableRules
+      })
     )
+    if (scan.tsgo && !options.quiet) {
+      for (const notice of tsgoNotices(scan.tsgo)) yield* Console.error(notice)
+    }
     const scorecard = options.scorecard ? buildLintScorecard(scan.findings) : undefined
     const now = yield* DateTime.now
     const timestamp = DateTime.formatIso(now)
@@ -222,8 +231,17 @@ export const runReportsMode = (
 
     // Run lint scan
     const scan = yield* cliTry(() =>
-      runSourceLintScan(targetPath, { tsgoProject: options.tsgoProject, enableRules: options.enableRules })
+      runSourceLintScan(targetPath, {
+        tsgoProject: options.tsgoProject,
+        // The other reports on this walk do not print lint findings.
+        autoTsgo: options.tsgo && (options.agentReport || options.improve),
+        tsconfig: options.tsconfig,
+        enableRules: options.enableRules
+      })
     )
+    if (scan.tsgo && !options.quiet) {
+      for (const notice of tsgoNotices(scan.tsgo)) yield* Console.error(notice)
+    }
 
     // Analyze project to get IRs
     const projectResult = yield* analyzeProject(targetPath, {

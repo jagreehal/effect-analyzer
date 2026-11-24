@@ -16,7 +16,9 @@ import { readFileSync } from "node:fs"
 import { calculateComplexity, DEFAULT_THRESHOLDS } from "./complexity"
 import { diffPrograms, type ProgramDiff } from "./diff"
 import type { LintIssue } from "./effect-linter"
+import { countFindings, takeFromBaseline } from "./finding-baseline"
 import { renderRailwayMermaid } from "./output/mermaid-railway"
+import { typeAwareFindings, type TypedFile } from "./review-types"
 import { lintSourceCode } from "./source-linter"
 import { analyzeEffectSource } from "./static-analyzer"
 import type { StaticEffectIR } from "./types"
@@ -80,6 +82,8 @@ export interface ReviewReport {
   readonly regressions: ReadonlyArray<ReviewRegression>
   /** Lint findings present in head and absent in base, per file. */
   readonly newFindings: ReadonlyArray<ReviewFinding>
+  /** Why the type-aware Effect rules did not run on some changed files. */
+  readonly typeAwareSkipped: ReadonlyArray<string>
   readonly risk: "low" | "moderate" | "high"
 }
 
@@ -123,7 +127,7 @@ const changedFiles = (options: ReviewOptions, cwd: string): ReadonlyArray<Review
   const pathspecs = options.paths && options.paths.length > 0 ? ["--", ...options.paths] : []
   const range = options.head ? [options.base, options.head] : [options.base]
   const includeTests = options.includeTests ?? false
-  const status = git(["diff", "--name-status", "--find-renames", ...range, ...pathspecs], cwd)
+  const status = git(["diff", "--name-status", "--no-relative", "--find-renames", ...range, ...pathspecs], cwd)
   const files: Array<ReviewFile> = []
   for (const line of status.split("\n")) {
     const [code, first, second] = line.split("\t")
@@ -139,7 +143,8 @@ const changedFiles = (options: ReviewOptions, cwd: string): ReadonlyArray<Review
     })
   }
   if (!options.head) {
-    const untracked = git(["ls-files", "--others", "--exclude-standard", ...pathspecs], cwd)
+    const others = pathspecs.length > 0 ? pathspecs : ["--", ":/"]
+    const untracked = git(["ls-files", "--others", "--exclude-standard", "--full-name", ...others], cwd)
     for (const path of untracked.split("\n")) {
       if (path && isReviewable(path, includeTests)) files.push({ path, status: "added", programs: [] })
     }
@@ -227,7 +232,7 @@ const counted = (items: ReadonlyArray<string>): ReadonlyArray<string> => {
 }
 
 /**
- * Findings in head that base did not have, matched by rule and message so a line
+ * Findings in head that base did not have, matched by rule, message and severity so a line
  * shift is not a new finding. `info` findings are left out: a review comment that
  * repeats an advisory on every PR gets muted, and `--lint-source` lists them.
  */
@@ -237,22 +242,10 @@ const newFindingsOf = (
   path: string
 ): ReadonlyArray<ReviewFinding> => {
   if (after === undefined) return []
-  const key = (i: LintIssue) => `${i.rule}|${i.message}`
-  const baseline = new Map<string, number>()
-  if (before !== undefined) {
-    for (const issue of lintSourceCode(before, path).issues) {
-      baseline.set(key(issue), (baseline.get(key(issue)) ?? 0) + 1)
-    }
-  }
+  const baseline = countFindings(before === undefined ? [] : lintSourceCode(before, path).issues)
   const fresh: Array<ReviewFinding> = []
   for (const issue of lintSourceCode(after, path).issues) {
-    if (issue.severity === "info") continue
-    const k = key(issue)
-    const left = baseline.get(k) ?? 0
-    if (left > 0) {
-      baseline.set(k, left - 1)
-      continue
-    }
+    if (issue.severity === "info" || takeFromBaseline(baseline, issue)) continue
     fresh.push({
       file: path,
       line: issue.location?.line ?? 1,
@@ -284,6 +277,29 @@ const replacementsOf = (files: ReadonlyArray<ReviewFile>): ReadonlyArray<string>
     )
   )
 
+/** Whether a 1-indexed line of the head version was added or edited by the change. */
+const changedLines = (options: ReviewOptions, file: ReviewFile, root: string): (line: number) => boolean => {
+  if (file.status === "added") return () => true
+  const range = options.head ? [options.base, options.head] : [options.base]
+  const paths = file.previousPath ? [file.previousPath, file.path] : [file.path]
+  const diff = git([
+    "diff",
+    "-U0",
+    "--no-ext-diff",
+    "--no-color",
+    "--no-relative",
+    "--find-renames",
+    ...range,
+    "--",
+    ...paths
+  ], root)
+  const hunks = [...diff.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm)].map((m) => {
+    const start = Number(m[1])
+    return [start, start + Number(m[2] ?? 1)] as const
+  })
+  return (line) => hunks.some(([start, end]) => line >= start && line < end)
+}
+
 const riskOf = (
   regressions: ReadonlyArray<ReviewRegression>,
   findings: ReadonlyArray<ReviewFinding>,
@@ -308,12 +324,14 @@ export const buildReview = (options: ReviewOptions): Effect.Effect<ReviewReport,
     const files: Array<ReviewFile> = []
     const regressions: Array<ReviewRegression> = []
     const newFindings: Array<ReviewFinding> = []
+    const typed: Array<TypedFile> = []
 
-    const changed = yield* Effect.try({
+    const { changed, root } = yield* Effect.try({
       try: () => {
         assertRef(options.base, cwd)
         if (options.head !== undefined) assertRef(options.head, cwd)
-        return changedFiles(options, cwd)
+        // Pathspecs are relative to the cwd, and the paths git lists to the root.
+        return { changed: changedFiles(options, cwd), root: git(["rev-parse", "--show-toplevel"], cwd).trimEnd() }
       },
       catch: (e) =>
         e instanceof ReviewError
@@ -324,8 +342,16 @@ export const buildReview = (options: ReviewOptions): Effect.Effect<ReviewReport,
     for (const file of changed) {
       const beforeSrc = file.status === "added"
         ? undefined
-        : sourceAt(options.base, file.previousPath ?? file.path, cwd)
-      const afterSrc = file.status === "removed" ? undefined : sourceAt(options.head, file.path, cwd)
+        : sourceAt(options.base, file.previousPath ?? file.path, root)
+      const afterSrc = file.status === "removed" ? undefined : sourceAt(options.head, file.path, root)
+      if (afterSrc !== undefined) {
+        typed.push({
+          path: file.path,
+          basePath: file.status === "added" ? undefined : file.previousPath ?? file.path,
+          source: afterSrc,
+          changedLines: () => changedLines(options, file, root)
+        })
+      }
       const before = yield* analyzeSide(beforeSrc, file.path)
       const after = yield* analyzeSide(afterSrc, file.path)
       const programs = reviewPrograms(before, after)
@@ -347,12 +373,19 @@ export const buildReview = (options: ReviewOptions): Effect.Effect<ReviewReport,
       for (const f of newFindingsOf(beforeSrc, afterSrc, file.path)) newFindings.push(f)
     }
 
+    const typeAware = yield* Effect.try({
+      try: () => typeAwareFindings(options, typed, root),
+      catch: (e) => new ReviewError({ message: e instanceof Error ? e.message : String(e), cause: e })
+    })
+    for (const f of typeAware.findings) newFindings.push(f)
+
     return {
       base: options.base,
       head: options.head ?? "working tree",
       files,
       regressions,
       newFindings,
+      typeAwareSkipped: typeAware.skipped,
       risk: riskOf(regressions, newFindings, files)
     }
   })
@@ -516,6 +549,15 @@ export const renderReviewMarkdown = (
     ),
     ""
   )
+  if (r.typeAwareSkipped.length > 0) {
+    lines.push(
+      "> [!NOTE]",
+      `> Type-aware Effect rules did not run on part of this change: ${
+        counted(r.typeAwareSkipped.map(code)).join(", ")
+      }`,
+      ""
+    )
+  }
 
   // Diagrams + step changes
   const withDiagram = touched.flatMap((p) => (p.railway === undefined ? [] : [{ ...p, railway: p.railway }]))

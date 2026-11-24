@@ -196,7 +196,7 @@ The point is to make that triage explicit. The agent report does not assume ever
 | Feature | How it shows up here |
 |---|---|
 | `--tsconfig` | `alchemy/src` uses `@/*` aliases; without `--tsconfig` they're silently dropped |
-| `--tsgo` | Adds the official Effect language-service diagnostics using the project's TypeScript 7 compiler |
+| `--tsgo` | Checks one named project with the official Effect language service |
 | `--coupling-transitive` | Idempotent here (no barrels); the absence of change is itself a finding |
 | Workspace-aware resolution | `packages/alchemy` imports from `packages/better-auth` via package name in some entry points; `workspacePackages` resolves those cross-package edges |
 | `@known-hub` at scale | 14 critical-fan-in files in a single library; the annotation pattern was specifically designed for this scenario |

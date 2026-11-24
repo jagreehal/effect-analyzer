@@ -13,14 +13,14 @@
     "generate:machines": "pnpm --dir ../../packages/effect-analyzer build && for f in samples/machines/door.ts samples/machines/editor.ts ../../examples/xstate-effect-workflows/approval.ts; do node ../../packages/effect-analyzer/dist/cli.js $f --format machine-json -o public/machines/$(basename $f .ts).json; done && pnpm -w exec dprint fmt apps/docs/public/machines/*.json"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.42.7",
+    "@astrojs/starlight": "^0.43.1",
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
-    "@typeonce/effect-machine": "0.46.0",
-    "astro": "^7.4.5",
+    "@typeonce/effect-machine": "0.47.1",
+    "astro": "^7.4.13",
     "astro-mermaid": "^2.2.0",
-    "effect": "4.1.2",
-    "mermaid": "^12.2.0",
+    "effect": "4.1.5",
+    "mermaid": "^12.3.0",
     "sharp": "^0.35.5",
     "ts-morph": "^28.0.0"
   }
