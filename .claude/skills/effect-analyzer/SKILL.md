@@ -157,6 +157,13 @@ self rather than read as a removal plus an addition), analyzes both sides with
 two `main`s), diffs each pair with `diffPrograms({ regressionMode: true })`, and
 lints both sides with `lintSourceCode`, keeping findings whose `rule|message`
 key is new on the head side (`info` severity is dropped: it repeats on every PR).
+Language service findings (`review-types.ts`) count when the change touched their line
+and `finding-baseline.ts` finds no match at base. `review-snapshot.ts` writes a ref to
+a temp directory through a private git index and links installed dependencies.
+`review-input-audit.ts` then checks that the types come from that ref: it follows
+imports and ambient declarations with TypeScript's own resolution, compares installed
+packages with the ref's lockfile (`lockfiles.ts`, `locked-versions.ts`), and reports
+inputs from outside the ref. An unavailable ref lands in `typeAwareSkipped`.
 Risk is `high` on any regression or new lint error, `moderate` on a new warning
 or a program that crossed the cyclomatic warning threshold, else `low`. The
 markdown starts with `<!-- effect-analyzer-review -->` so a bot can find and
@@ -258,13 +265,24 @@ does.**
   exits 0.
 - `--project` and `--file` together are a union, as upstream treats them.
 
-No `--lspconfig` is ever synthesised. `@effect/tsgo` reads the project's own
-plugin entry, whose canonical name is **`@effect/language-service`** (upstream
-`etscore.EffectPluginName`), not `@effect/tsgo`. A lookup under any other name
-falls back to `{}`, and passing that as `--lspconfig` would reset every
-configured severity to the rule defaults. Fixtures use the canonical name. If a project has no
-plugin entry the language service is off and `filesChecked` is `0` — that is
-upstream's behaviour, to be reported, not worked around.
+`@effect/tsgo` reads the project's own plugin entry, whose canonical name is
+**`@effect/language-service`** (upstream `etscore.EffectPluginName`). Fixtures use
+that name. `--lspconfig` replaces every configured severity, so the configured run
+comes first and `DEFAULT_LSPCONFIG` covers what it skipped: `runTsgoDiagnostics`
+merges the two by file, and `diagnostics` repeats a run that skipped every file.
+A project on TypeScript 5 or 6 runs from `bundledToolchainCwd`, which supplies
+TypeScript 7.
+
+The language service runs by default:
+
+- `checkFilesWithTsgo` (`tsgo-diagnostics.ts`) checks each file under the innermost
+  tsconfig that includes it, directly or through `references` (`tsconfigs.ts`). It
+  skips an outer config with no `files` or `include` that a nearer one extends.
+  `checkProjectWithTsgo` backs `--tsgo=<tsconfig>` and throws when it cannot run.
+- Plain runs print through `cli-language-service.ts` on stderr. `--lint-source` and
+  `--agent-report` go through `lint-session.ts`.
+- The LSP server (`lsp/language-service.ts`) spawns the CLI per document on open and
+  save, and kills its process group on edit, close and exit.
 
 Parity is enforced by tests that run both binaries and compare
 (`cli.diagnostics.test.ts`). Changing rendering, ordering or exit codes here
@@ -289,7 +307,8 @@ it. Adding a field to that key renumbers every existing finding.
 | `--tsconfig <path>` | Custom tsconfig.json path |
 | `--extensions <list>` | Extensions to discover in a directory walk (default: `ts,tsx`) |
 | `--max-depth <n>` | Directory walk depth (default: 10) |
-| `--tsgo[=<tsconfig>]` | Merge official `@effect/tsgo` diagnostics (TypeScript 7+) |
+| `--tsgo[=<tsconfig>]` | Check one named project with `@effect/tsgo`, failing if it cannot run. By default each file is checked under the nearest tsconfig that includes it |
+| `--no-tsgo` | Skip the default `@effect/tsgo` checks (plain runs, `--lint-source`, `--agent-report`) |
 | `--fail-on <severity>` | Exit 1 on a finding at or above `error`/`warning`/`info` (for `--lint-source`; omit for an advisory run) |
 | `--no-metadata` | Exclude metadata |
 | `--colocate` | Write colocated .md (the default; with `-o`, writes both) |

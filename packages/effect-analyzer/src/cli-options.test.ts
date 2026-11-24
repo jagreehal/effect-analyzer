@@ -342,6 +342,8 @@ describe("parseArgs", () => {
   describe("--tsgo", () => {
     it("defaults to tsconfig.json", () => {
       expect(opts("--tsgo").tsgoProject).toBe("tsconfig.json")
+      expect(opts().tsgo).toBe(true)
+      expect(opts("--no-tsgo").tsgo).toBe(false)
     })
 
     it("consumes a following path only once a path argument has been seen", () => {

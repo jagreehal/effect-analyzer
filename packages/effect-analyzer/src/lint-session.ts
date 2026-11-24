@@ -4,7 +4,7 @@ import { extname, join, resolve } from "node:path"
 import type { LintIssue } from "./effect-linter"
 import { findRuleDoc } from "./rule-registry"
 import { lintSourceCode } from "./source-linter"
-import { readTsgoProjectFiles, runTsgoDiagnostics } from "./tsgo-diagnostics"
+import { checkFilesWithTsgo, checkProjectWithTsgo } from "./tsgo-diagnostics"
 
 export interface LintFinding {
   readonly filePath: string
@@ -72,6 +72,8 @@ export interface TsgoCoverage {
   readonly totalFiles: number
   /** Scanned files the language service never checked, sorted. */
   readonly unchecked: ReadonlyArray<string>
+  /** Why the language service could not run on some files, one line each. */
+  readonly skipped?: ReadonlyArray<string> | undefined
 }
 
 export interface LintScanResult {
@@ -268,10 +270,17 @@ const walk = async (path: string, depth = 0): Promise<Array<string>> => {
 
 export interface SourceLintScanOptions {
   /**
-   * Path to a TypeScript 7 tsconfig.json. When set, official type-aware Effect
+   * Path to a tsconfig.json. When set, official type-aware Effect
    * diagnostics from the bundled `@effect/tsgo` bridge are merged in.
    */
   readonly tsgoProject?: string | undefined
+  /**
+   * Without `tsgoProject`, merge those diagnostics anyway by checking each file
+   * under its nearest tsconfig. Files it cannot check land in `tsgo.unchecked`.
+   */
+  readonly autoTsgo?: boolean | undefined
+  /** With `autoTsgo`, check every file under this tsconfig instead of its nearest. */
+  readonly tsconfig?: string | undefined
   /** Opt-in source rules to run, e.g. `barrel-import-from-effect`. */
   readonly enableRules?: ReadonlyArray<string> | undefined
 }
@@ -305,11 +314,12 @@ export const runSourceLintScan = async (
   // tsgo diagnostics bypass our disable pragmas — tsgo has its own
   // suppression story; wire the two together only if users actually ask.
   let tsgo: TsgoCoverage | undefined
-  if (options.tsgoProject) {
+  if (options.tsgoProject || options.autoTsgo) {
     const scanned = new Set(candidates)
-    const result = runTsgoDiagnostics({ project: options.tsgoProject })
-    const inProject = new Set(readTsgoProjectFiles(options.tsgoProject))
-    for (const diagnostic of result.diagnostics) {
+    const check = options.tsgoProject
+      ? checkProjectWithTsgo(options.tsgoProject)
+      : checkFilesWithTsgo(candidates, { tsconfig: options.tsconfig })
+    for (const diagnostic of check.diagnostics) {
       const filePath = resolve(diagnostic.filePath)
       if (!scanned.has(filePath)) continue
       const base = {
@@ -327,11 +337,11 @@ export const runSourceLintScan = async (
       }
       findings.push({ ...base, fingerprint: stableFingerprint(base) })
     }
-    const unchecked = candidates.filter((c) => !inProject.has(c))
     tsgo = {
-      filesChecked: result.summary.filesChecked,
-      totalFiles: result.summary.totalFiles,
-      unchecked
+      filesChecked: check.checked.size,
+      totalFiles: check.totalFiles,
+      unchecked: candidates.filter((c) => !check.checked.has(c)),
+      skipped: check.skipped.length > 0 ? check.skipped : undefined
     }
   }
 

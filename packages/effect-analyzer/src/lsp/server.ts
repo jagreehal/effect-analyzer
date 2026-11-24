@@ -39,8 +39,6 @@ import type {
   CompletionParams,
   DefinitionParams,
   DiagnosticSeverity,
-  DidChangeTextDocumentParams,
-  DidCloseTextDocumentParams,
   DocumentHighlight,
   DocumentHighlightKind,
   DocumentHighlightParams,
@@ -60,7 +58,6 @@ import type {
   Range,
   ReferenceParams,
   RenameParams,
-  SelectionRange,
   SelectionRangeParams,
   SignatureHelpParams,
   SymbolInformation,
@@ -76,16 +73,9 @@ import { lintSourceCode } from "../source-linter"
 import { analyzeEffectSource } from "../static-analyzer"
 import { getStaticChildren } from "../types"
 import type { StaticEffectIR, StaticFlowNode, StaticLayerNode } from "../types"
+import { makeLanguageService } from "./language-service"
 
-type ConnectionLike = ReturnType<(typeof LspNode)["createConnection"]> & {
-  onDidChangeContent: (handler: (params: DidChangeTextDocumentParams) => void) => void
-  onDidClose: (handler: (params: DidCloseTextDocumentParams) => void) => void
-  onInlayHint: (handler: (params: InlayHintParams) => Promise<Array<InlayHint>>) => void
-  onSelectionRange: (handler: (params: SelectionRangeParams) => Promise<Array<SelectionRange>>) => void
-  onDocumentLink: (handler: (params: DocumentLinkParams) => Promise<Array<DocumentLink>>) => void
-}
-
-const connection = createConnection() as ConnectionLike
+const connection = createConnection()
 const documents = new TextDocuments(TextDocument)
 const SYMBOL_KIND_FUNCTION: SymbolKind = 12
 const SYMBOL_KIND_VARIABLE: SymbolKind = 6
@@ -137,7 +127,7 @@ async function getPrograms(
 
 connection.onInitialize(() => ({
   capabilities: {
-    textDocumentSync: 2,
+    textDocumentSync: { openClose: true, change: 2, save: true },
     hoverProvider: true,
     definitionProvider: true,
     referencesProvider: true,
@@ -160,14 +150,35 @@ connection.onInitialize(() => ({
   }
 }))
 
-connection.onDidChangeContent((params: DidChangeTextDocumentParams) => {
-  const doc = documents.get(params.textDocument.uri)
+const languageService = makeLanguageService((uri) => {
+  const doc = documents.get(uri)
   if (doc) void publishDiagnostics(doc)
 })
 
-connection.onDidClose((params: DidCloseTextDocumentParams) => {
-  irCache.delete(params.textDocument.uri)
+documents.onDidOpen(({ document }) => {
+  languageService.check(document)
 })
+
+documents.onDidSave(({ document }) => {
+  languageService.check(document)
+})
+
+documents.onDidChangeContent(({ document }) => {
+  // Opening a document also lands here, at the version its run was started for.
+  languageService.edited(document.uri, document.version)
+  void publishDiagnostics(document)
+})
+
+documents.onDidClose(({ document }) => {
+  irCache.delete(document.uri)
+  languageService.closed(document.uri)
+  void connection.sendDiagnostics({ uri: document.uri, diagnostics: [] })
+})
+
+connection.onShutdown(languageService.stopAll)
+// For a client that exits without a shutdown request.
+process.on("exit", languageService.stopAll)
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => process.exit())
 
 function findNodeAtPosition(
   nodes: ReadonlyArray<StaticFlowNode>,
@@ -593,7 +604,7 @@ function collectEffectNodesWithTypes(
   }
 }
 
-connection.onInlayHint(async (params: InlayHintParams) => {
+connection.languages.inlayHint.on(async (params: InlayHintParams) => {
   const doc = documents.get(params.textDocument.uri)
   if (!doc) return []
   const programs = await getPrograms(doc.uri, doc.getText(), doc.version)
@@ -640,7 +651,7 @@ function collectNodeRanges(
   }
 }
 
-connection.onSelectionRange(async (params: SelectionRangeParams) => {
+connection.onSelectionRanges(async (params: SelectionRangeParams) => {
   const doc = documents.get(params.textDocument.uri)
   if (!doc) return []
   const programs = await getPrograms(doc.uri, doc.getText(), doc.version)
@@ -1246,7 +1257,7 @@ connection.onCompletion(async (params: CompletionParams) => {
 })
 
 const EFFECT_DOCS_URL = "https://effect.website/docs"
-connection.onDocumentLink(async (params: DocumentLinkParams) => {
+connection.onDocumentLinks(async (params: DocumentLinkParams) => {
   const doc = documents.get(params.textDocument.uri)
   if (!doc) return []
   const text = doc.getText()
@@ -1423,7 +1434,10 @@ async function publishDiagnostics(
       }
       return diagnostic
     })
-    await connection.sendDiagnostics({ uri: doc.uri, diagnostics })
+    await connection.sendDiagnostics({
+      uri: doc.uri,
+      diagnostics: [...diagnostics, ...languageService.findingsFor(doc.uri, doc.version)]
+    })
   } catch {
     // ignore
   }

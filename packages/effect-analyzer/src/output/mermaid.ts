@@ -6,7 +6,7 @@
  */
 
 import { Effect, Option } from "effect"
-import { countMeaningfulNodes, DEFAULT_LABEL_MAX, truncateDisplayText } from "../analysis-utils"
+import { countMeaningfulNodes, DEFAULT_LABEL_MAX, plainYieldLabel, truncateDisplayText } from "../analysis-utils"
 import { buildDataFlowGraph } from "../data-flow"
 import { analyzeErrorFlow, analyzeErrorPropagation } from "../error-flow"
 import { indexIR, spanPathKey } from "../ir"
@@ -487,7 +487,7 @@ function getNodeLabel(
       label = node.terminalKind
       break
     case "opaque":
-      label = `⚠ ${node.reason}`
+      label = `⚠ ${plainYieldLabel(node) ?? node.reason}`
       break
     case "cause":
       label = `Cause: ${node.causeOp}`
@@ -987,7 +987,7 @@ function renderNode(
       const opaqueId = `opaque_${++context.nodeCounter}`
       const opaqueLabel = node.reason === "callback-body" || node.reason === "predicate"
         ? node.sourceText
-        : `⚠ ${node.reason}`
+        : `⚠ ${plainYieldLabel(node) ?? node.reason}`
       lines.push(`  ${opaqueId}{{"${escapeLabel(opaqueLabel)}"}}`)
       context.styleClasses.set(opaqueId, "opaqueStyle")
       return { firstNodeId: opaqueId, lastNodeIds: [opaqueId] }

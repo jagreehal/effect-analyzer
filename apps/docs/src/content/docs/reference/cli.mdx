@@ -59,7 +59,7 @@ effect-analyze ./src/transfer.ts --format mermaid --no-colocate > transfer.mmd
 | `--pretty` | Pretty-print output (overrides `--compact`) | on |
 | `--compact` | Compact output (no indentation) | off |
 | `--no-color` | Disable colored terminal output | color on |
-| `--quiet` | Suppress verbose status messages | off |
+| `--quiet` | Suppress verbose status messages, and the Effect language service findings a plain run prints on stderr | off |
 | `--tsconfig <path>` | Path to a custom `tsconfig.json` | auto-detected |
 | `--extensions <list>` | Extensions discovered when walking a directory | `ts,tsx` |
 | `--max-depth <n>` | How deep a directory walk descends | `10` |
@@ -150,7 +150,24 @@ effect-analyze review --base main --head HEAD --format json --fail-on-regression
 
 Programs are paired by name and order of appearance, diffed with `--diff`'s engine in
 regression mode, and both sides are linted so only findings the change introduced are
-reported (`info` severity omitted). See [GitHub Action](/effect-analyzer/project/github-action/).
+reported (`info` severity omitted). `review` includes an Effect language service finding
+when the change touched its line and base did not have it at that severity or higher.
+
+`review` rebuilds base and an explicit `--head` from git in a temporary directory and
+links your installed dependencies. Uncommitted, untracked and ignored files stay out of
+it, including generated code. Omit `--head` to check the working tree with them.
+
+A ref is unavailable when its types depend on something other than the ref:
+
+- an installed package at another version than the lockfile or manifest records
+- a package version that `review` cannot determine, such as when two package managers'
+  lockfiles disagree and you declare no `packageManager`
+- a configuration, package or source file that resolves outside the ref
+- for base, a file the working tree has and git does not
+
+`review` then skips an unavailable head file. Against an unavailable base it counts
+findings on changed lines as new. `typeAwareSkipped` and the markdown give the reason.
+See [GitHub Action](/effect-analyzer/project/github-action/).
 
 ### `diagnostics`
 
@@ -167,12 +184,12 @@ reported (`info` severity omitted). See [GitHub Action](/effect-analyzer/project
 | `--lspconfig <json>` | Inline JSON replacing the project's plugin options |
 | `--no-analyzer` | Language service diagnostics only, omitting the analyzer's rules |
 
-Flags are forwarded to `@effect/tsgo` untouched — it validates them, applies its
-own `--severity` semantics and picks its own exit code — and its output is
+Flags are forwarded to `@effect/tsgo`, which validates them, applies its
+own `--severity` semantics and picks its own exit code. Its output is
 passed through. Only `--fail-on` and `--no-analyzer` are ours. A run with no
-analyzer findings to add is literally the upstream run: `text`, `pretty` and
-`github-actions` output is byte-identical, including the summary trailer and the
-order upstream emitted its diagnostics in.
+analyzer findings to add, on a project that configures the language service, is
+the upstream run: `text`, `pretty` and `github-actions` output is byte-identical,
+including the summary trailer and the order upstream emitted its diagnostics in.
 
 `--format json` is re-serialised so that every entry carries `source` (`tsgo` or
 `analyzer`), whether or not the analyzer contributed any. Upstream's
@@ -182,10 +199,9 @@ analyzer findings appended after it. Analyzer rules carry `code: 0`, outside the
 what it saw before.
 
 Your project's configuration is read by `@effect/tsgo` itself, from the
-`@effect/language-service` plugin entry in the tsconfig it is given — the same
-entry your editor uses, so the CLI and the editor agree. Nothing is synthesised
-on your behalf, and configured severities (including turning a rule `off`) are
-honoured exactly.
+`@effect/language-service` plugin entry in the tsconfig you give it, the same
+entry your editor uses, so the CLI and the editor agree. It honours the severities
+you configure, including `off`.
 
 ```jsonc
 // tsconfig.json
@@ -201,10 +217,8 @@ honoured exactly.
 }
 ```
 
-A project with no such plugin entry has the language service disabled, and
-`filesChecked` will be `0`. That is upstream's behaviour, and it is reported
-rather than worked around: check `summary.filesChecked` if you need to know
-whether a clean report actually examined anything.
+A project with no such plugin entry is checked with the rule defaults. When only some
+files lack one, you get upstream's result, and its output says how many it skipped.
 
 ```bash
 effect-analyze diagnostics --project tsconfig.json --format json
@@ -226,6 +240,16 @@ only add a failure it would not have seen, under the same rule (`1` when any
 error is present, and with `--strict` also when any warning is). `--fail-on`
 overrides that gate, and `--fail-on=none` makes a run purely advisory.
 
+## Language Server
+
+```bash
+node node_modules/effect-analyzer/dist/lsp/server.js --stdio
+```
+
+Point any LSP client at that command. It publishes the analyzer's lint findings as
+you type, and Effect language service findings when you open or save a file. With an
+`@effect/language-service` plugin entry in the tsconfig, your editor shows the latter.
+
 ## Source Linting
 
 Run deterministic source-level lints. See [Source Linter](/effect-analyzer/project/source-linter/) for the full rule list and workflow.
@@ -233,7 +257,8 @@ Run deterministic source-level lints. See [Source Linter](/effect-analyzer/proje
 | Flag | Description |
 |---|---|
 | `--lint-source` | Run deterministic source lints on a file or directory |
-| `--tsgo[=<tsconfig>]` | Merge official type-aware Effect diagnostics from `@effect/tsgo`; bare `--tsgo` uses `tsconfig.json` (target project requires TypeScript 7+) |
+| `--tsgo[=<tsconfig>]` | Check one named project with the Effect language service, and fail if it cannot run; bare `--tsgo` uses `tsconfig.json`. Without it, each file is checked under `--tsconfig` if given, else the nearest `tsconfig.json` that includes it |
+| `--no-tsgo` | Do not run the Effect language service. Applies to plain runs and `--agent-report` too |
 | `--sarif` | Emit SARIF 2.1.0 output |
 | `--scorecard` | Emit a per-file lint scorecard |
 | `--baseline <file>` | Compare findings against a baseline session/JSON file |

@@ -1032,7 +1032,10 @@ function analyzeYieldNode(
         }`,
         location: extractLocation(yieldNode, ctx.filePath, ctx.opts.includeLocations ?? false)
       })
-      return { variableName: extractYieldVariableName(yieldNode), effect: opaqueNode }
+      return {
+        variableName: extractYieldVariableName(yieldNode),
+        effect: { ...opaqueNode, displayName: computeDisplayName(opaqueNode) }
+      }
     }
 
     if (!expr) {

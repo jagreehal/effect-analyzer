@@ -5,7 +5,13 @@
  * describing what an Effect program does.
  */
 
-import { canonicalizeServiceDisplayName, DEFAULT_LABEL_MAX, isConcurrent, truncateDisplayText } from "../analysis-utils"
+import {
+  canonicalizeServiceDisplayName,
+  DEFAULT_LABEL_MAX,
+  isConcurrent,
+  plainYieldLabel,
+  truncateDisplayText
+} from "../analysis-utils"
 import { formatTypeSignature, splitTopLevelUnion } from "../type-extractor"
 import type { StaticEffectIR, StaticEffectProgram, StaticFlowNode } from "../types"
 
@@ -87,7 +93,7 @@ function shortLabel(node: StaticFlowNode): string {
     case "interruption":
       return node.interruptionType
     case "opaque":
-      return `(opaque: ${node.reason})`
+      return plainYieldLabel(node) ?? `(opaque: ${node.reason})`
     case "unknown":
       return `(unknown: ${node.reason})`
   }
@@ -638,7 +644,7 @@ export function explainNode(
       if (node.reason === "callback-body" || node.reason === "predicate" || node.reason === "stream-constructor") {
         lines.push(`${pad}${truncateDisplayText(node.sourceText, DEFAULT_LABEL_MAX)}`)
       } else {
-        lines.push(`${pad}(opaque: ${node.reason})`)
+        lines.push(`${pad}${shortLabel(node)}`)
       }
       break
     }

@@ -261,6 +261,11 @@ On `push` there is no PR to comment on, so the report goes to the job summary.
 | 🟡 **Moderate** | A new lint `warning`, or a program whose cyclomatic complexity rose past the warning threshold (10) in this PR |
 | 🟢 **Low** | Everything else, including any number of additions |
 
+Type-aware Effect rules, such as one for an Effect you forgot to yield, need your
+dependencies on disk. Add your install step (`npm ci`, `pnpm install`) before the
+action. The rules read both refs from git, which leaves out files a build step
+generates, and the review notes any part of the change they did not cover.
+
 Lint findings are only counted when the change *introduced* them: both sides of the
 file are linted and a finding that already existed at the base is not reported, even
 if the line moved. `info`-level findings are never shown in the review; run

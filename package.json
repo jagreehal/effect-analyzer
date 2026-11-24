@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
-    "dprint": "^0.64.3",
-    "turbo": "^2.11.10"
+    "dprint": "^0.65.0",
+    "turbo": "^2.11.13"
   }
 }

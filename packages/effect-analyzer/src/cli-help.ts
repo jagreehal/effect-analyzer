@@ -79,7 +79,8 @@ Options:
   --no-colocate-enhanced   Use standard Mermaid in colocated docs (default: enhanced)
   --colocate-suffix <s>    Suffix for colocated files (default: "effect-analysis")
                            Result: foo/bar.ts -> foo/bar.effect-analysis.md
-  -q, --quiet              Minimal output (no per-file lines)
+  -q, --quiet              Minimal output (no per-file lines, no language service
+                           findings on stderr)
   --ascii                  ASCII-only output: em dashes, arrows and ellipses become - -> ...
   --no-color               Disable colored output
   -w, --watch              Watch mode: re-analyze on file change
@@ -136,8 +137,10 @@ Options:
   --lint-source            Run deterministic source lints on a file or directory
   --enable-rule <code>     Turn on an opt-in source rule (repeatable): barrel-import-from-effect
                            (off by default: import { Effect } from "effect" is idiomatic in Effect v4)
-  --tsgo[=<tsconfig>]      Merge type-aware Effect diagnostics from @effect/tsgo
-                           using the target project's TypeScript 7 installation
+  --tsgo[=<tsconfig>]      Check one named project with the Effect language service,
+                           and fail if it cannot run. Without it, the language
+                           service runs by default on each file's nearest tsconfig
+  --no-tsgo                Do not run the Effect language service by default
   --sarif                  Emit SARIF 2.1.0 output (for --lint-source)
   --baseline <file>        Compare findings against a baseline session/json file
   --fail-on <severity>     Exit 1 when a finding is at or above error | warning | info

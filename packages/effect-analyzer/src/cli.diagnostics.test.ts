@@ -11,6 +11,7 @@ import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { producedReport, splitTrailer } from "./cli-diagnostics"
 
 const REPO_ROOT = resolve(__dirname, "..")
 
@@ -175,6 +176,16 @@ describe("effect-analyze diagnostics", () => {
       },
       { floatingEffect: "error" }
     )
+  })
+})
+
+describe("splitTrailer", () => {
+  it("keeps the line upstream adds for skipped files in the trailer", () => {
+    const trailer = "Checked 1 files out of 2 files. \n" +
+      "Skipped 1 files because their tsconfig does not enable the @effect/language-service plugin.\n" +
+      "0 errors, 0 warnings and 0 messages.\n"
+    expect(splitTrailer(`body\n${trailer}`)).toEqual({ body: "body\n", trailer })
+    expect(producedReport(trailer, "text")).toBe(true)
   })
 })
 

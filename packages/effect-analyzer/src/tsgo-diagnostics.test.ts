@@ -80,6 +80,7 @@ describe("tsgo-diagnostics", () => {
   it("carries the summary so a zero-file run is distinguishable from a clean one", () => {
     expect(parseTsgoOutput(SAMPLE)?.summary).toEqual({
       filesChecked: 2,
+      filesWithoutPlugin: 0,
       totalFiles: 2,
       errors: 1,
       warnings: 0,
@@ -137,9 +138,10 @@ describe("tsgo-diagnostics", () => {
     expect(Array.isArray(result.diagnostics)).toBe(true)
     // The run summary travels with the diagnostics, so a caller can tell
     // "checked and clean" from "checked nothing". This package's own tsconfig
-    // does not enable the `@effect/language-service` plugin, so the language
-    // service correctly checks none of its files.
+    // does not enable the `@effect/language-service` plugin, and its files are
+    // checked with the rule defaults all the same.
     expect(result.summary.totalFiles).toBeGreaterThan(0)
+    expect(result.summary.filesChecked).toBe(result.summary.totalFiles)
     for (const d of result.diagnostics) {
       expect(d.filePath).toMatch(/\.tsx?$/)
       expect(["error", "warning", "info"]).toContain(d.severity)

@@ -18,8 +18,9 @@ npx effect-analyze --version
 ```
 
 Effect v4 is the only supported Effect release. `ts-morph` is bundled automatically.
-The official `@effect/tsgo` bridge is also installed as a direct dependency;
-projects that enable it must use native TypeScript 7.
+The official `@effect/tsgo` language service and a TypeScript 7 it supports are
+installed too, so its type-aware rules run with no setup on any TypeScript version
+your project uses.
 
 `effect-analyze` is also a drop-in replacement for the `effect-tsgo` CLI, so one
 command covers both toolchain configuration and diagnostics — see
@@ -412,8 +413,8 @@ npx effect-analyze config       # interactive diagnostic severity picker
 npx effect-analyze patch | unpatch | get-exe-path
 ```
 
-`diagnostics` passes its flags to `@effect/tsgo` untouched and passes its
-output back, so `text`, `pretty` and `github-actions` are byte-identical to the
+`diagnostics` passes its flags to `@effect/tsgo` and passes its output back, so
+for a configured project `text`, `pretty` and `github-actions` are byte-identical to the
 native binary and its exit codes are unchanged. What it adds is the analyzer's
 own AST rules in the same stream, and a `source` field (`tsgo` or `analyzer`)
 on every JSON entry — alongside the `377xxx` `code` — so a consumer can tell an
@@ -422,21 +423,24 @@ rules carry `code: 0`, outside the Effect range. `--no-analyzer` reports only
 the language service; `--fail-on=none` makes a run advisory.
 
 Configuration is read by `@effect/tsgo` itself from the
-`@effect/language-service` plugin entry in your tsconfig — the same entry your
-editor uses — so configured severities are honoured exactly and nothing is
-synthesised on your behalf. A project without that plugin entry has the language
-service disabled and reports `filesChecked: 0`; check that field if you need to
-know whether a clean report examined anything.
+`@effect/language-service` plugin entry in your tsconfig, the same entry your
+editor uses, so your severities apply. A project without that entry is checked
+with the rule defaults.
 
 ### Source Linting + Official Effect Diagnostics
 
-Run effect-analyzer's deterministic AST checks and merge the official,
-type-aware Effect diagnostics from `@effect/tsgo` in one report:
+Run effect-analyzer's deterministic AST checks and the official, type-aware
+Effect diagnostics from `@effect/tsgo` in one report:
 
 ```bash
-npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json
-npx effect-analyze ./src --lint-source --tsgo=./tsconfig.json --fail-on=error
+npx effect-analyze ./src --lint-source
+npx effect-analyze ./src --lint-source --fail-on=error
 ```
+
+Each file is checked under the nearest `tsconfig.json` that includes it, so a
+monorepo needs no flags. Plain runs (`effect-analyze ./src`) print the same errors
+and warnings on stderr, and `--agent-report` and `review` include them. `--tsgo=<tsconfig>` checks
+one named project and fails if it cannot run; `--no-tsgo` turns the checks off.
 
 `barrel-import-from-effect` is off by default, because `import { Effect } from "effect"`
 is the documented form in Effect v4. Turn it on with
@@ -445,14 +449,13 @@ is the documented form in Effect v4. Turn it on with
 Every finding carries `source` and, for language service diagnostics, the
 `377xxx` `code`. `--fail-on` gates the exit status on severity; without it a run
 is advisory and never changes the exit code. The run summary also reports what
-the language service covered (`summary.tsgo.filesChecked` and `unchecked`), so a
-partially checked run cannot be mistaken for a clean one.
+the language service covered (`summary.tsgo.filesChecked`, `unchecked` and
+`skipped`, with the reason on stderr). Install the project's dependencies first:
+the rules read `effect`'s types from disk.
 
-`@effect/tsgo` is a production dependency of effect-analyzer, so no separate
-bridge install is needed. It selects the native compiler artifact for the
-target project's installed TypeScript version; use TypeScript 7 or newer.
 Configure upstream Effect rules in the `plugins` section of the target
-`tsconfig.json`. Bare `--tsgo` uses `tsconfig.json`.
+`tsconfig.json`. A project with its own TypeScript 7 is checked with that
+version, and other projects with the bundled one. Bare `--tsgo` uses `tsconfig.json`.
 
 [Source-linter guide →](https://jagreehal.github.io/effect-analyzer/project/source-linter/)
 
@@ -573,7 +576,6 @@ the TypeScript 7 API, or if this package moves back to TypeScript 6.
 
 - Node.js 22+
 - Effect v4
-- TypeScript 7+ when using `--tsgo` or the `diagnostics` command
 
 ## Documentation
 
